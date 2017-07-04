@@ -10,7 +10,6 @@ from libc.math cimport exp, erf, sqrt, isfinite, ceil, log
 # from libcpp.unordered_set cimport unordered_set
 
 import scipy.sparse
-from scipy.optimize import curve_fit
 
 cdef extern from "gsl/gsl_rng.h":
     ctypedef struct gsl_rng_type:
@@ -108,8 +107,12 @@ cdef np.ndarray spectral_layout(object graph, int dim):
 
     k = dim + 1
     num_lanczos_vectors = max(2 * k + 1, int(np.sqrt(graph.shape[0])))
-    eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(L, k,
-                                            which='SM', ncv=num_lanczos_vectors)
+    eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
+        L, k,
+        which='SM',
+        ncv=num_lanczos_vectors,
+        tol=1e-4,
+        max_iter=graph.shape[0] * 5)
     order = np.argsort(eigenvalues)[1:k]
     return eigenvectors[:, order]
 
@@ -185,7 +188,8 @@ cdef class NegativeSampler (object):
         self.n_zeros  = self.graph.shape[0]**2 - self.graph.nnz
         self.n_vertices = self.graph.shape[0]
         self.n_edges = self.n_vertices**2
-        self.sample_from_zeros_prob = 1.0 - ((1.0 - self.graph.data).sum() / (self.n_zeros))
+        self.sample_from_zeros_prob = 1.0 - ((1.0 - self.graph.data).sum()
+                                             / (self.n_zeros))
         self.non_zero_sampler = WalkerAliasSampler(1.0 - self.graph.data)
         self.head = self.graph.row
         self.tail = self.graph.col
@@ -193,7 +197,9 @@ cdef class NegativeSampler (object):
 #         self.non_zero_set = self.graph.row * self.n_vertices + self.graph.col
         self.non_zero_set = SimpleBloomFilter(self.n_non_zeros)
         for i in range(self.n_non_zeros):
-            self.non_zero_set.add_key(self.graph.row[i] * self.n_vertices + self.graph.col[i])
+            self.non_zero_set.add_key(self.graph.row[i] *
+                                      self.n_vertices +
+                                      self.graph.col[i])
 
         self.rng = gsl_rng_alloc(gsl_rng_taus)
 
@@ -222,7 +228,7 @@ cdef class NegativeSampler (object):
 
 @cython.boundscheck(False)
 @cython.cdivision(True)
-cpdef np.ndarray[np.float64_t, ndim=2] cython_fit(
+cpdef np.ndarray[np.float64_t, ndim=2] simplicial_set_embedding(
     object graph,
     np.int64_t n_components,
     np.float64_t initial_alpha,
@@ -233,8 +239,9 @@ cpdef np.ndarray[np.float64_t, ndim=2] cython_fit(
     str init
 ):
 
-    cdef np.int64_t i, j, k, l, d, edge, n_sampled
+    cdef np.int64_t i, j, k, d, edge, n_sampled
     cdef np.int64_t n_vertices
+    cdef np.int64_t n_edges
     cdef np.float64_t[:, :] embedding_view
     cdef np.float64_t* current
     cdef np.float64_t* other
@@ -244,12 +251,9 @@ cpdef np.ndarray[np.float64_t, ndim=2] cython_fit(
     cdef int is_negative_sample
     cdef gsl_rng *rng
     cdef np.float64_t alpha = initial_alpha
-    cdef np.int64_t n_edges
     cdef WalkerAliasSampler edge_sampler
     cdef NegativeSampler negative_sampler
     cdef np.float64_t negative_sample_prob
-
-    cdef np.float64_t tmp
 
     rng = gsl_rng_alloc(gsl_rng_taus)
 
@@ -257,8 +261,8 @@ cpdef np.ndarray[np.float64_t, ndim=2] cython_fit(
     graph.sum_duplicates()
     n_edges = graph.nnz
     n_vertices = graph.shape[0]
-    edge_sampler = WalkerAliasSampler(graph.data)
 
+    edge_sampler = WalkerAliasSampler(graph.data)
     negative_sampler = NegativeSampler(graph)
 
     negative_edge_weight = (1.0 - graph.data).sum() + (graph.shape[0]**2 - n_edges)
@@ -268,8 +272,11 @@ cpdef np.ndarray[np.float64_t, ndim=2] cython_fit(
         embedding = np.random.uniform(low=-10.0, high=10.0,
                                            size=(graph.shape[0], 2))
     else:
+        # We add a little noise to avoid local minima for optimization to come
         embedding = (spectral_layout(graph, n_components) * 100.0) + \
-                            np.random.normal(scale=0.05, size=[graph.shape[0], n_components])
+                            np.random.normal(scale=0.05,
+                                             size=[graph.shape[0],
+                                             n_components])
 
     if n_edge_samples <= 0:
         n_edge_samples = (graph.shape[0] // 150) * 1000000
