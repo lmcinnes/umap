@@ -1,9 +1,11 @@
 from .umap_utils import fuzzy_simplicial_set, embed_simplicial_set
 from scipy.optimize import curve_fit
+from sklearn.base import BaseEstimator
 
 import numpy as np
 
-class UMAP (object):
+class UMAP (BaseEstimator):
+
     def __init__(self,
                  n_neighbors=50,
                  n_components=2,
