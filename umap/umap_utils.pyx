@@ -6,10 +6,13 @@ import numpy as np
 cimport numpy as np
 
 from collections import deque
-from libc.math cimport exp, erf, sqrt, isfinite, ceil, log
+from libc.math cimport exp, pow, erf, sqrt, isfinite, ceil, log, fabs
 # from libcpp.unordered_set cimport unordered_set
 
 import scipy.sparse
+
+cdef extern from "numpy/npy_math.h":
+    float NPY_INFINITY
 
 cdef extern from "gsl/gsl_rng.h":
     ctypedef struct gsl_rng_type:
@@ -21,6 +24,156 @@ cdef extern from "gsl/gsl_rng.h":
     void gsl_rng_free(gsl_rng *r)
     double gsl_rng_uniform(const gsl_rng *r) nogil
     unsigned long int gsl_rng_uniform_int(const gsl_rng *r, unsigned long int n) nogil
+
+cdef float SMOOTH_K_TOLERANCE = 1e-5
+
+cpdef tuple smooth_knn_dist(
+    np.ndarray[np.float64_t, ndim=2] distances,
+    np.float64_t k,
+    np.int64_t n_iter=128
+):
+
+    cdef np.int64_t i, j
+    cdef np.int64_t n
+    cdef np.float64_t lo, hi, mid, val, psum
+    cdef np.ndarray[np.float64_t, ndim=1] result = np.empty(distances.shape[0],
+                                                            dtype=np.float64)
+    cdef np.ndarray[np.float64_t, ndim=1] rho = np.empty(distances.shape[0],
+                                                            dtype=np.float64)
+    cdef np.float64_t target = np.log(k)
+
+    for i in range(distances.shape[0]):
+        lo = 0.0
+        hi = NPY_INFINITY
+        mid = 1.0
+
+        rho[i] = np.partition(distances[i], 1)[1]
+
+        for n in range(n_iter):
+
+            val = 0.0
+            psum = 0.0
+            for j in range(1, distances.shape[1]):
+                psum += exp(-((distances[i, j] - rho[i]) / mid))
+            val = psum
+
+            if fabs(val - target) < SMOOTH_K_TOLERANCE:
+                break
+
+            if val > target:
+                hi = mid
+                mid = (lo + hi) / 2.0
+            else:
+                lo = mid
+                if hi == NPY_INFINITY:
+                    mid *= 2
+                else:
+                    mid = (lo + hi) / 2.0
+
+        result[i] = mid
+
+    return result, rho
+
+@cython.boundscheck(False)
+@cython.cdivision(True)
+cdef np.float64_t seuclidean(np.float64_t *a, np.float64_t *b, np.float64_t *v, np.int64_t size) nogil except -1:
+
+    cdef np.int64_t i
+    cdef np.float64_t diff
+    cdef np.float64_t result
+
+    result = 0.0
+    for i in range(size):
+        diff = a[i] - b[i]
+        result += (diff * diff) / v[i]
+
+    return sqrt(result)
+
+cpdef object fuzzy_simplicial_set(
+    np.ndarray[np.float64_t, ndim=2] X,
+    np.int64_t n_neighbors,
+    np.int64_t oversampling=3
+):
+
+        cdef np.float64_t[:, :] x_view
+        cdef np.ndarray[np.float64_t, ndim=2] knn_dists
+        cdef np.ndarray[np.int64_t, ndim=2] knn_indices
+
+        cdef np.int64_t dim
+
+        cdef np.float64_t *center
+        cdef np.float64_t *neighbor
+        cdef np.float64_t[:] v
+
+        cdef np.ndarray[np.float64_t, ndim=1] vals
+        cdef np.ndarray[np.int64_t, ndim=1] rows
+        cdef np.ndarray[np.int64_t, ndim=1] cols
+
+        cdef np.ndarray[np.float64_t, ndim=1] new_dists
+        cdef np.ndarray[np.int64_t, ndim=1] new_neighbor_indices
+        cdef np.int64_t[:] idxs, tmp_indices
+
+        cdef np.float64_t val, v_prod, v_normalize, r, normalizing_exponent
+        cdef np.int64_t i, j, k, col_index
+        cdef np.float64_t[:] tmp_dists_view
+        cdef np.float64_t[:] densities
+        cdef np.ndarray[np.float64_t, ndim=1] sigmas
+
+        n_oversampled_neighbors = <np.int64_t> (n_neighbors * oversampling)
+        x_view = X
+        dim = X.shape[1]
+
+        rows = np.zeros((X.shape[0] * n_oversampled_neighbors), dtype=np.int64)
+        cols = np.zeros((X.shape[0] * n_oversampled_neighbors), dtype=np.int64)
+        vals = np.zeros((X.shape[0] * n_oversampled_neighbors), dtype=np.float64)
+
+        tmp_dists = np.empty(n_oversampled_neighbors, dtype=np.float64)
+        tmp_dists_view = tmp_dists
+        densities = np.zeros(X.shape[0])
+
+        tree = KDTree(X)
+        knn_dists, knn_indices = tree.query(X, k=n_oversampled_neighbors, dualtree=True)
+
+        for i in range(knn_indices.shape[0]):
+            v = np.sqrt(X[knn_indices[i, 1:n_neighbors//3]].var(axis=0))
+            v += 0.1 * np.mean(v)
+            for j in range(knn_dists.shape[1]):
+                knn_dists[i, j] = seuclidean(&x_view[i, 0],
+                                             &x_view[knn_indices[i, j], 0],
+                                             &v[0],
+                                             dim)
+
+        sigmas, rhos = smooth_knn_dist(knn_dists, self.n_neighbors)
+
+        for i in range(knn_indices.shape[0]):
+
+            for j in range(n_oversampled_neighbors):
+                if j == 0:
+                    val = 0.0
+                else:
+                    val = exp(-((knn_dists[i, j] - rhos[i]) / sigmas[i]))
+
+                if sigmas[i] > sigmas[knn_indices[i, j]]:
+                    val *= sigmas[knn_indices[i, j]] / sigmas[i]
+                else:
+                    val *= sigmas[i] / sigmas[knn_indices[i, j]]
+
+                rows[i * n_oversampled_neighbors + j] = i
+                cols[i * n_oversampled_neighbors + j] = knn_indices[i, j]
+                vals[i * n_oversampled_neighbors + j] = val
+
+
+        result = coo_matrix((vals, (rows, cols)))
+        result.eliminate_zeros()
+
+        transpose = result.transpose()
+
+        prod_matrix = result.multiply(transpose)
+
+        result = result + transpose - prod_matrix
+        result.eliminate_zeros()
+
+        return result
 
 cdef class WalkerAliasSampler (object):
 
