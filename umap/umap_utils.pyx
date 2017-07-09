@@ -267,7 +267,7 @@ cdef np.ndarray spectral_layout(object graph, int dim):
         which='SM',
         ncv=num_lanczos_vectors,
         tol=1e-4,
-        max_iter=graph.shape[0] * 5)
+        maxiter=graph.shape[0] * 5)
     order = np.argsort(eigenvalues)[1:k]
     return eigenvectors[:, order]
 
