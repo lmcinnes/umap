@@ -14,6 +14,8 @@ import scipy.sparse
 cdef extern from "numpy/npy_math.h":
     float NPY_INFINITY
 
+from sklearn .neighbors import KDTree
+
 cdef extern from "gsl/gsl_rng.h":
     ctypedef struct gsl_rng_type:
         pass
@@ -143,7 +145,7 @@ cpdef object fuzzy_simplicial_set(
                                              &v[0],
                                              dim)
 
-        sigmas, rhos = smooth_knn_dist(knn_dists, self.n_neighbors)
+        sigmas, rhos = smooth_knn_dist(knn_dists, n_neighbors)
 
         for i in range(knn_indices.shape[0]):
 
@@ -163,7 +165,7 @@ cpdef object fuzzy_simplicial_set(
                 vals[i * n_oversampled_neighbors + j] = val
 
 
-        result = coo_matrix((vals, (rows, cols)))
+        result = scipy.sparse.coo_matrix((vals, (rows, cols)))
         result.eliminate_zeros()
 
         transpose = result.transpose()
