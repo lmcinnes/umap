@@ -1,4 +1,4 @@
-from .umap_utils import fuzzy_simplicial_set, embed_simplicial_set
+from .umap_utils import fuzzy_simplicial_set, simplicial_set_embedding
 from scipy.optimize import curve_fit
 from sklearn.base import BaseEstimator
 
@@ -140,7 +140,7 @@ class UMAP (BaseEstimator):
         else:
             n_edge_samples = self.n_edge_samples
 
-        self.embedding_ = embed_simplicial_set(
+        self.embedding_ = simplicial_set_embedding(
             graph,
             self.n_components,
             self.initial_alpha,
