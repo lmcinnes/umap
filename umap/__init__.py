@@ -1,1 +1,1 @@
-from umap_ import UMAP
+from .umap_ import UMAP
