@@ -60,10 +60,12 @@ Examples
 How well does it work? Here are some examples on the digits dataset.
 
 First the small sklearn digits data (~1700 digits in 64 space):
+
 .. image:: images/sklearn_digits.png
     :alt: Embedding of the sklearn digits dataset
 
 Now on the full test set (10000 digits in 784 space):
+
 .. image:: images/mnist_digits.png
     :alt: Embedding of the sklearn digits dataset
 
