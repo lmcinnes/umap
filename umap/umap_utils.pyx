@@ -112,8 +112,12 @@ cpdef tuple smooth_knn_dist(
         result[i] = mid
 
         # TODO: This is very inefficient, but will do for now. FIXME
-        if result[i] < MIN_K_DIST_SCALE * np.mean(ith_distances):
-            result[i] = MIN_K_DIST_SCALE * np.mean(ith_distances)
+        if rho[i] > 0.0:
+            if result[i] < MIN_K_DIST_SCALE * np.mean(ith_distances):
+                result[i] = MIN_K_DIST_SCALE * np.mean(ith_distances)
+        else:
+            if result[i] < MIN_K_DIST_SCALE * np.mean(distances):
+                result[i] = MIN_K_DIST_SCALE * np.mean(distances)
 
     return result, rho
 
@@ -179,7 +183,10 @@ cpdef object fuzzy_simplicial_set(
 
         for i in range(knn_indices.shape[0]):
             v = np.sqrt(X[knn_indices[i, 1:n_neighbors//3]].var(axis=0))
-            v += 0.1 * np.mean(v)
+            if np.mean(v) > 0:
+                v += 0.1 * np.mean(v)
+            else:
+                v[:] = 1.0
             for j in range(knn_dists.shape[1]):
                 knn_dists[i, j] = seuclidean(&x_view[i, 0],
                                              &x_view[knn_indices[i, j], 0],
