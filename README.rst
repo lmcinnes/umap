@@ -16,6 +16,10 @@ functionality. For basic usage you can do something like:
 
     embedding = umap.UMAP().fit_transform(digits.data)
 
+This algorithm is still under development. There are no promises that this will
+work well on your data, but if it doesn't please let me know so I can work
+to make the algorithm better, or understand what is going astray.
+
 A paper documenting the algorithm and the mathematical motivation behind
 it is forthcoming.
 
@@ -44,14 +48,6 @@ requirements at this time are:
 * scipy
 * scikit-learn
 * cython
-* gsl
-
-All of these other than gsl are easily satisfied. On linux gsl should be
-available via your package manager; on Mac gsl is available from homebrew
-(and probably other sources). On Windows -- I honestly don't know.
-
-I hope to remove the gsl dependency in the future (I really only need very
-efficient pseudo-random number generation).
 
 --------
 Examples
