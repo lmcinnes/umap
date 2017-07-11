@@ -84,6 +84,7 @@ cpdef tuple smooth_knn_dist(
         hi = NPY_INFINITY
         mid = 1.0
 
+        # TODO: This is very inefficient, but will do for now. FIXME
         ith_distances = distances[i]
         rho[i] = np.min(ith_distances[ith_distances > 0.0])
 
@@ -110,6 +111,7 @@ cpdef tuple smooth_knn_dist(
 
         result[i] = mid
 
+        # TODO: This is very inefficient, but will do for now. FIXME
         if result[i] < MIN_K_DIST_SCALE * np.mean(ith_distances):
             result[i] = MIN_K_DIST_SCALE * np.mean(ith_distances)
 
