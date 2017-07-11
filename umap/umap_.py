@@ -133,6 +133,9 @@ class UMAP (BaseEstimator):
             or 'coo'.
         """
 
+        # Handle other array dtypes (TODO: do this properly)
+        X = X.astype(np.float64)
+
         graph = fuzzy_simplicial_set(X, self.n_neighbors, self.oversampling)
 
         if self.n_edge_samples is None:
