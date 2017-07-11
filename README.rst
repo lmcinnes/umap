@@ -63,7 +63,13 @@ First the small sklearn digits data (~1700 digits in 64 space):
 Now on the full test set (10000 digits in 784 space):
 
 .. image:: images/mnist_digits.png
-    :alt: Embedding of the sklearn digits dataset
+    :alt: Embedding of the full digits test dataset
+
+And because no ML presentation is complete without it, the Iris dataset:
+
+.. image:: images/iris.png
+    :alt: Embedding of the iris dataset under several techniques
+
 
 ------------
 Contributing
