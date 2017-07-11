@@ -191,8 +191,10 @@ cpdef object fuzzy_simplicial_set(
         for i in range(knn_indices.shape[0]):
 
             for j in range(n_oversampled_neighbors):
-                if j == 0:
+                if knn_indices[i, j] == i:
                     val = 0.0
+                elif knn_dists[i, j] == 0.0:
+                    val = 1.0
                 else:
                     val = exp(-((knn_dists[i, j] - rhos[i]) / sigmas[i]))
 
