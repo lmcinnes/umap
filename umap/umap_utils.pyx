@@ -6,6 +6,7 @@ import numpy as np
 cimport numpy as np
 
 from collections import deque
+from libc.stdlib cimport malloc, free
 from libc.math cimport exp, pow, erf, sqrt, isfinite, ceil, log, fabs
 # from libcpp.unordered_set cimport unordered_set
 
@@ -16,16 +17,48 @@ cdef extern from "numpy/npy_math.h":
 
 from sklearn .neighbors import KDTree
 
-cdef extern from "gsl/gsl_rng.h":
-    ctypedef struct gsl_rng_type:
-        pass
-    ctypedef struct gsl_rng:
-        pass
-    const gsl_rng_type *gsl_rng_taus
-    gsl_rng *gsl_rng_alloc(const gsl_rng_type *T)
-    void gsl_rng_free(gsl_rng *r)
-    double gsl_rng_uniform(const gsl_rng *r) nogil
-    unsigned long int gsl_rng_uniform_int(const gsl_rng *r, unsigned long int n) nogil
+#cdef extern from "gsl/gsl_rng.h":
+#    ctypedef struct gsl_rng_type:
+#        pass
+#    ctypedef struct gsl_rng:
+#        pass
+#    const gsl_rng_type *gsl_rng_taus
+#    gsl_rng *gsl_rng_alloc(const gsl_rng_type *T)
+#    void gsl_rng_free(gsl_rng *r)
+#    double gsl_rng_uniform(const gsl_rng *r) nogil
+#    unsigned long int gsl_rng_uniform_int(const gsl_rng *r, unsigned long int n) nogil
+
+
+# Stolen directly from sklearn ...
+ctypedef np.npy_intp SIZE_t              # Type for indices and counters
+
+cdef enum:
+    # Max value for our rand_r replacement (near the bottom).
+    # We don't use RAND_MAX because it's different across platforms and
+    # particularly tiny on Windows/MSVC.
+    RAND_R_MAX = 0x7FFFFFFF
+
+# rand_r replacement using a 32bit XorShift generator
+# See http://www.jstatsoft.org/v08/i14/paper for details
+cdef inline np.uint32_t our_rand_r(np.uint32_t* seed) nogil:
+    seed[0] ^= <np.uint32_t>(seed[0] << 13)
+    seed[0] ^= <np.uint32_t>(seed[0] >> 17)
+    seed[0] ^= <np.uint32_t>(seed[0] << 5)
+
+    return seed[0] % (<np.uint32_t>RAND_R_MAX + 1)
+
+cdef inline SIZE_t rand_int(SIZE_t low, SIZE_t high,
+                            np.uint32_t* random_state) nogil:
+    """Generate a random integer in [0; end)."""
+    return low + our_rand_r(random_state) % (high - low)
+
+
+cdef inline double rand_uniform(double low, double high,
+                                np.uint32_t* random_state) nogil:
+    """Generate a random double in [low; high)."""
+    return ((high - low) * <double> our_rand_r(random_state) /
+            <double> RAND_R_MAX) + low
+
 
 cdef float SMOOTH_K_TOLERANCE = 1e-5
 
@@ -182,14 +215,17 @@ cdef class WalkerAliasSampler (object):
     cdef np.int64_t size
     cdef np.ndarray prob
     cdef np.ndarray alias
-    cdef gsl_rng *rng
+    # cdef gsl_rng *rng
+    cdef np.uint32_t *rng
 
     def __init__(self, probabilities):
 
         self.size = probabilities.shape[0]
         self.prob = np.zeros(probabilities.shape[0], dtype=np.float64)
         self.alias = np.zeros(probabilities.shape[0], dtype=np.int64)
-        self.rng = gsl_rng_alloc(gsl_rng_taus)
+        # self.rng = gsl_rng_alloc(gsl_rng_taus)
+        self.rng = <np.uint32_t *> malloc(sizeof(np.uint32_t))
+        self.rng[0] = np.random.randint(RAND_R_MAX, dtype=np.uint32)
 
         norm_prob = self.size * probabilities / probabilities.sum()
 
@@ -223,7 +259,8 @@ cdef class WalkerAliasSampler (object):
             self.prob[large.pop()] = 1.0
 
     def __dealloc__(self):
-        gsl_rng_free(self.rng)
+        # gsl_rng_free(self.rng)
+        free(self.rng)
 
     cdef np.int64_t sample(self) nogil except -1:
 
@@ -233,8 +270,10 @@ cdef class WalkerAliasSampler (object):
         cdef np.float64_t * prob = <np.float64_t *> self.prob.data
         cdef np.int64_t * alias = <np.int64_t *> self.alias.data
 
-        k = gsl_rng_uniform_int(self.rng, size)
-        u = gsl_rng_uniform(self.rng)
+        #k = gsl_rng_uniform_int(self.rng, size)
+        #u = gsl_rng_uniform(self.rng)
+        k = rand_int(0, size, self.rng)
+        u = rand_uniform(0.0, 1.0, self.rng)
 
         if u < prob[k]:
             return k
@@ -331,7 +370,8 @@ cdef class NegativeSampler (object):
     cdef int[:] tail
 #     cdef unordered_set[np.int64_t] non_zero_set
     cdef SimpleBloomFilter non_zero_set
-    cdef gsl_rng *rng
+    # cdef gsl_rng *rng
+    cdef np.uint32_t *rng
 
     def __init__(self, graph):
 
@@ -356,10 +396,13 @@ cdef class NegativeSampler (object):
                                       self.n_vertices +
                                       self.graph.col[i])
 
-        self.rng = gsl_rng_alloc(gsl_rng_taus)
+        # self.rng = gsl_rng_alloc(gsl_rng_taus)
+        self.rng = <np.uint32_t *> malloc(sizeof(np.uint32_t))
+        self.rng[0] = np.random.randint(RAND_R_MAX, dtype=np.uint32)
 
     def __dealloc__(self):
-        gsl_rng_free(self.rng)
+        # gsl_rng_free(self.rng)
+        free(self.rng)
 
     @cython.boundscheck(False)
     @cython.initializedcheck(False)
@@ -369,13 +412,17 @@ cdef class NegativeSampler (object):
         cdef np.int64_t row, col, index
         cdef np.int64_t edge
 
-        if gsl_rng_uniform(self.rng) < self.sample_from_zeros_prob:
-            row = gsl_rng_uniform_int(self.rng, self.n_vertices)
-            col = gsl_rng_uniform_int(self.rng, self.n_vertices)
+        # if gsl_rng_uniform(self.rng) < self.sample_from_zeros_prob:
+        #     row = gsl_rng_uniform_int(self.rng, self.n_vertices)
+        #     col = gsl_rng_uniform_int(self.rng, self.n_vertices)
+        if rand_uniform(0.0, 1.0, self.rng) < self.sample_from_zeros_prob:
+            row = rand_int(0, self.n_vertices, self.rng)
+            col = rand_int(0, self.n_vertices, self.rng)
             index = row * self.n_vertices + col
     #             while self.non_zero_set.count(index) > 0:
             while self.non_zero_set.has_key(index):
-                index = gsl_rng_uniform_int(self.rng, self.n_edges)
+                # index = gsl_rng_uniform_int(self.rng, self.n_edges)
+                index = rand_int(0, self.n_edges, self.rng)
             return index
         else:
             edge = self.non_zero_sampler.sample()
@@ -404,13 +451,16 @@ cpdef np.ndarray[np.float64_t, ndim=2] simplicial_set_embedding(
     cdef int dim = <int> n_components
     cdef int[:] positive_head, positive_tail, negative_head, negative_tail
     cdef int is_negative_sample
-    cdef gsl_rng *rng
+    # cdef gsl_rng *rng
+    cdef np.uint32_t *rng
     cdef np.float64_t alpha = initial_alpha
     cdef WalkerAliasSampler edge_sampler
     cdef NegativeSampler negative_sampler
     cdef np.float64_t negative_sample_prob
 
-    rng = gsl_rng_alloc(gsl_rng_taus)
+    # rng = gsl_rng_alloc(gsl_rng_taus)
+    rng = <np.uint32_t *> malloc(sizeof(np.uint32_t))
+    rng[0] = np.random.randint(RAND_R_MAX, dtype=np.uint32)
 
     graph = graph.tocoo()
     graph.sum_duplicates()
@@ -443,7 +493,8 @@ cpdef np.ndarray[np.float64_t, ndim=2] simplicial_set_embedding(
     for i in range(n_edge_samples):
 
 #         if gsl_rng_uniform(rng) < negative_sample_prob:
-        if gsl_rng_uniform(rng) < 0.8:
+#         if gsl_rng_uniform(rng) < 0.8:
+        if rand_uniform(0.0, 1.0, rng) < 0.8:
             is_negative_sample = True
         else:
             is_negative_sample = False
@@ -488,7 +539,8 @@ cpdef np.ndarray[np.float64_t, ndim=2] simplicial_set_embedding(
             if alpha < (initial_alpha * 0.0001):
                 alpha = initial_alpha * 0.0001;
 
-    gsl_rng_free(rng)
+    # gsl_rng_free(rng)
+    free(rng)
 
     return embedding
 
