@@ -61,6 +61,7 @@ cdef inline double rand_uniform(double low, double high,
 
 
 cdef float SMOOTH_K_TOLERANCE = 1e-5
+cdef float MIN_K_DIST_SCALE = 1e-3
 
 cpdef tuple smooth_knn_dist(
     np.ndarray[np.float64_t, ndim=2] distances,
@@ -76,13 +77,15 @@ cpdef tuple smooth_knn_dist(
     cdef np.ndarray[np.float64_t, ndim=1] rho = np.empty(distances.shape[0],
                                                             dtype=np.float64)
     cdef np.float64_t target = np.log(k)
+    cdef np.ndarray[np.float64_t, ndim=1] ith_distances
 
     for i in range(distances.shape[0]):
         lo = 0.0
         hi = NPY_INFINITY
         mid = 1.0
 
-        rho[i] = np.partition(distances[i], 1)[1]
+        ith_distances = distances[i]
+        rho[i] = np.min(ith_distances[ith_distances > 0.0])
 
         for n in range(n_iter):
 
@@ -106,6 +109,9 @@ cpdef tuple smooth_knn_dist(
                     mid = (lo + hi) / 2.0
 
         result[i] = mid
+
+        if result[i] < MIN_K_DIST_SCALE * np.mean(ith_distances):
+            result[i] = MIN_K_DIST_SCALE * np.mean(ith_distances)
 
     return result, rho
 
