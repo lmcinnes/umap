@@ -5,8 +5,6 @@ import numpy
 
 umap_utils = Extension('umap.umap_utils',
                         sources=['umap/umap_utils.pyx'],
-                        libraries=['gsl', 'cblas'],
-                        library_dirs=['/usr/lib'],
                         include_dirs=[numpy.get_include(), '/usr/include'])
 
 def readme():
