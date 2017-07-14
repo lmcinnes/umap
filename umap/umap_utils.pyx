@@ -78,6 +78,7 @@ cpdef tuple smooth_knn_dist(
                                                             dtype=np.float64)
     cdef np.float64_t target = np.log(k)
     cdef np.ndarray[np.float64_t, ndim=1] ith_distances
+    cdef np.ndarray[np.float64_t, ndim=1] non_zero_dists
 
     for i in range(distances.shape[0]):
         lo = 0.0
@@ -86,7 +87,11 @@ cpdef tuple smooth_knn_dist(
 
         # TODO: This is very inefficient, but will do for now. FIXME
         ith_distances = distances[i]
-        rho[i] = np.min(ith_distances[ith_distances > 0.0])
+        non_zero_dists = ith_distances[ith_distances > 0.0]
+        if non_zero_dists.shape[0] > 0:
+            rho[i] = np.min(non_zero_dists)
+        else:
+            rho[i] = 0.0
 
         for n in range(n_iter):
 
