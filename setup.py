@@ -1,11 +1,5 @@
 from Cython.Distutils import build_ext
-from setuptools import setup, Extension
-
-import numpy
-
-umap_utils = Extension('umap.umap_utils',
-                        sources=['umap/umap_utils.pyx'],
-                        include_dirs=[numpy.get_include(), '/usr/include'])
+from setuptools import setup
 
 def readme():
     with open('README.rst') as readme_file:
@@ -39,8 +33,9 @@ configuration = {
     'license' : 'BSD',
     'packages' : ['umap'],
     'install_requires' : ['scikit-learn>=0.16',
-                          'cython >= 0.17'],
-    'ext_modules' : [umap_utils,],
+                          'cython >= 0.17',
+                          'numba >= 0.34'],
+    'ext_modules' : [],
     'cmdclass' : {'build_ext' : build_ext},
     'test_suite' : 'nose.collector',
     'tests_require' : ['nose'],
