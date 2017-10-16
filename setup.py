@@ -34,6 +34,7 @@ configuration = {
     'packages' : ['umap'],
     'install_requires' : ['scikit-learn>=0.16',
                           'cython >= 0.17',
+                          'scipy >= 0.19',
                           'numba >= 0.34'],
     'ext_modules' : [],
     'cmdclass' : {'build_ext' : build_ext},
