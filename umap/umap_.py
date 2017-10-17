@@ -3,6 +3,7 @@ from sklearn.base import BaseEstimator
 from collections import deque, namedtuple
 
 import numpy as np
+import scipy.sparse
 import numba
 import cffi
 
@@ -89,8 +90,8 @@ def rdist(x, y):
 
 
 @numba.njit(parallel=True)
-def build_candidates(current_graph, n_vertices, n_neighbors, K):
-    candidate_neighbors = make_heap(n_vertices, K)
+def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates):
+    candidate_neighbors = make_heap(n_vertices, max_candidates)
     for i in range(n_vertices):
         for j in range(n_neighbors):
             if current_graph[0, i, j] < 0:
@@ -106,7 +107,8 @@ def build_candidates(current_graph, n_vertices, n_neighbors, K):
 
 
 @numba.njit(parallel=True)
-def nn_descent(data, n_neighbors, K=50, n_iters=10, delta=0.001, rho=0.5):
+def nn_descent(data, n_neighbors, max_candidates=50,
+               n_iters=10, delta=0.001, rho=0.5):
     n_vertices = data.shape[0]
     current_graph = make_heap(data.shape[0], n_neighbors)
 
@@ -121,19 +123,18 @@ def nn_descent(data, n_neighbors, K=50, n_iters=10, delta=0.001, rho=0.5):
     for n in range(n_iters):
 
         candidate_neighbors = build_candidates(current_graph, n_vertices,
-                                               n_neighbors, K)
+                                               n_neighbors, max_candidates)
 
         c = 0
         for i in range(n_vertices):
-            for j in range(K):
+            for j in range(max_candidates):
                 p = int(candidate_neighbors[0, i, j])
                 if p < 0 or np.random.random() < rho:
                     continue
-                for k in range(K):
+                for k in range(max_candidates):
                     q = int(candidate_neighbors[0, i, k])
-                    if q < 0 or not (
-                        candidate_neighbors[2, i, j] or candidate_neighbors[
-                        2, i, k]):
+                    if q < 0 or not candidate_neighbors[2, i, j] and not \
+                            candidate_neighbors[2, i, k]:
                         continue
 
                     d = rdist(data[p], data[q])
@@ -181,7 +182,6 @@ def smooth_knn_dist(distances, k, n_iter=128):
 
         for n in range(n_iter):
 
-            val = 0.0
             psum = 0.0
             for j in range(1, distances.shape[1]):
                 psum += np.exp(-((distances[i, j] - rho[i]) / mid))
@@ -212,74 +212,70 @@ def smooth_knn_dist(distances, k, n_iter=128):
 
     return result, rho
 
-import scipy.sparse
-
-from sklearn.neighbors import KDTree
 
 @numba.jit(parallel=True)
 def fuzzy_simplicial_set(X, n_neighbors, oversampling=3):
+    n_oversampled_neighbors = (n_neighbors * oversampling)
+    dim = X.shape[1]
 
-        n_oversampled_neighbors = (n_neighbors * oversampling)
-        dim = X.shape[1]
+    rows = np.zeros((X.shape[0] * n_oversampled_neighbors), dtype=np.int64)
+    cols = np.zeros((X.shape[0] * n_oversampled_neighbors), dtype=np.int64)
+    vals = np.zeros((X.shape[0] * n_oversampled_neighbors), dtype=np.float64)
 
-        rows = np.zeros((X.shape[0] * n_oversampled_neighbors), dtype=np.int64)
-        cols = np.zeros((X.shape[0] * n_oversampled_neighbors), dtype=np.int64)
-        vals = np.zeros((X.shape[0] * n_oversampled_neighbors), dtype=np.float64)
+    tmp_dists = np.empty(n_oversampled_neighbors, dtype=np.float64)
+    densities = np.zeros(X.shape[0])
 
-        tmp_dists = np.empty(n_oversampled_neighbors, dtype=np.float64)
-        densities = np.zeros(X.shape[0])
+    tmp_indices, knn_dists = nn_descent(X,
+                                        n_neighbors=n_oversampled_neighbors,
+                                        max_candidates=60)
+    knn_indices = tmp_indices.astype(np.int64)
+    for i in range(knn_indices.shape[0]):
+        order = np.argsort(knn_dists[i])
+        knn_dists[i] = knn_dists[i][order]
+        knn_indices[i] = knn_indices[i][order]
 
-        tmp_indices, knn_dists = nn_descent(X,
-                                            n_neighbors=n_oversampled_neighbors,
-                                            K=60)
-        knn_indices = tmp_indices.astype(np.int64)
-        for i in range(knn_indices.shape[0]):
-            order = np.argsort(knn_dists[i])
-            knn_dists[i]  = knn_dists[i][order]
-            knn_indices[i] = knn_indices[i][order]
+    #         for i in range(knn_indices.shape[0]):
+    #             v = np.sqrt(X[knn_indices[i, 1:n_neighbors//3]].var(axis=0))
+    #             if np.mean(v) > 0:
+    #                 v += 0.1 * np.mean(v)
+    #             else:
+    #                 v[:] = 1.0
+    #             for j in range(knn_dists.shape[1]):
+    #                 knn_dists[i, j] = seuclidean(X[i], X[knn_indices[i,
+    # j]], v)
 
-#         for i in range(knn_indices.shape[0]):
-#             v = np.sqrt(X[knn_indices[i, 1:n_neighbors//3]].var(axis=0))
-#             if np.mean(v) > 0:
-#                 v += 0.1 * np.mean(v)
-#             else:
-#                 v[:] = 1.0
-#             for j in range(knn_dists.shape[1]):
-#                 knn_dists[i, j] = seuclidean(X[i], X[knn_indices[i, j]], v)
+    sigmas, rhos = smooth_knn_dist(knn_dists, n_neighbors)
 
-        sigmas, rhos = smooth_knn_dist(knn_dists, n_neighbors)
+    for i in range(knn_indices.shape[0]):
 
-        for i in range(knn_indices.shape[0]):
+        for j in range(n_oversampled_neighbors):
+            if knn_indices[i, j] == i:
+                val = 0.0
+            elif knn_dists[i, j] == 0.0:
+                val = 1.0
+            else:
+                val = np.exp(-((knn_dists[i, j] - rhos[i]) / sigmas[i]))
 
-            for j in range(n_oversampled_neighbors):
-                if knn_indices[i, j] == i:
-                    val = 0.0
-                elif knn_dists[i, j] == 0.0:
-                    val = 1.0
-                else:
-                    val = np.exp(-((knn_dists[i, j] - rhos[i]) / sigmas[i]))
+            #                 if sigmas[i] > sigmas[knn_indices[i, j]]:
+            #                     val *= sigmas[knn_indices[i, j]] / sigmas[i]
+            #                 else:
+            #                     val *= sigmas[i] / sigmas[knn_indices[i, j]]
 
-#                 if sigmas[i] > sigmas[knn_indices[i, j]]:
-#                     val *= sigmas[knn_indices[i, j]] / sigmas[i]
-#                 else:
-#                     val *= sigmas[i] / sigmas[knn_indices[i, j]]
+            rows[i * n_oversampled_neighbors + j] = i
+            cols[i * n_oversampled_neighbors + j] = knn_indices[i, j]
+            vals[i * n_oversampled_neighbors + j] = val
 
-                rows[i * n_oversampled_neighbors + j] = i
-                cols[i * n_oversampled_neighbors + j] = knn_indices[i, j]
-                vals[i * n_oversampled_neighbors + j] = val
+    result = scipy.sparse.coo_matrix((vals, (rows, cols)))
+    result.eliminate_zeros()
 
+    transpose = result.transpose()
 
-        result = scipy.sparse.coo_matrix((vals, (rows, cols)))
-        result.eliminate_zeros()
+    prod_matrix = result.multiply(transpose)
 
-        transpose = result.transpose()
+    result = result + transpose - prod_matrix
+    result.eliminate_zeros()
 
-        prod_matrix = result.multiply(transpose)
-
-        result = result + transpose - prod_matrix
-        result.eliminate_zeros()
-
-        return result
+    return result
 
 
 @numba.jit()
@@ -320,6 +316,7 @@ def create_sampler(probabilities):
 
     return prob, alias
 
+
 @numba.njit()
 def sample(prob, alias):
     k = c_rand() % prob.shape[0]
@@ -333,7 +330,6 @@ def sample(prob, alias):
 
 @numba.jit()
 def spectral_layout(graph, dim):
-
     diag_data = np.asarray(graph.sum(axis=0))
     D = scipy.sparse.spdiags(diag_data, 0, graph.shape[0], graph.shape[0])
     L = D - graph
@@ -359,7 +355,6 @@ def clip(val):
 def optimize_layout(embedding, positive_head, positive_tail,
                     n_edge_samples, n_vertices, prob, alias,
                     a, b, gamma=1.0, initial_alpha=1.0):
-
     dim = embedding.shape[1]
     alpha = initial_alpha
 
@@ -388,7 +383,7 @@ def optimize_layout(embedding, positive_head, positive_tail,
 
             grad_coeff = (2.0 * gamma * b)
             grad_coeff /= (0.001 + dist_squared) * (
-            a * pow(dist_squared, b) + 1)
+                a * pow(dist_squared, b) + 1)
 
             if not np.isfinite(grad_coeff):
                 grad_coeff = 128.0
@@ -451,6 +446,7 @@ def find_ab_params(spread, min_dist):
     smooth curve (from a pre-defined family with simple gradient) that
     best matches an offset exponential decay.
     """
+
     def curve(x, a, b):
         return 1.0 / (1.0 + a * x ** (2 * b))
 
@@ -463,7 +459,7 @@ def find_ab_params(spread, min_dist):
     return params[0], params[1]
 
 
-class UMAP (BaseEstimator):
+class UMAP(BaseEstimator):
     """Uniform Manifold Approximation and Projection
 
     Finds a low dimensional embedding of the data that approximates
