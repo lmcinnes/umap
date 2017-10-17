@@ -216,14 +216,13 @@ def smooth_knn_dist(distances, k, n_iter=128):
 @numba.jit(parallel=True)
 def fuzzy_simplicial_set(X, n_neighbors, oversampling=3):
     n_oversampled_neighbors = (n_neighbors * oversampling)
-    dim = X.shape[1]
 
     rows = np.zeros((X.shape[0] * n_oversampled_neighbors), dtype=np.int64)
     cols = np.zeros((X.shape[0] * n_oversampled_neighbors), dtype=np.int64)
     vals = np.zeros((X.shape[0] * n_oversampled_neighbors), dtype=np.float64)
 
-    tmp_dists = np.empty(n_oversampled_neighbors, dtype=np.float64)
-    densities = np.zeros(X.shape[0])
+    # tmp_dists = np.empty(n_oversampled_neighbors, dtype=np.float64)
+    # densities = np.zeros(X.shape[0])
 
     tmp_indices, knn_dists = nn_descent(X,
                                         n_neighbors=n_oversampled_neighbors,
@@ -402,7 +401,7 @@ def optimize_layout(embedding, positive_head, positive_tail,
             alpha = np.exp(
                 -0.69314718055994529 * ((3 * i) / n_edge_samples) ** 2)
             if alpha < (initial_alpha * 0.0001):
-                alpha = initial_alpha * 0.0001;
+                alpha = initial_alpha * 0.0001
 
     return embedding
 
@@ -550,7 +549,7 @@ class UMAP(BaseEstimator):
         self.spread = spread
         self.min_dist = min_dist
 
-        self.oversampling = 3
+        self.oversampling = oversampling
 
         if a is None or b is None:
             self.a, self.b = find_ab_params(self.spread, self.min_dist)
