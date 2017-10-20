@@ -243,6 +243,7 @@ def fuzzy_simplicial_set(X, n_neighbors, oversampling=3):
     #                 knn_dists[i, j] = seuclidean(X[i], X[knn_indices[i,
     # j]], v)
 
+    knn_dists = np.sqrt(knn_dists)
     sigmas, rhos = smooth_knn_dist(knn_dists, n_neighbors)
 
     for i in range(knn_indices.shape[0]):
