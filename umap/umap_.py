@@ -421,8 +421,10 @@ def simplicial_set_embedding(graph, n_components,
                                       size=(graph.shape[0], 2))
     else:
         # We add a little noise to avoid local minima for optimization to come
-        embedding = (spectral_layout(graph, n_components) * 100.0) + \
-                    np.random.normal(scale=0.05,
+        initialisation = spectral_layout(graph, n_components)
+        expansion = 10.0 / initialisation.max()
+        embedding = (initialisation * expansion) + \
+                    np.random.normal(scale=0.0001,
                                      size=[graph.shape[0],
                                            n_components])
 
