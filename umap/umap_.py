@@ -381,11 +381,11 @@ def optimize_layout(embedding, positive_head, positive_tail,
         if is_negative_sample:
 
             grad_coeff = (2.0 * gamma * b)
-            grad_coeff /= (0.001 + dist_squared) * (
+            grad_coeff /= (0.00001 + dist_squared) * (
                 a * pow(dist_squared, b) + 1)
 
             if not np.isfinite(grad_coeff):
-                grad_coeff = 128.0
+                grad_coeff = 8.0
 
         else:
 
