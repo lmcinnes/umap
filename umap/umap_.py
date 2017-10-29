@@ -163,7 +163,7 @@ NPY_INFINITY = np.inf
 
 @numba.njit()
 def smooth_knn_dist(distances, k, n_iter=128):
-    target = np.log(k)
+    target = np.log2(k)
     rho = np.zeros(distances.shape[0])
     result = np.zeros(distances.shape[0])
 
@@ -382,7 +382,7 @@ def optimize_layout(embedding, positive_head, positive_tail,
         if is_negative_sample:
 
             grad_coeff = (2.0 * gamma * b)
-            grad_coeff /= (0.00001 + dist_squared) * (
+            grad_coeff /= (0.001 + dist_squared) * (
                 a * pow(dist_squared, b) + 1)
 
             if not np.isfinite(grad_coeff):
@@ -400,7 +400,7 @@ def optimize_layout(embedding, positive_head, positive_tail,
 
         if i % 10000 == 0:
             alpha = np.exp(
-                -0.69314718055994529 * ((3 * i) / n_edge_samples) ** 2)
+                -0.69314718055994529 * ((3 * i) / n_edge_samples) ** 2) * initial_alpha
             if alpha < (initial_alpha * 0.0001):
                 alpha = initial_alpha * 0.0001
 
