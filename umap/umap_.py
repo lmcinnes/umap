@@ -214,18 +214,14 @@ def smooth_knn_dist(distances, k, n_iter=128):
 
 
 @numba.jit(parallel=True)
-def fuzzy_simplicial_set(X, n_neighbors, oversampling=3):
-    n_oversampled_neighbors = (n_neighbors * oversampling)
+def fuzzy_simplicial_set(X, n_neighbors):
 
-    rows = np.zeros((X.shape[0] * n_oversampled_neighbors), dtype=np.int64)
-    cols = np.zeros((X.shape[0] * n_oversampled_neighbors), dtype=np.int64)
-    vals = np.zeros((X.shape[0] * n_oversampled_neighbors), dtype=np.float64)
-
-    # tmp_dists = np.empty(n_oversampled_neighbors, dtype=np.float64)
-    # densities = np.zeros(X.shape[0])
+    rows = np.zeros((X.shape[0] * n_neighbors), dtype=np.int64)
+    cols = np.zeros((X.shape[0] * n_neighbors), dtype=np.int64)
+    vals = np.zeros((X.shape[0] * n_neighbors), dtype=np.float64)
 
     tmp_indices, knn_dists = nn_descent(X,
-                                        n_neighbors=n_oversampled_neighbors,
+                                        n_neighbors=n_neighbors,
                                         max_candidates=60)
     knn_indices = tmp_indices.astype(np.int64)
     for i in range(knn_indices.shape[0]):
@@ -233,22 +229,12 @@ def fuzzy_simplicial_set(X, n_neighbors, oversampling=3):
         knn_dists[i] = knn_dists[i][order]
         knn_indices[i] = knn_indices[i][order]
 
-    #         for i in range(knn_indices.shape[0]):
-    #             v = np.sqrt(X[knn_indices[i, 1:n_neighbors//3]].var(axis=0))
-    #             if np.mean(v) > 0:
-    #                 v += 0.1 * np.mean(v)
-    #             else:
-    #                 v[:] = 1.0
-    #             for j in range(knn_dists.shape[1]):
-    #                 knn_dists[i, j] = seuclidean(X[i], X[knn_indices[i,
-    # j]], v)
-
     knn_dists = np.sqrt(knn_dists)
     sigmas, rhos = smooth_knn_dist(knn_dists, n_neighbors)
 
     for i in range(knn_indices.shape[0]):
 
-        for j in range(n_oversampled_neighbors):
+        for j in range(n_neighbors):
             if knn_indices[i, j] == i:
                 val = 0.0
             elif knn_dists[i, j] == 0.0:
@@ -256,14 +242,9 @@ def fuzzy_simplicial_set(X, n_neighbors, oversampling=3):
             else:
                 val = np.exp(-((knn_dists[i, j] - rhos[i]) / sigmas[i]))
 
-            #                 if sigmas[i] > sigmas[knn_indices[i, j]]:
-            #                     val *= sigmas[knn_indices[i, j]] / sigmas[i]
-            #                 else:
-            #                     val *= sigmas[i] / sigmas[knn_indices[i, j]]
-
-            rows[i * n_oversampled_neighbors + j] = i
-            cols[i * n_oversampled_neighbors + j] = knn_indices[i, j]
-            vals[i * n_oversampled_neighbors + j] = val
+            rows[i * n_neighbors + j] = i
+            cols[i * n_neighbors + j] = knn_indices[i, j]
+            vals[i * n_neighbors + j] = val
 
     result = scipy.sparse.coo_matrix((vals, (rows, cols)))
     result.eliminate_zeros()
@@ -537,8 +518,7 @@ class UMAP(BaseEstimator):
                  spread=1.0,
                  min_dist=0.25,
                  a=None,
-                 b=None,
-                 oversampling=3
+                 b=None
                  ):
 
         self.n_neighbors = n_neighbors
@@ -552,7 +532,6 @@ class UMAP(BaseEstimator):
         self.spread = spread
         self.min_dist = min_dist
 
-        self.oversampling = oversampling
 
         if a is None or b is None:
             self.a, self.b = find_ab_params(self.spread, self.min_dist)
@@ -575,7 +554,7 @@ class UMAP(BaseEstimator):
         # Handle other array dtypes (TODO: do this properly)
         X = X.astype(np.float64)
 
-        graph = fuzzy_simplicial_set(X, self.n_neighbors, self.oversampling)
+        graph = fuzzy_simplicial_set(X, self.n_neighbors)
 
         if self.n_edge_samples is None:
             n_edge_samples = 0
