@@ -181,6 +181,52 @@ def rdist(x, y):
 
 
 @numba.njit(parallel=True)
+def initialize_from_leaves(data, n_neighbors, leaf_array):
+    current_graph = make_heap(data.shape[0], n_neighbors)
+
+    for n in range(leaf_array.shape[0]):
+        for i in range(leaf_array.shape[1]):
+            if leaf_array[n, i] < 0:
+                break
+            for j in range(i + 1, leaf_array.shape[1]):
+                if leaf_array[n, j] < 0:
+                    break
+                d = rdist(data[leaf_array[n, i]], data[leaf_array[n, j]])
+                heap_push(current_graph, leaf_array[n, i], d, leaf_array[n, j],
+                          1)
+                heap_push(current_graph, leaf_array[n, j], d, leaf_array[n, i],
+                          1)
+
+    return current_graph
+
+
+def rptree_initialization(data, n_neighbors, n_trees=10):
+    leaves = []
+    for t in range(n_trees):
+        tree = make_tree(data, np.arange(data.shape[0]), leaf_size=n_neighbors)
+        leaves += [x.indices for x in tree.get_leaves()]
+
+    leaf_array = -1 * np.ones([len(leaves), n_neighbors], dtype=np.int64)
+    for i, leaf in enumerate(leaves):
+        leaf_array[i, :len(leaf)] = leaf
+
+    return initialize_from_leaves(data, n_neighbors, leaf_array)
+
+@numba.jit(parallel=True)
+def random_initialization(data, n_neighbors):
+    current_graph = make_heap(data.shape[0], n_neighbors)
+
+    for i in range(data.shape[0]):
+        indices = np.random.choice(data.shape[0], size=n_neighbors,
+                                   replace=False)
+        for j in range(indices.shape[0]):
+            d = rdist(data[i], data[indices[j]])
+            heap_push(current_graph, i, d, indices[j], 1)
+            heap_push(current_graph, indices[j], d, i, 1)
+
+    return current_graph
+
+@numba.njit(parallel=True)
 def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates):
     candidate_neighbors = make_heap(n_vertices, max_candidates)
     for i in range(n_vertices):
@@ -199,17 +245,13 @@ def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates):
 
 @numba.njit(parallel=True)
 def nn_descent(data, n_neighbors, max_candidates=50,
-               n_iters=10, delta=0.001, rho=0.5):
+               n_iters=10, delta=0.001, rho=0.5, rptree_init=True):
     n_vertices = data.shape[0]
-    current_graph = make_heap(data.shape[0], n_neighbors)
 
-    for i in range(data.shape[0]):
-        indices = np.random.choice(data.shape[0], size=n_neighbors,
-                                   replace=False)
-        for j in range(indices.shape[0]):
-            d = rdist(data[i], data[indices[j]])
-            heap_push(current_graph, i, d, indices[j], 1)
-            heap_push(current_graph, indices[j], d, i, 1)
+    if rptree_init:
+        current_graph = rptree_initialization(data, n_neighbors)
+    else:
+        current_graph = random_initialization(data, n_neighbors)
 
     for n in range(n_iters):
 
