@@ -29,6 +29,8 @@ def tau_rand(state):
 @numba.njit()
 def random_projection_split(data, indices, rng_state):
     dim = data.shape[1]
+
+    # Select two random points, set the hyperplane between them
     left_index = tau_rand(rng_state) % indices.shape[0]
     right_index = tau_rand(rng_state) % indices.shape[0]
     right_index += left_index == right_index
@@ -36,6 +38,8 @@ def random_projection_split(data, indices, rng_state):
     left = indices[left_index]
     right = indices[right_index]
 
+    # Compute the normal vector to the hyperplane (the vector between
+    # the two points) and the offset from the origin
     hyperplane_offset = 0.0
     hyperplane_vector = np.empty(dim, dtype=np.float32)
 
@@ -44,6 +48,9 @@ def random_projection_split(data, indices, rng_state):
         hyperplane_offset -= hyperplane_vector[d] * (
         data[left, d] + data[right, d]) / 2.0
 
+    # For each point compute the margin (project into normal vector, add offset)
+    # If we are on lower side of the hyperplane put in one pile, otherwise
+    # put it in the other pile (if we hit hyperplane on the nose, flip a coin)
     n_left = 0
     n_right = 0
     side = np.empty(indices.shape[0], np.int8)
@@ -51,8 +58,7 @@ def random_projection_split(data, indices, rng_state):
         margin = hyperplane_offset
         for d in range(dim):
             margin += hyperplane_vector[d] * data[indices[i], d]
-        # margin = compute_margin(data[indices[i]], hyperplane_vector,
-        # hyperplane_offset)
+
         if margin == 0:
             side[i] = tau_rand(rng_state) % 2
             if side[i] == 0:
@@ -66,9 +72,11 @@ def random_projection_split(data, indices, rng_state):
             side[i] = 1
             n_right += 1
 
+    # Now that we have the counts allocate arrays
     indices_left = np.empty(n_left, dtype=np.int64)
     indices_right = np.empty(n_right, dtype=np.int64)
 
+    # Populate the arrays with indices according to which side they fell on
     n_left = 0
     n_right = 0
     for i in range(side.shape[0]):
@@ -88,6 +96,8 @@ RandomProjectionTreeNode = namedtuple('RandomProjectionTreeNode',
 
 def make_tree(data, indices, leaf_size=30):
     rng_state = np.empty(3, dtype=np.int64)
+
+    # Make a tree recursively until we get below the leaf size
     if indices.shape[0] > leaf_size:
         left_indices, right_indices = random_projection_split(data,
                                                               indices,
@@ -212,6 +222,7 @@ def rptree_initialization(data, n_neighbors, n_trees=10):
 
     return initialize_from_leaves(data, n_neighbors, leaf_array)
 
+
 @numba.jit(parallel=True)
 def random_initialization(data, n_neighbors):
     current_graph = make_heap(data.shape[0], n_neighbors)
@@ -225,6 +236,7 @@ def random_initialization(data, n_neighbors):
             heap_push(current_graph, indices[j], d, i, 1)
 
     return current_graph
+
 
 @numba.njit(parallel=True)
 def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates):
