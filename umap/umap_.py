@@ -98,7 +98,11 @@ def make_tree(data, indices, leaf_size=30):
 
     return node
 
-
+def get_leaves(tree):
+    if tree.is_leaf:
+        return [tree.indices]
+    else:
+        return get_leaves(tree.left_child) + get_leaves(tree.right_child)
 
 @numba.njit('f8[:, :, :](i8,i8)')
 def make_heap(n_points, size):
