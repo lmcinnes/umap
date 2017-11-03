@@ -444,9 +444,9 @@ def create_sampler(probabilities):
 
 
 @numba.njit()
-def sample(prob, alias):
-    k = c_rand() % prob.shape[0]
-    u = c_rand() / 0x7fffffff
+def sample(prob, alias, rng_state):
+    k = tau_rand(rng_state) % prob.shape[0]
+    u = tau_rand(rng_state) / 0x7fffffff
 
     if u < prob[k]:
         return k
@@ -480,23 +480,25 @@ def clip(val):
 @numba.njit()
 def optimize_layout(embedding, positive_head, positive_tail,
                     n_edge_samples, n_vertices, prob, alias,
-                    a, b, gamma=1.0, initial_alpha=1.0):
+                    a, b, gamma=1.0, initial_alpha=1.0,
+                    negative_sample_rate=5):
     dim = embedding.shape[1]
     alpha = initial_alpha
+    rng_state = np.empty(3, np.int64)
 
     for i in range(n_edge_samples):
 
-        if c_rand() / 0x7fffffff < 0.8:
-            is_negative_sample = True
-        else:
+        if i % negative_sample_rate == 0:
             is_negative_sample = False
+        else:
+            is_negative_sample = True
 
         if is_negative_sample:
-            edge = c_rand() % (n_vertices ** 2)
+            edge = tau_rand(rng_state) % (n_vertices ** 2)
             j = edge // n_vertices
             k = edge % n_vertices
         else:
-            edge = sample(prob, alias)
+            edge = sample(prob, alias, rng_state)
             j = positive_head[edge]
             k = positive_tail[edge]
 
