@@ -89,7 +89,9 @@ RandomProjectionTreeNode = namedtuple('RandomProjectionTreeNode',
 def make_tree(data, indices, leaf_size=30):
     rng_state = np.empty(3, dtype=np.int64)
     if indices.shape[0] > leaf_size:
-        left_indices, right_indices = base_split(data, indices, rng_state)
+        left_indices, right_indices = random_projection_split(data,
+                                                              indices,
+                                                              rng_state)
         left_node = make_tree(data, left_indices, leaf_size)
         right_node = make_tree(data, right_indices, leaf_size)
         node = RandomProjectionTreeNode(indices, False, left_node, right_node)
