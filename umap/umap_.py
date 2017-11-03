@@ -15,6 +15,91 @@ c_rand = c.rand
 c_erf = c.erf
 
 
+@numba.njit('i4(i8[:])')
+def tau_rand(state):
+    state[0] = (((state[0] & 4294967294) << 12) & 0xffffffff) ^ \
+               ((((state[0] << 13) & 0xffffffff) ^ state[0]) >> 19)
+    state[1] = (((state[1] & 4294967288) << 4) & 0xffffffff) ^ \
+               ((((state[1] << 2) & 0xffffffff) ^ state[1]) >> 25)
+    state[2] = (((state[2] & 4294967280) << 17) & 0xffffffff) ^ \
+               ((((state[2] << 3) & 0xffffffff) ^ state[2]) >> 11)
+
+    return state[0] ^ state[1] ^ state[2]
+
+@numba.njit()
+def random_projection_split(data, indices, rng_state):
+    dim = data.shape[1]
+    left_index = tau_rand(rng_state) % indices.shape[0]
+    right_index = tau_rand(rng_state) % indices.shape[0]
+    right_index += left_index == right_index
+    right_index = right_index % indices.shape[0]
+    left = indices[left_index]
+    right = indices[right_index]
+
+    hyperplane_offset = 0.0
+    hyperplane_vector = np.empty(dim, dtype=np.float32)
+
+    for d in range(dim):
+        hyperplane_vector[d] = data[left, d] - data[right, d]
+        hyperplane_offset -= hyperplane_vector[d] * (
+        data[left, d] + data[right, d]) / 2.0
+
+    n_left = 0
+    n_right = 0
+    side = np.empty(indices.shape[0], np.int8)
+    for i in range(indices.shape[0]):
+        margin = hyperplane_offset
+        for d in range(dim):
+            margin += hyperplane_vector[d] * data[indices[i], d]
+        # margin = compute_margin(data[indices[i]], hyperplane_vector,
+        # hyperplane_offset)
+        if margin == 0:
+            side[i] = tau_rand(rng_state) % 2
+            if side[i] == 0:
+                n_left += 1
+            else:
+                n_right += 1
+        elif margin > 0:
+            side[i] = 0
+            n_left += 1
+        else:
+            side[i] = 1
+            n_right += 1
+
+    indices_left = np.empty(n_left, dtype=np.int64)
+    indices_right = np.empty(n_right, dtype=np.int64)
+
+    n_left = 0
+    n_right = 0
+    for i in range(side.shape[0]):
+        if side[i] == 0:
+            indices_left[n_left] = indices[i]
+            n_left += 1
+        else:
+            indices_right[n_right] = indices[i]
+            n_right += 1
+
+    return indices_left, indices_right
+
+
+RandomProjectionTreeNode = namedtuple('RandomProjectionTreeNode',
+                                      ['indices', 'is_leaf',
+                                       'left_child', 'right_child'])
+
+def make_tree(data, indices, leaf_size=30):
+    rng_state = np.empty(3, dtype=np.int64)
+    if indices.shape[0] > leaf_size:
+        left_indices, right_indices = base_split(data, indices, rng_state)
+        left_node = make_tree(data, left_indices, leaf_size)
+        right_node = make_tree(data, right_indices, leaf_size)
+        node = RandomProjectionTreeNode(indices, False, left_node, right_node)
+    else:
+        node = RandomProjectionTreeNode(indices, True, None, None)
+
+    return node
+
+
+
 @numba.njit('f8[:, :, :](i8,i8)')
 def make_heap(n_points, size):
     result = np.zeros((3, n_points, size))
@@ -406,7 +491,7 @@ def simplicial_set_embedding(graph, n_components,
         initialisation = spectral_layout(graph, n_components)
         expansion = 10.0 / initialisation.max()
         embedding = (initialisation * expansion) + \
-                    np.random.normal(scale=0.0001,
+                    np.random.normal(scale=0.001,
                                      size=[graph.shape[0],
                                            n_components])
 
