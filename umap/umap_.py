@@ -7,7 +7,7 @@ import scipy.sparse
 import numba
 import cffi
 
-import .distances
+import umap.distances as dist
 
 ffi = cffi.FFI()
 ffi.cdef('int rand();')
