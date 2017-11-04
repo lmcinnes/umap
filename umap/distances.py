@@ -1,7 +1,6 @@
 import numpy as np
 import numba
 
-
 @numba.njit()
 def euclidean(x, y):
     """Standard euclidean distance.
@@ -309,3 +308,40 @@ def correlation(x, y):
         dot_product = shifted_x * shifted_y
 
     return (1.0 - dot_product) / np.sqrt(norm_x * norm_y)
+
+named_distances = {
+    # general minkowski distances
+    'euclidean': euclidean,
+    'l2': euclidean,
+    'manhattan': manhattan,
+    'taxicab': manhattan,
+    'l1': manhattan,
+    'chebyshev': chebyshev,
+    'linfinity': chebyshev,
+    'linfty': chebyshev,
+    'linf': chebyshev,
+    'minkowski': minkowski,
+    # Standardised/weighted distances
+    'seuclidean': standardised_euclidean,
+    'standardised_euclidean': standardised_euclidean,
+    'wminkowski': weighted_minkowski,
+    'weighted_minkowski': weighted_minkowski,
+    'mahalanobis': mahalanobis,
+    # Other distances
+    'canberra': canberra,
+    'cosine': cosine,
+    'correlation': correlation,
+    'haversine': haversine,
+    'braycurtis': bray_curtis,
+    # Binary distances
+    'hamming': hamming,
+    'jaccard': jaccard,
+    'dice': dice,
+    'matching': matching,
+    'kulsinski': kulsinski,
+    'rogerstanimoto': rogers_tanimoto,
+    'russelrao': russelrao,
+    'sokalsneath': sokal_sneath,
+    'sokalmichener': sokal_michener,
+    'yule': yule,
+}

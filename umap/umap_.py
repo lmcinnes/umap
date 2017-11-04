@@ -28,6 +28,7 @@ def tau_rand(state):
 
     return state[0] ^ state[1] ^ state[2]
 
+
 @numba.njit()
 def random_projection_split(data, indices, rng_state):
     dim = data.shape[1]
@@ -48,7 +49,7 @@ def random_projection_split(data, indices, rng_state):
     for d in range(dim):
         hyperplane_vector[d] = data[left, d] - data[right, d]
         hyperplane_offset -= hyperplane_vector[d] * (
-        data[left, d] + data[right, d]) / 2.0
+            data[left, d] + data[right, d]) / 2.0
 
     # For each point compute the margin (project into normal vector, add offset)
     # If we are on lower side of the hyperplane put in one pile, otherwise
@@ -96,6 +97,7 @@ RandomProjectionTreeNode = namedtuple('RandomProjectionTreeNode',
                                       ['indices', 'is_leaf',
                                        'left_child', 'right_child'])
 
+
 def make_tree(data, indices, leaf_size=30):
     rng_state = np.empty(3, dtype=np.int64)
 
@@ -112,11 +114,13 @@ def make_tree(data, indices, leaf_size=30):
 
     return node
 
+
 def get_leaves(tree):
     if tree.is_leaf:
         return [tree.indices]
     else:
         return get_leaves(tree.left_child) + get_leaves(tree.right_child)
+
 
 @numba.njit('f8[:, :, :](i8,i8)')
 def make_heap(n_points, size):
@@ -353,7 +357,6 @@ def smooth_knn_dist(distances, k, n_iter=128):
 
 @numba.jit(parallel=True)
 def fuzzy_simplicial_set(X, n_neighbors):
-
     rows = np.zeros((X.shape[0] * n_neighbors), dtype=np.int64)
     cols = np.zeros((X.shape[0] * n_neighbors), dtype=np.int64)
     vals = np.zeros((X.shape[0] * n_neighbors), dtype=np.float64)
@@ -521,7 +524,8 @@ def optimize_layout(embedding, positive_head, positive_tail,
 
         if i % 10000 == 0:
             alpha = np.exp(
-                -0.69314718055994529 * ((3 * i) / n_edge_samples) ** 2) * initial_alpha
+                -0.69314718055994529 * (
+                (3 * i) / n_edge_samples) ** 2) * initial_alpha
             if alpha < (initial_alpha * 0.0001):
                 alpha = initial_alpha * 0.0001
 
@@ -671,7 +675,6 @@ class UMAP(BaseEstimator):
 
         self.spread = spread
         self.min_dist = min_dist
-
 
         if a is None or b is None:
             self.a, self.b = find_ab_params(self.spread, self.min_dist)
