@@ -7,6 +7,8 @@ import scipy.sparse
 import numba
 import cffi
 
+import .distances
+
 ffi = cffi.FFI()
 ffi.cdef('int rand();')
 ffi.cdef('double erf(double);')
@@ -290,15 +292,6 @@ def nn_descent(data, n_neighbors, max_candidates=50,
             break
 
     return current_graph[:2]
-
-
-@numba.njit('f8(f8[:],f8[:],f8[:])')
-def seuclidean(x, y, v):
-    result = 0.0
-    for i in range(x.shape[0]):
-        result += ((x[i] - y[i]) ** 2) / v[i]
-
-    return result
 
 
 SMOOTH_K_TOLERANCE = 1e-5
