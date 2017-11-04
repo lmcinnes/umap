@@ -3,6 +3,11 @@ import numba
 
 @numba.njit()
 def euclidean(x, y):
+    """Standard euclidean distance.
+
+    ..math::
+        D(x, y) = \sqrt{\sum_i (x_i - y_i)^2}
+    """
     result = 0.0
     for i in range(x.shape[1]):
         result += (x[i] - y[i])**2
@@ -10,6 +15,12 @@ def euclidean(x, y):
 
 @numba.njit()
 def standardised_euclidean(x, y, sigma):
+    """Euclidean distance standardised against a vector of standard
+    deviations per coordinate.
+
+    ..math::
+        D(x, y) = \sqrt{\sum_i \frac{(x_i - y_i)**2}{v_i}}
+    """
     result = 0.0
     for i in range(x.shape[0]):
         result += ((x[i] - y[i]) ** 2) / sigma[i]
@@ -18,6 +29,11 @@ def standardised_euclidean(x, y, sigma):
 
 @numba.njit()
 def manhattan(x, y):
+    """Manhatten, taxicab, or l1 distance.
+
+    ..math::
+        D(x, y) = \sum_i |x_i - y_i|
+    """
     result = 0.0
     for i in range(x.shape[0]):
         result += np.abs(x[i] - y[i])
@@ -26,6 +42,11 @@ def manhattan(x, y):
 
 @numba.njit()
 def chebyshev(x, y):
+    """Chebyshev or l-infinity distance.
+
+    ..math::
+        D(x, y) = \max_i |x_i - y_i|
+    """
     result = 0.0
     for i in range(x.shape[0]):
         result = np.max(result, np.abs(x[i] - y[i]))
@@ -34,6 +55,16 @@ def chebyshev(x, y):
 
 @numba.njit()
 def minkowski(x, y, p):
+    """Minkowski distance.
+
+    ..math::
+        D(x, y) = \left(\sum_i |x_i - y_i|^p\right)^{\frac{1}{p}}
+
+    This is a general distance. For p=1 it is equivalent to
+    manhattan distance, for p=2 it is Euclidean distance, and
+    for p=infinity it is Chebyshev distance. In general it is better
+    to use the more specialised functions for those distances.
+    """
     result = 0.0
     for i in range(x.shape[0]):
         result += (np.abs(x[i] - y[i]))**p
@@ -42,6 +73,15 @@ def minkowski(x, y, p):
 
 @numba.njit()
 def weighted_minkowski(x, y, w, p):
+    """A weighted version of Minkowski distance.
+
+    ..math::
+        D(x, y) = \left(\sum_i w_i |x_i - y_i|^p\right)^{\frac{1}{p}}
+
+    If weights w_i are inverse standard deviations of data in each dimension
+    then this represented a standardised Minkowski distance (and is
+    equivalent to standardised Euclidean distance for p=1).
+    """
     result = 0.0
     for i in range(x.shape[0]):
         result += (w[i] * np.abs(x[i] - y[i])) ** p
