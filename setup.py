@@ -32,11 +32,9 @@ configuration = {
     'maintainer_email' : 'leland.mcinnes@gmail.com',
     'license' : 'BSD',
     'packages' : ['umap'],
-    'install_requires' : ['scikit-learn >= 0.16',
-                          'cython >= 0.17',
+    'install_requires' : ['scikit-learn >= 0.16'
                           'scipy >= 0.19',
-                          'numba >= 0.34',
-                          'cffi'],
+                          'numba >= 0.34'],
     'ext_modules' : [],
     'cmdclass' : {'build_ext' : build_ext},
     'test_suite' : 'nose.collector',

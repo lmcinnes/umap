@@ -5,7 +5,6 @@ from collections import deque, namedtuple
 import numpy as np
 import scipy.sparse
 import numba
-import cffi
 
 import umap.distances as dist
 
