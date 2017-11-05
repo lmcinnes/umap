@@ -726,8 +726,12 @@ class UMAP(BaseEstimator):
             * euclidean
             * manhattan
             * chebyshev
+            * minkowski
             * canberra
             * braycurtis
+            * mahalanobis
+            * wminkowski
+            * seuclidean
             * cosine
             * correlation
             * haversine
@@ -740,6 +744,10 @@ class UMAP(BaseEstimator):
             * sokalmichener
             * sokalsneath
             * yule
+        Metrics that take arguments (such as minkowski, mahalanobis etc.)
+        can have arguments passed via the metric_kwds dictionary. At this
+        time care must be taken and dictionary elements must be ordered
+        appropriately; this will hopefully be fixed in the future.
 
     gamma: float (optional, default 1.0)
         Weighting applied to negative samples in low dimensional embedding
@@ -781,10 +789,9 @@ class UMAP(BaseEstimator):
         values are set automatically as determined by ``min_dist`` and
         ``spread``.
 
-    oversampling: int (optional, default 3)
-        The scaling factor for the number of neighbors to sample to attempt
-        to find the local neighborhood in manifold distance. If set to be too
-        large this can have a significant negative impact on performance.
+    metric_kwds: dict (optional, default {})
+        Arguments to pass on to the metric, such as the ``p`` value for
+        Minkowski distance.
     """
 
     def __init__(self,
