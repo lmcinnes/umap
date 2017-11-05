@@ -337,7 +337,7 @@ def nn_descent(data, n_neighbors, dist, max_candidates=50,
     return current_graph[:2]
 
 
-def make_nn_descent(dist):
+def make_nn_descent(dist, dist_kwds):
     @numba.njit(parallel=True)
     def nn_descent(data, n_neighbors, max_candidates=50,
                    n_iters=10, delta=0.001, rho=0.5, leaf_array=None):
@@ -354,7 +354,8 @@ def make_nn_descent(dist):
                     for j in range(i + 1, leaf_array.shape[1]):
                         if leaf_array[n, j] < 0:
                             break
-                        d = dist(data[leaf_array[n, i]], data[leaf_array[n, j]])
+                        d = dist(data[leaf_array[n, i]], data[leaf_array[n,j]],
+                                 **dist_kwds)
                         heap_push(current_graph, leaf_array[n, i], d,
                                   leaf_array[n, j],
                                   1)
@@ -366,7 +367,7 @@ def make_nn_descent(dist):
                 indices = np.random.choice(data.shape[0], size=n_neighbors,
                                            replace=False)
                 for j in range(indices.shape[0]):
-                    d = dist(data[i], data[indices[j]])
+                    d = dist(data[i], data[indices[j]], **dist_kwds)
                     heap_push(current_graph, i, d, indices[j], 1)
                     heap_push(current_graph, indices[j], d, i, 1)
 
@@ -388,7 +389,7 @@ def make_nn_descent(dist):
                                 candidate_neighbors[2, i, k]:
                             continue
 
-                        d = dist(data[p], data[q])
+                        d = dist(data[p], data[q], **dist_kwds)
                         c += heap_push(current_graph, p, d, q, 1)
                         c += heap_push(current_graph, q, d, p, 1)
 
@@ -456,7 +457,7 @@ def smooth_knn_dist(distances, k, n_iter=128):
 
 
 @numba.jit(parallel=True)
-def fuzzy_simplicial_set(X, n_neighbors, metric):
+def fuzzy_simplicial_set(X, n_neighbors, metric, metric_kwds={}):
     rows = np.zeros((X.shape[0] * n_neighbors), dtype=np.int64)
     cols = np.zeros((X.shape[0] * n_neighbors), dtype=np.int64)
     vals = np.zeros((X.shape[0] * n_neighbors), dtype=np.float64)
@@ -468,7 +469,7 @@ def fuzzy_simplicial_set(X, n_neighbors, metric):
     else:
         raise ValueError('Metric is neither callable, nor a recognised string')
 
-    metric_nn_descent = make_nn_descent(distance_func)
+    metric_nn_descent = make_nn_descent(distance_func, metric_kwds)
     leaf_array = rptree_leaf_array(X, n_neighbors, n_trees=10)
     tmp_indices, knn_dists = metric_nn_descent(X,
                                                n_neighbors,
@@ -796,11 +797,13 @@ class UMAP(BaseEstimator):
                  spread=1.0,
                  min_dist=0.25,
                  a=None,
-                 b=None
+                 b=None,
+                 metric_kwds={}
                  ):
 
         self.n_neighbors = n_neighbors
         self.metric = metric
+        self.metric_kwds = metric_kwds
         self.n_edge_samples = n_edge_samples
         self.init = init
         self.n_components = n_components
@@ -840,7 +843,8 @@ class UMAP(BaseEstimator):
         # Handle other array dtypes (TODO: do this properly)
         X = X.astype(np.float64)
 
-        graph = fuzzy_simplicial_set(X, self.n_neighbors, self._metric)
+        graph = fuzzy_simplicial_set(X, self.n_neighbors,
+                                     self._metric, self.metric_kwds)
 
         if self.n_edge_samples is None:
             n_edge_samples = 0

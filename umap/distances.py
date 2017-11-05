@@ -1,6 +1,9 @@
 import numpy as np
 import numba
 
+_mock_identity = np.eye(2, dtype=np.float64)
+_mock_ones = np.ones(2, dtype=np.float64)
+
 @numba.njit()
 def euclidean(x, y):
     """Standard euclidean distance.
@@ -15,7 +18,7 @@ def euclidean(x, y):
 
 
 @numba.njit()
-def standardised_euclidean(x, y, sigma):
+def standardised_euclidean(x, y, sigma=_mock_ones):
     """Euclidean distance standardised against a vector of standard
     deviations per coordinate.
 
@@ -58,7 +61,7 @@ def chebyshev(x, y):
 
 
 @numba.njit()
-def minkowski(x, y, p):
+def minkowski(x, y, p=2):
     """Minkowski distance.
 
     ..math::
@@ -77,7 +80,7 @@ def minkowski(x, y, p):
 
 
 @numba.njit()
-def weighted_minkowski(x, y, w, p):
+def weighted_minkowski(x, y, w=_mock_identity, p=2):
     """A weighted version of Minkowski distance.
 
     ..math::
@@ -95,7 +98,7 @@ def weighted_minkowski(x, y, w, p):
 
 
 @numba.njit()
-def mahalanobis(x, y, vinv):
+def mahalanobis(x, y, vinv=_mock_identity):
     result = 0.0
 
     diff = np.empty(x.shape[0], dtype=np.float64)
@@ -292,6 +295,7 @@ def correlation(x, y):
     mu_y = 0.0
     norm_x = 0.0
     norm_y = 0.0
+    dot_product = 0.0
 
     for i in range(x.shape[0]):
         mu_x += x[i]
@@ -305,7 +309,7 @@ def correlation(x, y):
         shifted_y = y[i] - mu_y
         norm_x += shifted_x ** 2
         norm_y += shifted_y ** 2
-        dot_product = shifted_x * shifted_y
+        dot_product += shifted_x * shifted_y
 
     return (1.0 - dot_product) / np.sqrt(norm_x * norm_y)
 
