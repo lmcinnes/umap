@@ -337,7 +337,7 @@ def nn_descent(data, n_neighbors, dist, max_candidates=50,
     return current_graph[:2]
 
 
-def make_nn_descent(dist, dist_kwds):
+def make_nn_descent(dist, dist_args):
     @numba.njit(parallel=True)
     def nn_descent(data, n_neighbors, max_candidates=50,
                    n_iters=10, delta=0.001, rho=0.5, leaf_array=None):
@@ -355,7 +355,7 @@ def make_nn_descent(dist, dist_kwds):
                         if leaf_array[n, j] < 0:
                             break
                         d = dist(data[leaf_array[n, i]], data[leaf_array[n,j]],
-                                 **dist_kwds)
+                                 *dist_args)
                         heap_push(current_graph, leaf_array[n, i], d,
                                   leaf_array[n, j],
                                   1)
@@ -367,7 +367,7 @@ def make_nn_descent(dist, dist_kwds):
                 indices = np.random.choice(data.shape[0], size=n_neighbors,
                                            replace=False)
                 for j in range(indices.shape[0]):
-                    d = dist(data[i], data[indices[j]], **dist_kwds)
+                    d = dist(data[i], data[indices[j]], *dist_args)
                     heap_push(current_graph, i, d, indices[j], 1)
                     heap_push(current_graph, indices[j], d, i, 1)
 
@@ -389,7 +389,7 @@ def make_nn_descent(dist, dist_kwds):
                                 candidate_neighbors[2, i, k]:
                             continue
 
-                        d = dist(data[p], data[q], **dist_kwds)
+                        d = dist(data[p], data[q], *dist_args)
                         c += heap_push(current_graph, p, d, q, 1)
                         c += heap_push(current_graph, q, d, p, 1)
 
@@ -469,7 +469,8 @@ def fuzzy_simplicial_set(X, n_neighbors, metric, metric_kwds={}):
     else:
         raise ValueError('Metric is neither callable, nor a recognised string')
 
-    metric_nn_descent = make_nn_descent(distance_func, metric_kwds)
+    metric_nn_descent = make_nn_descent(distance_func,
+                                        tuple(metric_kwds.values()))
     leaf_array = rptree_leaf_array(X, n_neighbors, n_trees=10)
     tmp_indices, knn_dists = metric_nn_descent(X,
                                                n_neighbors,
