@@ -229,6 +229,18 @@ def rptree_initialization(data, n_neighbors, dist, n_trees=10):
     return initialize_from_leaves(data, n_neighbors, dist, leaf_array)
 
 
+def rptree_leaf_array(data, n_neighbors, n_trees=10):
+    leaves = []
+    for t in range(n_trees):
+        tree = make_tree(data, np.arange(data.shape[0]), leaf_size=n_neighbors)
+        leaves += get_leaves(tree)
+
+    leaf_array = -1 * np.ones([len(leaves), n_neighbors], dtype=np.int64)
+    for i, leaf in enumerate(leaves):
+        leaf_array[i, :len(leaf)] = leaf
+
+    return leaf_array
+
 @numba.jit(parallel=True)
 def random_initialization(data, n_neighbors, dist):
     current_graph = make_heap(data.shape[0], n_neighbors)
@@ -268,11 +280,34 @@ def nn_descent(data, n_neighbors, dist, max_candidates=50,
     n_vertices = data.shape[0]
 
     rng_state = np.empty(3, dtype=np.int64)
+    current_graph = make_heap(data.shape[0], n_neighbors)
 
     if rptree_init:
-        current_graph = rptree_initialization(data, n_neighbors, dist)
+        # current_graph = rptree_initialization(data, n_neighbors, dist)
+        leaf_array = rptree_leaf_array(data, n_neighbors, n_trees=10)
+        for n in range(leaf_array.shape[0]):
+            for i in range(leaf_array.shape[1]):
+                if leaf_array[n, i] < 0:
+                    break
+                for j in range(i + 1, leaf_array.shape[1]):
+                    if leaf_array[n, j] < 0:
+                        break
+                    d = dist(data[leaf_array[n, i]], data[leaf_array[n, j]])
+                    heap_push(current_graph, leaf_array[n, i], d,
+                              leaf_array[n, j],
+                              1)
+                    heap_push(current_graph, leaf_array[n, j], d,
+                              leaf_array[n, i],
+                              1)
     else:
-        current_graph = random_initialization(data, n_neighbors, dist)
+        for i in range(data.shape[0]):
+            indices = np.random.choice(data.shape[0], size=n_neighbors,
+                                       replace=False)
+            for j in range(indices.shape[0]):
+                d = dist(data[i], data[indices[j]])
+                heap_push(current_graph, i, d, indices[j], 1)
+                heap_push(current_graph, indices[j], d, i, 1)
+        # current_graph = random_initialization(data, n_neighbors, dist)
 
     for n in range(n_iters):
 
@@ -302,11 +337,73 @@ def nn_descent(data, n_neighbors, dist, max_candidates=50,
     return current_graph[:2]
 
 
+def make_nn_descent(dist):
+    @numba.njit(parallel=True)
+    def nn_descent(data, n_neighbors, max_candidates=50,
+                   n_iters=10, delta=0.001, rho=0.5, leaf_array=None):
+        n_vertices = data.shape[0]
+
+        rng_state = np.empty(3, dtype=np.int64)
+        current_graph = make_heap(data.shape[0], n_neighbors)
+
+        if leaf_array is not None:
+            for n in range(leaf_array.shape[0]):
+                for i in range(leaf_array.shape[1]):
+                    if leaf_array[n, i] < 0:
+                        break
+                    for j in range(i + 1, leaf_array.shape[1]):
+                        if leaf_array[n, j] < 0:
+                            break
+                        d = dist(data[leaf_array[n, i]], data[leaf_array[n, j]])
+                        heap_push(current_graph, leaf_array[n, i], d,
+                                  leaf_array[n, j],
+                                  1)
+                        heap_push(current_graph, leaf_array[n, j], d,
+                                  leaf_array[n, i],
+                                  1)
+        else:
+            for i in range(data.shape[0]):
+                indices = np.random.choice(data.shape[0], size=n_neighbors,
+                                           replace=False)
+                for j in range(indices.shape[0]):
+                    d = dist(data[i], data[indices[j]])
+                    heap_push(current_graph, i, d, indices[j], 1)
+                    heap_push(current_graph, indices[j], d, i, 1)
+
+        for n in range(n_iters):
+
+            candidate_neighbors = build_candidates(current_graph, n_vertices,
+                                                   n_neighbors, max_candidates,
+                                                   rng_state)
+
+            c = 0
+            for i in range(n_vertices):
+                for j in range(max_candidates):
+                    p = int(candidate_neighbors[0, i, j])
+                    if p < 0 or tau_rand(rng_state) / 0x7fffffff < rho:
+                        continue
+                    for k in range(max_candidates):
+                        q = int(candidate_neighbors[0, i, k])
+                        if q < 0 or not candidate_neighbors[2, i, j] and not \
+                                candidate_neighbors[2, i, k]:
+                            continue
+
+                        d = dist(data[p], data[q])
+                        c += heap_push(current_graph, p, d, q, 1)
+                        c += heap_push(current_graph, q, d, p, 1)
+
+            if c <= delta * n_neighbors * data.shape[0]:
+                break
+
+        return current_graph[:2]
+
+    return nn_descent
+
 SMOOTH_K_TOLERANCE = 1e-5
 MIN_K_DIST_SCALE = 1e-3
 NPY_INFINITY = np.inf
 
-@numba.njit()
+@numba.njit(parallel=True)
 def smooth_knn_dist(distances, k, n_iter=128):
     target = np.log2(k)
     rho = np.zeros(distances.shape[0])
@@ -359,15 +456,24 @@ def smooth_knn_dist(distances, k, n_iter=128):
 
 
 @numba.jit(parallel=True)
-def fuzzy_simplicial_set(X, n_neighbors, dist):
+def fuzzy_simplicial_set(X, n_neighbors, metric):
     rows = np.zeros((X.shape[0] * n_neighbors), dtype=np.int64)
     cols = np.zeros((X.shape[0] * n_neighbors), dtype=np.int64)
     vals = np.zeros((X.shape[0] * n_neighbors), dtype=np.float64)
 
-    tmp_indices, knn_dists = nn_descent(X,
-                                        n_neighbors,
-                                        dist,
-                                        max_candidates=60)
+    if callable(metric):
+        distance_func = metric
+    elif metric in dist.named_distances:
+        distance_func = dist.named_distances[metric]
+    else:
+        raise ValueError('Metric is neither callable, nor a recognised string')
+
+    metric_nn_descent = make_nn_descent(distance_func)
+    leaf_array = rptree_leaf_array(X, n_neighbors, n_trees=10)
+    tmp_indices, knn_dists = metric_nn_descent(X,
+                                               n_neighbors,
+                                               max_candidates=60,
+                                               leaf_array=leaf_array)
     knn_indices = tmp_indices.astype(np.int64)
     for i in range(knn_indices.shape[0]):
         order = np.argsort(knn_dists[i])
