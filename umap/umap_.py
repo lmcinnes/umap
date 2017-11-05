@@ -210,68 +210,6 @@ def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates,
 
     return candidate_neighbors
 
-
-@numba.njit(parallel=True)
-def nn_descent(data, n_neighbors, dist, max_candidates=50,
-               n_iters=10, delta=0.001, rho=0.5, rptree_init=True):
-    n_vertices = data.shape[0]
-
-    rng_state = np.empty(3, dtype=np.int64)
-    current_graph = make_heap(data.shape[0], n_neighbors)
-
-    if rptree_init:
-        leaf_array = rptree_leaf_array(data, n_neighbors, n_trees=10)
-        for n in range(leaf_array.shape[0]):
-            for i in range(leaf_array.shape[1]):
-                if leaf_array[n, i] < 0:
-                    break
-                for j in range(i + 1, leaf_array.shape[1]):
-                    if leaf_array[n, j] < 0:
-                        break
-                    d = dist(data[leaf_array[n, i]], data[leaf_array[n, j]])
-                    heap_push(current_graph, leaf_array[n, i], d,
-                              leaf_array[n, j],
-                              1)
-                    heap_push(current_graph, leaf_array[n, j], d,
-                              leaf_array[n, i],
-                              1)
-    else:
-        for i in range(data.shape[0]):
-            indices = np.random.choice(data.shape[0], size=n_neighbors,
-                                       replace=False)
-            for j in range(indices.shape[0]):
-                d = dist(data[i], data[indices[j]])
-                heap_push(current_graph, i, d, indices[j], 1)
-                heap_push(current_graph, indices[j], d, i, 1)
-
-    for n in range(n_iters):
-
-        candidate_neighbors = build_candidates(current_graph, n_vertices,
-                                               n_neighbors, max_candidates,
-                                               rng_state)
-
-        c = 0
-        for i in range(n_vertices):
-            for j in range(max_candidates):
-                p = int(candidate_neighbors[0, i, j])
-                if p < 0 or tau_rand(rng_state) / 0x7fffffff < rho:
-                    continue
-                for k in range(max_candidates):
-                    q = int(candidate_neighbors[0, i, k])
-                    if q < 0 or not candidate_neighbors[2, i, j] and not \
-                            candidate_neighbors[2, i, k]:
-                        continue
-
-                    d = dist(data[p], data[q])
-                    c += heap_push(current_graph, p, d, q, 1)
-                    c += heap_push(current_graph, q, d, p, 1)
-
-        if c <= delta * n_neighbors * data.shape[0]:
-            break
-
-    return current_graph[:2]
-
-
 def make_nn_descent(dist, dist_args):
     @numba.njit(parallel=True)
     def nn_descent(data, n_neighbors, max_candidates=50,
