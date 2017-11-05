@@ -197,7 +197,7 @@ def rdist(x, y):
 
 
 @numba.njit(parallel=True)
-def initialize_from_leaves(data, n_neighbors, leaf_array):
+def initialize_from_leaves(data, n_neighbors, dist, leaf_array,):
     current_graph = make_heap(data.shape[0], n_neighbors)
 
     for n in range(leaf_array.shape[0]):
@@ -207,7 +207,7 @@ def initialize_from_leaves(data, n_neighbors, leaf_array):
             for j in range(i + 1, leaf_array.shape[1]):
                 if leaf_array[n, j] < 0:
                     break
-                d = rdist(data[leaf_array[n, i]], data[leaf_array[n, j]])
+                d = dist(data[leaf_array[n, i]], data[leaf_array[n, j]])
                 heap_push(current_graph, leaf_array[n, i], d, leaf_array[n, j],
                           1)
                 heap_push(current_graph, leaf_array[n, j], d, leaf_array[n, i],
@@ -216,7 +216,7 @@ def initialize_from_leaves(data, n_neighbors, leaf_array):
     return current_graph
 
 
-def rptree_initialization(data, n_neighbors, n_trees=10):
+def rptree_initialization(data, n_neighbors, dist, n_trees=10):
     leaves = []
     for t in range(n_trees):
         tree = make_tree(data, np.arange(data.shape[0]), leaf_size=n_neighbors)
@@ -226,18 +226,18 @@ def rptree_initialization(data, n_neighbors, n_trees=10):
     for i, leaf in enumerate(leaves):
         leaf_array[i, :len(leaf)] = leaf
 
-    return initialize_from_leaves(data, n_neighbors, leaf_array)
+    return initialize_from_leaves(data, n_neighbors, dist, leaf_array)
 
 
 @numba.jit(parallel=True)
-def random_initialization(data, n_neighbors):
+def random_initialization(data, n_neighbors, dist):
     current_graph = make_heap(data.shape[0], n_neighbors)
 
     for i in range(data.shape[0]):
         indices = np.random.choice(data.shape[0], size=n_neighbors,
                                    replace=False)
         for j in range(indices.shape[0]):
-            d = rdist(data[i], data[indices[j]])
+            d = dist(data[i], data[indices[j]])
             heap_push(current_graph, i, d, indices[j], 1)
             heap_push(current_graph, indices[j], d, i, 1)
 
@@ -245,7 +245,8 @@ def random_initialization(data, n_neighbors):
 
 
 @numba.njit(parallel=True)
-def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates):
+def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates,
+                     rng_state):
     candidate_neighbors = make_heap(n_vertices, max_candidates)
     for i in range(n_vertices):
         for j in range(n_neighbors):
@@ -253,7 +254,7 @@ def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates):
                 continue
             idx = current_graph[0, i, j]
             isn = current_graph[2, i, j]
-            d = np.random.random()
+            d = tau_rand(rng_state) / 0x7fffffff
             heap_push(candidate_neighbors, i, d, idx, isn)
             heap_push(candidate_neighbors, idx, d, i, isn)
             current_graph[2, i, j] = 0
@@ -262,25 +263,28 @@ def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates):
 
 
 @numba.njit(parallel=True)
-def nn_descent(data, n_neighbors, max_candidates=50,
+def nn_descent(data, n_neighbors, dist, max_candidates=50,
                n_iters=10, delta=0.001, rho=0.5, rptree_init=True):
     n_vertices = data.shape[0]
 
+    rng_state = np.empty(3, dtype=np.int64)
+
     if rptree_init:
-        current_graph = rptree_initialization(data, n_neighbors)
+        current_graph = rptree_initialization(data, n_neighbors, dist)
     else:
-        current_graph = random_initialization(data, n_neighbors)
+        current_graph = random_initialization(data, n_neighbors, dist)
 
     for n in range(n_iters):
 
         candidate_neighbors = build_candidates(current_graph, n_vertices,
-                                               n_neighbors, max_candidates)
+                                               n_neighbors, max_candidates,
+                                               rng_state)
 
         c = 0
         for i in range(n_vertices):
             for j in range(max_candidates):
                 p = int(candidate_neighbors[0, i, j])
-                if p < 0 or np.random.random() < rho:
+                if p < 0 or tau_rand(rng_state) / 0x7fffffff < rho:
                     continue
                 for k in range(max_candidates):
                     q = int(candidate_neighbors[0, i, k])
@@ -288,7 +292,7 @@ def nn_descent(data, n_neighbors, max_candidates=50,
                             candidate_neighbors[2, i, k]:
                         continue
 
-                    d = rdist(data[p], data[q])
+                    d = dist(data[p], data[q])
                     c += heap_push(current_graph, p, d, q, 1)
                     c += heap_push(current_graph, q, d, p, 1)
 
@@ -301,7 +305,6 @@ def nn_descent(data, n_neighbors, max_candidates=50,
 SMOOTH_K_TOLERANCE = 1e-5
 MIN_K_DIST_SCALE = 1e-3
 NPY_INFINITY = np.inf
-
 
 @numba.njit()
 def smooth_knn_dist(distances, k, n_iter=128):
@@ -356,13 +359,14 @@ def smooth_knn_dist(distances, k, n_iter=128):
 
 
 @numba.jit(parallel=True)
-def fuzzy_simplicial_set(X, n_neighbors):
+def fuzzy_simplicial_set(X, n_neighbors, dist):
     rows = np.zeros((X.shape[0] * n_neighbors), dtype=np.int64)
     cols = np.zeros((X.shape[0] * n_neighbors), dtype=np.int64)
     vals = np.zeros((X.shape[0] * n_neighbors), dtype=np.float64)
 
     tmp_indices, knn_dists = nn_descent(X,
-                                        n_neighbors=n_neighbors,
+                                        n_neighbors,
+                                        dist,
                                         max_candidates=60)
     knn_indices = tmp_indices.astype(np.int64)
     for i in range(knn_indices.shape[0]):
@@ -370,7 +374,6 @@ def fuzzy_simplicial_set(X, n_neighbors):
         knn_dists[i] = knn_dists[i][order]
         knn_indices[i] = knn_indices[i][order]
 
-    knn_dists = np.sqrt(knn_dists)
     sigmas, rhos = smooth_knn_dist(knn_dists, n_neighbors)
 
     for i in range(knn_indices.shape[0]):
@@ -606,6 +609,30 @@ class UMAP(BaseEstimator):
         provide easy visualization, but can reasonably be set to any
         integer value in the range 2 to 100.
 
+    metric: string or function (optional, default 'euclidean')
+        The metric to use to compute distances in high dimensional space.
+        If a string is passed it must match a valid predefined metric. If
+        a general metric is required a function that takes two 1d arrays and
+        returns a float can be provided. For performance purposes it is best
+        if this is a numba jit'd function. Valid string metrics include:
+            * euclidean
+            * manhattan
+            * chebyshev
+            * canberra
+            * braycurtis
+            * cosine
+            * correlation
+            * haversine
+            * hamming
+            * jaccard
+            * dice
+            * russelrao
+            * kulsinski
+            * rogerstanimoto
+            * sokalmichener
+            * sokalsneath
+            * yule
+
     gamma: float (optional, default 1.0)
         Weighting applied to negative samples in low dimensional embedding
         optimization. Values higher than one will result in greater weight
@@ -655,6 +682,7 @@ class UMAP(BaseEstimator):
     def __init__(self,
                  n_neighbors=50,
                  n_components=2,
+                 metric='euclidean',
                  gamma=1.0,
                  n_edge_samples=None,
                  alpha=1.0,
@@ -666,6 +694,7 @@ class UMAP(BaseEstimator):
                  ):
 
         self.n_neighbors = n_neighbors
+        self.metric = metric
         self.n_edge_samples = n_edge_samples
         self.init = init
         self.n_components = n_components
@@ -675,6 +704,14 @@ class UMAP(BaseEstimator):
 
         self.spread = spread
         self.min_dist = min_dist
+
+        if metric in dist.named_distances:
+            self._metric = dist.named_distances[self.metric]
+        elif callable(metric):
+            self._metric = self.metric
+        else:
+            raise ValueError('Supplied metric is neither '
+                             'a recognised string, nor callable')
 
         if a is None or b is None:
             self.a, self.b = find_ab_params(self.spread, self.min_dist)
@@ -697,7 +734,7 @@ class UMAP(BaseEstimator):
         # Handle other array dtypes (TODO: do this properly)
         X = X.astype(np.float64)
 
-        graph = fuzzy_simplicial_set(X, self.n_neighbors)
+        graph = fuzzy_simplicial_set(X, self.n_neighbors, self._metric)
 
         if self.n_edge_samples is None:
             n_edge_samples = 0
