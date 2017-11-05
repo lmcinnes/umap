@@ -32,7 +32,7 @@ configuration = {
     'maintainer_email' : 'leland.mcinnes@gmail.com',
     'license' : 'BSD',
     'packages' : ['umap'],
-    'install_requires' : ['scikit-learn >= 0.16'
+    'install_requires' : ['scikit-learn >= 0.16',
                           'scipy >= 0.19',
                           'numba >= 0.34'],
     'ext_modules' : [],
