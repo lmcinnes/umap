@@ -9,13 +9,6 @@ import cffi
 
 import umap.distances as dist
 
-ffi = cffi.FFI()
-ffi.cdef('int rand();')
-ffi.cdef('double erf(double);')
-c = ffi.dlopen(None)
-c_rand = c.rand
-c_erf = c.erf
-
 
 @numba.njit('i4(i8[:])')
 def tau_rand(state):
@@ -187,48 +180,6 @@ def heap_push(heap, row, weight, index, flag):
     return 1
 
 
-@numba.njit('f8(f8[:],f8[:])')
-def rdist(x, y):
-    result = 0.0
-    for i in range(x.shape[0]):
-        result += (x[i] - y[i]) ** 2
-
-    return result
-
-
-@numba.njit(parallel=True)
-def initialize_from_leaves(data, n_neighbors, dist, leaf_array,):
-    current_graph = make_heap(data.shape[0], n_neighbors)
-
-    for n in range(leaf_array.shape[0]):
-        for i in range(leaf_array.shape[1]):
-            if leaf_array[n, i] < 0:
-                break
-            for j in range(i + 1, leaf_array.shape[1]):
-                if leaf_array[n, j] < 0:
-                    break
-                d = dist(data[leaf_array[n, i]], data[leaf_array[n, j]])
-                heap_push(current_graph, leaf_array[n, i], d, leaf_array[n, j],
-                          1)
-                heap_push(current_graph, leaf_array[n, j], d, leaf_array[n, i],
-                          1)
-
-    return current_graph
-
-
-def rptree_initialization(data, n_neighbors, dist, n_trees=10):
-    leaves = []
-    for t in range(n_trees):
-        tree = make_tree(data, np.arange(data.shape[0]), leaf_size=n_neighbors)
-        leaves += [x.indices for x in tree.get_leaves()]
-
-    leaf_array = -1 * np.ones([len(leaves), n_neighbors], dtype=np.int64)
-    for i, leaf in enumerate(leaves):
-        leaf_array[i, :len(leaf)] = leaf
-
-    return initialize_from_leaves(data, n_neighbors, dist, leaf_array)
-
-
 def rptree_leaf_array(data, n_neighbors, n_trees=10):
     leaves = []
     for t in range(n_trees):
@@ -240,20 +191,6 @@ def rptree_leaf_array(data, n_neighbors, n_trees=10):
         leaf_array[i, :len(leaf)] = leaf
 
     return leaf_array
-
-@numba.jit(parallel=True)
-def random_initialization(data, n_neighbors, dist):
-    current_graph = make_heap(data.shape[0], n_neighbors)
-
-    for i in range(data.shape[0]):
-        indices = np.random.choice(data.shape[0], size=n_neighbors,
-                                   replace=False)
-        for j in range(indices.shape[0]):
-            d = dist(data[i], data[indices[j]])
-            heap_push(current_graph, i, d, indices[j], 1)
-            heap_push(current_graph, indices[j], d, i, 1)
-
-    return current_graph
 
 
 @numba.njit(parallel=True)
@@ -283,7 +220,6 @@ def nn_descent(data, n_neighbors, dist, max_candidates=50,
     current_graph = make_heap(data.shape[0], n_neighbors)
 
     if rptree_init:
-        # current_graph = rptree_initialization(data, n_neighbors, dist)
         leaf_array = rptree_leaf_array(data, n_neighbors, n_trees=10)
         for n in range(leaf_array.shape[0]):
             for i in range(leaf_array.shape[1]):
@@ -307,7 +243,6 @@ def nn_descent(data, n_neighbors, dist, max_candidates=50,
                 d = dist(data[i], data[indices[j]])
                 heap_push(current_graph, i, d, indices[j], 1)
                 heap_push(current_graph, indices[j], d, i, 1)
-        # current_graph = random_initialization(data, n_neighbors, dist)
 
     for n in range(n_iters):
 
@@ -581,7 +516,21 @@ def spectral_layout(graph, dim):
 
 @numba.njit()
 def clip(val):
-    return 8.0 * c_erf(val / 8.0)
+    if val > 4.0:
+        return 4.0
+    elif val < -4.0:
+        return -4.0
+    else:
+        return val
+
+
+@numba.njit('f8(f8[:],f8[:])')
+def rdist(x, y):
+    result = 0.0
+    for i in range(x.shape[0]):
+        result += (x[i] - y[i]) ** 2
+
+    return result
 
 
 @numba.njit()
