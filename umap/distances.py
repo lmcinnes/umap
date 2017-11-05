@@ -9,7 +9,7 @@ def euclidean(x, y):
         D(x, y) = \sqrt{\sum_i (x_i - y_i)^2}
     """
     result = 0.0
-    for i in range(x.shape[1]):
+    for i in range(x.shape[0]):
         result += (x[i] - y[i]) ** 2
     return np.sqrt(result)
 
@@ -275,13 +275,13 @@ def yule(x, y):
 
 @numba.njit()
 def cosine(x, y):
-    result = 0, 0
+    result = 0.0
     norm_x = 0.0
     norm_y = 0.0
     for i in range(x.shape[0]):
         result += x[i] * y[i]
-        norm_x += x[i] ** 2
-        norm_y += y[i] ** 2
+        norm_x += x[i]**2
+        norm_y += y[i]**2
 
     return 1.0 - (result / np.sqrt(norm_x * norm_y))
 
