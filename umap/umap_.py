@@ -601,12 +601,12 @@ class UMAP(BaseEstimator):
 
     Parameters
     ----------
-    n_neighbors: int (optional, default 50)
+    n_neighbors: float (optional, default 15)
         The size of local neighborhood (in terms of number of neighboring
         sample points) used for manifold approximation. Larger values
         result in more global views of the manifold, while smaller
         values result in more local data being preserved. In general
-        values should be in the range 10 to 100.
+        values should be in the range 2 to 100.
 
     n_components: int (optional, default 2)
         The dimension of the space to embed into. This defaults to 2 to
@@ -663,9 +663,9 @@ class UMAP(BaseEstimator):
     init: string (optional, default 'spectral')
         How to initialize the low dimensional embedding. Options are:
             * 'spectral': use a spectral embedding of the fuzzy 1-skeleton
-            * 'random': assign initial emebdding positions at random.
+            * 'random': assign initial embedding positions at random.
 
-    min_dist: float (optional, default 0.25)
+    min_dist: float (optional, default 0.1)
         The effective minimum distance between embedded points. Smaller values
         will result in a more clustered/clumped embedding where nearby points
         on the manifold are drawn closer together, while larger values will
@@ -692,7 +692,7 @@ class UMAP(BaseEstimator):
     """
 
     def __init__(self,
-                 n_neighbors=50,
+                 n_neighbors=15,
                  n_components=2,
                  metric='euclidean',
                  gamma=1.0,
@@ -700,7 +700,7 @@ class UMAP(BaseEstimator):
                  alpha=1.0,
                  init='spectral',
                  spread=1.0,
-                 min_dist=0.25,
+                 min_dist=0.1,
                  a=None,
                  b=None,
                  metric_kwds={}
