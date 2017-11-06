@@ -1,4 +1,3 @@
-from Cython.Distutils import build_ext
 from setuptools import setup
 
 def readme():
@@ -36,7 +35,7 @@ configuration = {
                           'scipy >= 0.19',
                           'numba >= 0.34'],
     'ext_modules' : [],
-    'cmdclass' : {'build_ext' : build_ext},
+    'cmdclass' : {},
     'test_suite' : 'nose.collector',
     'tests_require' : ['nose'],
     'data_files' : ()
