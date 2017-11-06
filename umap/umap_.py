@@ -209,6 +209,7 @@ def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates,
 
     return candidate_neighbors
 
+
 def make_nn_descent(dist, dist_args):
     @numba.njit(parallel=True)
     def nn_descent(data, n_neighbors, max_candidates=50,
@@ -226,7 +227,7 @@ def make_nn_descent(dist, dist_args):
                     for j in range(i + 1, leaf_array.shape[1]):
                         if leaf_array[n, j] < 0:
                             break
-                        d = dist(data[leaf_array[n, i]], data[leaf_array[n,j]],
+                        d = dist(data[leaf_array[n, i]], data[leaf_array[n, j]],
                                  *dist_args)
                         heap_push(current_graph, leaf_array[n, i], d,
                                   leaf_array[n, j],
@@ -272,9 +273,11 @@ def make_nn_descent(dist, dist_args):
 
     return nn_descent
 
+
 SMOOTH_K_TOLERANCE = 1e-5
 MIN_K_DIST_SCALE = 1e-3
 NPY_INFINITY = np.inf
+
 
 @numba.njit(parallel=True)
 def smooth_knn_dist(distances, k, n_iter=128):
@@ -436,8 +439,14 @@ def sample(prob, alias, rng_state):
 @numba.jit()
 def spectral_layout(graph, dim):
     diag_data = np.asarray(graph.sum(axis=0))
-    D = scipy.sparse.spdiags(diag_data, 0, graph.shape[0], graph.shape[0])
-    L = D - graph
+    # standard Laplacian
+    # D = scipy.sparse.spdiags(diag_data, 0, graph.shape[0], graph.shape[0])
+    # L = D - graph
+    # Normalized Laplacian
+    I = scipy.sparse.identity(graph.shape[0], dtype=np.float64)
+    D = scipy.sparse.spdiags(1.0 / np.sqrt(diag_data), 0, graph.shape[0],
+                             graph.shape[0])
+    L = I - D * graph * D
 
     k = dim + 1
     num_lanczos_vectors = max(2 * k + 1, int(np.sqrt(graph.shape[0])))
@@ -520,11 +529,12 @@ def optimize_layout(embedding, positive_head, positive_tail,
             other[d] += -grad_d * alpha
 
         if i % 10000 == 0:
-            alpha = np.exp(
-                -0.69314718055994529 * (
-                (3 * i) / n_edge_samples) ** 2) * initial_alpha
-            if alpha < (initial_alpha * 0.0001):
-                alpha = initial_alpha * 0.0001
+            # alpha = np.exp(
+            #     -0.69314718055994529 * (
+            #     (3 * i) / n_edge_samples) ** 2) * initial_alpha
+            alpha = (1.0 - np.sqrt(i / n_edge_samples)) * initial_alpha
+            if alpha < (initial_alpha * 0.000001):
+                alpha = initial_alpha * 0.000001
 
     return embedding
 
@@ -607,8 +617,9 @@ class UMAP(BaseEstimator):
         The metric to use to compute distances in high dimensional space.
         If a string is passed it must match a valid predefined metric. If
         a general metric is required a function that takes two 1d arrays and
-        returns a float can be provided. For performance purposes it is best
-        if this is a numba jit'd function. Valid string metrics include:
+        returns a float can be provided. For performance purposes it is
+        required that this be a numba jit'd function. Valid string metrics
+        include:
             * euclidean
             * manhattan
             * chebyshev
