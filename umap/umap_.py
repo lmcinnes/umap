@@ -10,7 +10,7 @@ import umap.distances as dist
 
 
 @numba.njit('i4(i8[:])')
-def tau_rand(state):
+def tau_rand_int(state):
     state[0] = (((state[0] & 4294967294) << 12) & 0xffffffff) ^ \
                ((((state[0] << 13) & 0xffffffff) ^ state[0]) >> 19)
     state[1] = (((state[1] & 4294967288) << 4) & 0xffffffff) ^ \
@@ -20,14 +20,19 @@ def tau_rand(state):
 
     return state[0] ^ state[1] ^ state[2]
 
+@numba.njit('f4(i8[:])')
+def tau_rand(state):
+    integer = tau_rand_int(state)
+    return float(integer) / 0x7fffffff
+
 
 @numba.njit()
 def random_projection_split(data, indices, rng_state):
     dim = data.shape[1]
 
     # Select two random points, set the hyperplane between them
-    left_index = tau_rand(rng_state) % indices.shape[0]
-    right_index = tau_rand(rng_state) % indices.shape[0]
+    left_index = tau_rand_int(rng_state) % indices.shape[0]
+    right_index = tau_rand_int(rng_state) % indices.shape[0]
     right_index += left_index == right_index
     right_index = right_index % indices.shape[0]
     left = indices[left_index]
@@ -55,7 +60,7 @@ def random_projection_split(data, indices, rng_state):
             margin += hyperplane_vector[d] * data[indices[i], d]
 
         if margin == 0:
-            side[i] = tau_rand(rng_state) % 2
+            side[i] = tau_rand_int(rng_state) % 2
             if side[i] == 0:
                 n_left += 1
             else:
@@ -202,7 +207,7 @@ def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates,
                 continue
             idx = current_graph[0, i, j]
             isn = current_graph[2, i, j]
-            d = tau_rand(rng_state) / 0x7fffffff
+            d = tau_rand(rng_state)
             heap_push(candidate_neighbors, i, d, idx, isn)
             heap_push(candidate_neighbors, idx, d, i, isn)
             current_graph[2, i, j] = 0
@@ -254,7 +259,7 @@ def make_nn_descent(dist, dist_args):
             for i in range(n_vertices):
                 for j in range(max_candidates):
                     p = int(candidate_neighbors[0, i, j])
-                    if p < 0 or tau_rand(rng_state) / 0x7fffffff < rho:
+                    if p < 0 or tau_rand(rng_state) < rho:
                         continue
                     for k in range(max_candidates):
                         q = int(candidate_neighbors[0, i, k])
@@ -427,8 +432,8 @@ def create_sampler(probabilities):
 
 @numba.njit()
 def sample(prob, alias, rng_state):
-    k = tau_rand(rng_state) % prob.shape[0]
-    u = tau_rand(rng_state) / 0x7fffffff
+    k = tau_rand_int(rng_state) % prob.shape[0]
+    u = tau_rand(rng_state)
 
     if u < prob[k]:
         return k
@@ -496,7 +501,7 @@ def optimize_layout(embedding, positive_head, positive_tail,
             is_negative_sample = True
 
         if is_negative_sample:
-            edge = tau_rand(rng_state) % (n_vertices ** 2)
+            edge = tau_rand_int(rng_state) % (n_vertices ** 2)
             j = edge // n_vertices
             k = edge % n_vertices
         else:
@@ -532,7 +537,7 @@ def optimize_layout(embedding, positive_head, positive_tail,
             # alpha = np.exp(
             #     -0.69314718055994529 * (
             #     (3 * i) / n_edge_samples) ** 2) * initial_alpha
-            alpha = (1.0 - np.sqrt(i / n_edge_samples)) * initial_alpha
+            alpha = (1.0 - np.sqrt(float(i) / n_edge_samples)) * initial_alpha
             if alpha < (initial_alpha * 0.000001):
                 alpha = initial_alpha * 0.000001
 
