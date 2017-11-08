@@ -2,40 +2,13 @@
 UMAP
 ====
 
-Uniform Manifold Approximation and Projection
+Uniform Manifold Approximation and Projection (UMAP) is a dimension reduction technique that can be used for visualisation similarly to t-SNE, but also for general non-linear dimension reduction. The algorithm is founded on three assumptions about the data
 
-Currently this is completely experimental, and supports a very limited range of
-functionality. For basic usage you can do something like:
+1. The data is uniformly distributed on Riemannian manifold;
+2. The Riemannian metric is locally constant (or can be approximated as such);
+3. The manifold is locally connected (not globally, but locally).
 
-.. code:: python
-
-    import umap
-    from sklearn.datasets import load_digits
-
-    digits = load_digits()
-
-    embedding = umap.UMAP().fit_transform(digits.data)
-
-This algorithm is still under development. There are no promises that this will
-work well on your data, but if it doesn't please let me know so I can work
-to make the algorithm better, or understand what is going astray.
-
-A paper documenting the algorithm and the mathematical motivation behind
-it is forthcoming.
-
---------------------
-What to do right now
---------------------
-
-This is experimental code to let people try things out and provide feedback.
-Some parameters that perhaps should be exposed aren't. Some parameters that
-perhaps shouldn't be exposed are. Many parameters are probably badly named.
-I haven't tried the algorithm on a very wide range of datasets yet.
-
-So ... if you are interested please grab the code and try it out. I would
-greatly appreciate feedback on how it worked on varying datasets. Please
-consult the docstrings and play with parameters to see what works, and
-by all means suggest better names for parameters!
+From these assumptions it is possible to model the manifold with a fuzzy topological structure. The embedding is found by searching for a low dimensional projection of the data that has the closest possible equivalent fuzzy topological structure.
 
 ----------
 Installing
