@@ -186,11 +186,12 @@ def heap_push(heap, row, weight, index, flag):
 
 def rptree_leaf_array(data, n_neighbors, n_trees=10):
     leaves = []
+    leaf_size = max(10, n_neighbors)
     for t in range(n_trees):
-        tree = make_tree(data, np.arange(data.shape[0]), leaf_size=n_neighbors)
+        tree = make_tree(data, np.arange(data.shape[0]), leaf_size=leaf_size)
         leaves += get_leaves(tree)
 
-    leaf_array = -1 * np.ones([len(leaves), n_neighbors], dtype=np.int64)
+    leaf_array = -1 * np.ones([len(leaves), leaf_size], dtype=np.int64)
     for i, leaf in enumerate(leaves):
         leaf_array[i, :len(leaf)] = leaf
 
