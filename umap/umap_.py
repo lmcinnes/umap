@@ -397,6 +397,7 @@ def create_sampler(probabilities):
     alias = np.zeros(probabilities.shape[0], dtype=np.int64)
 
     norm_prob = probabilities.shape[0] * probabilities / probabilities.sum()
+    norm_prob[np.isnan(norm_prob)] = 0.0
 
     is_small = (norm_prob < 1)
     small = np.where(is_small)[0]
