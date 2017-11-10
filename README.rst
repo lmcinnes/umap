@@ -43,7 +43,7 @@ major ones are as follows:
 local approximations of manifold structure. Larger values will result in more
 global structure being preserved at the loss of detailed local structure. In
 general this parameter should often be in the range 5 to 50, with a choice of
-10 to 15 being a sensible default.
+ 10 to 15 being a sensible default.
 * ``min_dist``: This controls how tightly the embedding is allowed compress
 points together. Larger values ensure embedded points are more evenly
 distributed, while smaller values allow the algorithm to optimise more
