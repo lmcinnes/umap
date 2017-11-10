@@ -109,7 +109,7 @@ Help and Support
 
 This project is still very young. I am currently trying to get example
 notebooks and documentation prepared, but it may be a while before those are
-available. In the meantime please `open an issue <https://github.com/lmcinnes/umap/issues/new`_
+available. In the meantime please `open an issue <https://github.com/lmcinnes/umap/issues/new>`_
 and I will try to provide any help and guidance that I can. Please also check
  the docstrings on the code, which provide some descriptions of the parameters.
 
