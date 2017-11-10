@@ -149,6 +149,33 @@ Requirements:
 * scikit-learn
 * numba
 
+For a manual install get this package:
+
+.. code:: bash
+
+    wget https://github.com/lmcinnes/umap/archive/master.zip
+    unzip master.zip
+    rm master.zip
+    cd hdbscan-master
+
+Install the requirements
+
+.. code:: bash
+
+    sudo pip install -r requirements.txt
+
+or
+
+.. code:: bash
+
+    conda install scikit-learn numba
+
+Install the package
+
+.. code:: bash
+
+    python setup.py install
+
 ----------------
 Help and Support
 ----------------
