@@ -56,6 +56,7 @@ in the input space. A wide variety of metrics are already coded, and a user
 defined function can be passed as long as it has been JITd by numba.
 
 An example of making use of these options:
+
 .. code:: python
 
     import umap
