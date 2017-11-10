@@ -149,6 +149,25 @@ Requirements:
 * scikit-learn
 * numba
 
+**Install Options**
+
+PyPI install, presuming you have numab and sklearn and all its requirements
+(numpy and scipy) installed:
+
+.. code:: bash
+
+    pip install umap
+
+If pip is having difficulties pulling the dependencies then we'd suggest installing
+the dependencies manually using anaconda followed by pulling hdbscan from pip:
+
+.. code:: bash
+
+    conda install numpy scipy
+    conda install scikit-learn
+    conda install numba
+    pip install umap
+
 For a manual install get this package:
 
 .. code:: bash
@@ -156,7 +175,7 @@ For a manual install get this package:
     wget https://github.com/lmcinnes/umap/archive/master.zip
     unzip master.zip
     rm master.zip
-    cd hdbscan-master
+    cd umap-master
 
 Install the requirements
 
