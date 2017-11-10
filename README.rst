@@ -1,3 +1,10 @@
+.. image:: https://img.shields.io/pypi/v/umap-learn.svg
+    :target: https://pypi.python.org/pypi/umap-learn/
+    :alt: PyPI Version
+.. image:: https://img.shields.io/pypi/l/umap-learn.svg
+    :target: https://github.com/lmcinnes/umap/blob/master/LICENSE
+    :alt: License
+
 ====
 UMAP
 ====
