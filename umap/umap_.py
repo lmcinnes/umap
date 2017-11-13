@@ -388,7 +388,8 @@ def fuzzy_simplicial_set(X, n_neighbors, metric, metric_kwds={}):
             cols[i * n_neighbors + j] = knn_indices[i, j]
             vals[i * n_neighbors + j] = val
 
-    result = scipy.sparse.coo_matrix((vals, (rows, cols)))
+    result = scipy.sparse.coo_matrix((vals, (rows, cols)),
+                                     shape=(X.shape[0], X.shape[0]))
     result.eliminate_zeros()
 
     transpose = result.transpose()
