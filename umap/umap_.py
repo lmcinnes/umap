@@ -359,6 +359,7 @@ def fuzzy_simplicial_set(X, n_neighbors, metric, metric_kwds={}):
     tmp_indices, knn_dists = metric_nn_descent(X,
                                                n_neighbors,
                                                max_candidates=60,
+                                               rp_tree_init=True,
                                                leaf_array=leaf_array)
     knn_indices = tmp_indices.astype(np.int64)
 
