@@ -220,36 +220,38 @@ def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates,
 def make_nn_descent(dist, dist_args):
     @numba.njit(parallel=True)
     def nn_descent(data, n_neighbors, max_candidates=50,
-                   n_iters=10, delta=0.001, rho=0.5, leaf_array=None):
+                   n_iters=10, delta=0.001, rho=0.5,
+                   rp_tree_init=True, leaf_array=None):
         n_vertices = data.shape[0]
 
         rng_state = np.empty(3, dtype=np.int64)
         current_graph = make_heap(data.shape[0], n_neighbors)
 
-        if leaf_array is not None:
+        for i in range(data.shape[0]):
+            indices = np.random.choice(data.shape[0], size=n_neighbors,
+                                       replace=False)
+            for j in range(indices.shape[0]):
+                d = dist(data[i], data[indices[j]], *dist_args)
+                heap_push(current_graph, i, d, indices[j], 1)
+                heap_push(current_graph, indices[j], d, i, 1)
+
+        if rp_tree_init:
             for n in range(leaf_array.shape[0]):
-                for i in range(leaf_array.shape[1]):
-                    if leaf_array[n, i] < 0:
-                        break
-                    for j in range(i + 1, leaf_array.shape[1]):
-                        if leaf_array[n, j] < 0:
+                    for i in range(leaf_array.shape[1]):
+                        if leaf_array[n, i] < 0:
                             break
-                        d = dist(data[leaf_array[n, i]], data[leaf_array[n, j]],
-                                 *dist_args)
-                        heap_push(current_graph, leaf_array[n, i], d,
-                                  leaf_array[n, j],
-                                  1)
-                        heap_push(current_graph, leaf_array[n, j], d,
-                                  leaf_array[n, i],
-                                  1)
-        else:
-            for i in range(data.shape[0]):
-                indices = np.random.choice(data.shape[0], size=n_neighbors,
-                                           replace=False)
-                for j in range(indices.shape[0]):
-                    d = dist(data[i], data[indices[j]], *dist_args)
-                    heap_push(current_graph, i, d, indices[j], 1)
-                    heap_push(current_graph, indices[j], d, i, 1)
+                        for j in range(i + 1, leaf_array.shape[1]):
+                            if leaf_array[n, j] < 0:
+                                break
+                            d = dist(data[leaf_array[n, i]], data[leaf_array[n, j]],
+                                     *dist_args)
+                            heap_push(current_graph, leaf_array[n, i], d,
+                                      leaf_array[n, j],
+                                      1)
+                            heap_push(current_graph, leaf_array[n, j], d,
+                                      leaf_array[n, i],
+                                      1)
+
 
         for n in range(n_iters):
 
