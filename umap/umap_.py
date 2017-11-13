@@ -1,6 +1,7 @@
 from scipy.optimize import curve_fit
 from sklearn.base import BaseEstimator
 from collections import deque, namedtuple
+from warnings import warn
 
 import numpy as np
 import scipy.sparse
@@ -358,6 +359,12 @@ def fuzzy_simplicial_set(X, n_neighbors, metric, metric_kwds={}):
                                                max_candidates=60,
                                                leaf_array=leaf_array)
     knn_indices = tmp_indices.astype(np.int64)
+
+    if np.any(knn_indices == -1):
+        warn('Failed to correctly find n_neighbors for some samples.'
+             'Results may be less than ideal. Try re-running with'
+             'different parameters.')
+
     for i in range(knn_indices.shape[0]):
         order = np.argsort(knn_dists[i])
         knn_dists[i] = knn_dists[i][order]
@@ -368,6 +375,8 @@ def fuzzy_simplicial_set(X, n_neighbors, metric, metric_kwds={}):
     for i in range(knn_indices.shape[0]):
 
         for j in range(n_neighbors):
+            if knn_indices[i, j] == -1:
+                continue # We didn't get the full knn for i
             if knn_indices[i, j] == i:
                 val = 0.0
             elif knn_dists[i, j] == 0.0:
