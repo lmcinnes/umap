@@ -360,7 +360,7 @@ def fuzzy_simplicial_set(X, n_neighbors, metric, metric_kwds={}):
                                                leaf_array=leaf_array)
     knn_indices = tmp_indices.astype(np.int64)
 
-    if np.any(knn_indices == -1):
+    if np.any(knn_indices < 0):
         warn('Failed to correctly find n_neighbors for some samples.'
              'Results may be less than ideal. Try re-running with'
              'different parameters.')
