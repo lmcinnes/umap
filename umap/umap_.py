@@ -572,7 +572,7 @@ def simplicial_set_embedding(graph, n_components,
     if init == 'random':
         embedding = np.random.uniform(low=-10.0, high=10.0,
                                       size=(graph.shape[0], 2))
-    else:
+    elif init == 'spectral':
         # We add a little noise to avoid local minima for optimization to come
         initialisation = spectral_layout(graph, n_components)
         expansion = 10.0 / initialisation.max()
@@ -580,6 +580,19 @@ def simplicial_set_embedding(graph, n_components,
                     np.random.normal(scale=0.001,
                                      size=[graph.shape[0],
                                            n_components])
+    else:
+        try:
+            init_data = np.array(init)
+            if len(init_data.shape) == 2:
+                embedding = init_data
+            else:
+                raise ValueError('Invalid init data passed.'
+                                 'Should be "random", "spectral" or'
+                                 'a numpy array of initial embedding postions')
+        except:
+            raise ValueError('Invalid init data passed.'
+                             'Should be "random", "spectral" or'
+                             'a numpy array of initial embedding postions')
 
     if n_edge_samples <= 0:
         n_edge_samples = (graph.shape[0] // 150) * 1000000
