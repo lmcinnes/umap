@@ -549,16 +549,23 @@ def spectral_layout(graph, dim):
 
     k = dim + 1
     num_lanczos_vectors = max(2 * k + 1, int(np.sqrt(graph.shape[0])))
-    eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
-        L, k,
-        which='SM',
-        ncv=num_lanczos_vectors,
-        tol=1e-4,
-        v0=np.ones(L.shape[0]),
-        maxiter=graph.shape[0] * 5)
-    order = np.argsort(eigenvalues)[1:k]
-    return eigenvectors[:, order]
-
+    try:
+        eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
+            L, k,
+            which='SM',
+            ncv=num_lanczos_vectors,
+            tol=1e-4,
+            v0=np.ones(L.shape[0]),
+            maxiter=graph.shape[0] * 5)
+        order = np.argsort(eigenvalues)[1:k]
+        return eigenvectors[:, order]
+    except scipy.sparse.linalg.ArpackError:
+        warn('WARNING: spectral initialisation failed! The eigenvector solver\n'
+             'failed. This is likely due to too small an eigengap. Consider\n'
+             'adding some noise or jitter to your data.\n\n'
+             'Falling back to random initialisation!')
+        return np.random.uniform(low=-10.0, high=10.0,
+                                 size=(graph.shape[0], 2))
 
 @numba.njit()
 def clip(val):
