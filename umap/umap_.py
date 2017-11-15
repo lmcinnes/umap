@@ -28,6 +28,80 @@ def tau_rand(state):
     integer = tau_rand_int(state)
     return float(integer) / 0x7fffffff
 
+@numba.njit()
+def norm(vec):
+    result = 0.0
+    for i in range(vec.shape[0]):
+        result += vec[i]**2
+    return np.sqrt(result)
+
+@numba.njit()
+def random_projection_cosine_split(data, indices, rng_state):
+    dim = data.shape[1]
+
+    # Select two random points, set the hyperplane between them
+    left_index = tau_rand_int(rng_state) % indices.shape[0]
+    right_index = tau_rand_int(rng_state) % indices.shape[0]
+    right_index += left_index == right_index
+    right_index = right_index % indices.shape[0]
+    left = indices[left_index]
+    right = indices[right_index]
+
+    left_norm = norm(data[left])
+    right_norm = norm(data[right])
+
+    # Compute the normal vector to the hyperplane (the vector between
+    # the two points)
+    hyperplane_vector = np.empty(dim, dtype=np.float32)
+
+    for d in range(dim):
+        hyperplane_vector[d] = ((data[left, d] / left_norm) -
+                                (data[right, d] / right_norm))
+
+    hyperplane_norm = norm(hyperplane_vector)
+    for d in range(dim):
+        hyperplane_vector[d] = hyperplane_vector[d] / hyperplane_norm
+
+    # For each point compute the margin (project into normal vector)
+    # If we are on lower side of the hyperplane put in one pile, otherwise
+    # put it in the other pile (if we hit hyperplane on the nose, flip a coin)
+    n_left = 0
+    n_right = 0
+    side = np.empty(indices.shape[0], np.int8)
+    for i in range(indices.shape[0]):
+        margin = 0.0
+        for d in range(dim):
+            margin += hyperplane_vector[d] * data[indices[i], d]
+
+        if margin == 0:
+            side[i] = tau_rand_int(rng_state) % 2
+            if side[i] == 0:
+                n_left += 1
+            else:
+                n_right += 1
+        elif margin > 0:
+            side[i] = 0
+            n_left += 1
+        else:
+            side[i] = 1
+            n_right += 1
+
+    # Now that we have the counts allocate arrays
+    indices_left = np.empty(n_left, dtype=np.int64)
+    indices_right = np.empty(n_right, dtype=np.int64)
+
+    # Populate the arrays with indices according to which side they fell on
+    n_left = 0
+    n_right = 0
+    for i in range(side.shape[0]):
+        if side[i] == 0:
+            indices_left[n_left] = indices[i]
+            n_left += 1
+        else:
+            indices_right[n_right] = indices[i]
+            n_right += 1
+
+    return indices_left, indices_right
 
 @numba.njit()
 def random_projection_split(data, indices, rng_state):
