@@ -703,6 +703,7 @@ class UMAP(BaseEstimator):
         How to initialize the low dimensional embedding. Options are:
             * 'spectral': use a spectral embedding of the fuzzy 1-skeleton
             * 'random': assign initial embedding positions at random.
+            * A numpy array of initial embedding positions.
 
     min_dist: float (optional, default 0.1)
         The effective minimum distance between embedded points. Smaller values
@@ -724,6 +725,10 @@ class UMAP(BaseEstimator):
         More specific parameters controlling the embedding. If None these
         values are set automatically as determined by ``min_dist`` and
         ``spread``.
+
+    random_seed: int (optional, default None)
+        Provide a fixed seed for reproducibility (currently experimental,
+        do not expect consistent results yet, consider this a placeholder).
 
     metric_kwds: dict (optional, default {})
         Arguments to pass on to the metric, such as the ``p`` value for
@@ -758,6 +763,7 @@ class UMAP(BaseEstimator):
 
         self.spread = spread
         self.min_dist = min_dist
+        self.random_seed = random_seed
 
         if metric in dist.named_distances:
             self._metric = dist.named_distances[self.metric]
@@ -766,9 +772,6 @@ class UMAP(BaseEstimator):
         else:
             raise ValueError('Supplied metric is neither '
                              'a recognised string, nor callable')
-
-        if random_seed is not None:
-            np.random.seed(random_seed)
 
         if a is None or b is None:
             self.a, self.b = find_ab_params(self.spread, self.min_dist)
@@ -790,6 +793,9 @@ class UMAP(BaseEstimator):
 
         # Handle other array dtypes (TODO: do this properly)
         X = X.astype(np.float64)
+
+        if self.random_seed is not None:
+            np.random.seed(self.random_seed)
 
         graph = fuzzy_simplicial_set(X, self.n_neighbors,
                                      self._metric, self.metric_kwds)
