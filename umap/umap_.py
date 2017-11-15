@@ -480,6 +480,7 @@ def spectral_layout(graph, dim):
         which='SM',
         ncv=num_lanczos_vectors,
         tol=1e-4,
+        v0=np.ones(L.shape[0]),
         maxiter=graph.shape[0] * 5)
     order = np.argsort(eigenvalues)[1:k]
     return eigenvectors[:, order]
