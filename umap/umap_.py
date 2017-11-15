@@ -9,6 +9,8 @@ import numba
 
 import umap.distances as dist
 
+INT32_MIN = np.iinfo(np.int32).min + 1
+INT32_MAX = np.iinfo(np.int32).max - 1
 
 @numba.njit('i4(i8[:])')
 def tau_rand_int(state):
@@ -97,7 +99,7 @@ RandomProjectionTreeNode = namedtuple('RandomProjectionTreeNode',
 
 
 def make_tree(data, indices, leaf_size=30):
-    rng_state = np.empty(3, dtype=np.int64)
+    rng_state = np.random.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
     # Make a tree recursively until we get below the leaf size
     if indices.shape[0] > leaf_size:
@@ -227,7 +229,7 @@ def make_nn_descent(dist, dist_args):
                    rp_tree_init=True, leaf_array=None):
         n_vertices = data.shape[0]
 
-        rng_state = np.empty(3, dtype=np.int64)
+        rng_state = np.random.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
         current_graph = make_heap(data.shape[0], n_neighbors)
 
         for i in range(data.shape[0]):
@@ -509,7 +511,7 @@ def optimize_layout(embedding, positive_head, positive_tail,
                     negative_sample_rate=5):
     dim = embedding.shape[1]
     alpha = initial_alpha
-    rng_state = np.empty(3, np.int64)
+    rng_state = np.random.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
     for i in range(n_edge_samples):
 
@@ -739,6 +741,7 @@ class UMAP(BaseEstimator):
                  min_dist=0.1,
                  a=None,
                  b=None,
+                 random_seed=None,
                  metric_kwds={}
                  ):
 
@@ -762,6 +765,9 @@ class UMAP(BaseEstimator):
         else:
             raise ValueError('Supplied metric is neither '
                              'a recognised string, nor callable')
+
+        if random_seed is not None:
+            np.random.seed(random_seed)
 
         if a is None or b is None:
             self.a, self.b = find_ab_params(self.spread, self.min_dist)
