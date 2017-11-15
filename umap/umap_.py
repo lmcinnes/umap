@@ -535,7 +535,6 @@ def sample(prob, alias, rng_state):
         return alias[k]
 
 
-@numba.jit()
 def spectral_layout(graph, dim):
     diag_data = np.asarray(graph.sum(axis=0))
     # standard Laplacian
