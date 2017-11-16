@@ -36,34 +36,12 @@ def norm(vec):
         result += vec[i]**2
     return np.sqrt(result)
 
-# Generate a random permutation; ideally used to randomly sample
-# indices; this is what numpy uses, but in practice algorithm R
-# is lower memory for this specific task, and just as simple
-# Fisher-Yates is left here in case we ever need it later
-@numba.njit()
-def knuth_fisher_yates_shuffle(size, rng_state):
-    result = np.arange(size)
-    for i in range(size - 1, 0, -1):
-        j = tau_rand_int(rng_state) % (i + 1)
-        result[i], result[j] = result[j], result[i]
-    return result
-
-# Algorithm R is a (stream) sampling algorithm to
-# sample n_samples items from a reservoir; it is
-# very similar to Fisher-Yates, but we don't need
-# to instantiate a whole result array only to
-# discard it later
-@numba.njit()
-def algorithm_r_sample(n_samples, reservoir_size, rng_state):
-    result = np.arange(n_samples)
-    for i in range(n_samples, reservoir_size):
-        j = tau_rand_int(rng_state) % (i + 1)
-        if j < n_samples:
-            result[j] = i
-    return result
-
 @numba.njit()
 def rejection_sample(n_samples, pool_size, rng_state):
+    """Generate n_samples many integers from 0 to pool_size such that no
+    integer is selected twice. The duplication constraint is achieved via
+    rejection sampling.
+    """
     result = np.empty(n_samples, dtype=np.int64)
     for i in range(n_samples):
         reject_sample = True
@@ -215,8 +193,6 @@ RandomProjectionTreeNode = namedtuple('RandomProjectionTreeNode',
 
 
 def make_tree(data, indices, rng_state, leaf_size=30):
-    # rng_state = np.random.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
-
     # Make a tree recursively until we get below the leaf size
     if indices.shape[0] > leaf_size:
         left_indices, right_indices = random_projection_split(data,
@@ -348,14 +324,9 @@ def make_nn_descent(dist, dist_args):
                    rp_tree_init=True, leaf_array=None):
         n_vertices = data.shape[0]
 
-        #rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(
-        #    np.int64)
         current_graph = make_heap(data.shape[0], n_neighbors)
 
         for i in range(data.shape[0]):
-            #indices = np.random.choice(data.shape[0], size=n_neighbors,
-            #                            replace=False)
-            # indices = algorithm_r_sample(n_neighbors, data.shape[0], rng_state)
             indices = rejection_sample(n_neighbors, data.shape[0], rng_state)
             for j in range(indices.shape[0]):
                 d = dist(data[i], data[indices[j]], *dist_args)
@@ -643,7 +614,6 @@ def optimize_layout(embedding, positive_head, positive_tail,
                     negative_sample_rate=5):
     dim = embedding.shape[1]
     alpha = initial_alpha
-    # rng_state = np.random.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
     for i in range(n_edge_samples):
 
