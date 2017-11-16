@@ -1,8 +1,10 @@
+import logging
+from collections import deque, namedtuple
+from warnings import warn
+
 from scipy.optimize import curve_fit
 from sklearn.base import BaseEstimator
 from sklearn.utils import check_random_state
-from collections import deque, namedtuple
-from warnings import warn
 
 import numpy as np
 import scipy.sparse
