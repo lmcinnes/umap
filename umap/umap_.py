@@ -14,6 +14,7 @@ import umap.distances as dist
 INT32_MIN = np.iinfo(np.int32).min + 1
 INT32_MAX = np.iinfo(np.int32).max - 1
 
+
 @numba.njit('i4(i8[:])')
 def tau_rand_int(state):
     state[0] = (((state[0] & 4294967294) << 12) & 0xffffffff) ^ \
@@ -25,10 +26,12 @@ def tau_rand_int(state):
 
     return state[0] ^ state[1] ^ state[2]
 
+
 @numba.njit('f4(i8[:])')
 def tau_rand(state):
     integer = tau_rand_int(state)
     return float(integer) / 0x7fffffff
+
 
 @numba.njit()
 def norm(vec):
@@ -36,6 +39,7 @@ def norm(vec):
     for i in range(vec.shape[0]):
         result += vec[i]**2
     return np.sqrt(result)
+
 
 @numba.njit()
 def rejection_sample(n_samples, pool_size, rng_state):
@@ -55,6 +59,7 @@ def rejection_sample(n_samples, pool_size, rng_state):
                 reject_sample = False
         result[i] = j
     return result
+
 
 @numba.njit()
 def random_projection_cosine_split(data, indices, rng_state):
@@ -123,6 +128,7 @@ def random_projection_cosine_split(data, indices, rng_state):
             n_right += 1
 
     return indices_left, indices_right
+
 
 @numba.njit()
 def random_projection_split(data, indices, rng_state):
@@ -479,10 +485,9 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state, metric, metric_kwds={}, v
     sigmas, rhos = smooth_knn_dist(knn_dists, n_neighbors)
 
     for i in range(knn_indices.shape[0]):
-
         for j in range(n_neighbors):
             if knn_indices[i, j] == -1:
-                continue # We didn't get the full knn for i
+                continue  # We didn't get the full knn for i
             if knn_indices[i, j] == i:
                 val = 0.0
             elif knn_dists[i, j] == 0.0:
@@ -590,6 +595,7 @@ def spectral_layout(graph, dim, random_state):
         return random_state.uniform(low=-10.0, high=10.0,
                                     size=(graph.shape[0], 2))
 
+
 @numba.njit()
 def clip(val):
     if val > 4.0:
@@ -689,9 +695,9 @@ def simplicial_set_embedding(graph, n_components,
         initialisation = spectral_layout(graph, n_components, random_state)
         expansion = 10.0 / initialisation.max()
         embedding = (initialisation * expansion) + \
-                    random_state.normal(scale=0.001,
-                                        size=[graph.shape[0],
-                                              n_components])
+            random_state.normal(scale=0.001,
+                                size=[graph.shape[0],
+                                      n_components])
     else:
         try:
             init_data = np.array(init)
@@ -895,10 +901,10 @@ class UMAP(BaseEstimator):
             self.b = b
 
         if self.verbose:
-            print("UMAP(n_neighbors={}, n_components={}, metric='{}', gamma={}, "
-                  "n_edge_samples={}, alpha={}, init='{}', spread={}, "
-                  "min_dist={}, a={}, b={}, random_state={}, metric_kwds={}, "
-                  "verbose={})".format(
+            print("UMAP(n_neighbors={}, n_components={}, metric='{}', "
+                  " gamma={}, n_edge_samples={}, alpha={}, init='{}', "
+                  "spread={}, min_dist={}, a={}, b={}, random_state={}, "
+                  "metric_kwds={}, verbose={})".format(
                       n_neighbors, n_components, metric, gamma,
                       n_edge_samples, alpha, init, spread,
                       min_dist, a, b, random_state, metric_kwds, verbose))
