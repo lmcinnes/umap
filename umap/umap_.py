@@ -1,4 +1,3 @@
-import logging
 from collections import deque, namedtuple
 from warnings import warn
 
@@ -323,11 +322,10 @@ def make_nn_descent(dist, dist_args):
     @numba.njit(parallel=True)
     def nn_descent(data, n_neighbors, rng_state, max_candidates=50,
                    n_iters=10, delta=0.001, rho=0.5,
-                   rp_tree_init=True, leaf_array=None):
+                   rp_tree_init=True, leaf_array=None, verbose=False):
         n_vertices = data.shape[0]
 
         current_graph = make_heap(data.shape[0], n_neighbors)
-
         for i in range(data.shape[0]):
             indices = rejection_sample(n_neighbors, data.shape[0], rng_state)
             for j in range(indices.shape[0]):
@@ -337,23 +335,24 @@ def make_nn_descent(dist, dist_args):
 
         if rp_tree_init:
             for n in range(leaf_array.shape[0]):
-                    for i in range(leaf_array.shape[1]):
-                        if leaf_array[n, i] < 0:
+                for i in range(leaf_array.shape[1]):
+                    if leaf_array[n, i] < 0:
+                        break
+                    for j in range(i + 1, leaf_array.shape[1]):
+                        if leaf_array[n, j] < 0:
                             break
-                        for j in range(i + 1, leaf_array.shape[1]):
-                            if leaf_array[n, j] < 0:
-                                break
-                            d = dist(data[leaf_array[n, i]], data[leaf_array[n, j]],
-                                     *dist_args)
-                            heap_push(current_graph, leaf_array[n, i], d,
-                                      leaf_array[n, j],
-                                      1)
-                            heap_push(current_graph, leaf_array[n, j], d,
-                                      leaf_array[n, i],
-                                      1)
-
+                        d = dist(data[leaf_array[n, i]], data[leaf_array[n, j]],
+                                 *dist_args)
+                        heap_push(current_graph, leaf_array[n, i], d,
+                                  leaf_array[n, j],
+                                  1)
+                        heap_push(current_graph, leaf_array[n, j], d,
+                                  leaf_array[n, i],
+                                  1)
 
         for n in range(n_iters):
+            if verbose:
+                print("\tnn descent iteration ", n, " / ", n_iters)
 
             candidate_neighbors = build_candidates(current_graph, n_vertices,
                                                    n_neighbors, max_candidates,
@@ -441,7 +440,7 @@ def smooth_knn_dist(distances, k, n_iter=128):
 
 
 @numba.jit(parallel=True)
-def fuzzy_simplicial_set(X, n_neighbors, random_state, metric, metric_kwds={}):
+def fuzzy_simplicial_set(X, n_neighbors, random_state, metric, metric_kwds={}, verbose=False):
     rows = np.zeros((X.shape[0] * n_neighbors), dtype=np.int64)
     cols = np.zeros((X.shape[0] * n_neighbors), dtype=np.int64)
     vals = np.zeros((X.shape[0] * n_neighbors), dtype=np.float64)
@@ -463,7 +462,8 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state, metric, metric_kwds={}):
                                                rng_state,
                                                max_candidates=60,
                                                rp_tree_init=True,
-                                               leaf_array=leaf_array)
+                                               leaf_array=leaf_array,
+                                               verbose=verbose)
     knn_indices = tmp_indices.astype(np.int64)
 
     if np.any(knn_indices < 0):
@@ -613,7 +613,7 @@ def rdist(x, y):
 def optimize_layout(embedding, positive_head, positive_tail,
                     n_edge_samples, n_vertices, prob, alias,
                     a, b, rng_state, gamma=1.0, initial_alpha=1.0,
-                    negative_sample_rate=5):
+                    negative_sample_rate=5, verbose=False):
     dim = embedding.shape[1]
     alpha = initial_alpha
 
@@ -665,13 +665,16 @@ def optimize_layout(embedding, positive_head, positive_tail,
             if alpha < (initial_alpha * 0.000001):
                 alpha = initial_alpha * 0.000001
 
+        if verbose and i % int(n_edge_samples/10) == 0 :
+            print("\tembedding iteration ", i, " / ", n_edge_samples)
+
     return embedding
 
 
 def simplicial_set_embedding(graph, n_components,
                              initial_alpha, a, b,
                              gamma, n_edge_samples,
-                             init, random_state):
+                             init, random_state, verbose):
     graph = graph.tocoo()
     graph.sum_duplicates()
     n_vertices = graph.shape[0]
@@ -713,7 +716,7 @@ def simplicial_set_embedding(graph, n_components,
     embedding = optimize_layout(embedding, positive_head, positive_tail,
                                 n_edge_samples, n_vertices,
                                 prob, alias, a, b, rng_state, gamma,
-                                initial_alpha)
+                                initial_alpha, verbose=verbose)
 
     return embedding
 
@@ -840,6 +843,9 @@ class UMAP(BaseEstimator):
     metric_kwds: dict (optional, default {})
         Arguments to pass on to the metric, such as the ``p`` value for
         Minkowski distance.
+
+    verbose: bool (optional, default False)
+        Controls verbosity of logging.
     """
 
     def __init__(self,
@@ -855,7 +861,8 @@ class UMAP(BaseEstimator):
                  a=None,
                  b=None,
                  random_state=None,
-                 metric_kwds={}
+                 metric_kwds={},
+                 verbose=False
                  ):
 
         self.n_neighbors = n_neighbors
@@ -871,6 +878,7 @@ class UMAP(BaseEstimator):
         self.spread = spread
         self.min_dist = min_dist
         self.random_state = random_state
+        self.verbose = verbose
 
         if metric in dist.named_distances:
             self._metric = dist.named_distances[self.metric]
@@ -885,6 +893,15 @@ class UMAP(BaseEstimator):
         else:
             self.a = a
             self.b = b
+
+        if self.verbose:
+            print("UMAP(n_neighbors={}, n_components={}, metric='{}', gamma={}, "
+                  "n_edge_samples={}, alpha={}, init='{}', spread={}, "
+                  "min_dist={}, a={}, b={}, random_state={}, metric_kwds={}, "
+                  "verbose={})".format(
+                      n_neighbors, n_components, metric, gamma,
+                      n_edge_samples, alpha, init, spread,
+                      min_dist, a, b, random_state, metric_kwds, verbose))
 
     def fit(self, X, y=None):
         """Fit X into an embedded space.
@@ -903,13 +920,25 @@ class UMAP(BaseEstimator):
 
         random_state = check_random_state(self.random_state)
 
-        graph = fuzzy_simplicial_set(X, self.n_neighbors, random_state,
-                                     self._metric, self.metric_kwds)
+        if self.verbose:
+            print("Construct fuzzy simplicial set")
+
+        graph = fuzzy_simplicial_set(
+            X,
+            self.n_neighbors,
+            random_state,
+            self._metric,
+            self.metric_kwds,
+            self.verbose
+        )
 
         if self.n_edge_samples is None:
             n_edge_samples = 0
         else:
             n_edge_samples = self.n_edge_samples
+
+        if self.verbose:
+            print("Construct embedding")
 
         self.embedding_ = simplicial_set_embedding(
             graph,
@@ -920,7 +949,8 @@ class UMAP(BaseEstimator):
             self.gamma,
             n_edge_samples,
             self.init,
-            random_state
+            random_state,
+            self.verbose
         )
 
     def fit_transform(self, X, y=None):
