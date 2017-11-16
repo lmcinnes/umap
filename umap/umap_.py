@@ -829,9 +829,11 @@ class UMAP(BaseEstimator):
         values are set automatically as determined by ``min_dist`` and
         ``spread``.
 
-    random_state: int (optional, default None)
-        Provide a fixed seed for reproducibility (currently experimental,
-        do not expect consistent results yet, consider this a placeholder).
+    random_state: int, RandomState instance or None, optional (default: None)
+        If int, random_state is the seed used by the random number generator;
+        If RandomState instance, random_state is the random number generator;
+        If None, the random number generator is the RandomState instance used
+        by `np.random`.
 
     metric_kwds: dict (optional, default {})
         Arguments to pass on to the metric, such as the ``p`` value for
