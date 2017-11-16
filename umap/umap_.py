@@ -1,5 +1,6 @@
 from scipy.optimize import curve_fit
 from sklearn.base import BaseEstimator
+from sklearn.utils import check_random_state
 from collections import deque, namedtuple
 from warnings import warn
 
@@ -34,6 +35,47 @@ def norm(vec):
     for i in range(vec.shape[0]):
         result += vec[i]**2
     return np.sqrt(result)
+
+# Generate a random permutation; ideally used to randomly sample
+# indices; this is what numpy uses, but in practice algorithm R
+# is lower memory for this specific task, and just as simple
+# Fisher-Yates is left here in case we ever need it later
+@numba.njit()
+def knuth_fisher_yates_shuffle(size, rng_state):
+    result = np.arange(size)
+    for i in range(size - 1, 0, -1):
+        j = tau_rand_int(rng_state) % (i + 1)
+        result[i], result[j] = result[j], result[i]
+    return result
+
+# Algorithm R is a (stream) sampling algorithm to
+# sample n_samples items from a reservoir; it is
+# very similar to Fisher-Yates, but we don't need
+# to instantiate a whole result array only to
+# discard it later
+@numba.njit()
+def algorithm_r_sample(n_samples, reservoir_size, rng_state):
+    result = np.arange(n_samples)
+    for i in range(n_samples, reservoir_size):
+        j = tau_rand_int(rng_state) % (i + 1)
+        if j < n_samples:
+            result[j] = i
+    return result
+
+@numba.njit()
+def rejection_sample(n_samples, pool_size, rng_state):
+    result = np.empty(n_samples, dtype=np.int64)
+    for i in range(n_samples):
+        reject_sample = True
+        while reject_sample:
+            j = tau_rand_int(rng_state) % pool_size
+            for k in range(i):
+                if j == result[k]:
+                    break
+            else:
+                reject_sample = False
+        result[i] = j
+    return result
 
 @numba.njit()
 def random_projection_cosine_split(data, indices, rng_state):
@@ -172,16 +214,16 @@ RandomProjectionTreeNode = namedtuple('RandomProjectionTreeNode',
                                        'left_child', 'right_child'])
 
 
-def make_tree(data, indices, leaf_size=30):
-    rng_state = np.random.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
+def make_tree(data, indices, rng_state, leaf_size=30):
+    # rng_state = np.random.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
     # Make a tree recursively until we get below the leaf size
     if indices.shape[0] > leaf_size:
         left_indices, right_indices = random_projection_split(data,
                                                               indices,
                                                               rng_state)
-        left_node = make_tree(data, left_indices, leaf_size)
-        right_node = make_tree(data, right_indices, leaf_size)
+        left_node = make_tree(data, left_indices, rng_state, leaf_size)
+        right_node = make_tree(data, right_indices, rng_state, leaf_size)
         node = RandomProjectionTreeNode(indices, False, left_node, right_node)
     else:
         node = RandomProjectionTreeNode(indices, True, None, None)
@@ -261,12 +303,15 @@ def heap_push(heap, row, weight, index, flag):
     return 1
 
 
-def rptree_leaf_array(data, n_neighbors, n_trees=10):
+def rptree_leaf_array(data, n_neighbors, rng_state, n_trees=10):
     leaves = []
     try:
         leaf_size = max(10, n_neighbors)
         for t in range(n_trees):
-            tree = make_tree(data, np.arange(data.shape[0]), leaf_size=leaf_size)
+            tree = make_tree(data,
+                             np.arange(data.shape[0]),
+                             rng_state,
+                             leaf_size=leaf_size)
             leaves += get_leaves(tree)
 
         leaf_array = -1 * np.ones([len(leaves), leaf_size], dtype=np.int64)
@@ -298,17 +343,20 @@ def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates,
 
 def make_nn_descent(dist, dist_args):
     @numba.njit(parallel=True)
-    def nn_descent(data, n_neighbors, max_candidates=50,
+    def nn_descent(data, n_neighbors, rng_state, max_candidates=50,
                    n_iters=10, delta=0.001, rho=0.5,
                    rp_tree_init=True, leaf_array=None):
         n_vertices = data.shape[0]
 
-        rng_state = np.random.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
+        #rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(
+        #    np.int64)
         current_graph = make_heap(data.shape[0], n_neighbors)
 
         for i in range(data.shape[0]):
-            indices = np.random.choice(data.shape[0], size=n_neighbors,
-                                       replace=False)
+            #indices = np.random.choice(data.shape[0], size=n_neighbors,
+            #                            replace=False)
+            # indices = algorithm_r_sample(n_neighbors, data.shape[0], rng_state)
+            indices = rejection_sample(n_neighbors, data.shape[0], rng_state)
             for j in range(indices.shape[0]):
                 d = dist(data[i], data[indices[j]], *dist_args)
                 heap_push(current_graph, i, d, indices[j], 1)
@@ -420,7 +468,7 @@ def smooth_knn_dist(distances, k, n_iter=128):
 
 
 @numba.jit(parallel=True)
-def fuzzy_simplicial_set(X, n_neighbors, metric, metric_kwds={}):
+def fuzzy_simplicial_set(X, n_neighbors, random_state, metric, metric_kwds={}):
     rows = np.zeros((X.shape[0] * n_neighbors), dtype=np.int64)
     cols = np.zeros((X.shape[0] * n_neighbors), dtype=np.int64)
     vals = np.zeros((X.shape[0] * n_neighbors), dtype=np.float64)
@@ -432,11 +480,14 @@ def fuzzy_simplicial_set(X, n_neighbors, metric, metric_kwds={}):
     else:
         raise ValueError('Metric is neither callable, nor a recognised string')
 
+    rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
+
     metric_nn_descent = make_nn_descent(distance_func,
                                         tuple(metric_kwds.values()))
-    leaf_array = rptree_leaf_array(X, n_neighbors, n_trees=10)
+    leaf_array = rptree_leaf_array(X, n_neighbors, rng_state, n_trees=10)
     tmp_indices, knn_dists = metric_nn_descent(X,
                                                n_neighbors,
+                                               rng_state,
                                                max_candidates=60,
                                                rp_tree_init=True,
                                                leaf_array=leaf_array)
@@ -535,7 +586,7 @@ def sample(prob, alias, rng_state):
         return alias[k]
 
 
-def spectral_layout(graph, dim):
+def spectral_layout(graph, dim, random_state):
     diag_data = np.asarray(graph.sum(axis=0))
     # standard Laplacian
     # D = scipy.sparse.spdiags(diag_data, 0, graph.shape[0], graph.shape[0])
@@ -563,8 +614,8 @@ def spectral_layout(graph, dim):
              'failed. This is likely due to too small an eigengap. Consider\n'
              'adding some noise or jitter to your data.\n\n'
              'Falling back to random initialisation!')
-        return np.random.uniform(low=-10.0, high=10.0,
-                                 size=(graph.shape[0], 2))
+        return random_state.uniform(low=-10.0, high=10.0,
+                                    size=(graph.shape[0], 2))
 
 @numba.njit()
 def clip(val):
@@ -588,11 +639,11 @@ def rdist(x, y):
 @numba.njit()
 def optimize_layout(embedding, positive_head, positive_tail,
                     n_edge_samples, n_vertices, prob, alias,
-                    a, b, gamma=1.0, initial_alpha=1.0,
+                    a, b, rng_state, gamma=1.0, initial_alpha=1.0,
                     negative_sample_rate=5):
     dim = embedding.shape[1]
     alpha = initial_alpha
-    rng_state = np.random.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
+    # rng_state = np.random.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
     for i in range(n_edge_samples):
 
@@ -648,24 +699,24 @@ def optimize_layout(embedding, positive_head, positive_tail,
 def simplicial_set_embedding(graph, n_components,
                              initial_alpha, a, b,
                              gamma, n_edge_samples,
-                             init):
+                             init, random_state):
     graph = graph.tocoo()
     graph.sum_duplicates()
     n_vertices = graph.shape[0]
 
     prob, alias = create_sampler(graph.data)
 
-    if init == 'random':
-        embedding = np.random.uniform(low=-10.0, high=10.0,
-                                      size=(graph.shape[0], 2))
-    elif init == 'spectral':
+    if isinstance(init, str) and init == 'random':
+        embedding = random_state.uniform(low=-10.0, high=10.0,
+                                         size=(graph.shape[0], 2))
+    elif isinstance(init, str) and init == 'spectral':
         # We add a little noise to avoid local minima for optimization to come
-        initialisation = spectral_layout(graph, n_components)
+        initialisation = spectral_layout(graph, n_components, random_state)
         expansion = 10.0 / initialisation.max()
         embedding = (initialisation * expansion) + \
-                    np.random.normal(scale=0.001,
-                                     size=[graph.shape[0],
-                                           n_components])
+                    random_state.normal(scale=0.001,
+                                        size=[graph.shape[0],
+                                              n_components])
     else:
         try:
             init_data = np.array(init)
@@ -674,11 +725,11 @@ def simplicial_set_embedding(graph, n_components,
             else:
                 raise ValueError('Invalid init data passed.'
                                  'Should be "random", "spectral" or'
-                                 'a numpy array of initial embedding postions')
+                                 ' a numpy array of initial embedding postions')
         except:
             raise ValueError('Invalid init data passed.'
                              'Should be "random", "spectral" or'
-                             'a numpy array of initial embedding postions')
+                             ' a numpy array of initial embedding postions')
 
     if n_edge_samples <= 0:
         n_edge_samples = (graph.shape[0] // 150) * 1000000
@@ -686,9 +737,11 @@ def simplicial_set_embedding(graph, n_components,
     positive_head = graph.row
     positive_tail = graph.col
 
+    rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
     embedding = optimize_layout(embedding, positive_head, positive_tail,
                                 n_edge_samples, n_vertices,
-                                prob, alias, a, b, gamma, initial_alpha)
+                                prob, alias, a, b, rng_state, gamma,
+                                initial_alpha)
 
     return embedding
 
@@ -806,7 +859,7 @@ class UMAP(BaseEstimator):
         values are set automatically as determined by ``min_dist`` and
         ``spread``.
 
-    random_seed: int (optional, default None)
+    random_state: int (optional, default None)
         Provide a fixed seed for reproducibility (currently experimental,
         do not expect consistent results yet, consider this a placeholder).
 
@@ -827,7 +880,7 @@ class UMAP(BaseEstimator):
                  min_dist=0.1,
                  a=None,
                  b=None,
-                 random_seed=None,
+                 random_state=None,
                  metric_kwds={}
                  ):
 
@@ -843,7 +896,7 @@ class UMAP(BaseEstimator):
 
         self.spread = spread
         self.min_dist = min_dist
-        self.random_seed = random_seed
+        self.random_state = random_state
 
         if metric in dist.named_distances:
             self._metric = dist.named_distances[self.metric]
@@ -874,10 +927,9 @@ class UMAP(BaseEstimator):
         # Handle other array dtypes (TODO: do this properly)
         X = X.astype(np.float64)
 
-        if self.random_seed is not None:
-            np.random.seed(self.random_seed)
+        random_state = check_random_state(self.random_state)
 
-        graph = fuzzy_simplicial_set(X, self.n_neighbors,
+        graph = fuzzy_simplicial_set(X, self.n_neighbors, random_state,
                                      self._metric, self.metric_kwds)
 
         if self.n_edge_samples is None:
@@ -893,7 +945,8 @@ class UMAP(BaseEstimator):
             self.b,
             self.gamma,
             n_edge_samples,
-            self.init
+            self.init,
+            random_state
         )
 
     def fit_transform(self, X, y=None):
