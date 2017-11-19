@@ -17,6 +17,17 @@ INT32_MAX = np.iinfo(np.int32).max - 1
 
 @numba.njit('i4(i8[:])')
 def tau_rand_int(state):
+    """A fast (pseudo)-random number generator.
+
+    Parameters
+    ----------
+    state: array of int64, shape (3,)
+        The internal state of the rng
+
+    Returns
+    -------
+    A (pseudo)-random int32 value
+    """
     state[0] = (((state[0] & 4294967294) << 12) & 0xffffffff) ^ \
                ((((state[0] << 13) & 0xffffffff) ^ state[0]) >> 19)
     state[1] = (((state[1] & 4294967288) << 4) & 0xffffffff) ^ \
@@ -29,12 +40,33 @@ def tau_rand_int(state):
 
 @numba.njit('f4(i8[:])')
 def tau_rand(state):
+    """A fast (pseudo)-random number generator for floats in the range [0,1]
+
+    Parameters
+    ----------
+    state: array of int64, shape (3,)
+        The internal state of the rng
+
+    Returns
+    -------
+    A (pseudo)-random float32 in the interval [0, 1]
+    """
     integer = tau_rand_int(state)
     return float(integer) / 0x7fffffff
 
 
 @numba.njit()
 def norm(vec):
+    """Compute the (standard l2) norm of a vector.
+
+    Parameters
+    ----------
+    vec: array of shape (dim,)
+
+    Returns
+    -------
+    The l2 norm of vec.
+    """
     result = 0.0
     for i in range(vec.shape[0]):
         result += vec[i]**2
@@ -46,6 +78,22 @@ def rejection_sample(n_samples, pool_size, rng_state):
     """Generate n_samples many integers from 0 to pool_size such that no
     integer is selected twice. The duplication constraint is achieved via
     rejection sampling.
+
+    Parameters
+    ----------
+    n_samples: int
+        The number of random samples to select from the pool
+
+    pool_size: int
+        The size of the total pool of candidates to sample from
+
+    rng_state: array of int64, shape (3,)
+        Internal state of the random number generator
+
+    Returns
+    -------
+    sample: array of shape(n_samples,)
+        The ``n_samples`` randomly selected elements from the pool.
     """
     result = np.empty(n_samples, dtype=np.int64)
     for i in range(n_samples):
@@ -63,6 +111,36 @@ def rejection_sample(n_samples, pool_size, rng_state):
 
 @numba.njit()
 def random_projection_cosine_split(data, indices, rng_state):
+    """Given a set of ``indices`` for data points from ``data``, create
+    a random hyperplane to split the data, returning two arrays indices
+    that fall on either side of the hyperplane. This is the basis for a
+    random projection tree, which simply uses this splitting recursively.
+
+    This particular split uses cosine distance to determine the hyperplane
+    and which side each data sample falls on.
+
+    Parameters
+    ----------
+    data: array of shape (n_samples, n_features)
+        The original data to be split
+
+    indices: array of shape (tree_node_size,)
+        The indices of the elements in the ``data`` array that are to
+        be split in the current operation.
+
+    rng_state: array of int64, shape (3,)
+        The internal state of the rng
+
+    Returns
+    -------
+    indices_left: array
+        The elements of ``indices`` that fall on the "left" side of the
+        random hyperplane.
+
+    indices_right: array
+        The elements of ``indices`` that fall on the "left" side of the
+        random hyperplane.
+    """
     dim = data.shape[1]
 
     # Select two random points, set the hyperplane between them
@@ -132,6 +210,36 @@ def random_projection_cosine_split(data, indices, rng_state):
 
 @numba.njit()
 def random_projection_split(data, indices, rng_state):
+    """Given a set of ``indices`` for data points from ``data``, create
+    a random hyperplane to split the data, returning two arrays indices
+    that fall on either side of the hyperplane. This is the basis for a
+    random projection tree, which simply uses this splitting recursively.
+
+    This particular split uses euclidean distance to determine the hyperplane
+    and which side each data sample falls on.
+
+    Parameters
+    ----------
+    data: array of shape (n_samples, n_features)
+        The original data to be split
+
+    indices: array of shape (tree_node_size,)
+        The indices of the elements in the ``data`` array that are to
+        be split in the current operation.
+
+    rng_state: array of int64, shape (3,)
+        The internal state of the rng
+
+    Returns
+    -------
+    indices_left: array
+        The elements of ``indices`` that fall on the "left" side of the
+        random hyperplane.
+
+    indices_right: array
+        The elements of ``indices`` that fall on the "left" side of the
+        random hyperplane.
+    """
     dim = data.shape[1]
 
     # Select two random points, set the hyperplane between them
@@ -200,6 +308,39 @@ RandomProjectionTreeNode = namedtuple('RandomProjectionTreeNode',
 
 
 def make_tree(data, indices, rng_state, leaf_size=30, angular=False):
+    """Construct a random projection tree based on ``data`` with leaves
+    of size at most ``leaf_size``.
+
+    Parameters
+    ----------
+    data: array of shape (n_samples, n_features)
+        The original data to be split
+
+    indices: array of shape (tree_node_size,)
+        The indices of the elements in the ``data`` array that are to
+        be split in the current operation. This should be np.arange(
+        data.shape[0]) for a full tree build, and may be smaller when being
+        called recursively for tree construction.
+
+    rng_state: array of int64, shape (3,)
+        The internal state of the rng
+
+    leaf_size: int (optional, default 30)
+        The maximum size of any leaf node in the tree. Any node in the tree
+        with more than ``leaf_size`` will be split further to create child
+        nodes.
+
+    angular: bool (optional, default False)
+        Whether to use cosine/angular distance to create splits in the tree,
+        or euclidean distance.
+
+    Returns
+    -------
+    node: RandomProjectionTreeNode
+        A random projection tree node which links to its child nodes. This
+        provides the full tree below the returned node.
+    """
+
     # Make a tree recursively until we get below the leaf size
     if indices.shape[0] > leaf_size:
         if angular:
