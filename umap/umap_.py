@@ -14,6 +14,11 @@ import umap.distances as dist
 INT32_MIN = np.iinfo(np.int32).min + 1
 INT32_MAX = np.iinfo(np.int32).max - 1
 
+SMOOTH_K_TOLERANCE = 1e-5
+MIN_K_DIST_SCALE = 1e-3
+NPY_INFINITY = np.inf
+
+
 
 @numba.njit('i4(i8[:])')
 def tau_rand_int(state):
@@ -604,11 +609,6 @@ def make_nn_descent(dist, dist_args):
         return current_graph[:2]
 
     return nn_descent
-
-
-SMOOTH_K_TOLERANCE = 1e-5
-MIN_K_DIST_SCALE = 1e-3
-NPY_INFINITY = np.inf
 
 
 @numba.njit(parallel=True)
