@@ -311,7 +311,10 @@ def correlation(x, y):
         norm_y += shifted_y ** 2
         dot_product += shifted_x * shifted_y
 
-    return (1.0 - dot_product) / np.sqrt(norm_x * norm_y)
+    if dot_product == 0.0:
+        return 1.0
+    else:
+        return (1.0 - dot_product) / np.sqrt(norm_x * norm_y)
 
 named_distances = {
     # general minkowski distances
