@@ -509,6 +509,39 @@ def heap_push(heap, row, weight, index, flag):
 
 
 def rptree_leaf_array(data, n_neighbors, rng_state, n_trees=10, angular=False):
+    """Generate an array of sets of candidate nearest neighbors by
+    constructing a random projection forest and taking the leaves of all the
+    trees. Any given tree has leaves that are a set of potential nearest
+    neighbors. Given enough trees the set of all such leaves gives a good
+    likelihood of getting a good set of nearest neighbors in composite. Since
+    such a random projection forest is inexpensive to compute, this can be a
+    useful means of seeding other nearest neighbor algorithms.
+
+    Parameters
+    ----------
+    data: array of shape (n_samples, n_features)
+        The data for which to generate nearest neighbor approximations.
+
+    n_neighbors: int
+        The number of nearest neighbors to attempt to approximate.
+
+    rng_state: array of int64, shape (3,)
+        The internal state of the rng
+
+    n_trees: int (optional, default 10)
+        The number of trees to build in the forest construction.
+
+    angular: bool (optional, default False)
+        Whether to use angular/cosine distance for random projection tree
+        construction.
+
+    Returns
+    -------
+    leaf_array: array of shape (n_leaves, max(10, n_neighbors))
+        Each row of leaf array is a list of indices found in a given leaf.
+        Since not all leaves are the same size the arrays are padded out with -1
+        to ensure we can return a single ndarray.
+    """
     leaves = []
     try:
         leaf_size = max(10, n_neighbors)
@@ -532,6 +565,32 @@ def rptree_leaf_array(data, n_neighbors, rng_state, n_trees=10, angular=False):
 @numba.njit(parallel=True)
 def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates,
                      rng_state):
+    """Build a heap of candidate neighbors for nearest neighbor descent. For
+    each vertex the candidate neighbors are any current neighbors, and any
+    vertices that have the vertex as one of their nearest neighbors.
+
+    Parameters
+    ----------
+    current_graph: heap
+        The current state of the graph for nearest neighbor descent.
+
+    n_vertices: int
+        The total number of vertices in the graph.
+
+    n_neighbors: int
+        The number of neighbor edges per node in the current graph.
+
+    max_candidates: int
+        The maximum number of new candidate neighbors.
+
+    rng_state: array of int64, shape (3,)
+        The internal state of the rng
+
+    Returns
+    -------
+    candidate_neighbors: A heap with an array of (randomly sorted) candidate
+    neighbors for each vertex in the graph.
+    """
     candidate_neighbors = make_heap(n_vertices, max_candidates)
     for i in range(n_vertices):
         for j in range(n_neighbors):
@@ -548,6 +607,26 @@ def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates,
 
 
 def make_nn_descent(dist, dist_args):
+    """Create a numba accelerated version of nearest neighbor descent
+    specialised for the given distance metric and metric arguments. Numba
+    doesn't support higher order functions directly, but we can instead JIT
+    compile the version of NN-descent for any given metric.
+
+    Parameters
+    ----------
+    dist: function
+        A numba JITd distance function which, given two arrays computes a
+        dissimilarity between them.
+
+    dist_args: tuple
+        Any extra arguments that need to be passed to the distance function
+        beyond the two arrays to be compared.
+
+    Returns
+    -------
+    A numba JITd function for nearest neighbor descent computation that is
+    specialised to the given metric.
+    """
     @numba.njit(parallel=True)
     def nn_descent(data, n_neighbors, rng_state, max_candidates=50,
                    n_iters=10, delta=0.001, rho=0.5,
@@ -613,6 +692,33 @@ def make_nn_descent(dist, dist_args):
 
 @numba.njit(parallel=True)
 def smooth_knn_dist(distances, k, n_iter=128):
+    """Compute a continuous version of the distance to the kth nearest
+    neighbor. That is, this is similar to knn-distance but allows continuous
+    k values rather than requiring an integral k. In esscence we are simply
+    computing the distance such that the cardinality of fuzzy set we generate
+    is k.
+
+    Parameters
+    ----------
+    distances: array of shape (n_samples, n_neighbors)
+        Distances to nearest neighbors for each samples. Each row should be a
+        sorted list of distances to a given samples nearest neighbors.
+
+    k: float
+        The number of nearest neighbors to approximate for.
+
+    n_iter: int (optiona, default 128)
+        We need to binary search for the correct distance value. This is the
+        max number of iterations to use in such a search.
+
+    Returns
+    -------
+    knn_dist: array of shape (n_samples,)
+        The distance to kth nearest neighbor, as suitably approximated.
+
+    nn_dist: array of shape (n_samples,)
+        The distance to the 1st nearest neighbor for each point.
+    """
     target = np.log2(k)
     rho = np.zeros(distances.shape[0])
     result = np.zeros(distances.shape[0])
@@ -667,6 +773,79 @@ def smooth_knn_dist(distances, k, n_iter=128):
 def fuzzy_simplicial_set(X, n_neighbors, random_state,
                          metric, metric_kwds={}, angular=False,
                          verbose=False):
+    """Given a set of data X, a neighborhood size, and a measure of distance
+    compute the fuzzy simplicial set (here represented as a fuzzy graph in
+    the form of a sparse matrix) associated to the data. This is done by
+    locally approximating geodesic distance at each point, creating a fuzzy
+    simplicial set for each such point, and then combining all the local
+    fuzzy simplicial sets into a global one via a fuzzy union.
+
+    Parameters
+    ----------
+    X: array of shape (n_samples, n_features)
+        The data to be modelled as a fuzzy simplicial set.
+
+    n_neighbors: int
+        The number of neighbors to use to approximate geodesic distance.
+        Larger numbers induce more global estimates of the manifold that can
+        miss finer detail, while smaller values will focus on fine manifold
+        structure to the detriment of the larger picture.
+
+    random_state: numpy RandomState or equivalent
+        A state capable being used as a numpy random state.
+
+    metric: string or function (optional, default 'euclidean')
+        The metric to use to compute distances in high dimensional space.
+        If a string is passed it must match a valid predefined metric. If
+        a general metric is required a function that takes two 1d arrays and
+        returns a float can be provided. For performance purposes it is
+        required that this be a numba jit'd function. Valid string metrics
+        include:
+            * euclidean
+            * manhattan
+            * chebyshev
+            * minkowski
+            * canberra
+            * braycurtis
+            * mahalanobis
+            * wminkowski
+            * seuclidean
+            * cosine
+            * correlation
+            * haversine
+            * hamming
+            * jaccard
+            * dice
+            * russelrao
+            * kulsinski
+            * rogerstanimoto
+            * sokalmichener
+            * sokalsneath
+            * yule
+        Metrics that take arguments (such as minkowski, mahalanobis etc.)
+        can have arguments passed via the metric_kwds dictionary. At this
+        time care must be taken and dictionary elements must be ordered
+        appropriately; this will hopefully be fixed in the future.
+
+    metric_kwds: dict (optional, default {})
+        Arguments to pass on to the metric, such as the ``p`` value for
+        Minkowski distance.
+
+    angular: bool (optional, default False)
+        Whether to use angular/cosine distance for the random projection
+        forest for seeding NN-descent to determine approximate nearest
+        neighbors.
+
+    verbose: bool (optional, default False)
+        Whether to report information on the current progress of the algorithm.
+
+    Returns
+    -------
+    fuzzy_simplicial_set: coo_matrix
+        A fuzzy simplicial set represented as a sparse matrix. The (i,
+        j) entry of the matrix represents the membership strength of the
+        1-simplex between the ith and jth sample points.
+    """
 
     rows = np.zeros((X.shape[0] * n_neighbors), dtype=np.int64)
     cols = np.zeros((X.shape[0] * n_neighbors), dtype=np.int64)
@@ -741,6 +920,24 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
 
 @numba.jit()
 def create_sampler(probabilities):
+    """Create the data necessary for a Walker alias sampler. This allows for
+    efficient sampling from a dataset according to an array of weights as to
+    how relatively likely each element of the dataset is to be sampled.
+
+    Parameters
+    ----------
+    probabilities: array of shape (n_items_for_sampling,)
+        An array of weights (which can be viewed as the desired probabilities
+        of a multinomial distribution when l1 normalised).
+
+    Returns
+    -------
+    prob: array of shape (n_items_for_sampling,)
+        The probabilities of selecting an element or its alias
+
+    alias: array of shape (n_items_for_sampling,)
+        The alternate choice if the element is not to be selected.
+    """
     prob = np.zeros(probabilities.shape[0], dtype=np.float64)
     alias = np.zeros(probabilities.shape[0], dtype=np.int64)
 
@@ -781,6 +978,23 @@ def create_sampler(probabilities):
 
 @numba.njit()
 def sample(prob, alias, rng_state):
+    """Given data for a Walker alias sampler, perform sampling.
+
+    Parameters
+    ----------
+    prob: array of shape (n_items_for_sampling,)
+        The probabilities of selecting an element or its alias
+
+    alias: array of shape (n_items_for_sampling,)
+        The alternate choice if the element is not to be selected.
+
+    rng_state: array of int64, shape (3,)
+        The internal state of the rng
+
+    Returns
+    -------
+    The index of the sampled item.
+    """
     k = tau_rand_int(rng_state) % prob.shape[0]
     u = tau_rand(rng_state)
 
@@ -791,6 +1005,26 @@ def sample(prob, alias, rng_state):
 
 
 def spectral_layout(graph, dim, random_state):
+    """Given a graph compute the spectral embedding of the graph. This is
+    simply the eigenvectors of the laplacian of the graph. Here we use the
+    normalized laplacian.
+
+    Parameters
+    ----------
+    graph: sparse matrix
+        The (weighted) adjacency matrix of the graph as a sparse matrix.
+
+    dim: int
+        The dimension of the space into which to embed.
+
+    random_state: numpy RandomState or equivalent
+        A state capable being used as a numpy random state.
+
+    Returns
+    -------
+    embedding: array of shape (n_vertices, dim)
+        The spectral embedding of the graph.
+    """
     diag_data = np.asarray(graph.sum(axis=0))
     # standard Laplacian
     # D = scipy.sparse.spdiags(diag_data, 0, graph.shape[0], graph.shape[0])
@@ -824,6 +1058,18 @@ def spectral_layout(graph, dim, random_state):
 
 @numba.njit()
 def clip(val):
+    """Standard clamping of a value into a fixed range (in this case -4.0 to
+    4.0)
+
+    Parameters
+    ----------
+    val: float
+        The value to be clamped.
+
+    Returns
+    -------
+    The clamped value, now fixed to be in the range -4.0 to 4.0.
+    """
     if val > 4.0:
         return 4.0
     elif val < -4.0:
@@ -834,6 +1080,17 @@ def clip(val):
 
 @numba.njit('f8(f8[:],f8[:])')
 def rdist(x, y):
+    """Reduced Euclidean distance.
+
+    Parameters
+    ----------
+    x: array of shape (embedding_dim,)
+    y: array of shape (embedding_dim,)
+
+    Returns
+    -------
+    The squared euclidean distance between x and y
+    """
     result = 0.0
     for i in range(x.shape[0]):
         result += (x[i] - y[i]) ** 2
