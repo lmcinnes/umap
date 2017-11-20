@@ -1,3 +1,6 @@
+# Author: Leland McInnes <leland.mcinnes@gmail.com>
+#
+# License: BSD 3 clause
 from collections import deque, namedtuple
 from warnings import warn
 
