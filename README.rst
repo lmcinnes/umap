@@ -166,7 +166,7 @@ PyPI install, presuming you have numab and sklearn and all its requirements
     pip install umap-learn
 
 If pip is having difficulties pulling the dependencies then we'd suggest installing
-the dependencies manually using anaconda followed by pulling hdbscan from pip:
+the dependencies manually using anaconda followed by pulling umap from pip:
 
 .. code:: bash
 
