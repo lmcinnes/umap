@@ -1103,6 +1103,61 @@ def optimize_layout(embedding, positive_head, positive_tail,
                     n_edge_samples, n_vertices, prob, alias,
                     a, b, rng_state, gamma=1.0, initial_alpha=1.0,
                     negative_sample_rate=5, verbose=False):
+    """Improve an embedding using stochastic gradient descent to minimize the
+    fuzzy set cross entropy between the 1-skeletons of the high dimensional
+    and low dimensional fuzzy simplicial sets. In practice this is done by
+    sampling edges based on their membership strength (with the (1-p) terms
+    coming from negative sampling similar to word2vec).
+
+    Parameters
+    ----------
+    embedding: array of shape (n_samples, n_components)
+        The initial embedding to be improved by SGD.
+
+    positive_head: array of shape (n_1_simplices)
+        The indices of the heads of 1-simplices with non-zero membership.
+
+    positive_tail: array of shape (n_1_simplices)
+        The indices of the tails of 1-simplices with non-zero membership.
+
+    n_edge_samples: int
+        The total number of edge samples to use in the optimization step.
+
+    n_vertices: int
+        The number of vertices (0-simplices) in the dataset.
+
+    prob: array of shape (n_1_simplices)
+        Walker alias sampler data.
+
+    alias: array of shape (n_1_simplices)
+        Walker alias sampler data
+
+    a: float
+        Parameter of differentiable approximation of right adjoint functor
+
+    b: float
+        Parameter of differentiable approximation of right adjoint functor
+
+    rng_state: array of int64, shape (3,)
+        The internal state of the rng
+
+    gamma: float (optional, default 1.0)
+        Weight to apply to negative samples.
+
+    initial_alpha: float (optional, default 1.0)
+        Initial learning rate for the SGD.
+
+    negative_sample_rate: int (optional, default 5)
+        Number of negative samples to use per positive sample.
+
+    verbose: bool (optional, default False)
+        Whether to report information on the current progress of the algorithm.
+
+    Returns
+    -------
+    embedding: array of shape (n_samples, n_components)
+        The optimized embedding.
+    """
     dim = embedding.shape[1]
     alpha = initial_alpha
 
@@ -1164,6 +1219,54 @@ def simplicial_set_embedding(graph, n_components,
                              initial_alpha, a, b,
                              gamma, n_edge_samples,
                              init, random_state, verbose):
+    """Perform a fuzzy simplicial set embedding, using a specified
+    initialisation method and then minimizing the fuzzy set cross entropy
+    between the 1-skeletons of the high and low dimensional fuzzy simplicial
+    sets.
+
+    Parameters
+    ----------
+    graph: sparse matrix
+        The 1-skeleton of the high dimensional fuzzy simplicial set as
+        represented by a graph for which we require a sparse matrix for the
+        (weighted) adjacency matrix.
+
+    n_components: int
+        The dimensionality of the euclidean space into which to embed the data.
+
+    initial_alpha: float
+        Initial learning rate for the SGD.
+
+    a: float
+        Parameter of differentiable approximation of right adjoint functor
+
+    b: float
+        Parameter of differentiable approximation of right adjoint functor
+
+    gamma: float (optional, default 1.0)
+        Weight to apply to negative samples.
+
+    n_edge_samples: int
+        The total number of edge samples to use in the optimization step.
+
+    init: string (optional, default 'spectral')
+        How to initialize the low dimensional embedding. Options are:
+            * 'spectral': use a spectral embedding of the fuzzy 1-skeleton
+            * 'random': assign initial embedding positions at random.
+            * A numpy array of initial embedding positions.
+
+    random_state: numpy RandomState or equivalent
+        A state capable being used as a numpy random state.
+
+    verbose: bool (optional, default False)
+        Whether to report information on the current progress of the algorithm.
+
+    Returns
+    -------
+    embedding: array of shape (n_samples, n_components)
+        The optimized of ``graph`` into an ``n_components`` dimensional
+        euclidean space.
+    """
     graph = graph.tocoo()
     graph.sum_duplicates()
     n_vertices = graph.shape[0]
