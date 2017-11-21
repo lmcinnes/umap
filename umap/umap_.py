@@ -6,7 +6,7 @@ from warnings import warn
 
 from scipy.optimize import curve_fit
 from sklearn.base import BaseEstimator
-from sklearn.utils import check_random_state
+from sklearn.utils import check_random_state, check_array
 
 import numpy as np
 import scipy.sparse
@@ -1520,7 +1520,7 @@ class UMAP(BaseEstimator):
         """
 
         # Handle other array dtypes (TODO: do this properly)
-        X = X.astype(np.float64)
+        X = check_array(X).astype(np.float64)
 
         random_state = check_random_state(self.random_state)
 
