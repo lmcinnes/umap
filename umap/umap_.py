@@ -559,7 +559,10 @@ def rptree_leaf_array(data, n_neighbors, rng_state, n_trees=10, angular=False):
         leaf_array = -1 * np.ones([len(leaves), leaf_size], dtype=np.int64)
         for i, leaf in enumerate(leaves):
             leaf_array[i, :len(leaf)] = leaf
-    except RecursionError:
+    except (RuntimeError, RecursionError):
+        warn('Random Projection forest initialisation failed due to recursion'
+             'limit being reached. Something is a little strange with your '
+             'data, and this may take longer than normal to compute.')
         leaf_array = np.array([[-1]])
 
     return leaf_array
@@ -1557,6 +1560,8 @@ class UMAP(BaseEstimator):
             random_state,
             self.verbose
         )
+
+        return self
 
     def fit_transform(self, X, y=None):
         """Fit X into an embedded space and return that transformed
