@@ -14,6 +14,9 @@ import numba
 
 import umap.distances as dist
 
+from umap.sparse import (sparse_random_projection_cosine_split,
+                         sparse_random_projection_split)
+
 INT32_MIN = np.iinfo(np.int32).min + 1
 INT32_MAX = np.iinfo(np.int32).max - 1
 
