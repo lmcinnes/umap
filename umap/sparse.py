@@ -8,6 +8,7 @@ import numba
 
 from .umap_ import tau_rand_int, norm
 
+
 # Just reproduce a simpler version of numpy unique (not numba supported yet)
 @numba.njit()
 def arr_unique(arr):
@@ -15,10 +16,12 @@ def arr_unique(arr):
     flag = np.concatenate(([True], aux[1:] != aux[:-1]))
     return aux[flag]
 
+
 # Just reproduce a simpler version of numpy union1d (not numba supported yet)
 @numba.njit()
 def arr_union(ar1, ar2):
     return arr_unique(np.concatenate(ar1, ar2))
+
 
 # Just reproduce a simpler version of numpy intersect1d (not numba supported
 # yet)
@@ -27,6 +30,7 @@ def arr_intersect(ar1, ar2):
     aux = np.concatenate((ar1, ar2))
     aux.sort()
     return aux[:-1][aux[1:] == aux[:-1]]
+
 
 @numba.njit()
 def sparse_sum(ind1, data1, ind2, data2):
@@ -93,6 +97,7 @@ def sparse_sum(ind1, data1, ind2, data2):
 def sparse_diff(ind1, data1, ind2, data2):
     return sparse_sum(ind1, data1, ind2, -data2)
 
+
 @numba.njit()
 def sparse_mul(ind1, data1, ind2, data2):
     result_ind = arr_intersect(ind1, ind2)
@@ -125,8 +130,6 @@ def sparse_mul(ind1, data1, ind2, data2):
     result_data = result_data[:nnz]
 
     return result_ind, result_data
-
-@numba.njit()
 
 
 @numba.njit()
@@ -249,6 +252,7 @@ def sparse_random_projection_cosine_split(inds,
             n_right += 1
 
     return indices_left, indices_right
+
 
 @numba.njit()
 def sparse_random_projection_split(inds,
@@ -373,3 +377,52 @@ def sparse_random_projection_split(inds,
             n_right += 1
 
     return indices_left, indices_right
+
+
+@numba.njit()
+def sparse_euclidean(ind1, data1, ind2, data2):
+    aux_inds, aux_data = sparse_diff(ind1, data1, ind2, data2)
+    result = 0.0
+    for i in range(aux_data.shape[0]):
+        result += aux_data[i]**2
+    return np.sqrt(result)
+
+
+@numba.njit()
+def sparse_manhattan(ind1, data1, ind2, data2):
+    aux_inds, aux_data = sparse_diff(ind1, data1, ind2, data2)
+    result = 0.0
+    for i in range(aux_data.shape[0]):
+        result += np.abs(aux_data[i])
+    return result
+
+
+@numba.njit()
+def sparse_chebyshev(ind1, data1, ind2, data2):
+    aux_inds, aux_data = sparse_diff(ind1, data1, ind2, data2)
+    result = 0.0
+    for i in range(aux_data.shape[0]):
+        result = np.max(result, np.abs(aux_data[i]))
+    return result
+
+
+@numba.njit()
+def sparse_minkowski(ind1, data1, ind2, data2, p):
+    aux_inds, aux_data = sparse_diff(ind1, data1, ind2, data2)
+    result = 0.0
+    for i in range(aux_data.shape[0]):
+        result += np.abs(aux_data[i])**p
+    return result ** (1.0 / p)
+
+
+@numba.njit()
+def sparse_cosine(ind1, data1, ind2, data2):
+    aux_inds, aux_data = sparse_mul(ind1, data1, ind2, data2)
+    result = 0.0
+    norm1 = norm(data1)
+    norm2 = norm(data2)
+
+    for i in range(aux_data.shape[0]):
+        result += aux_data[i]
+
+    return 1.0 - (result / np.sqrt(norm1 * norm2))
