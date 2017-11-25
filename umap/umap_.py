@@ -351,18 +351,40 @@ def make_tree(data, indices, rng_state, leaf_size=30, angular=False):
         A random projection tree node which links to its child nodes. This
         provides the full tree below the returned node.
     """
+    is_sparse = scipy.sparse.isspmatrix_csr(data)
 
     # Make a tree recursively until we get below the leaf size
     if indices.shape[0] > leaf_size:
-        if angular:
-            (left_indices,
-             right_indices) = random_projection_cosine_split(data,
-                                                             indices,
-                                                             rng_state)
+        if is_sparse:
+            inds = data.indices
+            indptr = data.indptr
+            spdata = data.data
+
+            if angular:
+                (left_indices,
+                 right_indices) = sparse_random_projection_cosine_split(
+                    inds,
+                    indptr,
+                    spdata,
+                    indices,
+                    rng_state)
+            else:
+                left_indices, right_indices = sparse_random_projection_split(
+                    inds,
+                    indptr,
+                    spdata,
+                    indices,
+                    rng_state)
         else:
-            left_indices, right_indices = random_projection_split(data,
-                                                                  indices,
-                                                                  rng_state)
+            if angular:
+                (left_indices,
+                 right_indices) = random_projection_cosine_split(data,
+                                                                 indices,
+                                                                 rng_state)
+            else:
+                left_indices, right_indices = random_projection_split(data,
+                                                                      indices,
+                                                                      rng_state)
         left_node = make_tree(data,
                               left_indices,
                               rng_state,
