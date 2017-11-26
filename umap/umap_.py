@@ -14,8 +14,7 @@ import numba
 
 import umap.distances as dist
 
-from umap.sparse import (sparse_random_projection_cosine_split,
-                         sparse_random_projection_split)
+import umap.sparse as sparse
 
 INT32_MIN = np.iinfo(np.int32).min + 1
 INT32_MAX = np.iinfo(np.int32).max - 1
@@ -362,14 +361,15 @@ def make_tree(data, indices, rng_state, leaf_size=30, angular=False):
 
             if angular:
                 (left_indices,
-                 right_indices) = sparse_random_projection_cosine_split(
+                 right_indices) = sparse.sparse_random_projection_cosine_split(
                     inds,
                     indptr,
                     spdata,
                     indices,
                     rng_state)
             else:
-                left_indices, right_indices = sparse_random_projection_split(
+                left_indices, right_indices = \
+                    sparse.sparse_random_projection_split(
                     inds,
                     indptr,
                     spdata,
@@ -894,18 +894,40 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
 
     rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
-    metric_nn_descent = make_nn_descent(distance_func,
-                                        tuple(metric_kwds.values()))
-    leaf_array = rptree_leaf_array(X, n_neighbors,
-                                   rng_state, n_trees=10,
-                                   angular=angular)
-    tmp_indices, knn_dists = metric_nn_descent(X,
-                                               n_neighbors,
-                                               rng_state,
-                                               max_candidates=60,
-                                               rp_tree_init=True,
-                                               leaf_array=leaf_array,
-                                               verbose=verbose)
+    if scipy.sparse.isspmatrix_csr(X):
+        if metric in sparse.sparse_named_distances:
+            distance_func = sparse.sparse_named_distances[metric]
+        else:
+            raise ValueError('Metric {} not supported for sparse '
+                             'data'.format(metric))
+        metric_nn_descent = sparse.make_sparse_nn_descent(distance_func,
+                                                   tuple(metric_kwds.values()))
+        leaf_array = rptree_leaf_array(X, n_neighbors,
+                                       rng_state, n_trees=10,
+                                       angular=angular)
+        tmp_indices, knn_dists = metric_nn_descent(X.indices,
+                                                   X.indptr,
+                                                   X.data,
+                                                   X.shape[0],
+                                                   n_neighbors,
+                                                   rng_state,
+                                                   max_candidates=60,
+                                                   rp_tree_init=True,
+                                                   leaf_array=leaf_array,
+                                                   verbose=verbose)
+    else:
+        metric_nn_descent = make_nn_descent(distance_func,
+                                            tuple(metric_kwds.values()))
+        leaf_array = rptree_leaf_array(X, n_neighbors,
+                                       rng_state, n_trees=10,
+                                       angular=angular)
+        tmp_indices, knn_dists = metric_nn_descent(X,
+                                                   n_neighbors,
+                                                   rng_state,
+                                                   max_candidates=60,
+                                                   rp_tree_init=True,
+                                                   leaf_array=leaf_array,
+                                                   verbose=verbose)
     knn_indices = tmp_indices.astype(np.int64)
 
     if np.any(knn_indices < 0):
