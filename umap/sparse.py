@@ -548,7 +548,7 @@ def sparse_cosine(ind1, data1, ind2, data2):
 
     return 1.0 - (result / np.sqrt(norm1 * norm2))
 
-sparse_namd_distances = {
+sparse_named_distances = {
     'euclidean' : sparse_euclidean,
     'manhattan' : sparse_manhattan,
     'l1'        : sparse_manhattan,
