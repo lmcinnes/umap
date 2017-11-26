@@ -656,6 +656,8 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
     if scipy.sparse.isspmatrix_csr(X):
         if metric in sparse.sparse_named_distances:
             distance_func = sparse.sparse_named_distances[metric]
+            if metric in sparse.sparse_need_n_features:
+                metric_kwds['n_features'] = X.shape[1]
         else:
             raise ValueError('Metric {} not supported for sparse '
                              'data'.format(metric))
