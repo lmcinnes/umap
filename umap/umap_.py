@@ -1570,7 +1570,10 @@ class UMAP(BaseEstimator):
         """
 
         # Handle other array dtypes (TODO: do this properly)
-        X = check_array(X).astype(np.float64)
+        X = check_array(X, accept_sparse='csr').astype(np.float64)
+
+        if scipy.sparse.isspmatrix_csr(X) and not X.has_sorted_indices:
+            X.sort_indices()
 
         random_state = check_random_state(self.random_state)
 
