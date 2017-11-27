@@ -524,12 +524,12 @@ def sparse_chebyshev(ind1, data1, ind2, data2):
     aux_inds, aux_data = sparse_diff(ind1, data1, ind2, data2)
     result = 0.0
     for i in range(aux_data.shape[0]):
-        result = np.max(result, np.abs(aux_data[i]))
+        result = max(result, np.abs(aux_data[i]))
     return result
 
 
 @numba.njit()
-def sparse_minkowski(ind1, data1, ind2, data2, p):
+def sparse_minkowski(ind1, data1, ind2, data2, p=2):
     aux_inds, aux_data = sparse_diff(ind1, data1, ind2, data2)
     result = 0.0
     for i in range(aux_data.shape[0]):
@@ -539,7 +539,7 @@ def sparse_minkowski(ind1, data1, ind2, data2, p):
 
 @numba.njit()
 def sparse_hamming(ind1, data1, ind2, data2, n_features):
-    num_not_equal = sparse_diff(ind1, data1, ind2, data2).shape[0]
+    num_not_equal = sparse_diff(ind1, data1, ind2, data2)[0].shape[0]
     return float(num_not_equal) / n_features
 
 
@@ -608,8 +608,11 @@ def sparse_kulsinski(ind1, data1, ind2, data2, n_features):
     num_non_zero = arr_union(ind1, ind2).shape[0]
     num_not_equal = num_non_zero - num_true_true
 
-    return float(num_not_equal - num_true_true + n_features) / \
-           (num_not_equal + n_features)
+    if num_not_equal == 0:
+        return 0.0
+    else:
+        return float(num_not_equal - num_true_true + n_features) / \
+                (num_not_equal + n_features)
 
 
 @numba.njit()
@@ -622,7 +625,10 @@ def sparse_rogers_tanimoto(ind1, data1, ind2, data2, n_features):
 
 
 @numba.njit()
-def sparse_russelrao(ind1, data1, ind2, data2, n_features):
+def sparse_russellrao(ind1, data1, ind2, data2, n_features):
+    if ind1.shape[0] == ind2.shape[0] and np.all(ind1 == ind2):
+        return 0.0
+
     num_true_true = arr_intersect(ind1, ind2).shape[0]
 
     return float(n_features - num_true_true) / (n_features)
@@ -656,17 +662,31 @@ def sparse_cosine(ind1, data1, ind2, data2):
     for i in range(aux_data.shape[0]):
         result += aux_data[i]
 
-    return 1.0 - (result / np.sqrt(norm1 * norm2))
+    return 1.0 - (result / (norm1 * norm2))
 
 
 @numba.njit()
 def sparse_correlation(ind1, data1, ind2, data2, n_features):
 
-    mu1 = float(np.sum(data1)) / n_features
-    mu2 = float(np.sum(data2)) / n_features
+    mu_x = 0.0
+    mu_y = 0.0
+    dot_product = 0.0
 
-    shifted_data1 = data1 - mu1
-    shifted_data2 = data2 - mu2
+    for i in range(data1.shape[0]):
+        mu_x += data1[i]
+    for i in range(data2.shape[0]):
+        mu_y += data2[i]
+
+    mu_x /= n_features
+    mu_y /= n_features
+
+    shifted_data1 = np.empty(data1.shape[0], dtype=np.float64)
+    shifted_data2 = np.empty(data2.shape[0], dtype=np.float64)
+
+    for i in range(data1.shape[0]):
+        shifted_data1[i] = data1[i] - mu_x
+    for i in range(data2.shape[0]):
+        shifted_data2[i] = data2[i] - mu_y
 
     norm1 = norm(shifted_data1)
     norm2 = norm(shifted_data2)
@@ -677,12 +697,13 @@ def sparse_correlation(ind1, data1, ind2, data2, n_features):
     if dot_prod_data.shape[0] == 0:
         return 1.0
 
-    dot_product = np.sum(dot_prod_data)
+    for i in range(dot_prod_data.shape[0]):
+        dot_product += dot_prod_data[i]
 
     if dot_product == 0.0:
         return 1.0
     else:
-        return (1.0 - dot_product) / np.sqrt(norm1 * norm2)
+        return (1.0 - (dot_product / (norm1 * norm2)))
 
 sparse_named_distances = {
     'euclidean' : sparse_euclidean,
@@ -701,7 +722,7 @@ sparse_named_distances = {
     'matching'  : sparse_matching,
     'kulsinski' : sparse_kulsinski,
     'rogers_tanimoto' : sparse_rogers_tanimoto,
-    'russelrao' : sparse_russelrao,
+    'russellrao' : sparse_russellrao,
     'sokal_michener' : sparse_sokal_michener,
     'sokal_sneath' : sparse_sokal_sneath,
     'cosine'    : sparse_cosine,
@@ -713,7 +734,7 @@ sparse_need_n_features = (
     'matching',
     'kulsinski',
     'rogers_tanimoto',
-    'russelrao',
+    'russellrao',
     'sokal_michener',
     'correlation'
 )

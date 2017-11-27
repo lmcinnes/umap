@@ -58,7 +58,7 @@ def chebyshev(x, y):
     """
     result = 0.0
     for i in range(x.shape[0]):
-        result = np.max(result, np.abs(x[i] - y[i]))
+        result = max(result, np.abs(x[i] - y[i]))
 
     return result
 
@@ -125,13 +125,12 @@ def hamming(x, y):
         if x[i] != y[i]:
             result += 1.0
 
-    return result / x.shape[0]
+    return float(result) / x.shape[0]
 
 
 @numba.njit()
 def canberra(x, y):
     result = 0.0
-    denominator = 0.0
     for i in range(x.shape[0]):
         denominator = np.abs(x[i]) + np.abs(y[i])
         if denominator > 0:
@@ -146,10 +145,10 @@ def bray_curtis(x, y):
     denominator = 0.0
     for i in range(x.shape[0]):
         numerator += np.abs(x[i] - y[i])
-        denominator += np.abs(x[i]) + np.abs(y[i])
+        denominator += np.abs(x[i] + y[i])
 
     if denominator > 0.0:
-        return numerator / denominator
+        return float(numerator) / denominator
     else:
         return 0.0
 
@@ -164,7 +163,7 @@ def jaccard(x, y):
         num_non_zero += (x_true or y_true)
         num_equal += (x_true and y_true)
 
-    return (num_non_zero - num_equal) / num_non_zero
+    return float(num_non_zero - num_equal) / num_non_zero
 
 
 @numba.njit()
@@ -175,7 +174,7 @@ def matching(x, y):
         y_true = y[i] != 0
         num_not_equal += (x_true != y_true)
 
-    return num_not_equal / x.shape[0]
+    return float(num_not_equal) / x.shape[0]
 
 
 @numba.njit()
@@ -201,8 +200,11 @@ def kulsinski(x, y):
         num_true_true += (x_true and y_true)
         num_not_equal += (x_true != y_true)
 
-    return (num_not_equal - num_true_true + x.shape[0]) / \
-           (num_not_equal + x.shape[0])
+    if num_not_equal == 0:
+        return 0.0
+    else:
+        return float(num_not_equal - num_true_true + x.shape[0]) / \
+                (num_not_equal + x.shape[0])
 
 
 @numba.njit()
@@ -217,14 +219,18 @@ def rogers_tanimoto(x, y):
 
 
 @numba.njit()
-def russelrao(x, y):
+def russellrao(x, y):
     num_true_true = 0.0
     for i in range(x.shape[0]):
         x_true = x[i] != 0
         y_true = y[i] != 0
         num_true_true += (x_true and y_true)
 
-    return (x.shape[0] - num_true_true) / (x.shape[0])
+    if (num_true_true == np.sum(x != 0) and
+        num_true_true == np.sum(y != 0)):
+        return 0.0
+    else:
+        return float(x.shape[0] - num_true_true) / (x.shape[0])
 
 
 @numba.njit()
@@ -273,7 +279,8 @@ def yule(x, y):
         num_true_false += (x_true and (not y_true))
         num_false_true += ((not x_true) and y_true)
 
-    num_false_false = x.shape - num_true_true - num_true_false - num_false_true
+    num_false_false = x.shape[0] - num_true_true - num_true_false - \
+                      num_false_true
 
     return (2.0 * num_true_false * num_false_true) / \
            (num_true_true * num_false_false + num_true_false * num_false_true)
@@ -317,7 +324,7 @@ def correlation(x, y):
     if dot_product == 0.0:
         return 1.0
     else:
-        return (1.0 - dot_product) / np.sqrt(norm_x * norm_y)
+        return (1.0 - (dot_product / np.sqrt(norm_x * norm_y)))
 
 named_distances = {
     # general minkowski distances
@@ -350,7 +357,7 @@ named_distances = {
     'matching': matching,
     'kulsinski': kulsinski,
     'rogerstanimoto': rogers_tanimoto,
-    'russelrao': russelrao,
+    'russellrao': russellrao,
     'sokalsneath': sokal_sneath,
     'sokalmichener': sokal_michener,
     'yule': yule,
