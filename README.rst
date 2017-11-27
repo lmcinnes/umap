@@ -75,6 +75,9 @@ An example of making use of these options:
                           min_dist=0.3,
                           metric='correlation').fit_transform(digits.data)
 
+UMAP also supports fitting to sparse matrix data. This is currently
+experimental and may be slower than the eventual final implementation.
+
 Further details and tutorials are coming.
 
 ----------------
