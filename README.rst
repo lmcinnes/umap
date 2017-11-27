@@ -4,6 +4,10 @@
 .. image:: https://img.shields.io/pypi/l/umap-learn.svg
     :target: https://github.com/lmcinnes/umap/blob/master/LICENSE
     :alt: License
+.. image:: https://travis-ci.org/lmcinnes/umap.svg
+    :target: https://travis-ci.org/lmcinnes/umap
+    :alt: Travis Build Status
+
 
 ====
 UMAP
