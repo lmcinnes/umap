@@ -14,6 +14,9 @@ from umap.utils import (tau_rand_int,
                         rejection_sample,
                         build_candidates)
 
+import locale
+
+locale.setlocale(locale.LC_NUMERIC, 'C')
 
 # Just reproduce a simpler version of numpy unique (not numba supported yet)
 @numba.njit()

@@ -24,14 +24,16 @@ from umap.utils import (tau_rand_int,
                         rejection_sample,
                         build_candidates)
 
+import locale
+
+locale.setlocale(locale.LC_NUMERIC, 'C')
+
 INT32_MIN = np.iinfo(np.int32).min + 1
 INT32_MAX = np.iinfo(np.int32).max - 1
 
 SMOOTH_K_TOLERANCE = 1e-5
 MIN_K_DIST_SCALE = 1e-3
 NPY_INFINITY = np.inf
-
-
 
 
 @numba.njit()
