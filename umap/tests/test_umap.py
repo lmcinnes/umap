@@ -3,6 +3,7 @@ Tests for UMAP to ensure things are working as expected.
 """
 from nose.tools import assert_less
 from nose.tools import assert_greater_equal
+import os.path
 import numpy as np
 from scipy.spatial import distance
 from scipy import sparse
@@ -34,7 +35,8 @@ from umap.umap_ import (
     INT32_MAX,
     INT32_MIN,
     rptree_leaf_array,
-    make_nn_descent)
+    make_nn_descent,
+    UMAP)
 
 np.random.seed(42)
 spatial_data = np.random.randn(10, 20)
@@ -190,4 +192,13 @@ def test_sparse_fit():
     pass
 
 def test_sklearn_digits():
-    pass
+    digits = datasets.load_digits()
+    data = digits.data
+    embedding = UMAP(n_neighbors=5, min_dist=0.01,
+                     random_state=42).fit_transform(data)
+    #np.save('digits_embedding_42.npy', embedding)
+    to_match = np.load(os.path.join(os.path.dirname(__file__),
+                                    'digits_embedding_42.npy'))
+    assert_array_almost_equal(embedding, to_match, err_msg='Digits embedding '
+                                                           'is not consistent '
+                                                           'with previous runs')
