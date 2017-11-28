@@ -17,6 +17,7 @@ from sklearn.utils.testing import (assert_equal,
                                    assert_no_warnings,
                                    if_matplotlib)
 from sklearn.metrics import pairwise_distances
+from sklearn.neighbors import KDTree
 from sklearn.utils import shuffle
 from sklearn.preprocessing import StandardScaler
 from scipy.stats import mode
@@ -29,6 +30,11 @@ from sklearn import datasets
 
 import umap.distances as dist
 import umap.sparse as spdist
+from umap.umap_ import (
+    INT32_MAX,
+    INT32_MIN,
+    rptree_leaf_array,
+    make_nn_descent)
 
 np.random.seed(42)
 spatial_data = np.random.randn(10, 20)
@@ -37,6 +43,8 @@ binary_data = np.random.choice(a=[False, True],
                                p=[0.66, 1-0.66])
 sparse_spatial_data = sparse.csr_matrix(spatial_data * binary_data)
 sparse_binary_data = sparse.csr_matrix(binary_data)
+
+nn_data = np.random.uniform(0, 1, size=(1000, 5))
 
 spatial_distances = (
     'euclidean',
@@ -63,10 +71,34 @@ binary_distances = (
 )
 
 def test_nn_descent_neighbor_accuracy():
-    pass
+    rng_state = np.random.randint(INT32_MIN, INT32_MAX, size=3)
+    nn_descent = make_nn_descent(dist.euclidean, ())
+    leaf_array = rptree_leaf_array(nn_data, 10, rng_state)
+    tmp_indices, knn_dists = nn_descent(nn_data,
+                                        10,
+                                        rng_state,
+                                        leaf_array=leaf_array)
+    knn_indices = tmp_indices.astype(np.int64)
+    for i in range(knn_indices.shape[0]):
+        order = np.argsort(knn_dists[i])
+        knn_dists[i] = knn_dists[i][order]
+        knn_indices[i] = knn_indices[i][order]
+
+    tree = KDTree(nn_data)
+    true_indices = tree.query(nn_data, 10, return_distance=False)
+
+    num_correct = 0.0
+    for i in range(nn_data.shape[0]):
+        num_correct += np.sum(np.in1d(true_indices[i], knn_indices[i]))
+
+    percent_correct = num_correct / (spatial_data.shape[0] * 10)
+    assert_greater_equal(percent_correct, 0.99, 'NN-descent did not get 99% '
+                                               'accuracy on nearest neighbors')
+
 
 def test_trustworthiness():
     pass
+
 
 def test_metrics():
     for metric in spatial_distances:
