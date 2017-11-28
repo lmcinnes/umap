@@ -45,6 +45,10 @@ sparse_spatial_data = sparse.csr_matrix(spatial_data * binary_data)
 sparse_binary_data = sparse.csr_matrix(binary_data)
 
 nn_data = np.random.uniform(0, 1, size=(1000, 5))
+binary_nn_data = np.random.choice(a=[False, True],
+                                  size=(1000, 5),
+                                 p=[0.66, 1-0.66])
+sparse_nn_data = sparse.csr_matrix(nn_data * binary_nn_data)
 
 spatial_distances = (
     'euclidean',
@@ -95,6 +99,36 @@ def test_nn_descent_neighbor_accuracy():
     assert_greater_equal(percent_correct, 0.99, 'NN-descent did not get 99% '
                                                'accuracy on nearest neighbors')
 
+def test_sparse_nn_descent_neighbor_accuracy():
+    rng_state = np.random.randint(INT32_MIN, INT32_MAX, size=3)
+    nn_descent = spdist.make_sparse_nn_descent(spdist.sparse_euclidean, ())
+    leaf_array = rptree_leaf_array(sparse_nn_data, 10, rng_state)
+    tmp_indices, knn_dists = nn_descent(sparse_nn_data.indices,
+                                        sparse_nn_data.indptr,
+                                        sparse_nn_data.data,
+                                        sparse_nn_data.shape[0],
+                                        10,
+                                        rng_state,
+                                        leaf_array=leaf_array)
+    knn_indices = tmp_indices.astype(np.int64)
+    for i in range(knn_indices.shape[0]):
+        order = np.argsort(knn_dists[i])
+        knn_dists[i] = knn_dists[i][order]
+        knn_indices[i] = knn_indices[i][order]
+
+    tree = KDTree(sparse_nn_data.todense())
+    true_indices = tree.query(sparse_nn_data.todense(), 10, return_distance=False)
+
+    print(sparse_nn_data.shape)
+
+    num_correct = 0.0
+    for i in range(nn_data.shape[0]):
+        num_correct += np.sum(np.in1d(true_indices[i], knn_indices[i]))
+
+    percent_correct = num_correct / (spatial_data.shape[0] * 10)
+    assert_greater_equal(percent_correct, 0.99, 'Sparse NN-descent did not get '
+                                                '99% accuracy on nearest '
+                                                'neighbors')
 
 def test_trustworthiness():
     pass
