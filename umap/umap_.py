@@ -288,11 +288,11 @@ def make_tree(data, indices, rng_state, leaf_size=30, angular=False):
             else:
                 left_indices, right_indices = \
                     sparse.sparse_random_projection_split(
-                    inds,
-                    indptr,
-                    spdata,
-                    indices,
-                    rng_state)
+                        inds,
+                        indptr,
+                        spdata,
+                        indices,
+                        rng_state)
         else:
             if angular:
                 (left_indices,
@@ -338,7 +338,6 @@ def get_leaves(tree):
         return [tree.indices]
     else:
         return get_leaves(tree.left_child) + get_leaves(tree.right_child)
-
 
 
 def rptree_leaf_array(data, n_neighbors, rng_state, n_trees=10, angular=False):
@@ -396,7 +395,6 @@ def rptree_leaf_array(data, n_neighbors, rng_state, n_trees=10, angular=False):
         leaf_array = np.array([[-1]])
 
     return leaf_array
-
 
 
 def make_nn_descent(dist, dist_args):
@@ -652,7 +650,7 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
         raise ValueError('Metric is neither callable, nor a recognised string')
 
     if metric in ('cosine', 'correlation', 'dice', 'jaccard'):
-        angular=True
+        angular = True
 
     rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
@@ -665,7 +663,7 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
             raise ValueError('Metric {} not supported for sparse '
                              'data'.format(metric))
         metric_nn_descent = sparse.make_sparse_nn_descent(distance_func,
-                                                   tuple(metric_kwds.values()))
+                                                          tuple(metric_kwds.values()))
         leaf_array = rptree_leaf_array(X, n_neighbors,
                                        rng_state, n_trees=10,
                                        angular=angular)
@@ -1026,7 +1024,7 @@ def optimize_layout(embedding, positive_head, positive_tail,
             if alpha < (initial_alpha * 0.000001):
                 alpha = initial_alpha * 0.000001
 
-        if verbose and i % int(n_edge_samples/10) == 0 :
+        if verbose and i % int(n_edge_samples / 10) == 0:
             print("\t", i, " / ", n_edge_samples)
 
     return embedding
