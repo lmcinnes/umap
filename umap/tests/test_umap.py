@@ -76,6 +76,7 @@ binary_distances = (
     'yule'
 )
 
+
 def test_nn_descent_neighbor_accuracy():
     rng_state = np.random.randint(INT32_MIN, INT32_MAX, size=3)
     nn_descent = make_nn_descent(dist.euclidean, ())
@@ -191,6 +192,7 @@ def test_sparse_metrics():
 def test_sparse_fit():
     pass
 
+@SkipTest
 def test_sklearn_digits():
     digits = datasets.load_digits()
     data = digits.data
