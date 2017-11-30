@@ -1,6 +1,7 @@
 # Author: Leland McInnes <leland.mcinnes@gmail.com>
 #
 # License: BSD 3 clause
+from __future__ import print_function
 from collections import deque, namedtuple
 from warnings import warn
 
@@ -452,7 +453,7 @@ def make_nn_descent(dist, dist_args):
 
         for n in range(n_iters):
             if verbose:
-                print("\tnn descent iteration ", n, " / ", n_iters)
+                print("\t", n, " / ", n_iters)
 
             candidate_neighbors = build_candidates(current_graph, n_vertices,
                                                    n_neighbors, max_candidates,
@@ -1026,7 +1027,7 @@ def optimize_layout(embedding, positive_head, positive_tail,
                 alpha = initial_alpha * 0.000001
 
         if verbose and i % int(n_edge_samples/10) == 0 :
-            print("\tembedding iteration ", i, " / ", n_edge_samples)
+            print("\t", i, " / ", n_edge_samples)
 
     return embedding
 
