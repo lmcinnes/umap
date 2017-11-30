@@ -2,7 +2,7 @@
 # Enough simple sparse operations in numba to enable sparse UMAP
 #
 # License: BSD 3 clause
-
+from __future__ import print_function
 import numpy as np
 import numba
 
