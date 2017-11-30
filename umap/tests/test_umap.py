@@ -42,14 +42,14 @@ np.random.seed(42)
 spatial_data = np.random.randn(10, 20)
 binary_data = np.random.choice(a=[False, True],
                                size=(10, 20),
-                               p=[0.66, 1-0.66])
+                               p=[0.66, 1 - 0.66])
 sparse_spatial_data = sparse.csr_matrix(spatial_data * binary_data)
 sparse_binary_data = sparse.csr_matrix(binary_data)
 
 nn_data = np.random.uniform(0, 1, size=(1000, 5))
 binary_nn_data = np.random.choice(a=[False, True],
                                   size=(1000, 5),
-                                 p=[0.66, 1-0.66])
+                                  p=[0.66, 1 - 0.66])
 sparse_nn_data = sparse.csr_matrix(nn_data * binary_nn_data)
 
 spatial_distances = (
@@ -100,7 +100,8 @@ def test_nn_descent_neighbor_accuracy():
 
     percent_correct = num_correct / (spatial_data.shape[0] * 10)
     assert_greater_equal(percent_correct, 0.99, 'NN-descent did not get 99% '
-                                               'accuracy on nearest neighbors')
+                         'accuracy on nearest neighbors')
+
 
 def test_sparse_nn_descent_neighbor_accuracy():
     rng_state = np.random.randint(INT32_MIN, INT32_MAX, size=3)
@@ -120,7 +121,8 @@ def test_sparse_nn_descent_neighbor_accuracy():
         knn_indices[i] = knn_indices[i][order]
 
     tree = KDTree(sparse_nn_data.todense())
-    true_indices = tree.query(sparse_nn_data.todense(), 10, return_distance=False)
+    true_indices = tree.query(sparse_nn_data.todense(),
+                              10, return_distance=False)
 
     print(sparse_nn_data.shape)
 
@@ -133,6 +135,7 @@ def test_sparse_nn_descent_neighbor_accuracy():
                                                 '99% accuracy on nearest '
                                                 'neighbors')
 
+
 def test_trustworthiness():
     pass
 
@@ -142,8 +145,8 @@ def test_metrics():
         dist_matrix = pairwise_distances(spatial_data, metric=metric)
         dist_function = dist.named_distances[metric]
         test_matrix = np.array([[dist_function(spatial_data[i], spatial_data[j])
-                                    for j in range(spatial_data.shape[0])]
-                                        for i in range(spatial_data.shape[0])])
+                                 for j in range(spatial_data.shape[0])]
+                                for i in range(spatial_data.shape[0])])
         assert_array_almost_equal(test_matrix, dist_matrix,
                                   err_msg="Distances don't match "
                                           "for metric {}".format(metric))
@@ -152,11 +155,12 @@ def test_metrics():
         dist_matrix = pairwise_distances(binary_data, metric=metric)
         dist_function = dist.named_distances[metric]
         test_matrix = np.array([[dist_function(binary_data[i], binary_data[j])
-                                    for j in range(binary_data.shape[0])]
-                                        for i in range(binary_data.shape[0])])
+                                 for j in range(binary_data.shape[0])]
+                                for i in range(binary_data.shape[0])])
         assert_array_almost_equal(test_matrix, dist_matrix,
                                   err_msg="Distances don't match "
                                           "for metric {}".format(metric))
+
 
 def test_sparse_metrics():
     for metric in spatial_distances:
@@ -174,7 +178,7 @@ def test_sparse_metrics():
                                     sparse_spatial_data[j].data,
                                     sparse_spatial_data.shape[1])
                         for j in range(sparse_spatial_data.shape[0])]
-                            for i in range(sparse_spatial_data.shape[0])])
+                     for i in range(sparse_spatial_data.shape[0])])
             else:
                 test_matrix = np.array(
                     [[dist_function(sparse_spatial_data[i].indices,
@@ -182,7 +186,7 @@ def test_sparse_metrics():
                                     sparse_spatial_data[j].indices,
                                     sparse_spatial_data[j].data)
                         for j in range(sparse_spatial_data.shape[0])]
-                            for i in range(sparse_spatial_data.shape[0])])
+                     for i in range(sparse_spatial_data.shape[0])])
 
             assert_array_almost_equal(test_matrix, dist_matrix,
                                       err_msg="Distances don't match "
@@ -191,6 +195,7 @@ def test_sparse_metrics():
 
 def test_sparse_fit():
     pass
+
 
 @SkipTest
 def test_sklearn_digits():

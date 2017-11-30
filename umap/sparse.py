@@ -192,10 +192,10 @@ def sparse_random_projection_cosine_split(inds,
     left = indices[left_index]
     right = indices[right_index]
 
-    left_inds = inds[indptr[left]:indptr[left+1]]
-    left_data = data[indptr[left]:indptr[left+1]]
-    right_inds = inds[indptr[right]:indptr[right+1]]
-    right_data = data[indptr[right]:indptr[right+1]]
+    left_inds = inds[indptr[left]:indptr[left + 1]]
+    left_data = data[indptr[left]:indptr[left + 1]]
+    right_inds = inds[indptr[right]:indptr[right + 1]]
+    right_data = data[indptr[right]:indptr[right + 1]]
 
     left_norm = norm(left_data)
     right_norm = norm(right_data)
@@ -222,8 +222,8 @@ def sparse_random_projection_cosine_split(inds,
     for i in range(indices.shape[0]):
         margin = 0.0
 
-        i_inds = inds[indptr[indices[i]]:indptr[indices[i]+1]]
-        i_data = data[indptr[indices[i]]:indptr[indices[i]+1]]
+        i_inds = inds[indptr[indices[i]]:indptr[indices[i] + 1]]
+        i_data = data[indptr[indices[i]]:indptr[indices[i] + 1]]
 
         mul_inds, mul_data = sparse_mul(hyperplane_inds,
                                         hyperplane_data,
@@ -314,10 +314,10 @@ def sparse_random_projection_split(inds,
     left = indices[left_index]
     right = indices[right_index]
 
-    left_inds = inds[indptr[left]:indptr[left+1]]
-    left_data = data[indptr[left]:indptr[left+1]]
-    right_inds = inds[indptr[right]:indptr[right+1]]
-    right_data = data[indptr[right]:indptr[right+1]]
+    left_inds = inds[indptr[left]:indptr[left + 1]]
+    left_data = data[indptr[left]:indptr[left + 1]]
+    right_inds = inds[indptr[right]:indptr[right + 1]]
+    right_data = data[indptr[right]:indptr[right + 1]]
 
     # Compute the normal vector to the hyperplane (the vector between
     # the two points) and the offset from the origin
@@ -347,8 +347,8 @@ def sparse_random_projection_split(inds,
     side = np.empty(indices.shape[0], np.int8)
     for i in range(indices.shape[0]):
         margin = hyperplane_offset
-        i_inds = inds[indptr[indices[i]]:indptr[indices[i]+1]]
-        i_data = data[indptr[indices[i]]:indptr[indices[i]+1]]
+        i_inds = inds[indptr[indices[i]]:indptr[indices[i] + 1]]
+        i_data = data[indptr[indices[i]]:indptr[indices[i] + 1]]
 
         mul_inds, mul_data = sparse_mul(hyperplane_inds,
                                         hyperplane_data,
@@ -421,11 +421,11 @@ def make_sparse_nn_descent(sparse_dist, dist_args):
             indices = rejection_sample(n_neighbors, n_vertices, rng_state)
             for j in range(indices.shape[0]):
 
-                from_inds = inds[indptr[i]:indptr[i+1]]
-                from_data = data[indptr[i]:indptr[i+1]]
+                from_inds = inds[indptr[i]:indptr[i + 1]]
+                from_data = data[indptr[i]:indptr[i + 1]]
 
-                to_inds = inds[indptr[indices[j]]:indptr[indices[j]+1]]
-                to_data = data[indptr[indices[j]]:indptr[indices[j]+1]]
+                to_inds = inds[indptr[indices[j]]:indptr[indices[j] + 1]]
+                to_data = data[indptr[indices[j]]:indptr[indices[j] + 1]]
 
                 d = sparse_dist(from_inds, from_data,
                                 to_inds, to_data,
@@ -447,9 +447,9 @@ def make_sparse_nn_descent(sparse_dist, dist_args):
                         from_data = data[indptr[leaf_array[n, i]]:indptr[leaf_array[n, i] + 1]]
 
                         to_inds = inds[
-                                  indptr[leaf_array[n, j]]:indptr[leaf_array[n, j] + 1]]
+                            indptr[leaf_array[n, j]]:indptr[leaf_array[n, j] + 1]]
                         to_data = data[
-                                  indptr[leaf_array[n, j]]:indptr[leaf_array[n, j] + 1]]
+                            indptr[leaf_array[n, j]]:indptr[leaf_array[n, j] + 1]]
 
                         d = sparse_dist(from_inds, from_data,
                                         to_inds, to_data,
@@ -464,7 +464,7 @@ def make_sparse_nn_descent(sparse_dist, dist_args):
 
         for n in range(n_iters):
             if verbose:
-                print("\tnn descent iteration ", n, " / ", n_iters)
+                print("\t", n, " / ", n_iters)
 
             candidate_neighbors = build_candidates(current_graph, n_vertices,
                                                    n_neighbors, max_candidates,
@@ -486,9 +486,9 @@ def make_sparse_nn_descent(sparse_dist, dist_args):
                         from_data = data[indptr[p]:indptr[p + 1]]
 
                         to_inds = inds[
-                                  indptr[q]:indptr[q + 1]]
+                            indptr[q]:indptr[q + 1]]
                         to_data = data[
-                                  indptr[q]:indptr[q + 1]]
+                            indptr[q]:indptr[q + 1]]
 
                         d = sparse_dist(from_inds, from_data,
                                         to_inds, to_data,
@@ -503,6 +503,7 @@ def make_sparse_nn_descent(sparse_dist, dist_args):
         return current_graph[:2]
 
     return nn_descent
+
 
 @numba.njit()
 def sparse_euclidean(ind1, data1, ind2, data2):
@@ -560,6 +561,7 @@ def sparse_canberra(ind1, data1, ind2, data2):
 
     return np.sum(val_data)
 
+
 @numba.njit()
 def sparse_bray_curtis(ind1, data1, ind2, data2):
     abs_data1 = np.abs(data1)
@@ -615,7 +617,7 @@ def sparse_kulsinski(ind1, data1, ind2, data2, n_features):
         return 0.0
     else:
         return float(num_not_equal - num_true_true + n_features) / \
-                (num_not_equal + n_features)
+            (num_not_equal + n_features)
 
 
 @numba.njit()
@@ -708,28 +710,29 @@ def sparse_correlation(ind1, data1, ind2, data2, n_features):
     else:
         return (1.0 - (dot_product / (norm1 * norm2)))
 
+
 sparse_named_distances = {
-    'euclidean' : sparse_euclidean,
-    'manhattan' : sparse_manhattan,
-    'l1'        : sparse_manhattan,
-    'taxicab'   : sparse_manhattan,
-    'chebyshev' : sparse_chebyshev,
-    'linf'      : sparse_chebyshev,
-    'linfty'    : sparse_chebyshev,
-    'linfinity' : sparse_chebyshev,
-    'minkowski' : sparse_minkowski,
-    'hamming'   : sparse_hamming,
-    'canberra'  : sparse_canberra,
-    'bray_curtis' : sparse_bray_curtis,
-    'jaccard'   : sparse_jaccard,
-    'matching'  : sparse_matching,
-    'kulsinski' : sparse_kulsinski,
-    'rogers_tanimoto' : sparse_rogers_tanimoto,
-    'russellrao' : sparse_russellrao,
-    'sokal_michener' : sparse_sokal_michener,
-    'sokal_sneath' : sparse_sokal_sneath,
-    'cosine'    : sparse_cosine,
-    'correlation' : sparse_correlation,
+    'euclidean': sparse_euclidean,
+    'manhattan': sparse_manhattan,
+    'l1': sparse_manhattan,
+    'taxicab': sparse_manhattan,
+    'chebyshev': sparse_chebyshev,
+    'linf': sparse_chebyshev,
+    'linfty': sparse_chebyshev,
+    'linfinity': sparse_chebyshev,
+    'minkowski': sparse_minkowski,
+    'hamming': sparse_hamming,
+    'canberra': sparse_canberra,
+    'bray_curtis': sparse_bray_curtis,
+    'jaccard': sparse_jaccard,
+    'matching': sparse_matching,
+    'kulsinski': sparse_kulsinski,
+    'rogers_tanimoto': sparse_rogers_tanimoto,
+    'russellrao': sparse_russellrao,
+    'sokal_michener': sparse_sokal_michener,
+    'sokal_sneath': sparse_sokal_sneath,
+    'cosine': sparse_cosine,
+    'correlation': sparse_correlation,
 }
 
 sparse_need_n_features = (
