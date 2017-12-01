@@ -642,65 +642,74 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
     cols = np.zeros((X.shape[0] * n_neighbors), dtype=np.int64)
     vals = np.zeros((X.shape[0] * n_neighbors), dtype=np.float64)
 
-    if callable(metric):
-        distance_func = metric
-    elif metric in dist.named_distances:
-        distance_func = dist.named_distances[metric]
+    if metric == 'precomputed':
+        # Compute indices of n neares neighbors
+        knn_indices = np.argsort(X)[:,:n_neighbors]
+        # Compute the neares neighbor distances
+        #   (equivalent to np.sort(X)[:,:n_neighbors])
+        knn_dists = X[np.arange(X.shape[0])[:,None], knn_indices].copy()
     else:
-        raise ValueError('Metric is neither callable, nor a recognised string')
-
-    if metric in ('cosine', 'correlation', 'dice', 'jaccard'):
-        angular = True
-
-    rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
-
-    if scipy.sparse.isspmatrix_csr(X):
-        if metric in sparse.sparse_named_distances:
-            distance_func = sparse.sparse_named_distances[metric]
-            if metric in sparse.sparse_need_n_features:
-                metric_kwds['n_features'] = X.shape[1]
+        if callable(metric):
+            distance_func = metric
+        elif metric in dist.named_distances:
+            distance_func = dist.named_distances[metric]
         else:
-            raise ValueError('Metric {} not supported for sparse '
-                             'data'.format(metric))
-        metric_nn_descent = sparse.make_sparse_nn_descent(distance_func,
-                                                          tuple(metric_kwds.values()))
-        leaf_array = rptree_leaf_array(X, n_neighbors,
-                                       rng_state, n_trees=10,
-                                       angular=angular)
-        tmp_indices, knn_dists = metric_nn_descent(X.indices,
-                                                   X.indptr,
-                                                   X.data,
-                                                   X.shape[0],
-                                                   n_neighbors,
-                                                   rng_state,
-                                                   max_candidates=60,
-                                                   rp_tree_init=True,
-                                                   leaf_array=leaf_array,
-                                                   verbose=verbose)
-    else:
-        metric_nn_descent = make_nn_descent(distance_func,
-                                            tuple(metric_kwds.values()))
-        leaf_array = rptree_leaf_array(X, n_neighbors,
-                                       rng_state, n_trees=10,
-                                       angular=angular)
-        tmp_indices, knn_dists = metric_nn_descent(X,
-                                                   n_neighbors,
-                                                   rng_state,
-                                                   max_candidates=60,
-                                                   rp_tree_init=True,
-                                                   leaf_array=leaf_array,
-                                                   verbose=verbose)
-    knn_indices = tmp_indices.astype(np.int64)
+            raise ValueError('Metric is neither callable, ' +
+                             'nor a recognised string')
 
-    if np.any(knn_indices < 0):
-        warn('Failed to correctly find n_neighbors for some samples.'
-             'Results may be less than ideal. Try re-running with'
-             'different parameters.')
+        if metric in ('cosine', 'correlation', 'dice', 'jaccard'):
+            angular = True
 
-    for i in range(knn_indices.shape[0]):
-        order = np.argsort(knn_dists[i])
-        knn_dists[i] = knn_dists[i][order]
-        knn_indices[i] = knn_indices[i][order]
+        rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3) \
+                                    .astype(np.int64)
+
+        if scipy.sparse.isspmatrix_csr(X):
+            if metric in sparse.sparse_named_distances:
+                distance_func = sparse.sparse_named_distances[metric]
+                if metric in sparse.sparse_need_n_features:
+                    metric_kwds['n_features'] = X.shape[1]
+            else:
+                raise ValueError('Metric {} not supported for sparse ' +
+                                'data'.format(metric))
+            metric_nn_descent = sparse.make_sparse_nn_descent(
+                    distance_func, tuple(metric_kwds.values()))
+            leaf_array = rptree_leaf_array(X, n_neighbors,
+                                        rng_state, n_trees=10,
+                                        angular=angular)
+            tmp_indices, knn_dists = metric_nn_descent(X.indices,
+                                                    X.indptr,
+                                                    X.data,
+                                                    X.shape[0],
+                                                    n_neighbors,
+                                                    rng_state,
+                                                    max_candidates=60,
+                                                    rp_tree_init=True,
+                                                    leaf_array=leaf_array,
+                                                    verbose=verbose)
+        else:
+            metric_nn_descent = make_nn_descent(distance_func,
+                                                tuple(metric_kwds.values()))
+            leaf_array = rptree_leaf_array(X, n_neighbors,
+                                        rng_state, n_trees=10,
+                                        angular=angular)
+            tmp_indices, knn_dists = metric_nn_descent(X,
+                                                    n_neighbors,
+                                                    rng_state,
+                                                    max_candidates=60,
+                                                    rp_tree_init=True,
+                                                    leaf_array=leaf_array,
+                                                    verbose=verbose)
+        knn_indices = tmp_indices.astype(np.int64)
+
+        if np.any(knn_indices < 0):
+            warn('Failed to correctly find n_neighbors for some samples.'
+                'Results may be less than ideal. Try re-running with'
+                'different parameters.')
+
+        for i in range(knn_indices.shape[0]):
+            order = np.argsort(knn_dists[i])
+            knn_dists[i] = knn_dists[i][order]
+            knn_indices[i] = knn_indices[i][order]
 
     sigmas, rhos = smooth_knn_dist(knn_dists, n_neighbors)
 
