@@ -15,7 +15,6 @@ from umap.utils import (tau_rand_int,
                         build_candidates)
 
 import locale
-
 locale.setlocale(locale.LC_NUMERIC, 'C')
 
 # Just reproduce a simpler version of numpy unique (not numba supported yet)

@@ -531,7 +531,8 @@ def smooth_knn_dist(distances, k, n_iter=128):
 
             psum = 0.0
             for j in range(1, distances.shape[1]):
-                psum += np.exp(-((distances[i, j] - rho[i]) / mid))
+                dist = max(0, (distances[i, j] - rho[i]))
+                psum += np.exp(-(dist / mid))
             val = psum
 
             if np.fabs(val - target) < SMOOTH_K_TOLERANCE:
