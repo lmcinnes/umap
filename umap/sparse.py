@@ -584,8 +584,11 @@ def sparse_bray_curtis(ind1, data1, ind2, data2):
 def sparse_jaccard(ind1, data1, ind2, data2):
     num_non_zero = arr_union(ind1, ind2).shape[0]
     num_equal = arr_intersect(ind1, ind2).shape[0]
-
-    return float(num_non_zero - num_equal) / num_non_zero
+    
+    if num_non_zero == 0:
+        return 0.0
+    else:
+        return float(num_non_zero - num_equal) / num_non_zero
 
 
 @numba.njit()
