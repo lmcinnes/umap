@@ -164,7 +164,7 @@ def jaccard(x, y):
         num_equal += (x_true and y_true)
 
     if num_non_zero == 0.0:
-        return 1.0
+        return 0.0
     else:
         return float(num_non_zero - num_equal) / num_non_zero
 
