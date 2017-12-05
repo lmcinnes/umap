@@ -81,6 +81,12 @@ def random_projection_cosine_split(data, indices, rng_state):
 
     left_norm = norm(data[left])
     right_norm = norm(data[right])
+    
+    if left_norm == 0.0:
+        left_norm = 1.0
+        
+    if right_norm == 0.0:
+        right_norm = 0.0
 
     # Compute the normal vector to the hyperplane (the vector between
     # the two points)
@@ -91,6 +97,9 @@ def random_projection_cosine_split(data, indices, rng_state):
                                 (data[right, d] / right_norm))
 
     hyperplane_norm = norm(hyperplane_vector)
+    if hyperplane_norm == 0.0:
+        hyperplane_norm = 1.0
+        
     for d in range(dim):
         hyperplane_vector[d] = hyperplane_vector[d] / hyperplane_norm
 
