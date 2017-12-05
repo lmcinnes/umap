@@ -163,7 +163,10 @@ def jaccard(x, y):
         num_non_zero += (x_true or y_true)
         num_equal += (x_true and y_true)
 
-    return float(num_non_zero - num_equal) / num_non_zero
+    if num_non_zero == 0.0:
+        return 1.0
+    else:
+        return float(num_non_zero - num_equal) / num_non_zero
 
 
 @numba.njit()
