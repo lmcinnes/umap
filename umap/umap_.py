@@ -23,7 +23,8 @@ from umap.utils import (tau_rand_int,
                         make_heap,
                         heap_push,
                         rejection_sample,
-                        build_candidates)
+                        build_candidates,
+                        deheap_sort)
 
 import locale
 
@@ -485,13 +486,13 @@ def make_nn_descent(dist, dist_args):
             if c <= delta * n_neighbors * data.shape[0]:
                 break
 
-        return current_graph[:2]
+        return deheap_sort(current_graph)
 
     return nn_descent
 
 
 @numba.njit(parallel=True)
-def smooth_knn_dist(distances, k, n_iter=128):
+def smooth_knn_dist(distances, k, n_iter=64, bandwidth=1.0):
     """Compute a continuous version of the distance to the kth nearest
     neighbor. That is, this is similar to knn-distance but allows continuous
     k values rather than requiring an integral k. In esscence we are simply
@@ -519,7 +520,7 @@ def smooth_knn_dist(distances, k, n_iter=128):
     nn_dist: array of shape (n_samples,)
         The distance to the 1st nearest neighbor for each point.
     """
-    target = np.log2(k)
+    target = np.log2(k) * bandwidth
     rho = np.zeros(distances.shape[0])
     result = np.zeros(distances.shape[0])
 
@@ -653,9 +654,10 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
     vals = np.zeros((X.shape[0] * n_neighbors), dtype=np.float64)
 
     if metric == 'precomputed':
-        # Compute indices of n neares neighbors
+        # Note that this does not support sparse distance matrices yet ...
+        # Compute indices of n nearest neighbors
         knn_indices = np.argsort(X)[:,:n_neighbors]
-        # Compute the neares neighbor distances
+        # Compute the nearest neighbor distances
         #   (equivalent to np.sort(X)[:,:n_neighbors])
         knn_dists = X[np.arange(X.shape[0])[:,None], knn_indices].copy()
     else:
@@ -686,40 +688,39 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
             leaf_array = rptree_leaf_array(X, n_neighbors,
                                         rng_state, n_trees=10,
                                         angular=angular)
-            tmp_indices, knn_dists = metric_nn_descent(X.indices,
-                                                    X.indptr,
-                                                    X.data,
-                                                    X.shape[0],
-                                                    n_neighbors,
-                                                    rng_state,
-                                                    max_candidates=60,
-                                                    rp_tree_init=True,
-                                                    leaf_array=leaf_array,
-                                                    verbose=verbose)
+            knn_indices, knn_dists = metric_nn_descent(X.indices,
+                                                       X.indptr,
+                                                       X.data,
+                                                       X.shape[0],
+                                                       n_neighbors,
+                                                       rng_state,
+                                                       max_candidates=60,
+                                                       rp_tree_init=True,
+                                                       leaf_array=leaf_array,
+                                                       verbose=verbose)
         else:
             metric_nn_descent = make_nn_descent(distance_func,
                                                 tuple(metric_kwds.values()))
+            # TODO: Hacked values for now
+            n_trees = 5 + int(round((X.shape[0]) ** 0.5 / 20.0))
+            n_iters = max(5, int(round(np.log2(X.shape[0]))))
+
             leaf_array = rptree_leaf_array(X, n_neighbors,
-                                        rng_state, n_trees=10,
-                                        angular=angular)
-            tmp_indices, knn_dists = metric_nn_descent(X,
-                                                    n_neighbors,
-                                                    rng_state,
-                                                    max_candidates=60,
-                                                    rp_tree_init=True,
-                                                    leaf_array=leaf_array,
-                                                    verbose=verbose)
-        knn_indices = tmp_indices.astype(np.int64)
+                                           rng_state, n_trees=n_trees,
+                                           angular=angular)
+            knn_indices, knn_dists = metric_nn_descent(X,
+                                                       n_neighbors,
+                                                       rng_state,
+                                                       max_candidates=60,
+                                                       rp_tree_init=True,
+                                                       leaf_array=leaf_array,
+                                                       n_iters=n_iters,
+                                                       verbose=verbose)
 
         if np.any(knn_indices < 0):
             warn('Failed to correctly find n_neighbors for some samples.'
                 'Results may be less than ideal. Try re-running with'
                 'different parameters.')
-
-        for i in range(knn_indices.shape[0]):
-            order = np.argsort(knn_dists[i])
-            knn_dists[i] = knn_dists[i][order]
-            knn_indices[i] = knn_indices[i][order]
 
     sigmas, rhos = smooth_knn_dist(knn_dists, n_neighbors)
 

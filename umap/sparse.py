@@ -12,7 +12,8 @@ from umap.utils import (tau_rand_int,
                         make_heap,
                         heap_push,
                         rejection_sample,
-                        build_candidates)
+                        build_candidates,
+                        deheap_sort)
 
 import locale
 locale.setlocale(locale.LC_NUMERIC, 'C')
@@ -499,7 +500,7 @@ def make_sparse_nn_descent(sparse_dist, dist_args):
             if c <= delta * n_neighbors * n_vertices:
                 break
 
-        return current_graph[:2]
+        return deheap_sort(current_graph)
 
     return nn_descent
 
