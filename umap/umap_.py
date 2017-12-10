@@ -509,9 +509,13 @@ def smooth_knn_dist(distances, k, n_iter=64, bandwidth=1.0):
     k: float
         The number of nearest neighbors to approximate for.
 
-    n_iter: int (optiona, default 128)
+    n_iter: int (optional, default 64)
         We need to binary search for the correct distance value. This is the
         max number of iterations to use in such a search.
+
+    bandwidth: float (optional, default 1)
+        The target bandwidth of the kernel, larger values will produce
+        larger return values.
 
     Returns
     -------
@@ -1138,6 +1142,7 @@ def simplicial_set_embedding(graph, n_components,
         if graph.shape[0] >= 300:
             n_edge_samples = (graph.shape[0] // 150) * 1000000
         else:
+            # If the dataset size is too small ensure we do some work
             n_edge_samples = 2000000
 
     positive_head = graph.row
@@ -1319,14 +1324,6 @@ class UMAP(BaseEstimator):
         self.random_state = random_state
         self.angular_rp_forest = angular_rp_forest
         self.verbose = verbose
-
-        # if metric in dist.named_distances:
-        #     self._metric = dist.named_distances[self.metric]
-        # elif callable(metric):
-        #     self._metric = self.metric
-        # else:
-        #     raise ValueError('Supplied metric is neither '
-        #                      'a recognised string, nor callable')
 
         if a is None or b is None:
             self.a, self.b = find_ab_params(self.spread, self.min_dist)
