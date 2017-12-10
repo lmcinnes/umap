@@ -8,6 +8,7 @@ from warnings import warn
 from scipy.optimize import curve_fit
 from sklearn.base import BaseEstimator
 from sklearn.utils import check_random_state, check_array
+from sklearn.metrics import pairwise_distances
 
 import numpy as np
 import scipy.sparse
@@ -1134,7 +1135,10 @@ def simplicial_set_embedding(graph, n_components,
                              ' a numpy array of initial embedding postions')
 
     if n_edge_samples <= 0:
-        n_edge_samples = (graph.shape[0] // 150) * 1000000
+        if graph.shape[0] >= 300:
+            n_edge_samples = (graph.shape[0] // 150) * 1000000
+        else:
+            n_edge_samples = 2000000
 
     positive_head = graph.row
     positive_tail = graph.col
@@ -1362,15 +1366,29 @@ class UMAP(BaseEstimator):
         if self.verbose:
             print("Construct fuzzy simplicial set")
 
-        graph = fuzzy_simplicial_set(
-            X,
-            self.n_neighbors,
-            random_state,
-            self.metric,
-            self.metric_kwds,
-            self.angular_rp_forest,
-            self.verbose
-        )
+        # Handle small cases efficiently by computing all distances
+        if X.shape[0] < 4096:
+            dmat = pairwise_distances(X, metric=metric, **self.metric_kwds)
+            graph = fuzzy_simplicial_set(
+                dmat,
+                self.n_neighbors,
+                random_state,
+                'precomputed',
+                self.metric_kwds,
+                self.angular_rp_forest,
+                self.verbose
+            )
+        else:
+            # Standard case
+            graph = fuzzy_simplicial_set(
+                X,
+                self.n_neighbors,
+                random_state,
+                self.metric,
+                self.metric_kwds,
+                self.angular_rp_forest,
+                self.verbose
+            )
 
         if self.n_edge_samples is None:
             n_edge_samples = 0
