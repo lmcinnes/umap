@@ -493,7 +493,8 @@ def make_nn_descent(dist, dist_args):
 
 
 @numba.njit(parallel=True)
-def smooth_knn_dist(distances, k, n_iter=64, bandwidth=1.0):
+def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1,
+                    bandwidth=1.0):
     """Compute a continuous version of the distance to the kth nearest
     neighbor. That is, this is similar to knn-distance but allows continuous
     k values rather than requiring an integral k. In esscence we are simply
@@ -512,6 +513,13 @@ def smooth_knn_dist(distances, k, n_iter=64, bandwidth=1.0):
     n_iter: int (optional, default 64)
         We need to binary search for the correct distance value. This is the
         max number of iterations to use in such a search.
+
+    local_connectivity: int (optional, default 1)
+        The local connectivity required -- i.e. the number of nearest
+        neighbors that should be assumed to be connected at a local level.
+        The higher this value the more connected the manifold becomes
+        locally. In practice this should be not more than the local intrinsic
+        dimension of the manifold.
 
     bandwidth: float (optional, default 1)
         The target bandwidth of the kernel, larger values will produce
@@ -537,8 +545,10 @@ def smooth_knn_dist(distances, k, n_iter=64, bandwidth=1.0):
         # TODO: This is very inefficient, but will do for now. FIXME
         ith_distances = distances[i]
         non_zero_dists = ith_distances[ith_distances > 0.0]
-        if non_zero_dists.shape[0] > 0:
-            rho[i] = np.min(non_zero_dists)
+        if non_zero_dists.shape[0] >= local_connectivity:
+            rho[i] = non_zero_dists[local_connectivity - 1]
+        elif non_zero_dists.shape[0] > 0:
+            rho[i] = np.max(non_zero_dists)
         else:
             rho[i] = 0.0
 
@@ -579,6 +589,7 @@ def smooth_knn_dist(distances, k, n_iter=64, bandwidth=1.0):
 @numba.jit(parallel=True)
 def fuzzy_simplicial_set(X, n_neighbors, random_state,
                          metric, metric_kwds={}, angular=False,
+                         local_connectivity=1, bandwidth=1.0,
                          verbose=False):
     """Given a set of data X, a neighborhood size, and a measure of distance
     compute the fuzzy simplicial set (here represented as a fuzzy graph in
@@ -642,6 +653,13 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
         Whether to use angular/cosine distance for the random projection
         forest for seeding NN-descent to determine approximate nearest
         neighbors.
+
+    local_connectivity: int (optional, default 1)
+        The local connectivity required -- i.e. the number of nearest
+        neighbors that should be assumed to be connected at a local level.
+        The higher this value the more connected the manifold becomes
+        locally. In practice this should be not more than the local intrinsic
+        dimension of the manifold.
 
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
@@ -727,7 +745,8 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
                 'Results may be less than ideal. Try re-running with'
                 'different parameters.')
 
-    sigmas, rhos = smooth_knn_dist(knn_dists, n_neighbors)
+    sigmas, rhos = smooth_knn_dist(knn_dists, n_neighbors,
+                                   local_connectivity=local_connectivity)
 
     for i in range(knn_indices.shape[0]):
         for j in range(n_neighbors):
@@ -735,10 +754,11 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
                 continue  # We didn't get the full knn for i
             if knn_indices[i, j] == i:
                 val = 0.0
-            elif knn_dists[i, j] == 0.0:
+            elif knn_dists[i, j] - rhos[i] <= 0.0:
                 val = 1.0
             else:
-                val = np.exp(-((knn_dists[i, j] - rhos[i]) / sigmas[i]))
+                val = np.exp(-((knn_dists[i, j] - rhos[i]) / (sigmas[i] *
+                                                              bandwidth)))
 
             rows[i * n_neighbors + j] = i
             cols[i * n_neighbors + j] = knn_indices[i, j]
@@ -1229,11 +1249,6 @@ class UMAP(BaseEstimator):
         time care must be taken and dictionary elements must be ordered
         appropriately; this will hopefully be fixed in the future.
 
-    gamma: float (optional, default 1.0)
-        Weighting applied to negative samples in low dimensional embedding
-        optimization. Values higher than one will result in greater weight
-        being given to negative samples.
-
     n_edge_samples: int (optional, default None)
         The number of edge/1-simplex samples to be used in optimizing the
         low dimensional embedding. Larger values result in more accurate
@@ -1260,6 +1275,24 @@ class UMAP(BaseEstimator):
     spread: float (optional, default 1.0)
         The effective scale of embedded points. In combination with ``min_dist``
         this determines how clustered/clumped the embedded points are.
+
+    local_connectivity: int (optional, default 1)
+        The local connectivity required -- i.e. the number of nearest
+        neighbors that should be assumed to be connected at a local level.
+        The higher this value the more connected the manifold becomes
+        locally. In practice this should be not more than the local intrinsic
+        dimension of the manifold.
+
+    gamma: float (optional, default 1.0)
+        Weighting applied to negative samples in low dimensional embedding
+        optimization. Values higher than one will result in greater weight
+        being given to negative samples.
+
+    bandwidth: float (optional, default 1.0)
+        The effective bandwidth of the kernel if we view the algorithm as
+        similar to Laplacian eigenmaps. Larger values induce more
+        connectivity and a more global view of the data, smaller values
+        concentrate more locally.
 
     a: float (optional, default None)
         More specific parameters controlling the embedding. If None these
@@ -1295,12 +1328,14 @@ class UMAP(BaseEstimator):
                  n_neighbors=15,
                  n_components=2,
                  metric='euclidean',
-                 gamma=1.0,
                  n_edge_samples=None,
                  alpha=1.0,
                  init='spectral',
                  spread=1.0,
                  min_dist=0.1,
+                 local_connectivity=1,
+                 bandwidth=1.0,
+                 gamma=1.0,
                  a=None,
                  b=None,
                  random_state=None,
@@ -1321,6 +1356,8 @@ class UMAP(BaseEstimator):
 
         self.spread = spread
         self.min_dist = min_dist
+        self.local_connectivity = local_connectivity
+        self.bandwidth = bandwidth
         self.random_state = random_state
         self.angular_rp_forest = angular_rp_forest
         self.verbose = verbose
@@ -1373,6 +1410,8 @@ class UMAP(BaseEstimator):
                 'precomputed',
                 self.metric_kwds,
                 self.angular_rp_forest,
+                self.local_connectivity,
+                self.bandwidth,
                 self.verbose
             )
         else:
@@ -1384,6 +1423,8 @@ class UMAP(BaseEstimator):
                 self.metric,
                 self.metric_kwds,
                 self.angular_rp_forest,
+                self.local_connectivity,
+                self.bandwidth,
                 self.verbose
             )
 
