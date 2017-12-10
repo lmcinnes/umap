@@ -1365,7 +1365,7 @@ class UMAP(BaseEstimator):
 
         # Handle small cases efficiently by computing all distances
         if X.shape[0] < 4096:
-            dmat = pairwise_distances(X, metric=metric, **self.metric_kwds)
+            dmat = pairwise_distances(X, metric=self.metric, **self.metric_kwds)
             graph = fuzzy_simplicial_set(
                 dmat,
                 self.n_neighbors,
