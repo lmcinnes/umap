@@ -586,7 +586,7 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1,
     return result, rho
 
 
-@numba.jit(parallel=True)
+# @numba.jit(parallel=True)
 def fuzzy_simplicial_set(X, n_neighbors, random_state,
                          metric, metric_kwds={}, angular=False,
                          set_operation='union',
