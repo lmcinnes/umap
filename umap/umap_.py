@@ -589,6 +589,7 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1,
 @numba.jit(parallel=True)
 def fuzzy_simplicial_set(X, n_neighbors, random_state,
                          metric, metric_kwds={}, angular=False,
+                         set_operation='union',
                          local_connectivity=1, bandwidth=1.0,
                          verbose=False):
     """Given a set of data X, a neighborhood size, and a measure of distance
@@ -653,6 +654,12 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
         Whether to use angular/cosine distance for the random projection
         forest for seeding NN-descent to determine approximate nearest
         neighbors.
+
+    set_operation: str (optional, default 'union')
+        The set operation used to combine local fuzzy simplicial sets to
+        obtain a global fuzzy simplicial sets. This can be either a fuzzy
+        union ('union'), or a fuzzy intersection ('intersction'). Both
+        operations use the product t-norm.
 
     local_connectivity: int (optional, default 1)
         The local connectivity required -- i.e. the number of nearest
@@ -772,7 +779,14 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
 
     prod_matrix = result.multiply(transpose)
 
-    result = result + transpose - prod_matrix
+    if set_operation == 'intersection':
+        result = prod_matrix
+    elif set_operation == 'union':
+        result = result + transpose - prod_matrix
+    else:
+        raise ValueError('Invalid set operation -- must be union or '
+                         'intersection!')
+
     result.eliminate_zeros()
 
     return result
@@ -1276,6 +1290,12 @@ class UMAP(BaseEstimator):
         The effective scale of embedded points. In combination with ``min_dist``
         this determines how clustered/clumped the embedded points are.
 
+    set_operation: str (optional, default 'union')
+        The set operation used to combine local fuzzy simplicial sets to
+        obtain a global fuzzy simplicial sets. This can be either a fuzzy
+        union ('union'), or a fuzzy intersection ('intersction'). Both
+        operations use the product t-norm.
+
     local_connectivity: int (optional, default 1)
         The local connectivity required -- i.e. the number of nearest
         neighbors that should be assumed to be connected at a local level.
@@ -1333,6 +1353,7 @@ class UMAP(BaseEstimator):
                  init='spectral',
                  spread=1.0,
                  min_dist=0.1,
+                 set_operation='union',
                  local_connectivity=1,
                  bandwidth=1.0,
                  gamma=1.0,
@@ -1356,6 +1377,7 @@ class UMAP(BaseEstimator):
 
         self.spread = spread
         self.min_dist = min_dist
+        self.set_operation = set_operation
         self.local_connectivity = local_connectivity
         self.bandwidth = bandwidth
         self.random_state = random_state
@@ -1410,6 +1432,7 @@ class UMAP(BaseEstimator):
                 'precomputed',
                 self.metric_kwds,
                 self.angular_rp_forest,
+                self.set_operation,
                 self.local_connectivity,
                 self.bandwidth,
                 self.verbose
@@ -1423,6 +1446,7 @@ class UMAP(BaseEstimator):
                 self.metric,
                 self.metric_kwds,
                 self.angular_rp_forest,
+                self.set_operation,
                 self.local_connectivity,
                 self.bandwidth,
                 self.verbose
