@@ -783,6 +783,8 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
         result = prod_matrix
     elif set_operation == 'union':
         result = result + transpose - prod_matrix
+    elif set_operation == 'none':
+        return result
     else:
         raise ValueError('Invalid set operation -- must be union or '
                          'intersection!')
@@ -899,6 +901,17 @@ def spectral_layout(graph, dim, random_state):
     embedding: array of shape (n_vertices, dim)
         The spectral embedding of the graph.
     """
+    n_samples = graph.shape[0]
+    n_components, labels = scipy.sparse.csgraph.connected_components(graph)
+
+    if n_components > 1:
+        component_sizes = np.bincount(labels)
+        largest_component = np.where(
+            component_sizes == component_sizes.max())[0][0]
+        graph = graph.tocsr()[labels == largest_component, :]
+        graph = graph.tocsc()[:, labels == largest_component]
+        graph = graph.tocoo()
+
     diag_data = np.asarray(graph.sum(axis=0))
     # standard Laplacian
     # D = scipy.sparse.spdiags(diag_data, 0, graph.shape[0], graph.shape[0])
@@ -920,7 +933,13 @@ def spectral_layout(graph, dim, random_state):
             v0=np.ones(L.shape[0]),
             maxiter=graph.shape[0] * 5)
         order = np.argsort(eigenvalues)[1:k]
-        return eigenvectors[:, order]
+        if n_components == 1:
+            return eigenvectors[:, order]
+        else:
+            init = random_state.uniform(low=-10.0, high=10.0,
+                                        size=(n_samples, 2))
+            init[labels == largest_component] = eigenvectors[:, order]
+            return init
     except scipy.sparse.linalg.ArpackError:
         warn('WARNING: spectral initialisation failed! The eigenvector solver\n'
              'failed. This is likely due to too small an eigengap. Consider\n'
