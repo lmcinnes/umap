@@ -589,7 +589,7 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1,
 # @numba.jit(parallel=True)
 def fuzzy_simplicial_set(X, n_neighbors, random_state,
                          metric, metric_kwds={}, angular=False,
-                         set_operation='union',
+                         set_op_mix_ratio=1.0,
                          local_connectivity=1, bandwidth=1.0,
                          verbose=False):
     """Given a set of data X, a neighborhood size, and a measure of distance
@@ -655,11 +655,13 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
         forest for seeding NN-descent to determine approximate nearest
         neighbors.
 
-    set_operation: str (optional, default 'union')
-        The set operation used to combine local fuzzy simplicial sets to
-        obtain a global fuzzy simplicial sets. This can be either a fuzzy
-        union ('union'), or a fuzzy intersection ('intersction'). Both
-        operations use the product t-norm.
+    set_op_mix_ratio: float (optional, default 1.0)
+        Interpolate between (fuzzy) union and intersection as the set operation
+        used to combine local fuzzy simplicial sets to obtain a global fuzzy
+        simplicial sets. Both fuzzy set operations use the product t-norm.
+        The value of this parameter should be between 0.0 and 1.0; a value of
+        1.0 will use a pure fuzzy union, while 0.0 will use a pure fuzzy
+        intersection.
 
     local_connectivity: int (optional, default 1)
         The local connectivity required -- i.e. the number of nearest
@@ -779,15 +781,8 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
 
     prod_matrix = result.multiply(transpose)
 
-    if set_operation == 'intersection':
-        result = prod_matrix
-    elif set_operation == 'union':
-        result = result + transpose - prod_matrix
-    elif set_operation == 'none':
-        return result
-    else:
-        raise ValueError('Invalid set operation -- must be union or '
-                         'intersection!')
+    result = set_op_mix_ratio * (result + transpose - prod_matrix) + \
+             (1.0 - set_op_mix_ratio) * prod_matrix
 
     result.eliminate_zeros()
 
@@ -1309,11 +1304,13 @@ class UMAP(BaseEstimator):
         The effective scale of embedded points. In combination with ``min_dist``
         this determines how clustered/clumped the embedded points are.
 
-    set_operation: str (optional, default 'union')
-        The set operation used to combine local fuzzy simplicial sets to
-        obtain a global fuzzy simplicial sets. This can be either a fuzzy
-        union ('union'), or a fuzzy intersection ('intersction'). Both
-        operations use the product t-norm.
+    set_op_mix_ratio: float (optional, default 1.0)
+        Interpolate between (fuzzy) union and intersection as the set operation
+        used to combine local fuzzy simplicial sets to obtain a global fuzzy
+        simplicial sets. Both fuzzy set operations use the product t-norm.
+        The value of this parameter should be between 0.0 and 1.0; a value of
+        1.0 will use a pure fuzzy union, while 0.0 will use a pure fuzzy
+        intersection.
 
     local_connectivity: int (optional, default 1)
         The local connectivity required -- i.e. the number of nearest
@@ -1372,7 +1369,7 @@ class UMAP(BaseEstimator):
                  init='spectral',
                  spread=1.0,
                  min_dist=0.1,
-                 set_operation='union',
+                 set_op_mix_ratio=1.0,
                  local_connectivity=1,
                  bandwidth=1.0,
                  gamma=1.0,
@@ -1396,7 +1393,7 @@ class UMAP(BaseEstimator):
 
         self.spread = spread
         self.min_dist = min_dist
-        self.set_operation = set_operation
+        self.set_op_mix_ratio = set_op_mix_ratio
         self.local_connectivity = local_connectivity
         self.bandwidth = bandwidth
         self.random_state = random_state
@@ -1408,6 +1405,9 @@ class UMAP(BaseEstimator):
         else:
             self.a = a
             self.b = b
+
+        if set_op_mix_ratio < 0.0 or set_op_mix_ratio > 1.0:
+            raise ValueError('set_op_mix_ratio must be between 0.0 and 1.0')
 
         if self.verbose:
             print("UMAP(n_neighbors={}, n_components={}, metric='{}', "
@@ -1451,7 +1451,7 @@ class UMAP(BaseEstimator):
                 'precomputed',
                 self.metric_kwds,
                 self.angular_rp_forest,
-                self.set_operation,
+                self.set_op_mix_ratio,
                 self.local_connectivity,
                 self.bandwidth,
                 self.verbose
@@ -1465,7 +1465,7 @@ class UMAP(BaseEstimator):
                 self.metric,
                 self.metric_kwds,
                 self.angular_rp_forest,
-                self.set_operation,
+                self.set_op_mix_ratio,
                 self.local_connectivity,
                 self.bandwidth,
                 self.verbose
