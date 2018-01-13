@@ -493,7 +493,7 @@ def make_nn_descent(dist, dist_args):
 
 
 @numba.njit(parallel=True)
-def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1,
+def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0,
                     bandwidth=1.0):
     """Compute a continuous version of the distance to the kth nearest
     neighbor. That is, this is similar to knn-distance but allows continuous
@@ -546,7 +546,17 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1,
         ith_distances = distances[i]
         non_zero_dists = ith_distances[ith_distances > 0.0]
         if non_zero_dists.shape[0] >= local_connectivity:
-            rho[i] = non_zero_dists[local_connectivity - 1]
+            index = int(np.floor(local_connectivity))
+            interpolation = local_connectivity - index
+            if index > 0:
+                if interpolation <= SMOOTH_K_TOLERANCE:
+                    rho[i] = non_zero_dists[index - 1]
+                else:
+                    rho[i] = non_zero_dists[index - 1] + interpolation * (
+                        non_zero_dists[index] - non_zero_dists[index - 1]
+                    )
+            else:
+                rho[i] = interpolation * non_zero_dists[0]
         elif non_zero_dists.shape[0] > 0:
             rho[i] = np.max(non_zero_dists)
         else:
@@ -590,7 +600,7 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1,
 def fuzzy_simplicial_set(X, n_neighbors, random_state,
                          metric, metric_kwds={}, angular=False,
                          set_op_mix_ratio=1.0,
-                         local_connectivity=1, bandwidth=1.0,
+                         local_connectivity=1.0, bandwidth=1.0,
                          verbose=False):
     """Given a set of data X, a neighborhood size, and a measure of distance
     compute the fuzzy simplicial set (here represented as a fuzzy graph in
@@ -1370,7 +1380,7 @@ class UMAP(BaseEstimator):
                  spread=1.0,
                  min_dist=0.1,
                  set_op_mix_ratio=1.0,
-                 local_connectivity=1,
+                 local_connectivity=1.0,
                  bandwidth=1.0,
                  gamma=1.0,
                  a=None,
