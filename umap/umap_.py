@@ -885,6 +885,13 @@ def sample(prob, alias, rng_state):
         return alias[k]
 
 
+@numba.jit()
+def make_epochs_per_sample(weights, n_epochs):
+    result = -1.0 * np.ones(weights.shape[0], dtype=np.float64)
+    n_samples = n_epochs * (weights / weights.max())
+    result[n_samples > 0] = float(n_epochs) / n_samples[n_samples > 0]
+    return result
+
 def spectral_layout(graph, dim, random_state):
     """Given a graph compute the spectral embedding of the graph. This is
     simply the eigenvectors of the laplacian of the graph. Here we use the
@@ -998,9 +1005,70 @@ def rdist(x, y):
 
 @numba.njit()
 def optimize_layout(embedding, positive_head, positive_tail,
-                    n_edge_samples, n_vertices, prob, alias,
+                    n_epochs, n_vertices, epochs_per_sample,
                     a, b, rng_state, gamma=1.0, initial_alpha=1.0,
                     negative_sample_rate=5, verbose=False):
+    dim = embedding.shape[1]
+    alpha = initial_alpha
+
+    float_epoch_of_next_sample = epochs_per_sample.copy()
+    epoch_of_next_sample = np.floor(float_epoch_of_next_sample).astype(np.int64)
+
+    for n in range(n_epochs):
+        for i in range(epochs_per_sample.shape[0]):
+            if epoch_of_next_sample[i] == n:
+                j = positive_head[i]
+                k = positive_tail[i]
+
+                current = embedding[j]
+                other = embedding[k]
+
+                dist_squared = rdist(current, other)
+
+                grad_coeff = (-2.0 * a * b * pow(dist_squared, b - 1.0))
+                grad_coeff /= (a * pow(dist_squared, b) + 1.0)
+
+                for d in range(dim):
+                    grad_d = clip(grad_coeff * (current[d] - other[d]))
+                    current[d] += grad_d * alpha
+                    other[d] += -grad_d * alpha
+
+                float_epoch_of_next_sample[i] += epochs_per_sample[i]
+
+                for s in range(negative_sample_rate):
+                    edge = tau_rand_int(rng_state) % (n_vertices ** 2)
+                    j = edge // n_vertices
+                    k = edge % n_vertices
+
+                    current = embedding[j]
+                    other = embedding[k]
+
+                    dist_squared = rdist(current, other)
+
+                    grad_coeff = (2.0 * gamma * b)
+                    grad_coeff /= (0.001 + dist_squared) * (
+                        a * pow(dist_squared, b) + 1)
+
+                    if not np.isfinite(grad_coeff):
+                        grad_coeff = 4.0
+
+                    for d in range(dim):
+                        grad_d = clip(grad_coeff * (current[d] - other[d]))
+                        current[d] += grad_d * alpha
+                        other[d] += -grad_d * alpha
+
+        epoch_of_next_sample = np.floor(
+            float_epoch_of_next_sample).astype(np.int64)
+
+        alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
+
+    return embedding
+
+@numba.njit()
+def old_optimize_layout(embedding, positive_head, positive_tail,
+                        n_edge_samples, n_vertices, prob, alias,
+                        a, b, rng_state, gamma=1.0, initial_alpha=1.0,
+                        negative_sample_rate=5, verbose=False):
     """Improve an embedding using stochastic gradient descent to minimize the
     fuzzy set cross entropy between the 1-skeletons of the high dimensional
     and low dimensional fuzzy simplicial sets. In practice this is done by
@@ -1115,7 +1183,7 @@ def optimize_layout(embedding, positive_head, positive_tail,
 
 def simplicial_set_embedding(graph, n_components,
                              initial_alpha, a, b,
-                             gamma, n_edge_samples,
+                             gamma, n_epochs,
                              init, random_state, verbose):
     """Perform a fuzzy simplicial set embedding, using a specified
     initialisation method and then minimizing the fuzzy set cross entropy
@@ -1169,7 +1237,7 @@ def simplicial_set_embedding(graph, n_components,
     graph.sum_duplicates()
     n_vertices = graph.shape[0]
 
-    prob, alias = create_sampler(graph.data)
+    epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs)
 
     if isinstance(init, str) and init == 'random':
         embedding = random_state.uniform(low=-10.0, high=10.0,
@@ -1196,20 +1264,20 @@ def simplicial_set_embedding(graph, n_components,
                              'Should be "random", "spectral" or'
                              ' a numpy array of initial embedding postions')
 
-    if n_edge_samples <= 0:
+    if n_epochs <= 0:
         if graph.shape[0] >= 300:
-            n_edge_samples = (graph.shape[0] // 150) * 1000000
+            n_epochs = (graph.shape[0] // 1000)
         else:
             # If the dataset size is too small ensure we do some work
-            n_edge_samples = 2000000
+            n_epochs = 30
 
     positive_head = graph.row
     positive_tail = graph.col
 
     rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
     embedding = optimize_layout(embedding, positive_head, positive_tail,
-                                n_edge_samples, n_vertices,
-                                prob, alias, a, b, rng_state, gamma,
+                                n_epochs, n_vertices,
+                                epochs_per_sample, a, b, rng_state, gamma,
                                 initial_alpha, verbose=verbose)
 
     return embedding
