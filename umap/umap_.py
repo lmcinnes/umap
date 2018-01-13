@@ -493,7 +493,7 @@ def make_nn_descent(dist, dist_args):
 
 
 @numba.njit(parallel=True)
-def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1,
+def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0,
                     bandwidth=1.0):
     """Compute a continuous version of the distance to the kth nearest
     neighbor. That is, this is similar to knn-distance but allows continuous
@@ -546,7 +546,17 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1,
         ith_distances = distances[i]
         non_zero_dists = ith_distances[ith_distances > 0.0]
         if non_zero_dists.shape[0] >= local_connectivity:
-            rho[i] = non_zero_dists[local_connectivity - 1]
+            index = int(np.floor(local_connectivity))
+            interpolation = local_connectivity - index
+            if index > 0:
+                if interpolation <= SMOOTH_K_TOLERANCE:
+                    rho[i] = non_zero_dists[index - 1]
+                else:
+                    rho[i] = non_zero_dists[index - 1] + interpolation * (
+                        non_zero_dists[index] - non_zero_dists[index - 1]
+                    )
+            else:
+                rho[i] = interpolation * non_zero_dists[0]
         elif non_zero_dists.shape[0] > 0:
             rho[i] = np.max(non_zero_dists)
         else:
@@ -586,10 +596,11 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1,
     return result, rho
 
 
-@numba.jit(parallel=True)
+# @numba.jit(parallel=True)
 def fuzzy_simplicial_set(X, n_neighbors, random_state,
                          metric, metric_kwds={}, angular=False,
-                         local_connectivity=1, bandwidth=1.0,
+                         set_op_mix_ratio=1.0,
+                         local_connectivity=1.0, bandwidth=1.0,
                          verbose=False):
     """Given a set of data X, a neighborhood size, and a measure of distance
     compute the fuzzy simplicial set (here represented as a fuzzy graph in
@@ -653,6 +664,14 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
         Whether to use angular/cosine distance for the random projection
         forest for seeding NN-descent to determine approximate nearest
         neighbors.
+
+    set_op_mix_ratio: float (optional, default 1.0)
+        Interpolate between (fuzzy) union and intersection as the set operation
+        used to combine local fuzzy simplicial sets to obtain a global fuzzy
+        simplicial sets. Both fuzzy set operations use the product t-norm.
+        The value of this parameter should be between 0.0 and 1.0; a value of
+        1.0 will use a pure fuzzy union, while 0.0 will use a pure fuzzy
+        intersection.
 
     local_connectivity: int (optional, default 1)
         The local connectivity required -- i.e. the number of nearest
@@ -772,7 +791,9 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
 
     prod_matrix = result.multiply(transpose)
 
-    result = result + transpose - prod_matrix
+    result = set_op_mix_ratio * (result + transpose - prod_matrix) + \
+             (1.0 - set_op_mix_ratio) * prod_matrix
+
     result.eliminate_zeros()
 
     return result
@@ -885,6 +906,17 @@ def spectral_layout(graph, dim, random_state):
     embedding: array of shape (n_vertices, dim)
         The spectral embedding of the graph.
     """
+    n_samples = graph.shape[0]
+    n_components, labels = scipy.sparse.csgraph.connected_components(graph)
+
+    if n_components > 1:
+        component_sizes = np.bincount(labels)
+        largest_component = np.where(
+            component_sizes == component_sizes.max())[0][0]
+        graph = graph.tocsr()[labels == largest_component, :]
+        graph = graph.tocsc()[:, labels == largest_component]
+        graph = graph.tocoo()
+
     diag_data = np.asarray(graph.sum(axis=0))
     # standard Laplacian
     # D = scipy.sparse.spdiags(diag_data, 0, graph.shape[0], graph.shape[0])
@@ -906,7 +938,13 @@ def spectral_layout(graph, dim, random_state):
             v0=np.ones(L.shape[0]),
             maxiter=graph.shape[0] * 5)
         order = np.argsort(eigenvalues)[1:k]
-        return eigenvectors[:, order]
+        if n_components == 1:
+            return eigenvectors[:, order]
+        else:
+            init = random_state.uniform(low=-10.0, high=10.0,
+                                        size=(n_samples, 2))
+            init[labels == largest_component] = eigenvectors[:, order]
+            return init
     except scipy.sparse.linalg.ArpackError:
         warn('WARNING: spectral initialisation failed! The eigenvector solver\n'
              'failed. This is likely due to too small an eigengap. Consider\n'
@@ -1276,6 +1314,14 @@ class UMAP(BaseEstimator):
         The effective scale of embedded points. In combination with ``min_dist``
         this determines how clustered/clumped the embedded points are.
 
+    set_op_mix_ratio: float (optional, default 1.0)
+        Interpolate between (fuzzy) union and intersection as the set operation
+        used to combine local fuzzy simplicial sets to obtain a global fuzzy
+        simplicial sets. Both fuzzy set operations use the product t-norm.
+        The value of this parameter should be between 0.0 and 1.0; a value of
+        1.0 will use a pure fuzzy union, while 0.0 will use a pure fuzzy
+        intersection.
+
     local_connectivity: int (optional, default 1)
         The local connectivity required -- i.e. the number of nearest
         neighbors that should be assumed to be connected at a local level.
@@ -1333,7 +1379,8 @@ class UMAP(BaseEstimator):
                  init='spectral',
                  spread=1.0,
                  min_dist=0.1,
-                 local_connectivity=1,
+                 set_op_mix_ratio=1.0,
+                 local_connectivity=1.0,
                  bandwidth=1.0,
                  gamma=1.0,
                  a=None,
@@ -1356,6 +1403,7 @@ class UMAP(BaseEstimator):
 
         self.spread = spread
         self.min_dist = min_dist
+        self.set_op_mix_ratio = set_op_mix_ratio
         self.local_connectivity = local_connectivity
         self.bandwidth = bandwidth
         self.random_state = random_state
@@ -1367,6 +1415,9 @@ class UMAP(BaseEstimator):
         else:
             self.a = a
             self.b = b
+
+        if set_op_mix_ratio < 0.0 or set_op_mix_ratio > 1.0:
+            raise ValueError('set_op_mix_ratio must be between 0.0 and 1.0')
 
         if self.verbose:
             print("UMAP(n_neighbors={}, n_components={}, metric='{}', "
@@ -1414,6 +1465,7 @@ class UMAP(BaseEstimator):
                 'precomputed',
                 self.metric_kwds,
                 self.angular_rp_forest,
+                self.set_op_mix_ratio,
                 self.local_connectivity,
                 self.bandwidth,
                 self.verbose
@@ -1427,6 +1479,7 @@ class UMAP(BaseEstimator):
                 self.metric,
                 self.metric_kwds,
                 self.angular_rp_forest,
+                self.set_op_mix_ratio,
                 self.local_connectivity,
                 self.bandwidth,
                 self.verbose
