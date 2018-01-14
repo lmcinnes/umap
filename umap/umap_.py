@@ -1183,7 +1183,7 @@ def old_optimize_layout(embedding, positive_head, positive_tail,
 
 def simplicial_set_embedding(graph, n_components,
                              initial_alpha, a, b,
-                             gamma, n_epochs,
+                             gamma, negative_sample_rate, n_epochs,
                              init, random_state, verbose):
     """Perform a fuzzy simplicial set embedding, using a specified
     initialisation method and then minimizing the fuzzy set cross entropy
@@ -1264,6 +1264,9 @@ def simplicial_set_embedding(graph, n_components,
                              'Should be "random", "spectral" or'
                              ' a numpy array of initial embedding postions')
 
+    total_weight = graph.data.sum()
+    print('Total weight: {}; Edge samples: {}'.format(total_weight,
+                                                      total_weight * n_epochs))
     if n_epochs <= 0:
         if graph.shape[0] >= 300:
             n_epochs = (graph.shape[0] // 1000)
@@ -1278,7 +1281,8 @@ def simplicial_set_embedding(graph, n_components,
     embedding = optimize_layout(embedding, positive_head, positive_tail,
                                 n_epochs, n_vertices,
                                 epochs_per_sample, a, b, rng_state, gamma,
-                                initial_alpha, verbose=verbose)
+                                initial_alpha, negative_sample_rate,
+                                verbose=verbose)
 
     return embedding
 
@@ -1442,7 +1446,7 @@ class UMAP(BaseEstimator):
                  n_neighbors=15,
                  n_components=2,
                  metric='euclidean',
-                 n_edge_samples=None,
+                 n_epochs=None,
                  alpha=1.0,
                  init='spectral',
                  spread=1.0,
@@ -1451,6 +1455,7 @@ class UMAP(BaseEstimator):
                  local_connectivity=1.0,
                  bandwidth=1.0,
                  gamma=1.0,
+                 negative_sample_rate=5,
                  a=None,
                  b=None,
                  random_state=None,
@@ -1462,7 +1467,7 @@ class UMAP(BaseEstimator):
         self.n_neighbors = n_neighbors
         self.metric = metric
         self.metric_kwds = metric_kwds
-        self.n_edge_samples = n_edge_samples
+        self.n_epochs = n_epochs
         self.init = init
         self.n_components = n_components
         self.gamma = gamma
@@ -1474,6 +1479,7 @@ class UMAP(BaseEstimator):
         self.set_op_mix_ratio = set_op_mix_ratio
         self.local_connectivity = local_connectivity
         self.bandwidth = bandwidth
+        self.negative_sample_rate = negative_sample_rate
         self.random_state = random_state
         self.angular_rp_forest = angular_rp_forest
         self.verbose = verbose
@@ -1489,11 +1495,11 @@ class UMAP(BaseEstimator):
 
         if self.verbose:
             print("UMAP(n_neighbors={}, n_components={}, metric='{}', "
-                  " gamma={}, n_edge_samples={}, alpha={}, init='{}', "
+                  " gamma={}, n_epochs={}, alpha={}, init='{}', "
                   "spread={}, min_dist={}, a={}, b={}, random_state={}, "
                   "metric_kwds={}, verbose={})".format(
                       n_neighbors, n_components, metric, gamma,
-                      n_edge_samples, alpha, init, spread,
+                n_epochs, alpha, init, spread,
                       min_dist, a, b, random_state, metric_kwds, verbose))
 
     def fit(self, X, y=None):
@@ -1553,10 +1559,10 @@ class UMAP(BaseEstimator):
                 self.verbose
             )
 
-        if self.n_edge_samples is None:
-            n_edge_samples = 0
+        if self.n_epochs is None:
+            n_epochs = 0
         else:
-            n_edge_samples = self.n_edge_samples
+            n_epochs = self.n_epochs
 
         if self.verbose:
             print("Construct embedding")
@@ -1568,7 +1574,8 @@ class UMAP(BaseEstimator):
             self.a,
             self.b,
             self.gamma,
-            n_edge_samples,
+            self.negative_sample_rate,
+            n_epochs,
             self.init,
             random_state,
             self.verbose
