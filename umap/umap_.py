@@ -1007,16 +1007,17 @@ def rdist(x, y):
 def optimize_layout(embedding, positive_head, positive_tail,
                     n_epochs, n_vertices, epochs_per_sample,
                     a, b, rng_state, gamma=1.0, initial_alpha=1.0,
-                    negative_sample_rate=5, verbose=False):
+                    negative_sample_rate=5.0, verbose=False):
     dim = embedding.shape[1]
     alpha = initial_alpha
 
-    float_epoch_of_next_sample = epochs_per_sample.copy()
-    epoch_of_next_sample = np.floor(float_epoch_of_next_sample).astype(np.int64)
+    epochs_per_negative_sample = epochs_per_sample / negative_sample_rate
+    epoch_of_next_negative_sample = epochs_per_negative_sample.copy()
+    epoch_of_next_sample = epochs_per_sample.copy()
 
     for n in range(n_epochs):
         for i in range(epochs_per_sample.shape[0]):
-            if epoch_of_next_sample[i] == n:
+            if epoch_of_next_sample[i] <= n:
                 j = positive_head[i]
                 k = positive_tail[i]
 
@@ -1033,9 +1034,9 @@ def optimize_layout(embedding, positive_head, positive_tail,
                     current[d] += grad_d * alpha
                     other[d] += -grad_d * alpha
 
-                float_epoch_of_next_sample[i] += epochs_per_sample[i]
+                epoch_of_next_sample[i] += epochs_per_sample[i]
 
-                for s in range(negative_sample_rate):
+                while epoch_of_next_negative_sample[i] <= n:
                     edge = tau_rand_int(rng_state) % (n_vertices ** 2)
                     j = edge // n_vertices
                     k = edge % n_vertices
@@ -1057,8 +1058,9 @@ def optimize_layout(embedding, positive_head, positive_tail,
                         current[d] += grad_d * alpha
                         other[d] += -grad_d * alpha
 
-        epoch_of_next_sample = np.floor(
-            float_epoch_of_next_sample).astype(np.int64)
+                    epoch_of_next_negative_sample[i] += \
+                        epochs_per_negative_sample[i]
+
 
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
 
@@ -1237,8 +1239,6 @@ def simplicial_set_embedding(graph, n_components,
     graph.sum_duplicates()
     n_vertices = graph.shape[0]
 
-    epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs)
-
     if isinstance(init, str) and init == 'random':
         embedding = random_state.uniform(low=-10.0, high=10.0,
                                          size=(graph.shape[0], 2))
@@ -1269,10 +1269,15 @@ def simplicial_set_embedding(graph, n_components,
                                                       total_weight * n_epochs))
     if n_epochs <= 0:
         if graph.shape[0] >= 300:
-            n_epochs = (graph.shape[0] // 1000)
+            n_epochs = (graph.shape[0] // 500)
         else:
             # If the dataset size is too small ensure we do some work
-            n_epochs = 30
+            n_epochs = 100
+
+    graph.data[graph.data < 1.0 / (2 * n_epochs)] = 0.0
+    graph.eliminatezeros()
+
+    epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs)
 
     positive_head = graph.row
     positive_tail = graph.col
