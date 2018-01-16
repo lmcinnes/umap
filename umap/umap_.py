@@ -1011,8 +1011,8 @@ def optimize_layout(embedding, positive_head, positive_tail,
     dim = embedding.shape[1]
     alpha = initial_alpha
 
-    epochs_per_negative_sample = epochs_per_sample / negative_sample_rate
-    epoch_of_next_negative_sample = epochs_per_negative_sample.copy()
+    #    epochs_per_negative_sample = epochs_per_sample / negative_sample_rate
+    #    epoch_of_next_negative_sample = epochs_per_negative_sample.copy()
     epoch_of_next_sample = epochs_per_sample.copy()
 
     for n in range(n_epochs):
@@ -1036,12 +1036,13 @@ def optimize_layout(embedding, positive_head, positive_tail,
 
                 epoch_of_next_sample[i] += epochs_per_sample[i]
 
-                while epoch_of_next_negative_sample[i] <= n:
-                    edge = tau_rand_int(rng_state) % (n_vertices ** 2)
-                    j = edge // n_vertices
-                    k = edge % n_vertices
+                # while epoch_of_next_negative_sample[i] <= n:
+                for i in range(negative_sample_rate):
+                    # edge = tau_rand_int(rng_state) % (n_vertices ** 2)
+                    # j = edge // n_vertices
+                    k = tau_rand_int(rng_state) % n_vertices
 
-                    current = embedding[j]
+                    # current = embedding[j]
                     other = embedding[k]
 
                     dist_squared = rdist(current, other)
@@ -1058,8 +1059,8 @@ def optimize_layout(embedding, positive_head, positive_tail,
                         current[d] += grad_d * alpha
                         other[d] += -grad_d * alpha
 
-                    epoch_of_next_negative_sample[i] += \
-                        epochs_per_negative_sample[i]
+                    #                    epoch_of_next_negative_sample[i] += \
+                    #                        epochs_per_negative_sample[i]
 
 
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
@@ -1275,7 +1276,7 @@ def simplicial_set_embedding(graph, n_components,
             n_epochs = 100
 
     graph.data[graph.data < 1.0 / (2 * n_epochs)] = 0.0
-    graph.eliminatezeros()
+    graph.eliminate_zeros()
 
     epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs)
 
