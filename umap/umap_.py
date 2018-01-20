@@ -800,97 +800,27 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
 
 
 @numba.jit()
-def create_sampler(probabilities):
-    """Create the data necessary for a Walker alias sampler. This allows for
-    efficient sampling from a dataset according to an array of weights as to
-    how relatively likely each element of the dataset is to be sampled.
-
-    Parameters
-    ----------
-    probabilities: array of shape (n_items_for_sampling,)
-        An array of weights (which can be viewed as the desired probabilities
-        of a multinomial distribution when l1 normalised).
-
-    Returns
-    -------
-    prob: array of shape (n_items_for_sampling,)
-        The probabilities of selecting an element or its alias
-
-    alias: array of shape (n_items_for_sampling,)
-        The alternate choice if the element is not to be selected.
-    """
-    prob = np.zeros(probabilities.shape[0], dtype=np.float64)
-    alias = np.zeros(probabilities.shape[0], dtype=np.int64)
-
-    norm_prob = probabilities.shape[0] * probabilities / probabilities.sum()
-    norm_prob[np.isnan(norm_prob)] = 0.0
-
-    is_small = (norm_prob < 1)
-    small = np.where(is_small)[0]
-    large = np.where(~is_small)[0]
-
-    # We can use deque or just operate on arrays;
-    # benchmarks to determine this at a later date
-    small = deque(small)
-    large = deque(large)
-
-    while small and large:
-        j = small.pop()
-        k = large.pop()
-
-        prob[j] = norm_prob[j]
-        alias[j] = k
-
-        norm_prob[k] -= (1.0 - norm_prob[j])
-
-        if norm_prob[k] < 1.0:
-            small.append(k)
-        else:
-            large.append(k)
-
-    while small:
-        prob[small.pop()] = 1.0
-
-    while large:
-        prob[large.pop()] = 1.0
-
-    return prob, alias
-
-
-@numba.njit()
-def sample(prob, alias, rng_state):
-    """Given data for a Walker alias sampler, perform sampling.
-
-    Parameters
-    ----------
-    prob: array of shape (n_items_for_sampling,)
-        The probabilities of selecting an element or its alias
-
-    alias: array of shape (n_items_for_sampling,)
-        The alternate choice if the element is not to be selected.
-
-    rng_state: array of int64, shape (3,)
-        The internal state of the rng
-
-    Returns
-    -------
-    The index of the sampled item.
-    """
-    k = tau_rand_int(rng_state) % prob.shape[0]
-    u = tau_rand(rng_state)
-
-    if u < prob[k]:
-        return k
-    else:
-        return alias[k]
-
-
-@numba.jit()
 def make_epochs_per_sample(weights, n_epochs):
+    """Given a set of weights and number of epochs generate the number of
+    epochs per sample for each weight.
+
+    Parameters
+    ----------
+    weights: array of shape (n_1_simplices)
+        The weights ofhow much we wish to sample each 1-simplex.
+
+    n_epochs: int
+        The total number of epochs we want to train for.
+
+    Returns
+    -------
+    An array of number of epochs per sample, one for each 1-simplex.
+    """
     result = -1.0 * np.ones(weights.shape[0], dtype=np.float64)
     n_samples = n_epochs * (weights / weights.max())
     result[n_samples > 0] = float(n_epochs) / n_samples[n_samples > 0]
     return result
+
 
 def spectral_layout(graph, dim, random_state):
     """Given a graph compute the spectral embedding of the graph. This is
@@ -1008,6 +938,60 @@ def optimize_layout(embedding, positive_head, positive_tail,
                     n_epochs, n_vertices, epochs_per_sample,
                     a, b, rng_state, gamma=1.0, initial_alpha=1.0,
                     negative_sample_rate=5.0, verbose=False):
+    """Improve an embedding using stochastic gradient descent to minimize the
+    fuzzy set cross entropy between the 1-skeletons of the high dimensional
+    and low dimensional fuzzy simplicial sets. In practice this is done by
+    sampling edges based on their membership strength (with the (1-p) terms
+    coming from negative sampling similar to word2vec).
+
+    Parameters
+    ----------
+    embedding: array of shape (n_samples, n_components)
+        The initial embedding to be improved by SGD.
+
+    positive_head: array of shape (n_1_simplices)
+        The indices of the heads of 1-simplices with non-zero membership.
+
+    positive_tail: array of shape (n_1_simplices)
+        The indices of the tails of 1-simplices with non-zero membership.
+
+    n_epochs: int
+        The number of training epochs to use in optimization.
+
+    n_vertices: int
+        The number of vertices (0-simplices) in the dataset.
+
+    epochs_per_samples: array of shape (n_1_simplices)
+        A float value of the number of epochs per 1-simplex. 1-simplices with
+        weaker membership strength will have more epochs between being sampled.
+
+    a: float
+        Parameter of differentiable approximation of right adjoint functor
+
+    b: float
+        Parameter of differentiable approximation of right adjoint functor
+
+    rng_state: array of int64, shape (3,)
+        The internal state of the rng
+
+    gamma: float (optional, default 1.0)
+        Weight to apply to negative samples.
+
+    initial_alpha: float (optional, default 1.0)
+        Initial learning rate for the SGD.
+
+    negative_sample_rate: int (optional, default 5)
+        Number of negative samples to use per positive sample.
+
+    verbose: bool (optional, default False)
+        Whether to report information on the current progress of the algorithm.
+
+    Returns
+    -------
+    embedding: array of shape (n_samples, n_components)
+        The optimized embedding.
+    """
+
     dim = embedding.shape[1]
     alpha = initial_alpha
 
@@ -1036,13 +1020,12 @@ def optimize_layout(embedding, positive_head, positive_tail,
 
                 epoch_of_next_sample[i] += epochs_per_sample[i]
 
-                while epoch_of_next_negative_sample[i] <= n:
-                    # for i in range(negative_sample_rate):
-                    # edge = tau_rand_int(rng_state) % (n_vertices ** 2)
-                    # j = edge // n_vertices
+                n_neg_samples = int((n - epoch_of_next_negative_sample[i]) /
+                                    epochs_per_negative_sample[i])
+
+                for p in range(n_neg_samples):
                     k = tau_rand_int(rng_state) % n_vertices
 
-                    # current = embedding[j]
                     other = embedding[k]
 
                     dist_squared = rdist(current, other)
@@ -1057,129 +1040,15 @@ def optimize_layout(embedding, positive_head, positive_tail,
                     for d in range(dim):
                         grad_d = clip(grad_coeff * (current[d] - other[d]))
                         current[d] += grad_d * alpha
-                        other[d] += -grad_d * alpha
 
-                    epoch_of_next_negative_sample[i] += \
-                        epochs_per_negative_sample[i]
-
+                epoch_of_next_negative_sample[i] += n_neg_samples * \
+                                                    epochs_per_negative_sample[
+                                                        i]
 
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
 
-    return embedding
-
-@numba.njit()
-def old_optimize_layout(embedding, positive_head, positive_tail,
-                        n_edge_samples, n_vertices, prob, alias,
-                        a, b, rng_state, gamma=1.0, initial_alpha=1.0,
-                        negative_sample_rate=5, verbose=False):
-    """Improve an embedding using stochastic gradient descent to minimize the
-    fuzzy set cross entropy between the 1-skeletons of the high dimensional
-    and low dimensional fuzzy simplicial sets. In practice this is done by
-    sampling edges based on their membership strength (with the (1-p) terms
-    coming from negative sampling similar to word2vec).
-
-    Parameters
-    ----------
-    embedding: array of shape (n_samples, n_components)
-        The initial embedding to be improved by SGD.
-
-    positive_head: array of shape (n_1_simplices)
-        The indices of the heads of 1-simplices with non-zero membership.
-
-    positive_tail: array of shape (n_1_simplices)
-        The indices of the tails of 1-simplices with non-zero membership.
-
-    n_edge_samples: int
-        The total number of edge samples to use in the optimization step.
-
-    n_vertices: int
-        The number of vertices (0-simplices) in the dataset.
-
-    prob: array of shape (n_1_simplices)
-        Walker alias sampler data.
-
-    alias: array of shape (n_1_simplices)
-        Walker alias sampler data
-
-    a: float
-        Parameter of differentiable approximation of right adjoint functor
-
-    b: float
-        Parameter of differentiable approximation of right adjoint functor
-
-    rng_state: array of int64, shape (3,)
-        The internal state of the rng
-
-    gamma: float (optional, default 1.0)
-        Weight to apply to negative samples.
-
-    initial_alpha: float (optional, default 1.0)
-        Initial learning rate for the SGD.
-
-    negative_sample_rate: int (optional, default 5)
-        Number of negative samples to use per positive sample.
-
-    verbose: bool (optional, default False)
-        Whether to report information on the current progress of the algorithm.
-
-    Returns
-    -------
-    embedding: array of shape (n_samples, n_components)
-        The optimized embedding.
-    """
-    dim = embedding.shape[1]
-    alpha = initial_alpha
-
-    for i in range(n_edge_samples):
-
-        if i % negative_sample_rate == 0:
-            is_negative_sample = False
-        else:
-            is_negative_sample = True
-
-        if is_negative_sample:
-            edge = tau_rand_int(rng_state) % (n_vertices ** 2)
-            j = edge // n_vertices
-            k = edge % n_vertices
-        else:
-            edge = sample(prob, alias, rng_state)
-            j = positive_head[edge]
-            k = positive_tail[edge]
-
-        current = embedding[j]
-        other = embedding[k]
-
-        dist_squared = rdist(current, other)
-
-        if is_negative_sample:
-
-            grad_coeff = (2.0 * gamma * b)
-            grad_coeff /= (0.001 + dist_squared) * (
-                a * pow(dist_squared, b) + 1)
-
-            if not np.isfinite(grad_coeff):
-                grad_coeff = 8.0
-
-        else:
-
-            grad_coeff = (-2.0 * a * b * pow(dist_squared, b - 1.0))
-            grad_coeff /= (a * pow(dist_squared, b) + 1.0)
-
-        for d in range(dim):
-            grad_d = clip(grad_coeff * (current[d] - other[d]))
-            current[d] += grad_d * alpha
-            other[d] += -grad_d * alpha
-
-        if i % 10000 == 0:
-            # alpha = np.exp(
-            #     -0.69314718055994529 * (
-            #     (3 * i) / n_edge_samples) ** 2) * initial_alpha
-            alpha = (1.0 - np.sqrt(float(i) / n_edge_samples)) * initial_alpha
-            if alpha < (initial_alpha * 0.000001):
-                alpha = initial_alpha * 0.000001
-
-        if verbose and i % int(n_edge_samples / 10) == 0:
-            print("\t", i, " / ", n_edge_samples)
+        if verbose and n % int(n_epochs / 10) == 0:
+            print('\tcompleted ', n, ' / ', n_epochs, 'epochs')
 
     return embedding
 
@@ -1266,16 +1135,15 @@ def simplicial_set_embedding(graph, n_components,
                              ' a numpy array of initial embedding postions')
 
     total_weight = graph.data.sum()
-    print('Total weight: {}; Edge samples: {}'.format(total_weight,
-                                                      total_weight * n_epochs))
-    if n_epochs <= 0:
-        if graph.shape[0] >= 300:
-            n_epochs = (graph.shape[0] // 500)
-        else:
-            # If the dataset size is too small ensure we do some work
-            n_epochs = 100
 
-    graph.data[graph.data < 1.0 / (2 * n_epochs)] = 0.0
+    if n_epochs <= 0:
+        # For smaller datasets we can use more epochs
+        if graph.shape[0] <= 10000:
+            n_epochs = 500
+        else:
+            n_epochs = 200
+
+    graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
     graph.eliminate_zeros()
 
     epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs)
