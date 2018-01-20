@@ -6,7 +6,7 @@ def readme():
 
 configuration = {
     'name' : 'umap-learn',
-    'version' : '0.1.5',
+    'version': '0.2.0',
     'description' : 'Uniform Manifold Approximation and Projection',
     'long_description' : readme(),
     'classifiers' : [
