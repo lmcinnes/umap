@@ -69,6 +69,8 @@ def make_trustworthiness_calculator(metric):
 def trustworthiness_vector(source, embedding, max_k, metric='euclidean'):
     tree = KDTree(embedding, metric=metric)
     indices_embedded = tree.query(embedding, k=max_k, return_distance=False)
+    # Drop the actual point itself
+    indices_embedded = indices_embedded[:, 1:]
 
     dist = named_distances[metric]
 
