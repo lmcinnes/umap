@@ -1111,7 +1111,7 @@ def simplicial_set_embedding(graph, n_components,
 
     if isinstance(init, str) and init == 'random':
         embedding = random_state.uniform(low=-10.0, high=10.0,
-                                         size=(graph.shape[0], 2))
+                                         size=(graph.shape[0], n_components))
     elif isinstance(init, str) and init == 'spectral':
         # We add a little noise to avoid local minima for optimization to come
         initialisation = spectral_layout(graph, n_components, random_state)
