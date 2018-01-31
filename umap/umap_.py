@@ -12,6 +12,7 @@ from sklearn.metrics import pairwise_distances
 
 import numpy as np
 import scipy.sparse
+import scipy.sparse.csgraph
 import numba
 
 import umap.distances as dist
