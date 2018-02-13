@@ -233,8 +233,8 @@ Citation
 If you would like to cite this algorithm in your work the ArXiv paper is the
 current reference:
 
-.. code-block::
-    @article{2018arXivUMAP,
+::
+   @article{2018arXivUMAP,
         author = {{McInnes}, L. and {Healy}, J.},
         title = "{UMAP: Uniform Manifold Approximation and Projection for Dimension Reduction}",
         journal = {ArXiv e-prints},
@@ -244,7 +244,7 @@ current reference:
         keywords = {Statistics - Machine Learning, Computer Science - Computational Geometry, Computer Science - Learning},
         year = 2018,
         month = feb,
-    }
+   }
 
 
 -------
