@@ -30,8 +30,8 @@ topological structure.
 The details for the underlying mathematics can be found in
 `our paper on ArXiv <https://arxiv.org/abs/1802.03426>`_:
 
- - McInnes, L, Healy, J, *UMAP: Uniform Manifold Approximation and Projection
-  for Dimension Reduction*, ArXiv e-prints 1802.03426, 2018
+- McInnes, L, Healy, J, *UMAP: Uniform Manifold Approximation and Projection
+for Dimension Reduction*, ArXiv e-prints 1802.03426, 2018
 
 
 The important thing is that you don't need to worry about that -- you can use
