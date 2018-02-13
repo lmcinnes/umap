@@ -20,12 +20,19 @@ assumptions about the data
 
 1. The data is uniformly distributed on Riemannian manifold;
 2. The Riemannian metric is locally constant (or can be approximated as such);
-3. The manifold is locally connected (not globally, but locally).
+3. The manifold is locally connected.
 
 From these assumptions it is possible to model the manifold with a fuzzy
 topological structure. The embedding is found by searching for a low dimensional
 projection of the data that has the closest possible equivalent fuzzy
 topological structure.
+
+The details for the underlying mathematics can be found in
+`our paper on ArXiv <https://arxiv.org/abs/1802.03426>`_:
+
+McInnes, L, Healy, J, *UMAP: Uniform Manifold Approximation and Projection for
+Dimension Reduction*, ArXiv e-prints 1802.03426, 2018
+
 
 The important thing is that you don't need to worry about that -- you can use
 UMAP right now for dimension reduction and visualisation as easily as a drop
@@ -218,6 +225,27 @@ notebooks and documentation prepared, but it may be a while before those are
 available. In the meantime please `open an issue <https://github.com/lmcinnes/umap/issues/new>`_
 and I will try to provide any help and guidance that I can. Please also check
 the docstrings on the code, which provide some descriptions of the parameters.
+
+--------
+Citation
+--------
+
+If you would like to cite this algorithm in your work the ArXiv paper is the
+current reference:
+
+.. code-block::
+@article{2018arXivUMAP,
+        author = {{McInnes}, L. and {Healy}, J.},
+        title = "{UMAP: Uniform Manifold Approximation and Projection for Dimension Reduction}",
+        journal = {ArXiv e-prints},
+        archivePrefix = "arXiv",
+        eprint = {1802.03426},
+        primaryClass = "stat.ML",
+        keywords = {Statistics - Machine Learning, Computer Science - Computational Geometry, Computer Science - Learning},
+        year = 2018,
+        month = feb,
+    }
+
 
 -------
 License
