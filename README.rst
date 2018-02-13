@@ -233,7 +233,6 @@ Citation
 If you would like to cite this algorithm in your work the ArXiv paper is the
 current reference:
 
-::
    @article{2018arXivUMAP,
         author = {{McInnes}, L. and {Healy}, J.},
         title = "{UMAP: Uniform Manifold Approximation and Projection for Dimension Reduction}",
