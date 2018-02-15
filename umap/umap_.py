@@ -880,7 +880,7 @@ def spectral_layout(graph, dim, random_state):
             return eigenvectors[:, order]
         else:
             init = random_state.uniform(low=-10.0, high=10.0,
-                                        size=(n_samples, 2))
+                                        size=(n_samples, dim))
             init[labels == largest_component] = eigenvectors[:, order]
             return init
     except scipy.sparse.linalg.ArpackError:
@@ -889,7 +889,7 @@ def spectral_layout(graph, dim, random_state):
              'adding some noise or jitter to your data.\n\n'
              'Falling back to random initialisation!')
         return random_state.uniform(low=-10.0, high=10.0,
-                                    size=(graph.shape[0], 2))
+                                    size=(graph.shape[0], dim))
 
 
 @numba.njit()
