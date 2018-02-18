@@ -802,7 +802,7 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
 
 
 @numba.njit(parallel=True)
-def fast_intersection(rows, cols, values, target, unknown_dist=1.0, dist=3.0):
+def fast_intersection(rows, cols, values, target, unknown_dist=1.0, dist=5.0):
     for nz in range(rows.shape[0]):
         i = rows[nz]
         j = cols[nz]
@@ -829,7 +829,33 @@ def reset_local_connectivity(simplicial_set):
 def categorical_simplicial_set_intersection(simplicial_set,
                                             target,
                                             unknown_dist=1.0,
-                                            dist=3.0):
+                                            dist=5.0):
+    """Combine a fuzzy simplicial set with another fuzzy simplicial set
+    generated from categorical data using categorical distances. The target
+    data is assumed to be categorical label data (a vector of labels),
+    and this will update the fuzzy simplicial set to respect that label data.
+
+    Parameters
+    ----------
+    simplicial_set: sparse matrix
+        The input fuzzy simplicial set.
+
+    target: array of shape (n_samples)
+        The categorical labels to use in the intersection.
+
+    unknown_dist: float (optional, default 1.0)
+        The distance an unknown label (-1) is assumed to be from any point.
+
+    dist float (optional, default 5.0)
+        The distance between unmatched labels.
+
+    Returns
+    -------
+    simplicial_set: sparse matrix
+        The resulting intersected fuzzy simplicial set.
+    """
+    simplicial_set = simplicial_set.tocoo()
+
     fast_intersection(simplicial_set.row,
                       simplicial_set.col,
                       simplicial_set.data,
@@ -1536,5 +1562,5 @@ class UMAP(BaseEstimator):
         X_new : array, shape (n_samples, n_components)
             Embedding of the training data in low-dimensional space.
         """
-        self.fit(X)
+        self.fit(X, y)
         return self.embedding_
