@@ -803,6 +803,37 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
 
 @numba.njit(parallel=True)
 def fast_intersection(rows, cols, values, target, unknown_dist=1.0, dist=5.0):
+    """Under the assumption of categorical distance for the intersecting
+    simplicial set perform a fast intersection.
+
+    Parameters
+    ----------
+    rows: array
+        An array of the row of each non-zero in the sparse matrix
+        representation.
+
+    cols: array
+        An array of the column of each non-zero in the sparse matrix
+        representation.
+
+    values: array
+        An array of the value of each non-zero in the sparse matrix
+        representation.
+
+    target: array of shape (n_samples)
+        The categorical labels to use in the intersection.
+
+    unknown_dist: float (optional, default 1.0)
+        The distance an unknown label (-1) is assumed to be from any point.
+
+    dist float (optional, default 5.0)
+        The distance between unmatched labels.
+
+    Returns
+    -------
+    simplicial_set: sparse matrix
+        The resulting intersected fuzzy simplicial set.
+    """
     for nz in range(rows.shape[0]):
         i = rows[nz]
         j = cols[nz]
@@ -816,6 +847,23 @@ def fast_intersection(rows, cols, values, target, unknown_dist=1.0, dist=5.0):
 
 @numba.jit()
 def reset_local_connectivity(simplicial_set):
+    """Reset the local connectivity requirement -- each data sample should
+    have complete confidence in at least one 1-simplex in the simplicial set.
+    We can enforce this by locally rescaling confidences, and then remerging the
+    different local simplicial sets together.
+
+    Parameters
+    ----------
+    simplicial_set: sparse matrix
+        The simplicial set for which to recalculate with respect to local
+        connectivity.
+
+    Returns
+    -------
+    simplicial_set: sparse_matrix
+        The recalculated simplicial set, now with the local connectivity
+        assumption restored.
+    """
     simplicial_set = normalize(simplicial_set, norm='max')
     transpose = simplicial_set.transpose()
     prod_matrix = simplicial_set.multiply(transpose)
