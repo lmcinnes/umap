@@ -9,6 +9,7 @@ from scipy.optimize import curve_fit
 from sklearn.base import BaseEstimator
 from sklearn.utils import check_random_state, check_array
 from sklearn.metrics import pairwise_distances
+from sklearn.preprocessing import normalize
 
 import numpy as np
 import scipy.sparse
@@ -800,6 +801,47 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
     return result
 
 
+@numba.njit(parallel=True)
+def fast_intersection(rows, cols, values, target, unknown_dist=1.0, dist=3.0):
+    for nz in range(rows.shape[0]):
+        i = rows[nz]
+        j = cols[nz]
+        if target[i] == -1 or target[j] == -1:
+            values[nz] *= np.exp(-unknown_dist)
+        elif target[i] != target[j]:
+            values[nz] *= np.exp(-dist)
+
+    return
+
+
+@numba.jit()
+def reset_local_connectivity(simplicial_set):
+    simplicial_set = normalize(simplicial_set, norm='max')
+    transpose = simplicial_set.transpose()
+    prod_matrix = simplicial_set.multiply(transpose)
+    simplicial_set = simplicial_set + transpose - prod_matrix
+    simplicial_set.eliminate_zeros()
+
+    return simplicial_set
+
+
+@numba.jit()
+def categorical_simplicial_set_intersection(simplicial_set,
+                                            target,
+                                            unknown_dist=1.0,
+                                            dist=3.0):
+    fast_intersection(simplicial_set.row,
+                      simplicial_set.col,
+                      simplicial_set.data,
+                      target,
+                      unknown_dist,
+                      dist)
+
+    simplicial_set.eliminate_zeros()
+
+    return reset_local_connectivity(simplicial_set)
+
+
 @numba.jit()
 def make_epochs_per_sample(weights, n_epochs):
     """Given a set of weights and number of epochs generate the number of
@@ -1336,6 +1378,8 @@ class UMAP(BaseEstimator):
                  random_state=None,
                  metric_kwds={},
                  angular_rp_forest=False,
+                 target_metric='categorical',
+                 target_metric_kwds={},
                  verbose=False
                  ):
 
@@ -1357,6 +1401,8 @@ class UMAP(BaseEstimator):
         self.negative_sample_rate = negative_sample_rate
         self.random_state = random_state
         self.angular_rp_forest = angular_rp_forest
+        self.target_metric = target_metric
+        self.target_metric_kwds = target_metric_kwds
         self.verbose = verbose
 
         if a is None or b is None:
@@ -1433,6 +1479,23 @@ class UMAP(BaseEstimator):
                 self.bandwidth,
                 self.verbose
             )
+
+        if y is not None:
+            if self.target_metric == 'categorical':
+                graph = categorical_simplicial_set_intersection(graph, y)
+            else:
+                target_graph = fuzzy_simplicial_set(y[np.newaxis, :].T,
+                                                    self.n_neighbors,
+                                                    random_state,
+                                                    self.target_metric,
+                                                    self.target_metric_kwds,
+                                                    False,
+                                                    1.0,
+                                                    1.0,
+                                                    1.0,
+                                                    False)
+                graph = graph.multiply(target_graph)
+                graph = reset_local_connectivity(graph)
 
         if self.n_epochs is None:
             n_epochs = 0
