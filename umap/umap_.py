@@ -9,6 +9,7 @@ from scipy.optimize import curve_fit
 from sklearn.base import BaseEstimator
 from sklearn.utils import check_random_state, check_array
 from sklearn.metrics import pairwise_distances
+from sklearn.preprocessing import normalize
 
 import numpy as np
 import scipy.sparse
@@ -800,6 +801,121 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
     return result
 
 
+@numba.njit(parallel=True)
+def fast_intersection(rows, cols, values, target, unknown_dist=1.0, dist=5.0):
+    """Under the assumption of categorical distance for the intersecting
+    simplicial set perform a fast intersection.
+
+    Parameters
+    ----------
+    rows: array
+        An array of the row of each non-zero in the sparse matrix
+        representation.
+
+    cols: array
+        An array of the column of each non-zero in the sparse matrix
+        representation.
+
+    values: array
+        An array of the value of each non-zero in the sparse matrix
+        representation.
+
+    target: array of shape (n_samples)
+        The categorical labels to use in the intersection.
+
+    unknown_dist: float (optional, default 1.0)
+        The distance an unknown label (-1) is assumed to be from any point.
+
+    dist float (optional, default 5.0)
+        The distance between unmatched labels.
+
+    Returns
+    -------
+    simplicial_set: sparse matrix
+        The resulting intersected fuzzy simplicial set.
+    """
+    for nz in range(rows.shape[0]):
+        i = rows[nz]
+        j = cols[nz]
+        if target[i] == -1 or target[j] == -1:
+            values[nz] *= np.exp(-unknown_dist)
+        elif target[i] != target[j]:
+            values[nz] *= np.exp(-dist)
+
+    return
+
+
+@numba.jit()
+def reset_local_connectivity(simplicial_set):
+    """Reset the local connectivity requirement -- each data sample should
+    have complete confidence in at least one 1-simplex in the simplicial set.
+    We can enforce this by locally rescaling confidences, and then remerging the
+    different local simplicial sets together.
+
+    Parameters
+    ----------
+    simplicial_set: sparse matrix
+        The simplicial set for which to recalculate with respect to local
+        connectivity.
+
+    Returns
+    -------
+    simplicial_set: sparse_matrix
+        The recalculated simplicial set, now with the local connectivity
+        assumption restored.
+    """
+    simplicial_set = normalize(simplicial_set, norm='max')
+    transpose = simplicial_set.transpose()
+    prod_matrix = simplicial_set.multiply(transpose)
+    simplicial_set = simplicial_set + transpose - prod_matrix
+    simplicial_set.eliminate_zeros()
+
+    return simplicial_set
+
+
+@numba.jit()
+def categorical_simplicial_set_intersection(simplicial_set,
+                                            target,
+                                            unknown_dist=1.0,
+                                            dist=5.0):
+    """Combine a fuzzy simplicial set with another fuzzy simplicial set
+    generated from categorical data using categorical distances. The target
+    data is assumed to be categorical label data (a vector of labels),
+    and this will update the fuzzy simplicial set to respect that label data.
+
+    Parameters
+    ----------
+    simplicial_set: sparse matrix
+        The input fuzzy simplicial set.
+
+    target: array of shape (n_samples)
+        The categorical labels to use in the intersection.
+
+    unknown_dist: float (optional, default 1.0)
+        The distance an unknown label (-1) is assumed to be from any point.
+
+    dist float (optional, default 5.0)
+        The distance between unmatched labels.
+
+    Returns
+    -------
+    simplicial_set: sparse matrix
+        The resulting intersected fuzzy simplicial set.
+    """
+    simplicial_set = simplicial_set.tocoo()
+
+    fast_intersection(simplicial_set.row,
+                      simplicial_set.col,
+                      simplicial_set.data,
+                      target,
+                      unknown_dist,
+                      dist)
+
+    simplicial_set.eliminate_zeros()
+
+    return reset_local_connectivity(simplicial_set)
+
+
 @numba.jit()
 def make_epochs_per_sample(weights, n_epochs):
     """Given a set of weights and number of epochs generate the number of
@@ -1336,6 +1452,8 @@ class UMAP(BaseEstimator):
                  random_state=None,
                  metric_kwds={},
                  angular_rp_forest=False,
+                 target_metric='categorical',
+                 target_metric_kwds={},
                  verbose=False
                  ):
 
@@ -1357,6 +1475,8 @@ class UMAP(BaseEstimator):
         self.negative_sample_rate = negative_sample_rate
         self.random_state = random_state
         self.angular_rp_forest = angular_rp_forest
+        self.target_metric = target_metric
+        self.target_metric_kwds = target_metric_kwds
         self.verbose = verbose
 
         if a is None or b is None:
@@ -1434,6 +1554,24 @@ class UMAP(BaseEstimator):
                 self.verbose
             )
 
+        if y is not None:
+            if self.target_metric == 'categorical':
+                graph = categorical_simplicial_set_intersection(graph, y)
+            else:
+                target_graph = fuzzy_simplicial_set(y[np.newaxis, :].T,
+                                                    self.n_neighbors,
+                                                    random_state,
+                                                    self.target_metric,
+                                                    self.target_metric_kwds,
+                                                    False,
+                                                    1.0,
+                                                    1.0,
+                                                    1.0,
+                                                    False)
+                product = graph.multiply(target_graph)
+                graph = 0.99 * product + 0.01 * (graph + target_graph - product)
+                graph = reset_local_connectivity(graph)
+
         if self.n_epochs is None:
             n_epochs = 0
         else:
@@ -1473,5 +1611,5 @@ class UMAP(BaseEstimator):
         X_new : array, shape (n_samples, n_components)
             Embedding of the training data in low-dimensional space.
         """
-        self.fit(X)
+        self.fit(X, y)
         return self.embedding_
