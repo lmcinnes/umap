@@ -1568,7 +1568,8 @@ class UMAP(BaseEstimator):
                                                     1.0,
                                                     1.0,
                                                     False)
-                graph = graph.multiply(target_graph)
+                product = graph.multiply(target_graph)
+                graph = 0.99 * product + 0.01 * (graph + target_graph - product)
                 graph = reset_local_connectivity(graph)
 
         if self.n_epochs is None:
