@@ -140,6 +140,7 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0,
 
 def nearest_neighbors(X, n_neighbors, metric, metric_kwds, angular,
                       random_state, verbose=False):
+
     if metric == 'precomputed':
         # Note that this does not support sparse distance matrices yet ...
         # Compute indices of n nearest neighbors
@@ -225,6 +226,8 @@ def compute_membership_strengths(knn_indices, knn_dists, sigmas, rhos):
         for j in range(n_neighbors):
             if knn_indices[i, j] == -1:
                 continue  # We didn't get the full knn for i
+            if knn_indices[i, j] == i:
+                val = 0.0
             elif knn_dists[i, j] - rhos[i] <= 0.0:
                 val = 1.0
             else:
@@ -331,6 +334,7 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
         j) entry of the matrix represents the membership strength of the
         1-simplex between the ith and jth sample points.
     """
+
     knn_indices, knn_dists = nearest_neighbors(X, n_neighbors,
                                                metric, metric_kwds, angular,
                                                random_state, verbose=verbose)
