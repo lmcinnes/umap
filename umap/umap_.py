@@ -140,7 +140,41 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0,
 
 def nearest_neighbors(X, n_neighbors, metric, metric_kwds, angular,
                       random_state, verbose=False):
+    """Compute the ``n_neighbors`` nearest points for each data point in ``X``
+    under ``metric``. This may be exact, but more likely is approximated via
+    nearest neighbor descent.
 
+    Parameters
+    ----------
+    X: array of shape (n_samples, n_features)
+        The input data to compute the k-neighbor graph of.
+
+    n_neighbors: int
+        The number of nearest neighbors to compute for each sample in ``X``.
+
+    metric: string or callable
+        The metric to use for the computation.
+
+    metric_kwds: dict
+        Any arguments to pass to the metric computation function.
+
+    angular: bool
+        Whether to use angular rp trees in NN approximation.
+
+    random_state: np.random state
+        The random state to use for approximate NN computations.
+
+    verbose: bool
+        Whether to print status data during the computation.
+
+    Returns
+    -------
+    knn_indices: array of shape (n_samples, n_neighbors)
+        The indices on the ``n_neighbors`` closest points in the dataset.
+
+    knn_dists: array of shape (n_samples, n_neighbors)
+        The distances to the ``n_neighbors`` closest points in the dataset.
+    """
     if metric == 'precomputed':
         # Note that this does not support sparse distance matrices yet ...
         # Compute indices of n nearest neighbors
