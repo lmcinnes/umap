@@ -215,6 +215,36 @@ def nearest_neighbors(X, n_neighbors, metric, metric_kwds, angular,
 
 @numba.njit(parallel=True)
 def compute_membership_strengths(knn_indices, knn_dists, sigmas, rhos):
+    """Construct the membership strength data for the 1-skeleton of each local
+    fuzzy simplicial set -- this is formed as a sparse matrix where each row is
+    a local fuzzy simplicial set, with a membership strength for the
+    1-simplex to each other data point.
+
+    Parameters
+    ----------
+    knn_indices: array of shape (n_samples, n_neighbors)
+        The indices on the ``n_neighbors`` closest points in the dataset.
+
+    knn_dists: array of shape (n_samples, n_neighbors)
+        The distances to the ``n_neighbors`` closest points in the dataset.
+
+    sigmas: array of shape(n_samples)
+        The normalization factor derived from the metric tensor approximation.
+
+    rhos: array of shape(n_samples)
+        The local connectivity adjustment.
+
+    Returns
+    -------
+    rows: array of shape (n_samples * n_neighbors)
+        Row data for the resulting sparse matrix (coo format)
+
+    cols: array of shape (n_samples * n_neighbors)
+        Column data for the resulting sparse matrix (coo format)
+
+    vals: array of shape (n_samples * n_neighbors)
+        Entries for the resulting sparse matrix (coo format)
+    """
     n_samples = knn_indices.shape[0]
     n_neighbors = knn_indices.shape[1]
 
