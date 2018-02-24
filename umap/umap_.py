@@ -696,8 +696,6 @@ def simplicial_set_embedding(graph, n_components,
                              'Should be "random", "spectral" or'
                              ' a numpy array of initial embedding postions')
 
-    total_weight = graph.data.sum()
-
     if n_epochs <= 0:
         # For smaller datasets we can use more epochs
         if graph.shape[0] <= 10000:
