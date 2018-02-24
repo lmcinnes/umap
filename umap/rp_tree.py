@@ -8,20 +8,14 @@ from warnings import warn
 import numpy as np
 import numba
 
-import umap.distances as dist
-
 from umap.sparse import (sparse_mul,
                          sparse_diff,
                          sparse_sum)
 
 from umap.utils import (tau_rand_int,
-                        tau_rand,
-                        norm,
-                        make_heap,
-                        heap_push,
-                        rejection_sample,
-                        deheap_sort)
+                        norm)
 
+import scipy.sparse
 import locale
 
 locale.setlocale(locale.LC_NUMERIC, 'C')
