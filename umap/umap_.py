@@ -2,7 +2,6 @@
 #
 # License: BSD 3 clause
 from __future__ import print_function
-from collections import deque, namedtuple
 from warnings import warn
 
 from scipy.optimize import curve_fit
@@ -21,14 +20,13 @@ import umap.sparse as sparse
 
 from umap.utils import (tau_rand_int,
                         tau_rand,
-                        norm,
                         make_heap,
                         heap_push,
                         rejection_sample,
                         build_candidates,
                         deheap_sort)
 
-from umap.rp_tree import (make_tree, rptree_leaf_array)
+from umap.rp_tree import rptree_leaf_array
 
 import locale
 
