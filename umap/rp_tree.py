@@ -20,6 +20,14 @@ import locale
 
 locale.setlocale(locale.LC_NUMERIC, 'C')
 
+RandomProjectionTreeNode = namedtuple('RandomProjectionTreeNode',
+                                      ['indices', 'is_leaf', 'hyperplane',
+                                       'offset', 'left_child', 'right_child'])
+
+FlatTree = namedtuple('FlatTree', ['hyperplanes', 'offsets',
+                                   'children', 'indices'])
+
+
 @numba.njit()
 def random_projection_cosine_split(data, indices, rng_state):
     """Given a set of ``indices`` for data points from ``data``, create
@@ -591,3 +599,90 @@ def rptree_leaf_array(data, n_neighbors, rng_state, n_trees=10, angular=False):
         leaf_array = np.array([[-1]])
 
     return leaf_array
+
+
+def num_nodes(tree):
+    """Determine the number of nodes in a tree"""
+    if tree.is_leaf:
+        return 1
+    else:
+        return 1 + num_nodes(tree.left_child) + num_nodes(tree.right_child)
+
+
+def num_leaves(tree):
+    """Determine the number of leaves in a tree"""
+    if tree.is_leaf:
+        return 1
+    else:
+        return num_leaves(tree.left_child) + num_leaves(tree.right_child)
+
+
+def recursive_flatten(tree, hyperplanes, offsets,
+                      children, indices, node_num,
+                      leaf_num):
+    if tree.is_leaf:
+        children[node_num, 0] = -leaf_num
+        indices[leaf_num, :tree.indices.shape[0]] = tree.indices
+        leaf_num += 1
+        return node_num, leaf_num
+    else:
+        hyperplanes[node_num] = tree.hyperplane
+        offsets[node_num] = tree.offset
+        children[node_num, 0] = node_num + 1
+        old_node_num = node_num
+        node_num, leaf_num = recursive_flatten(tree.left_child,
+                                               hyperplanes, offsets,
+                                               children, indices,
+                                               node_num + 1, leaf_num)
+        children[old_node_num, 1] = node_num + 1
+        node_num, leaf_num = recursive_flatten(tree.right_child,
+                                               hyperplanes, offsets,
+                                               children, indices,
+                                               node_num + 1, leaf_num)
+        return node_num, leaf_num
+
+
+def flatten_tree(tree, leaf_size):
+    n_nodes = num_nodes(tree)
+    n_leaves = num_leaves(tree)
+    hyperplanes = np.zeros((n_nodes, tree.hyperplane.shape[0]),
+                           dtype=np.float64)
+    offsets = np.zeros(n_nodes, dtype=np.float64)
+    children = -1 * np.ones((n_nodes, 2), dtype=np.int64)
+    indices = -1 * np.ones((n_leaves, leaf_size), dtype=np.int64)
+    recursive_flatten(tree, hyperplanes, offsets, children, indices, 0, 0)
+    return FlatTree(hyperplanes, offsets, children, indices)
+
+
+@numba.njit()
+def select_side(hyperplane, offset, point, rng_state):
+    margin = offset
+    for d in range(point.shape[0]):
+        margin += hyperplane[d] * point[d]
+
+    if margin == 0:
+        side = tau_rand_int(rng_state) % 2
+        if side == 0:
+            return 0
+        else:
+            return 1
+    elif margin > 0:
+        return 0
+    else:
+        return 1
+
+
+@numba.njit()
+def search_flat_tree(point,
+                     hyperplanes, offsets,
+                     children, indices,
+                     rng_state):
+    node = 0
+    while children[node, 0] > 0:
+        side = select_side(hyperplanes[node], offsets[node], point, rng_state)
+        if side == 0:
+            node = children[node, 0]
+        else:
+            node = children[node, 1]
+
+    return indices[-children[node, 0]]
