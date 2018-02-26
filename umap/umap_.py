@@ -19,7 +19,7 @@ import umap.distances as dist
 import umap.sparse as sparse
 
 from umap.utils import tau_rand_int
-from umap.rp_tree import rptree_leaf_array
+from umap.rp_tree import rptree_leaf_array, make_forest
 from umap.nndescent import make_nn_descent
 
 import locale
@@ -207,9 +207,13 @@ def nearest_neighbors(X, n_neighbors, metric, metric_kwds, angular,
                                  'data'.format(metric))
             metric_nn_descent = sparse.make_sparse_nn_descent(
                 distance_func, tuple(metric_kwds.values()))
-            leaf_array = rptree_leaf_array(X, n_neighbors,
-                                           rng_state, n_trees=10,
-                                           angular=angular)
+
+            # TODO: Hacked values for now
+            n_trees = 5 + int(round((X.shape[0]) ** 0.5 / 20.0))
+            n_iters = max(5, int(round(np.log2(X.shape[0]))))
+
+            rp_forest = make_forest(X, n_neighbors, n_trees, rng_state, angular)
+            leaf_array = rptree_leaf_array(rp_forest)
             knn_indices, knn_dists = metric_nn_descent(X.indices,
                                                        X.indptr,
                                                        X.data,
@@ -219,6 +223,7 @@ def nearest_neighbors(X, n_neighbors, metric, metric_kwds, angular,
                                                        max_candidates=60,
                                                        rp_tree_init=True,
                                                        leaf_array=leaf_array,
+                                                       n_iters=n_iters,
                                                        verbose=verbose)
         else:
             metric_nn_descent = make_nn_descent(distance_func,
@@ -227,9 +232,8 @@ def nearest_neighbors(X, n_neighbors, metric, metric_kwds, angular,
             n_trees = 5 + int(round((X.shape[0]) ** 0.5 / 20.0))
             n_iters = max(5, int(round(np.log2(X.shape[0]))))
 
-            leaf_array = rptree_leaf_array(X, n_neighbors,
-                                           rng_state, n_trees=n_trees,
-                                           angular=angular)
+            rp_forest = make_forest(X, n_neighbors, n_trees, rng_state, angular)
+            leaf_array = rptree_leaf_array(rp_forest)
             knn_indices, knn_dists = metric_nn_descent(X,
                                                        n_neighbors,
                                                        rng_state,

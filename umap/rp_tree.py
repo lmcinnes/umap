@@ -29,7 +29,7 @@ FlatTree = namedtuple('FlatTree', ['hyperplanes', 'offsets',
 
 
 @numba.njit()
-def random_projection_cosine_split(data, indices, rng_state):
+def angular_random_projection_split(data, indices, rng_state):
     """Given a set of ``indices`` for data points from ``data``, create
     a random hyperplane to split the data, returning two arrays indices
     that fall on either side of the hyperplane. This is the basis for a
@@ -127,11 +127,11 @@ def random_projection_cosine_split(data, indices, rng_state):
             indices_right[n_right] = indices[i]
             n_right += 1
 
-    return indices_left, indices_right
+    return indices_left, indices_right, hyperplane_vector, None
 
 
 @numba.njit()
-def random_projection_split(data, indices, rng_state):
+def euclidean_random_projection_split(data, indices, rng_state):
     """Given a set of ``indices`` for data points from ``data``, create
     a random hyperplane to split the data, returning two arrays indices
     that fall on either side of the hyperplane. This is the basis for a
@@ -215,15 +215,15 @@ def random_projection_split(data, indices, rng_state):
             indices_right[n_right] = indices[i]
             n_right += 1
 
-    return indices_left, indices_right
+    return indices_left, indices_right, hyperplane_vector, hyperplane_offset
 
 
 @numba.njit()
-def sparse_random_projection_cosine_split(inds,
-                                          indptr,
-                                          data,
-                                          indices,
-                                          rng_state):
+def sparse_angular_random_projection_split(inds,
+                                           indptr,
+                                           data,
+                                           indices,
+                                           rng_state):
     """Given a set of ``indices`` for data points from a sparse data set
     presented in csr sparse format as inds, indptr and data, create
     a random hyperplane to split the data, returning two arrays indices
@@ -329,15 +329,17 @@ def sparse_random_projection_cosine_split(inds,
             indices_right[n_right] = indices[i]
             n_right += 1
 
-    return indices_left, indices_right
+    hyperplane = np.vstack((hyperplane_inds, hyperplane_data))
+
+    return indices_left, indices_right, hyperplane, None
 
 
 @numba.njit()
-def sparse_random_projection_split(inds,
-                                   indptr,
-                                   data,
-                                   indices,
-                                   rng_state):
+def sparse_euclidean_random_projection_split(inds,
+                                             indptr,
+                                             data,
+                                             indices,
+                                             rng_state):
     """Given a set of ``indices`` for data points from a sparse data set
     presented in csr sparse format as inds, indptr and data, create
     a random hyperplane to split the data, returning two arrays indices
@@ -446,25 +448,114 @@ def sparse_random_projection_split(inds,
             indices_right[n_right] = indices[i]
             n_right += 1
 
-    return indices_left, indices_right
+    hyperplane = np.vstack((hyperplane_inds, hyperplane_data))
 
-RandomProjectionTreeNode = namedtuple('RandomProjectionTreeNode',
-                                      ['indices', 'is_leaf',
-                                       'left_child', 'right_child'])
+    return indices_left, indices_right, hyperplane, hyperplane_offset
 
 
-def make_tree(data, indices, rng_state, leaf_size=30, angular=False):
+@numba.jit()
+def make_euclidean_tree(data, indices, rng_state, leaf_size=30):
+    if indices.shape[0] > leaf_size:
+        left_indices, right_indices, hyperplane, offset = \
+            euclidean_random_projection_split(data, indices, rng_state)
+
+        left_node = make_euclidean_tree(data,
+                                        left_indices,
+                                        rng_state,
+                                        leaf_size)
+        right_node = make_euclidean_tree(data,
+                                         right_indices,
+                                         rng_state,
+                                         leaf_size)
+
+        node = RandomProjectionTreeNode(None, False, hyperplane, offset,
+                                        left_node, right_node)
+    else:
+        node = RandomProjectionTreeNode(indices, True, None, None, None, None)
+
+    return node
+
+
+@numba.jit()
+def make_angular_tree(data, indices, rng_state, leaf_size=30):
+    if indices.shape[0] > leaf_size:
+        left_indices, right_indices, hyperplane, offset = \
+            angular_random_projection_split(data, indices, rng_state)
+
+        left_node = make_angular_tree(data,
+                                      left_indices,
+                                      rng_state,
+                                      leaf_size)
+        right_node = make_angular_tree(data,
+                                       right_indices,
+                                       rng_state,
+                                       leaf_size)
+
+        node = RandomProjectionTreeNode(None, False, hyperplane, offset,
+                                        left_node, right_node)
+    else:
+        node = RandomProjectionTreeNode(indices, True, None, None, None, None)
+
+    return node
+
+
+@numba.jit()
+def make_sparse_euclidean_tree(inds, indptr, data, indices, rng_state,
+                               leaf_size=30):
+    if indices.shape[0] > leaf_size:
+        left_indices, right_indices, hyperplane, offset = \
+            sparse_euclidean_random_projection_split(inds, indptr, data,
+                                                     indices, rng_state)
+
+        left_node = make_euclidean_tree(data,
+                                        left_indices,
+                                        rng_state,
+                                        leaf_size)
+        right_node = make_euclidean_tree(data,
+                                         right_indices,
+                                         rng_state,
+                                         leaf_size)
+
+        node = RandomProjectionTreeNode(None, False, hyperplane, offset,
+                                        left_node, right_node)
+    else:
+        node = RandomProjectionTreeNode(indices, True, None, None, None, None)
+
+    return node
+
+
+@numba.jit()
+def make_sparse_angular_tree(inds, indptr, data, indices, rng_state,
+                             leaf_size=30):
+    if indices.shape[0] > leaf_size:
+        left_indices, right_indices, hyperplane, offset = \
+            sparse_angular_random_projection_split(inds, indptr, data, indices,
+                                                   rng_state)
+
+        left_node = make_euclidean_tree(data,
+                                        left_indices,
+                                        rng_state,
+                                        leaf_size)
+        right_node = make_euclidean_tree(data,
+                                         right_indices,
+                                         rng_state,
+                                         leaf_size)
+
+        node = RandomProjectionTreeNode(None, False, hyperplane, offset,
+                                        left_node, right_node)
+    else:
+        node = RandomProjectionTreeNode(indices, True, None, None, None, None)
+
+    return node
+
+
+def make_tree(data, rng_state, leaf_size=30, angular=False):
     """Construct a random projection tree based on ``data`` with leaves
     of size at most ``leaf_size``.
     Parameters
     ----------
     data: array of shape (n_samples, n_features)
         The original data to be split
-    indices: array of shape (tree_node_size,)
-        The indices of the elements in the ``data`` array that are to
-        be split in the current operation. This should be np.arange(
-        data.shape[0]) for a full tree build, and may be smaller when being
-        called recursively for tree construction.
     rng_state: array of int64, shape (3,)
         The internal state of the rng
     leaf_size: int (optional, default 30)
@@ -481,124 +572,25 @@ def make_tree(data, indices, rng_state, leaf_size=30, angular=False):
         provides the full tree below the returned node.
     """
     is_sparse = scipy.sparse.isspmatrix_csr(data)
+    indices = np.arange(data.shape[0])
 
     # Make a tree recursively until we get below the leaf size
-    if indices.shape[0] > leaf_size:
-        if is_sparse:
-            inds = data.indices
-            indptr = data.indptr
-            spdata = data.data
+    if is_sparse:
+        inds = data.indices
+        indptr = data.indptr
+        spdata = data.data
 
-            if angular:
-                (left_indices,
-                 right_indices) = sparse.sparse_random_projection_cosine_split(
-                    inds,
-                    indptr,
-                    spdata,
-                    indices,
-                    rng_state)
-            else:
-                left_indices, right_indices = \
-                    sparse.sparse_random_projection_split(
-                        inds,
-                        indptr,
-                        spdata,
-                        indices,
-                        rng_state)
+        if angular:
+            return make_sparse_angular_tree(inds, indptr, spdata, indices,
+                                            rng_state, leaf_size)
         else:
-            if angular:
-                (left_indices,
-                 right_indices) = random_projection_cosine_split(data,
-                                                                 indices,
-                                                                 rng_state)
-            else:
-                left_indices, right_indices = random_projection_split(data,
-                                                                      indices,
-                                                                      rng_state)
-        left_node = make_tree(data,
-                              left_indices,
-                              rng_state,
-                              leaf_size,
-                              angular)
-        right_node = make_tree(data,
-                               right_indices,
-                               rng_state,
-                               leaf_size,
-                               angular)
-
-        node = RandomProjectionTreeNode(indices, False, left_node, right_node)
+            return make_sparse_euclidean_tree(inds, indptr, spdata, indices,
+                                              rng_state, leaf_size)
     else:
-        node = RandomProjectionTreeNode(indices, True, None, None)
-
-    return node
-
-
-def get_leaves(tree):
-    """Return the set of leaf nodes of a random projection tree.
-    Parameters
-    ----------
-    tree: RandomProjectionTreeNode
-        The root node of the tree to get leaves of.
-    Returns
-    -------
-    leaves: list
-        A list of arrays of indices of points in each leaf node.
-    """
-    if tree.is_leaf:
-        return [tree.indices]
-    else:
-        return get_leaves(tree.left_child) + get_leaves(tree.right_child)
-
-
-def rptree_leaf_array(data, n_neighbors, rng_state, n_trees=10, angular=False):
-    """Generate an array of sets of candidate nearest neighbors by
-    constructing a random projection forest and taking the leaves of all the
-    trees. Any given tree has leaves that are a set of potential nearest
-    neighbors. Given enough trees the set of all such leaves gives a good
-    likelihood of getting a good set of nearest neighbors in composite. Since
-    such a random projection forest is inexpensive to compute, this can be a
-    useful means of seeding other nearest neighbor algorithms.
-    Parameters
-    ----------
-    data: array of shape (n_samples, n_features)
-        The data for which to generate nearest neighbor approximations.
-    n_neighbors: int
-        The number of nearest neighbors to attempt to approximate.
-    rng_state: array of int64, shape (3,)
-        The internal state of the rng
-    n_trees: int (optional, default 10)
-        The number of trees to build in the forest construction.
-    angular: bool (optional, default False)
-        Whether to use angular/cosine distance for random projection tree
-        construction.
-    Returns
-    -------
-    leaf_array: array of shape (n_leaves, max(10, n_neighbors))
-        Each row of leaf array is a list of indices found in a given leaf.
-        Since not all leaves are the same size the arrays are padded out with -1
-        to ensure we can return a single ndarray.
-    """
-    leaves = []
-    try:
-        leaf_size = max(10, n_neighbors)
-        for t in range(n_trees):
-            tree = make_tree(data,
-                             np.arange(data.shape[0]),
-                             rng_state,
-                             leaf_size=leaf_size,
-                             angular=angular)
-            leaves += get_leaves(tree)
-
-        leaf_array = -1 * np.ones([len(leaves), leaf_size], dtype=np.int64)
-        for i, leaf in enumerate(leaves):
-            leaf_array[i, :len(leaf)] = leaf
-    except (RuntimeError, RecursionError):
-        warn('Random Projection forest initialisation failed due to recursion'
-             'limit being reached. Something is a little strange with your '
-             'data, and this may take longer than normal to compute.')
-        leaf_array = np.array([[-1]])
-
-    return leaf_array
+        if angular:
+            return make_angular_tree(data, indices, rng_state, leaf_size)
+        else:
+            return make_euclidean_tree(data, indices, rng_state, leaf_size)
 
 
 def num_nodes(tree):
@@ -686,3 +678,70 @@ def search_flat_tree(point,
             node = children[node, 1]
 
     return indices[-children[node, 0]]
+
+
+def make_forest(data, n_neighbors, n_trees, rng_state, angular=False):
+    """Build a random projection forest with ``n_trees``.
+
+    Parameters
+    ----------
+    data
+    n_neighbors
+    n_trees
+    rng_state
+    angular
+
+    Returns
+    -------
+    forest: list
+        A list of random projection trees.
+    """
+    result = []
+    leaf_size = max(10, n_neighbors)
+    try:
+        result = [flatten_tree(
+            make_tree(data, rng_state, leaf_size, angular),
+            leaf_size)
+                  for i in range(n_trees)]
+    except (RuntimeError, RecursionError):
+        warn('Random Projection forest initialisation failed due to recursion'
+             'limit being reached. Something is a little strange with your '
+             'data, and this may take longer than normal to compute.')
+
+    return result
+
+
+def rptree_leaf_array(rp_forest):
+    """Generate an array of sets of candidate nearest neighbors by
+    constructing a random projection forest and taking the leaves of all the
+    trees. Any given tree has leaves that are a set of potential nearest
+    neighbors. Given enough trees the set of all such leaves gives a good
+    likelihood of getting a good set of nearest neighbors in composite. Since
+    such a random projection forest is inexpensive to compute, this can be a
+    useful means of seeding other nearest neighbor algorithms.
+    Parameters
+    ----------
+    data: array of shape (n_samples, n_features)
+        The data for which to generate nearest neighbor approximations.
+    n_neighbors: int
+        The number of nearest neighbors to attempt to approximate.
+    rng_state: array of int64, shape (3,)
+        The internal state of the rng
+    n_trees: int (optional, default 10)
+        The number of trees to build in the forest construction.
+    angular: bool (optional, default False)
+        Whether to use angular/cosine distance for random projection tree
+        construction.
+    Returns
+    -------
+    leaf_array: array of shape (n_leaves, max(10, n_neighbors))
+        Each row of leaf array is a list of indices found in a given leaf.
+        Since not all leaves are the same size the arrays are padded out with -1
+        to ensure we can return a single ndarray.
+    """
+    if len(rp_forest) > 0:
+        leaf_array = np.vstack([tree.indices for tree in rp_forest])
+    else:
+        leaf_array = np.array([[-1]])
+
+    return leaf_array
