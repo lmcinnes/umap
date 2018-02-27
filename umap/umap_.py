@@ -182,6 +182,8 @@ def nearest_neighbors(X, n_neighbors, metric, metric_kwds, angular,
         # Compute the nearest neighbor distances
         #   (equivalent to np.sort(X)[:,:n_neighbors])
         knn_dists = X[np.arange(X.shape[0])[:, None], knn_indices].copy()
+
+        rp_forest = []
     else:
         if callable(metric):
             distance_func = metric
@@ -248,7 +250,7 @@ def nearest_neighbors(X, n_neighbors, metric, metric_kwds, angular,
                  'Results may be less than ideal. Try re-running with'
                  'different parameters.')
 
-    return knn_indices, knn_dists
+    return knn_indices, knn_dists, rp_forest
 
 
 @numba.njit(parallel=True)
@@ -308,9 +310,12 @@ def compute_membership_strengths(knn_indices, knn_dists, sigmas, rhos):
     return rows, cols, vals
 
 
-@numba.jit(parallel=True)
+@numba.jit()
 def fuzzy_simplicial_set(X, n_neighbors, random_state,
-                         metric, metric_kwds={}, angular=False,
+                         metric, metric_kwds={},
+                         knn_indices=None,
+                         knn_dists=None,
+                         angular=False,
                          set_op_mix_ratio=1.0,
                          local_connectivity=1.0, bandwidth=1.0,
                          verbose=False):
@@ -372,6 +377,18 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
         Arguments to pass on to the metric, such as the ``p`` value for
         Minkowski distance.
 
+    knn_indices: array of shape (n_samples, n_neighbors) (optional)
+        If the k-nearest neighbors of each point has already been calculated
+        you can pass them in here to save computation time. This should be
+        an array with the indices of the k-nearest neighbors as a row for
+        each data point.
+
+    knn_dists: array of shape (n_samples, n_neighbors) (optional)
+        If the k-nearest neighbors of each point has already been calculated
+        you can pass them in here to save computation time. This should be
+        an array with the distances of the k-nearest neighbors as a row for
+        each data point.
+
     angular: bool (optional, default False)
         Whether to use angular/cosine distance for the random projection
         forest for seeding NN-descent to determine approximate nearest
@@ -402,10 +419,11 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
         j) entry of the matrix represents the membership strength of the
         1-simplex between the ith and jth sample points.
     """
-
-    knn_indices, knn_dists = nearest_neighbors(X, n_neighbors,
-                                               metric, metric_kwds, angular,
-                                               random_state, verbose=verbose)
+    if knn_indices is None or knn_dists is None:
+        knn_indices, knn_dists, _ = \
+            nearest_neighbors(X, n_neighbors,
+                              metric, metric_kwds, angular,
+                              random_state, verbose=verbose)
 
     sigmas, rhos = smooth_knn_dist(knn_dists, n_neighbors,
                                    local_connectivity=local_connectivity)
@@ -1025,6 +1043,9 @@ class UMAP(BaseEstimator):
 
         if scipy.sparse.isspmatrix_csr(X) and not X.has_sorted_indices:
             X.sort_indices()
+            self._sparse_data = True
+        else:
+            self._sparse_data = False
 
         random_state = check_random_state(self.random_state)
 
@@ -1048,12 +1069,21 @@ class UMAP(BaseEstimator):
             )
         else:
             # Standard case
+            (self._knn_indices,
+             self._knn_dists,
+             self._rp_forest) = nearest_neighbors(X, self.n_neighbors,
+                                                  self.metric, self.metric_kwds,
+                                                  self.angular_rp_forest,
+                                                  random_state, self.verbose)
+
             graph = fuzzy_simplicial_set(
                 X,
                 self.n_neighbors,
                 random_state,
                 self.metric,
                 self.metric_kwds,
+                self._knn_indices,
+                self._knn_dists,
                 self.angular_rp_forest,
                 self.set_op_mix_ratio,
                 self.local_connectivity,
