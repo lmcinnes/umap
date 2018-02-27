@@ -9,9 +9,12 @@ import numba
 from umap.utils import (tau_rand,
                         make_heap,
                         heap_push,
+                        smallest_flagged,
                         rejection_sample,
                         build_candidates,
                         deheap_sort)
+
+from umap.rp_tree import search_flat_tree
 
 
 def make_nn_descent(dist, dist_args):
@@ -97,3 +100,74 @@ def make_nn_descent(dist, dist_args):
         return deheap_sort(current_graph)
 
     return nn_descent
+
+
+def make_initialisations(dist, dist_args):
+    @numba.njit()
+    def init_from_random(n_neighbors, data, query_points, heap, rng_state):
+        for i in range(query_points.shape[0]):
+            indices = rejection_sample(n_neighbors, data.shape[0],
+                                       rng_state)
+            for j in range(indices.shape[0]):
+                if indices[j] < 0:
+                    continue
+                d = dist(data[indices[j]], query_points[i], *dist_args)
+                heap_push(heap, i, d, indices[j], 1)
+        return
+
+    @numba.njit()
+    def init_from_tree(tree, data, query_points, heap, rng_state):
+        for i in range(query_points.shape[0]):
+            indices = search_flat_tree(query_points[i], tree.hyperplanes,
+                                       tree.offsets, tree.children,
+                                       tree.indices,
+                                       rng_state)
+
+            for j in range(indices.shape[0]):
+                if indices[j] < 0:
+                    continue
+                d = dist(data[indices[j]], query_points[i], *dist_args)
+                heap_push(heap, i, d, indices[j], 1)
+
+        return
+
+    return init_from_random, init_from_tree
+
+
+def initialise_search(forest, data, query_points, n_neighbors,
+                      init_from_random, init_from_tree, rng_state):
+    results = make_heap(query_points.shape[0], n_neighbors)
+    init_from_random(n_neighbors, data, query_points, results, rng_state)
+    if forest is not None:
+        for tree in forest:
+            init_from_tree(tree, data, query_points, results, rng_state)
+
+    return results
+
+
+def make_initialized_nnd_search(dist, dist_args):
+    @numba.njit(parallel=True)
+    def initialized_nnd_search(data,
+                               knn_graph,
+                               initialization,
+                               query_points):
+
+        for i in range(query_points.shape[0]):
+
+            while True:
+
+                # Find smallest flagged vertex
+                vertex = smallest_flagged(initialization, i)
+
+                if vertex == -1:
+                    break
+                candidates = knn_graph[vertex]
+                for j in range(candidates.shape[0]):
+                    if candidates[j] == vertex or candidates[j] == -1:
+                        continue
+                    d = dist(data[candidates[j]], query_points[i], *dist_args)
+                    heap_push(initialization, i, d, candidates[j], 1)
+
+        return initialization
+
+    return initialized_nnd_search
