@@ -1085,8 +1085,8 @@ def simplicial_set_embedding(graph, n_components,
     gamma: float (optional, default 1.0)
         Weight to apply to negative samples.
 
-    n_edge_samples: int
-        The total number of edge samples to use in the optimization step.
+    negative_sample_rate: int (optional, default 5)
+        Number of negative samples to use per positive sample.
 
     init: string (optional, default 'spectral')
         How to initialize the low dimensional embedding. Options are:
@@ -1234,12 +1234,10 @@ class UMAP(BaseEstimator):
         time care must be taken and dictionary elements must be ordered
         appropriately; this will hopefully be fixed in the future.
 
-    n_edge_samples: int (optional, default None)
-        The number of edge/1-simplex samples to be used in optimizing the
-        low dimensional embedding. Larger values result in more accurate
-        embeddings. If None is specified a value will be selected based on
-        the size of the input dataset (typically around dataset_size * 10**4).
-
+    negative_sample_rate: int (optional, default 5)
+        The number of negative edge/1-simplex samples to use per positive 
+        edge/1-simplex sample in optimizing the low dimensional embedding.
+        
     alpha: float (optional, default 1.0)
         The initial learning rate for the embedding optimization.
 
@@ -1358,6 +1356,7 @@ class UMAP(BaseEstimator):
         self.random_state = random_state
         self.angular_rp_forest = angular_rp_forest
         self.verbose = verbose
+        self.graph = None
 
         if a is None or b is None:
             self.a, self.b = find_ab_params(self.spread, self.min_dist)
@@ -1407,7 +1406,7 @@ class UMAP(BaseEstimator):
         # Handle small cases efficiently by computing all distances
         if X.shape[0] < 4096:
             dmat = pairwise_distances(X, metric=self.metric, **self.metric_kwds)
-            graph = fuzzy_simplicial_set(
+            self.graph = fuzzy_simplicial_set(
                 dmat,
                 self.n_neighbors,
                 random_state,
@@ -1421,7 +1420,7 @@ class UMAP(BaseEstimator):
             )
         else:
             # Standard case
-            graph = fuzzy_simplicial_set(
+            self.graph = fuzzy_simplicial_set(
                 X,
                 self.n_neighbors,
                 random_state,
@@ -1443,7 +1442,7 @@ class UMAP(BaseEstimator):
             print("Construct embedding")
 
         self.embedding_ = simplicial_set_embedding(
-            graph,
+            self.graph,
             self.n_components,
             self.initial_alpha,
             self.a,
