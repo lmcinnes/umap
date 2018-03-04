@@ -1358,6 +1358,10 @@ class UMAP(BaseEstimator):
         self.verbose = verbose
         self.graph = None
 
+        if self.n_neighbors < 2:
+            raise ValueError('The value of n_neighbors must be greater than or'
+                             ' equal to 2.')
+
         if a is None or b is None:
             self.a, self.b = find_ab_params(self.spread, self.min_dist)
         else:
