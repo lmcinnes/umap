@@ -1395,7 +1395,7 @@ class UMAP(BaseEstimator):
         # Handle other array dtypes (TODO: do this properly)
         X = check_array(X, accept_sparse='csr').astype(np.float64)
 
-        if X.shape[0] <= self.n_neighbors:
+        if X.shape[0] - 1 <= self.n_neighbors:
             raise ValueError('n_neighbors must be smaller than the dataset '
                              'size!')
 
