@@ -582,7 +582,7 @@ def rdist(x, y):
 
 
 @numba.njit()
-def optimize_layout(embedding, positive_head, positive_tail,
+def optimize_layout(head_embedding, tail_embedding, head, tail,
                     n_epochs, n_vertices, epochs_per_sample,
                     a, b, rng_state, gamma=1.0, initial_alpha=1.0,
                     negative_sample_rate=5.0, verbose=False):
@@ -594,13 +594,19 @@ def optimize_layout(embedding, positive_head, positive_tail,
 
     Parameters
     ----------
-    embedding: array of shape (n_samples, n_components)
+    head_embedding: array of shape (n_samples, n_components)
         The initial embedding to be improved by SGD.
 
-    positive_head: array of shape (n_1_simplices)
+    tail_embedding: array of shape (source_samples, n_components)
+        The reference embedding of embedded points. If not embedding new
+        previously unseen points with respect to an existing embedding this
+        is simply the head_embedding (again); otherwise it provides the
+        existing embedding to embed with respect to.
+
+    head: array of shape (n_1_simplices)
         The indices of the heads of 1-simplices with non-zero membership.
 
-    positive_tail: array of shape (n_1_simplices)
+    tail: array of shape (n_1_simplices)
         The indices of the tails of 1-simplices with non-zero membership.
 
     n_epochs: int
@@ -640,7 +646,7 @@ def optimize_layout(embedding, positive_head, positive_tail,
         The optimized embedding.
     """
 
-    dim = embedding.shape[1]
+    dim = head_embedding.shape[1]
     alpha = initial_alpha
 
     epochs_per_negative_sample = epochs_per_sample / negative_sample_rate
@@ -650,11 +656,11 @@ def optimize_layout(embedding, positive_head, positive_tail,
     for n in range(n_epochs):
         for i in range(epochs_per_sample.shape[0]):
             if epoch_of_next_sample[i] <= n:
-                j = positive_head[i]
-                k = positive_tail[i]
+                j = head[i]
+                k = tail[i]
 
-                current = embedding[j]
-                other = embedding[k]
+                current = head_embedding[j]
+                other = tail_embedding[k]
 
                 dist_squared = rdist(current, other)
 
@@ -674,7 +680,7 @@ def optimize_layout(embedding, positive_head, positive_tail,
                 for p in range(n_neg_samples):
                     k = tau_rand_int(rng_state) % n_vertices
 
-                    other = embedding[k]
+                    other = tail_embedding[k]
 
                     dist_squared = rdist(current, other)
 
@@ -698,7 +704,7 @@ def optimize_layout(embedding, positive_head, positive_tail,
         if verbose and n % int(n_epochs / 10) == 0:
             print('\tcompleted ', n, ' / ', n_epochs, 'epochs')
 
-    return embedding
+    return head_embedding
 
 
 def simplicial_set_embedding(graph, n_components,
@@ -794,11 +800,11 @@ def simplicial_set_embedding(graph, n_components,
 
     epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs)
 
-    positive_head = graph.row
-    positive_tail = graph.col
+    head = graph.row
+    tail = graph.col
 
     rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
-    embedding = optimize_layout(embedding, positive_head, positive_tail,
+    embedding = optimize_layout(embedding, embedding, head, tail,
                                 n_epochs, n_vertices,
                                 epochs_per_sample, a, b, rng_state, gamma,
                                 initial_alpha, negative_sample_rate,
@@ -1069,6 +1075,7 @@ class UMAP(BaseEstimator):
             )
         else:
             # Standard case
+            self._raw_data = X
             (self._knn_indices,
              self._knn_dists,
              self._rp_forest) = nearest_neighbors(X, self.n_neighbors,
