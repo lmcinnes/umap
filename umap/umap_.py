@@ -1055,7 +1055,7 @@ class UMAP(BaseEstimator):
         # Handle small cases efficiently by computing all distances
         if X.shape[0] < 4096:
             dmat = pairwise_distances(X, metric=self.metric, **self.metric_kwds)
-            graph = fuzzy_simplicial_set(
+            self.graph_ = fuzzy_simplicial_set(
                 dmat,
                 self.n_neighbors,
                 random_state,
@@ -1076,7 +1076,7 @@ class UMAP(BaseEstimator):
                                                   self.angular_rp_forest,
                                                   random_state, self.verbose)
 
-            graph = fuzzy_simplicial_set(
+            self.graph_ = fuzzy_simplicial_set(
                 X,
                 self.n_neighbors,
                 random_state,
@@ -1100,7 +1100,7 @@ class UMAP(BaseEstimator):
             print("Construct embedding")
 
         self.embedding_ = simplicial_set_embedding(
-            graph,
+            self.graph_,
             self.n_components,
             self.initial_alpha,
             self.a,
