@@ -299,7 +299,10 @@ def cosine(x, y):
         norm_x += x[i]**2
         norm_y += y[i]**2
 
-    return 1.0 - (result / np.sqrt(norm_x * norm_y))
+    if norm_x == 0.0 or norm_y == 0.0:
+        return 1.0
+    else:
+        return 1.0 - (result / np.sqrt(norm_x * norm_y))
 
 
 @numba.njit()
