@@ -9,6 +9,7 @@ import numba
 from umap.utils import (tau_rand,
                         make_heap,
                         heap_push,
+                        unchecked_heap_push,
                         smallest_flagged,
                         rejection_sample,
                         build_candidates,
@@ -103,7 +104,7 @@ def make_nn_descent(dist, dist_args):
 
 
 def make_initialisations(dist, dist_args):
-    @numba.njit()
+    @numba.njit(parallel=True)
     def init_from_random(n_neighbors, data, query_points, heap, rng_state):
         for i in range(query_points.shape[0]):
             indices = rejection_sample(n_neighbors, data.shape[0],
@@ -115,7 +116,7 @@ def make_initialisations(dist, dist_args):
                 heap_push(heap, i, d, indices[j], 1)
         return
 
-    @numba.njit()
+    @numba.njit(parallel=True)
     def init_from_tree(tree, data, query_points, heap, rng_state):
         for i in range(query_points.shape[0]):
             indices = search_flat_tree(query_points[i], tree.hyperplanes,
@@ -148,11 +149,14 @@ def initialise_search(forest, data, query_points, n_neighbors,
 def make_initialized_nnd_search(dist, dist_args):
     @numba.njit(parallel=True)
     def initialized_nnd_search(data,
-                               knn_graph,
+                               indptr,
+                               indices,
                                initialization,
                                query_points):
 
-        for i in range(query_points.shape[0]):
+        for i in numba.prange(query_points.shape[0]):
+
+            tried = set(initialization[0, i])
 
             while True:
 
@@ -161,12 +165,14 @@ def make_initialized_nnd_search(dist, dist_args):
 
                 if vertex == -1:
                     break
-                candidates = knn_graph[vertex]
+                candidates = indices[indptr[vertex]:indptr[vertex + 1]]
                 for j in range(candidates.shape[0]):
-                    if candidates[j] == vertex or candidates[j] == -1:
+                    if candidates[j] == vertex or candidates[j] == -1 or \
+                                    candidates[j] in tried:
                         continue
                     d = dist(data[candidates[j]], query_points[i], *dist_args)
-                    heap_push(initialization, i, d, candidates[j], 1)
+                    unchecked_heap_push(initialization, i, d, candidates[j], 1)
+                    tried.add(candidates[j])
 
         return initialization
 

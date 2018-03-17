@@ -8,6 +8,7 @@ from scipy.optimize import curve_fit
 from sklearn.base import BaseEstimator
 from sklearn.utils import check_random_state, check_array
 from sklearn.metrics import pairwise_distances
+from sklearn.preprocessing import normalize
 
 import numpy as np
 import scipy.sparse
@@ -18,9 +19,12 @@ import umap.distances as dist
 
 import umap.sparse as sparse
 
-from umap.utils import tau_rand_int
+from umap.utils import tau_rand_int, deheap_sort
 from umap.rp_tree import rptree_leaf_array, make_forest
-from umap.nndescent import make_nn_descent
+from umap.nndescent import (make_nn_descent,
+                            make_initialisations,
+                            make_initialized_nnd_search,
+                            initialise_search)
 
 import locale
 
@@ -813,6 +817,17 @@ def simplicial_set_embedding(graph, n_components,
     return embedding
 
 
+@numba.njit()
+def init_transform(indices, weights, embedding):
+    result = np.zeros((indices.shape[0], embedding.shape[1]), dtype=np.float64)
+
+    for i in range(indices.shape[0]):
+        for j in range(indices.shape[1]):
+            result[i] += weights[i, j] * embedding[indices[i, j]]
+
+    return result
+
+
 def find_ab_params(spread, min_dist):
     """Fit a, b params for the differentiable curve used in lower
     dimensional fuzzy simplicial complex construction. We want the
@@ -977,11 +992,13 @@ class UMAP(BaseEstimator):
                  init='spectral',
                  spread=1.0,
                  min_dist=0.1,
+                 enable_transform=False,
                  set_op_mix_ratio=1.0,
                  local_connectivity=1.0,
                  bandwidth=1.0,
                  gamma=1.0,
                  negative_sample_rate=5,
+                 transform_queue_size=5.0,
                  a=None,
                  b=None,
                  random_state=None,
@@ -1002,13 +1019,17 @@ class UMAP(BaseEstimator):
 
         self.spread = spread
         self.min_dist = min_dist
+        self.enable_transform = enable_transform
         self.set_op_mix_ratio = set_op_mix_ratio
         self.local_connectivity = local_connectivity
         self.bandwidth = bandwidth
         self.negative_sample_rate = negative_sample_rate
         self.random_state = random_state
         self.angular_rp_forest = angular_rp_forest
+        self.transform_queue_size = transform_queue_size
         self.verbose = verbose
+
+        self._transform_available = False
 
         if a is None or b is None:
             self.a, self.b = find_ab_params(self.spread, self.min_dist)
@@ -1098,6 +1119,32 @@ class UMAP(BaseEstimator):
                 self.verbose
             )
 
+            if not scipy.sparse.isspmatrix(X) and self.enable_transform:
+                self._raw_data = X
+                self._transform_available = True
+                self._search_graph = scipy.sparse.lil_matrix((X.shape[0],
+                                                              X.shape[0]),
+                                                             dtype=np.int8)
+                self._search_graph.rows = self._knn_indices
+                self._search_graph.data = (self._knn_dists != 0).astype(np.int8)
+                self._search_graph = self._search_graph.maximum(
+                    self._search_graph.transpose()).tocsr()
+
+                if callable(self.metric):
+                    self._distance_func = self.metric
+                elif self.metric in dist.named_distances:
+                    self._distance_func = dist.named_distances[self.metric]
+                else:
+                    raise ValueError('Metric is neither callable, ' +
+                                     'nor a recognised string')
+                self._dist_args = tuple(self.metric_kwds.values())
+
+                self._random_init, self._tree_init = make_initialisations(
+                    self._distance_func,
+                    self._dist_args)
+                self._search = make_initialized_nnd_search(self._distance_func,
+                                                           self._dist_args)
+
         if self.n_epochs is None:
             n_epochs = 0
         else:
@@ -1139,3 +1186,58 @@ class UMAP(BaseEstimator):
         """
         self.fit(X)
         return self.embedding_
+
+    def transform(self, X):
+        if not self._transform_available:
+            raise ValueError('Transform data was not built -- please refit '
+                             'with parameter enable_transform set to True.')
+
+        X = check_array(X, dtype=np.float64, order='C')
+        random_state = check_random_state(self.random_state)
+        rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(
+            np.int64)
+
+        init = initialise_search(self._rp_forest, self._raw_data,
+                                 X,
+                                 int(self.n_neighbors *
+                                     self.transform_queue_size),
+                                 self._random_init, self._tree_init,
+                                 rng_state)
+        result = self._search(self._raw_data,
+                              self._search_graph.indptr,
+                              self._search_graph.indices,
+                              init,
+                              X)
+
+        indices, dists = deheap_sort(result)
+
+        sigmas, rhos = smooth_knn_dist(indices, self.n_neighbors,
+                                       local_connectivity=self.local_connectivity)
+
+        rows, cols, vals = compute_membership_strengths(indices, dists,
+                                                        sigmas, rhos)
+
+        graph = scipy.sparse.coo_matrix((vals, (rows, cols)),
+                                        shape=(X.shape[0],
+                                               self._raw_data.shape[0]))
+        graph.eliminate_zeros()
+
+        csr_graph = normalize(graph.tocsr(), norm='l1')
+        inds = csr_graph.indices.reshape(X.shape[0], self.n_neighbors)
+        weights = csr_graph.data.reshape(X.shape[0], self.n_neighbors)
+        embedding = init_transform(inds, weights, self.embedding_)
+
+        epochs_per_sample = make_epochs_per_sample(graph.data, self.n_epochs)
+
+        head = graph.row
+        tail = graph.col
+
+        embedding = optimize_layout(embedding, self.embedding_, head, tail,
+                                    self.n_epochs, X.shape[0],
+                                    epochs_per_sample, self.a, self.b,
+                                    rng_state, self.gamma,
+                                    self.initial_alpha,
+                                    self.negative_sample_rate,
+                                    verbose=self.verbose)
+
+        return embedding
