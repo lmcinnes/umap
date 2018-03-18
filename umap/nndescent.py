@@ -13,6 +13,7 @@ from umap.utils import (tau_rand,
                         smallest_flagged,
                         rejection_sample,
                         build_candidates,
+                        new_build_candidates,
                         deheap_sort)
 
 from umap.rp_tree import search_flat_tree
@@ -75,7 +76,8 @@ def make_nn_descent(dist, dist_args):
             if verbose:
                 print("\t", n, " / ", n_iters)
 
-            candidate_neighbors = build_candidates(current_graph, n_vertices,
+            candidate_neighbors = build_candidates(current_graph,
+                                                   n_vertices,
                                                    n_neighbors, max_candidates,
                                                    rng_state)
 

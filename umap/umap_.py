@@ -651,6 +651,7 @@ def optimize_layout(head_embedding, tail_embedding, head, tail,
     """
 
     dim = head_embedding.shape[1]
+    move_other = head_embedding.shape[0] == tail_embedding.shape[0]
     alpha = initial_alpha
 
     epochs_per_negative_sample = epochs_per_sample / negative_sample_rate
@@ -674,7 +675,8 @@ def optimize_layout(head_embedding, tail_embedding, head, tail,
                 for d in range(dim):
                     grad_d = clip(grad_coeff * (current[d] - other[d]))
                     current[d] += grad_d * alpha
-                    other[d] += -grad_d * alpha
+                    if move_other:
+                        other[d] += -grad_d * alpha
 
                 epoch_of_next_sample[i] += epochs_per_sample[i]
 
@@ -823,7 +825,8 @@ def init_transform(indices, weights, embedding):
 
     for i in range(indices.shape[0]):
         for j in range(indices.shape[1]):
-            result[i] += weights[i, j] * embedding[indices[i, j]]
+            for d in range(embedding.shape[1]):
+                result[i, d] += weights[i, j] * embedding[indices[i, j], d]
 
     return result
 
@@ -998,7 +1001,7 @@ class UMAP(BaseEstimator):
                  bandwidth=1.0,
                  gamma=1.0,
                  negative_sample_rate=5,
-                 transform_queue_size=5.0,
+                 transform_queue_size=2.0,
                  a=None,
                  b=None,
                  random_state=None,
@@ -1210,6 +1213,8 @@ class UMAP(BaseEstimator):
                               X)
 
         indices, dists = deheap_sort(result)
+        indices = indices[:, :self.n_neighbors]
+        dists = dists[:, :self.n_neighbors]
 
         sigmas, rhos = smooth_knn_dist(indices, self.n_neighbors,
                                        local_connectivity=self.local_connectivity)
@@ -1220,20 +1225,31 @@ class UMAP(BaseEstimator):
         graph = scipy.sparse.coo_matrix((vals, (rows, cols)),
                                         shape=(X.shape[0],
                                                self._raw_data.shape[0]))
-        graph.eliminate_zeros()
 
         csr_graph = normalize(graph.tocsr(), norm='l1')
         inds = csr_graph.indices.reshape(X.shape[0], self.n_neighbors)
         weights = csr_graph.data.reshape(X.shape[0], self.n_neighbors)
         embedding = init_transform(inds, weights, self.embedding_)
 
-        epochs_per_sample = make_epochs_per_sample(graph.data, self.n_epochs)
+        if self.n_epochs is None:
+            # For smaller datasets we can use more epochs
+            if graph.shape[0] <= 10000:
+                n_epochs = 300
+            else:
+                n_epochs = 100
+        else:
+            n_epochs = self.n_epochs
+
+        graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
+        graph.eliminate_zeros()
+
+        epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs)
 
         head = graph.row
         tail = graph.col
 
         embedding = optimize_layout(embedding, self.embedding_, head, tail,
-                                    self.n_epochs, X.shape[0],
+                                    n_epochs, X.shape[0],
                                     epochs_per_sample, self.a, self.b,
                                     rng_state, self.gamma,
                                     self.initial_alpha,
