@@ -1207,7 +1207,7 @@ class UMAP(BaseEstimator):
         X_new : array, shape (n_samples, n_components)
             Embedding of the new data in low-dimensional space.
         """
-        if not self._sparse_data:
+        if self._sparse_data:
             raise ValueError('Transform not available for sparse input.')
 
         X = check_array(X, dtype=np.float64, order='C')
