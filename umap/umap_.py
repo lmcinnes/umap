@@ -1066,6 +1066,7 @@ class UMAP(BaseEstimator):
 
         # Handle other array dtypes (TODO: do this properly)
         X = check_array(X, accept_sparse='csr').astype(np.float64)
+        self._raw_data = X
 
         if X.shape[0] <= self.n_neighbors:
             raise ValueError('n_neighbors must be smaller than the dataset '
@@ -1084,6 +1085,7 @@ class UMAP(BaseEstimator):
 
         # Handle small cases efficiently by computing all distances
         if X.shape[0] < 4096:
+            self._small_data = True
             dmat = pairwise_distances(X, metric=self.metric, **self.metric_kwds)
             self.graph_ = fuzzy_simplicial_set(
                 dmat,
@@ -1091,6 +1093,8 @@ class UMAP(BaseEstimator):
                 random_state,
                 'precomputed',
                 self.metric_kwds,
+                None,
+                None,
                 self.angular_rp_forest,
                 self.set_op_mix_ratio,
                 self.local_connectivity,
@@ -1098,8 +1102,8 @@ class UMAP(BaseEstimator):
                 self.verbose
             )
         else:
+            self._small_data = False
             # Standard case
-            self._raw_data = X
             (self._knn_indices,
              self._knn_dists,
              self._rp_forest) = nearest_neighbors(X, self.n_neighbors,
@@ -1122,31 +1126,30 @@ class UMAP(BaseEstimator):
                 self.verbose
             )
 
-            if not scipy.sparse.isspmatrix(X) and self.enable_transform:
-                self._raw_data = X
-                self._transform_available = True
-                self._search_graph = scipy.sparse.lil_matrix((X.shape[0],
-                                                              X.shape[0]),
-                                                             dtype=np.int8)
-                self._search_graph.rows = self._knn_indices
-                self._search_graph.data = (self._knn_dists != 0).astype(np.int8)
-                self._search_graph = self._search_graph.maximum(
-                    self._search_graph.transpose()).tocsr()
+            self._raw_data = X
+            self._transform_available = True
+            self._search_graph = scipy.sparse.lil_matrix((X.shape[0],
+                                                          X.shape[0]),
+                                                         dtype=np.int8)
+            self._search_graph.rows = self._knn_indices
+            self._search_graph.data = (self._knn_dists != 0).astype(np.int8)
+            self._search_graph = self._search_graph.maximum(
+                self._search_graph.transpose()).tocsr()
 
-                if callable(self.metric):
-                    self._distance_func = self.metric
-                elif self.metric in dist.named_distances:
-                    self._distance_func = dist.named_distances[self.metric]
-                else:
-                    raise ValueError('Metric is neither callable, ' +
-                                     'nor a recognised string')
-                self._dist_args = tuple(self.metric_kwds.values())
+            if callable(self.metric):
+                self._distance_func = self.metric
+            elif self.metric in dist.named_distances:
+                self._distance_func = dist.named_distances[self.metric]
+            else:
+                raise ValueError('Metric is neither callable, ' +
+                                 'nor a recognised string')
+            self._dist_args = tuple(self.metric_kwds.values())
 
-                self._random_init, self._tree_init = make_initialisations(
-                    self._distance_func,
-                    self._dist_args)
-                self._search = make_initialized_nnd_search(self._distance_func,
-                                                           self._dist_args)
+            self._random_init, self._tree_init = make_initialisations(
+                self._distance_func,
+                self._dist_args)
+            self._search = make_initialized_nnd_search(self._distance_func,
+                                                       self._dist_args)
 
         if self.n_epochs is None:
             n_epochs = 0
@@ -1191,30 +1194,50 @@ class UMAP(BaseEstimator):
         return self.embedding_
 
     def transform(self, X):
-        if not self._transform_available:
-            raise ValueError('Transform data was not built -- please refit '
-                             'with parameter enable_transform set to True.')
+        """Transform X into the existing embedded space and return that
+        transformed output.
+
+        Parameters
+        ----------
+        X : array, shape (n_samples, n_features)
+            New data to be transformed.
+
+        Returns
+        -------
+        X_new : array, shape (n_samples, n_components)
+            Embedding of the new data in low-dimensional space.
+        """
+        if not self._sparse_data:
+            raise ValueError('Transform not available for sparse input.')
 
         X = check_array(X, dtype=np.float64, order='C')
         random_state = check_random_state(self.random_state)
         rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(
             np.int64)
 
-        init = initialise_search(self._rp_forest, self._raw_data,
-                                 X,
-                                 int(self.n_neighbors *
-                                     self.transform_queue_size),
-                                 self._random_init, self._tree_init,
-                                 rng_state)
-        result = self._search(self._raw_data,
-                              self._search_graph.indptr,
-                              self._search_graph.indices,
-                              init,
-                              X)
+        if self._small_data:
+            dmat = pairwise_distances(X, self._raw_data,
+                                      metric=self.metric, **self.metric_kwds)
+            indices = np.argsort(dmat)
+            dists = np.sort(dmat)  # TODO: more efficient approach
+            indices = indices[:, :self.n_neighbors]
+            dists = dists[:, :self.n_neighbors]
+        else:
+            init = initialise_search(self._rp_forest, self._raw_data,
+                                     X,
+                                     int(self.n_neighbors *
+                                         self.transform_queue_size),
+                                     self._random_init, self._tree_init,
+                                     rng_state)
+            result = self._search(self._raw_data,
+                                  self._search_graph.indptr,
+                                  self._search_graph.indices,
+                                  init,
+                                  X)
 
-        indices, dists = deheap_sort(result)
-        indices = indices[:, :self.n_neighbors]
-        dists = dists[:, :self.n_neighbors]
+            indices, dists = deheap_sort(result)
+            indices = indices[:, :self.n_neighbors]
+            dists = dists[:, :self.n_neighbors]
 
         sigmas, rhos = smooth_knn_dist(indices, self.n_neighbors,
                                        local_connectivity=self.local_connectivity)
