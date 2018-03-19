@@ -1067,6 +1067,8 @@ class UMAP(BaseEstimator):
                 random_state,
                 'precomputed',
                 self.metric_kwds,
+                None,
+                None,
                 self.angular_rp_forest,
                 self.set_op_mix_ratio,
                 self.local_connectivity,
