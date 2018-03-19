@@ -995,7 +995,6 @@ class UMAP(BaseEstimator):
                  init='spectral',
                  spread=1.0,
                  min_dist=0.1,
-                 enable_transform=False,
                  set_op_mix_ratio=1.0,
                  local_connectivity=1.0,
                  bandwidth=1.0,
@@ -1022,7 +1021,6 @@ class UMAP(BaseEstimator):
 
         self.spread = spread
         self.min_dist = min_dist
-        self.enable_transform = enable_transform
         self.set_op_mix_ratio = set_op_mix_ratio
         self.local_connectivity = local_connectivity
         self.bandwidth = bandwidth
