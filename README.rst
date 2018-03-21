@@ -172,7 +172,7 @@ Requirements:
 
 **Install Options**
 
-PyPI install, presuming you have numab and sklearn and all its requirements
+PyPI install, presuming you have numba and sklearn and all its requirements
 (numpy and scipy) installed:
 
 .. code:: bash
