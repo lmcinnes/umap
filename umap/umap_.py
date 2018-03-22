@@ -1243,24 +1243,6 @@ class UMAP(BaseEstimator):
                 self.verbose
             )
 
-        if y is not None:
-            if self.target_metric == 'categorical':
-                graph = categorical_simplicial_set_intersection(graph, y)
-            else:
-                target_graph = fuzzy_simplicial_set(y[np.newaxis, :].T,
-                                                    self.n_neighbors,
-                                                    random_state,
-                                                    self.target_metric,
-                                                    self.target_metric_kwds,
-                                                    False,
-                                                    1.0,
-                                                    1.0,
-                                                    1.0,
-                                                    False)
-                product = graph.multiply(target_graph)
-                graph = 0.99 * product + 0.01 * (graph + target_graph - product)
-                graph = reset_local_connectivity(graph)
-
             self._raw_data = X
             self._transform_available = True
             self._search_graph = scipy.sparse.lil_matrix((X.shape[0],
@@ -1285,6 +1267,27 @@ class UMAP(BaseEstimator):
                 self._dist_args)
             self._search = make_initialized_nnd_search(self._distance_func,
                                                        self._dist_args)
+
+        if y is not None:
+            if self.target_metric == 'categorical':
+                self.graph_ = categorical_simplicial_set_intersection(
+                    self.graph_, y)
+            else:
+                target_graph = fuzzy_simplicial_set(y[np.newaxis, :].T,
+                                                    self.n_neighbors,
+                                                    random_state,
+                                                    self.target_metric,
+                                                    self.target_metric_kwds,
+                                                    False,
+                                                    1.0,
+                                                    1.0,
+                                                    1.0,
+                                                    False)
+                product = self.graph_.multiply(target_graph)
+                self.graph_ = 0.99 * product + 0.01 * (self.graph_ +
+                                                       target_graph -
+                                                       product)
+                self.graph_ = reset_local_connectivity(graph)
 
         if self.n_epochs is None:
             n_epochs = 0
