@@ -1478,3 +1478,14 @@ class UMAP(BaseEstimator):
         """
         self.fit(X)
         return self.embedding_
+      
+    def transform(self, X):
+      """Fit X into an embedded space and return that transformed
+        output.
+      
+      see fit_transform()
+      """
+      self.fit(X)
+      return self.embedding_
+      
+      
