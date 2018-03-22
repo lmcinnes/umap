@@ -1287,7 +1287,7 @@ class UMAP(BaseEstimator):
                 self.graph_ = 0.99 * product + 0.01 * (self.graph_ +
                                                        target_graph -
                                                        product)
-                self.graph_ = reset_local_connectivity(graph)
+                self.graph_ = reset_local_connectivity(self.graph_)
 
         if self.n_epochs is None:
             n_epochs = 0
