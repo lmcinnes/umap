@@ -34,6 +34,7 @@ import umap.sparse as spdist
 from umap.umap_ import (
     INT32_MAX,
     INT32_MIN,
+    make_forest,
     rptree_leaf_array,
     make_nn_descent,
     UMAP)
@@ -80,7 +81,8 @@ binary_distances = (
 def test_nn_descent_neighbor_accuracy():
     rng_state = np.random.randint(INT32_MIN, INT32_MAX, size=3)
     nn_descent = make_nn_descent(dist.euclidean, ())
-    leaf_array = rptree_leaf_array(nn_data, 10, rng_state)
+    rp_forest = make_forest(nn_data, 10, 10, rng_state)
+    leaf_array = rptree_leaf_array(rp_forest)
     tmp_indices, knn_dists = nn_descent(nn_data,
                                         10,
                                         rng_state,
@@ -106,7 +108,8 @@ def test_nn_descent_neighbor_accuracy():
 def test_sparse_nn_descent_neighbor_accuracy():
     rng_state = np.random.randint(INT32_MIN, INT32_MAX, size=3)
     nn_descent = spdist.make_sparse_nn_descent(spdist.sparse_euclidean, ())
-    leaf_array = rptree_leaf_array(sparse_nn_data, 10, rng_state)
+    rp_forest = make_forest(sparse_nn_data, 10, 10, rng_state)
+    leaf_array = rptree_leaf_array(rp_forest)
     tmp_indices, knn_dists = nn_descent(sparse_nn_data.indices,
                                         sparse_nn_data.indptr,
                                         sparse_nn_data.data,
@@ -197,7 +200,7 @@ def test_sparse_fit():
     pass
 
 
-@SkipTest
+# @SkipTest
 def test_sklearn_digits():
     digits = datasets.load_digits()
     data = digits.data
