@@ -507,14 +507,14 @@ def make_sparse_euclidean_tree(inds, indptr, data, indices, rng_state,
             sparse_euclidean_random_projection_split(inds, indptr, data,
                                                      indices, rng_state)
 
-        left_node = make_euclidean_tree(data,
-                                        left_indices,
-                                        rng_state,
-                                        leaf_size)
-        right_node = make_euclidean_tree(data,
-                                         right_indices,
-                                         rng_state,
-                                         leaf_size)
+        left_node = make_sparse_euclidean_tree(inds, indptr, data,
+                                               left_indices,
+                                               rng_state,
+                                               leaf_size)
+        right_node = make_sparse_euclidean_tree(inds, indptr, data,
+                                                right_indices,
+                                                rng_state,
+                                                leaf_size)
 
         node = RandomProjectionTreeNode(None, False, hyperplane, offset,
                                         left_node, right_node)
@@ -532,14 +532,14 @@ def make_sparse_angular_tree(inds, indptr, data, indices, rng_state,
             sparse_angular_random_projection_split(inds, indptr, data, indices,
                                                    rng_state)
 
-        left_node = make_euclidean_tree(data,
-                                        left_indices,
-                                        rng_state,
-                                        leaf_size)
-        right_node = make_euclidean_tree(data,
-                                         right_indices,
-                                         rng_state,
-                                         leaf_size)
+        left_node = make_sparse_angular_tree(inds, indptr, data,
+                                             left_indices,
+                                             rng_state,
+                                             leaf_size)
+        right_node = make_sparse_angular_tree(inds, indptr, data,
+                                              right_indices,
+                                              rng_state,
+                                              leaf_size)
 
         node = RandomProjectionTreeNode(None, False, hyperplane, offset,
                                         left_node, right_node)
