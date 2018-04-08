@@ -637,8 +637,15 @@ def recursive_flatten(tree, hyperplanes, offsets,
 def flatten_tree(tree, leaf_size):
     n_nodes = num_nodes(tree)
     n_leaves = num_leaves(tree)
-    hyperplanes = np.zeros((n_nodes, tree.hyperplane.shape[0]),
-                           dtype=np.float64)
+    if len(tree.hyperplane.shape) > 1:
+        # sparse case
+        hyperplanes = np.zeros((n_nodes,
+                                tree.hyperplane.shape[0],
+                                tree.hyperplane.shape[1]),
+                               dtype=np.float64)
+    else:
+        hyperplanes = np.zeros((n_nodes, tree.hyperplane.shape[0]),
+                               dtype=np.float64)
     offsets = np.zeros(n_nodes, dtype=np.float64)
     children = -1 * np.ones((n_nodes, 2), dtype=np.int64)
     indices = -1 * np.ones((n_leaves, leaf_size), dtype=np.int64)
