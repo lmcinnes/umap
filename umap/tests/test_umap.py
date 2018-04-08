@@ -200,7 +200,7 @@ def test_sparse_fit():
     pass
 
 
-# @SkipTest
+@SkipTest
 def test_sklearn_digits():
     digits = datasets.load_digits()
     data = digits.data
