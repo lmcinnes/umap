@@ -1,6 +1,9 @@
 .. image:: https://img.shields.io/pypi/v/umap-learn.svg
     :target: https://pypi.python.org/pypi/umap-learn/
     :alt: PyPI Version
+.. image:: https://anaconda.org/conda-forge/umap-learn/badges/version.svg
+    :target: https://anaconda.org/conda-forge/umap-learn
+    :alt: Anaconda Version
 .. image:: https://img.shields.io/pypi/l/umap-learn.svg
     :target: https://github.com/lmcinnes/umap/blob/master/LICENSE
     :alt: License
@@ -171,6 +174,14 @@ Requirements:
 * numba
 
 **Install Options**
+
+Conda install, via the excellent work of the conda-forge team:
+
+.. code:: bash
+
+    conda install -c conda-forge umap-learn
+    
+The conda-forge packages are available for linux, OS X, and Windows 64 bit.
 
 PyPI install, presuming you have numba and sklearn and all its requirements
 (numpy and scipy) installed:
