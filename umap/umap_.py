@@ -38,7 +38,7 @@ MIN_K_DIST_SCALE = 1e-3
 NPY_INFINITY = np.inf
 
 
-@numba.njit(parallel=True)
+@numba.njit(parallel=True, fastmath=True)
 def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0,
                     bandwidth=1.0):
     """Compute a continuous version of the distance to the kth nearest
@@ -257,7 +257,7 @@ def nearest_neighbors(X, n_neighbors, metric, metric_kwds, angular,
     return knn_indices, knn_dists, rp_forest
 
 
-@numba.njit(parallel=True)
+@numba.njit(parallel=True, fastmath=True)
 def compute_membership_strengths(knn_indices, knn_dists, sigmas, rhos):
     """Construct the membership strength data for the 1-skeleton of each local
     fuzzy simplicial set -- this is formed as a sparse matrix where each row is
@@ -680,7 +680,7 @@ def clip(val):
         return val
 
 
-@numba.njit('f8(f8[:],f8[:])')
+@numba.njit('f8(f8[:],f8[:])', fastmath=True)
 def rdist(x, y):
     """Reduced Euclidean distance.
 
@@ -700,7 +700,7 @@ def rdist(x, y):
     return result
 
 
-@numba.njit()
+@numba.njit(fastmath=True)
 def optimize_layout(head_embedding, tail_embedding, head, tail,
                     n_epochs, n_vertices, epochs_per_sample,
                     a, b, rng_state, gamma=1.0, initial_alpha=1.0,

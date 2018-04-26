@@ -7,7 +7,8 @@ import numba
 _mock_identity = np.eye(2, dtype=np.float64)
 _mock_ones = np.ones(2, dtype=np.float64)
 
-@numba.njit()
+
+@numba.njit(fastmath=True)
 def euclidean(x, y):
     """Standard euclidean distance.
 
