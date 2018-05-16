@@ -25,6 +25,7 @@ from umap.nndescent import (make_nn_descent,
                             make_initialisations,
                             make_initialized_nnd_search,
                             initialise_search)
+from umap.spectral import spectral_layout
 
 import locale
 
@@ -589,75 +590,6 @@ def make_epochs_per_sample(weights, n_epochs):
     return result
 
 
-def spectral_layout(graph, dim, random_state):
-    """Given a graph compute the spectral embedding of the graph. This is
-    simply the eigenvectors of the laplacian of the graph. Here we use the
-    normalized laplacian.
-
-    Parameters
-    ----------
-    graph: sparse matrix
-        The (weighted) adjacency matrix of the graph as a sparse matrix.
-
-    dim: int
-        The dimension of the space into which to embed.
-
-    random_state: numpy RandomState or equivalent
-        A state capable being used as a numpy random state.
-
-    Returns
-    -------
-    embedding: array of shape (n_vertices, dim)
-        The spectral embedding of the graph.
-    """
-    n_samples = graph.shape[0]
-    n_components, labels = scipy.sparse.csgraph.connected_components(graph)
-
-    if n_components > 1:
-        component_sizes = np.bincount(labels)
-        largest_component = np.where(
-            component_sizes == component_sizes.max())[0][0]
-        graph = graph.tocsr()[labels == largest_component, :]
-        graph = graph.tocsc()[:, labels == largest_component]
-        graph = graph.tocoo()
-
-    diag_data = np.asarray(graph.sum(axis=0))
-    # standard Laplacian
-    # D = scipy.sparse.spdiags(diag_data, 0, graph.shape[0], graph.shape[0])
-    # L = D - graph
-    # Normalized Laplacian
-    I = scipy.sparse.identity(graph.shape[0], dtype=np.float64)
-    D = scipy.sparse.spdiags(1.0 / np.sqrt(diag_data), 0, graph.shape[0],
-                             graph.shape[0])
-    L = I - D * graph * D
-
-    k = dim + 1
-    num_lanczos_vectors = max(2 * k + 1, int(np.sqrt(graph.shape[0])))
-    try:
-        eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
-            L, k,
-            which='SM',
-            ncv=num_lanczos_vectors,
-            tol=1e-4,
-            v0=np.ones(L.shape[0]),
-            maxiter=graph.shape[0] * 5)
-        order = np.argsort(eigenvalues)[1:k]
-        if n_components == 1:
-            return eigenvectors[:, order]
-        else:
-            init = random_state.uniform(low=-10.0, high=10.0,
-                                        size=(n_samples, dim))
-            init[labels == largest_component] = eigenvectors[:, order]
-            return init
-    except scipy.sparse.linalg.ArpackError:
-        warn('WARNING: spectral initialisation failed! The eigenvector solver\n'
-             'failed. This is likely due to too small an eigengap. Consider\n'
-             'adding some noise or jitter to your data.\n\n'
-             'Falling back to random initialisation!')
-        return random_state.uniform(low=-10.0, high=10.0,
-                                    size=(graph.shape[0], dim))
-
-
 @numba.njit()
 def clip(val):
     """Standard clamping of a value into a fixed range (in this case -4.0 to
@@ -828,10 +760,10 @@ def optimize_layout(head_embedding, tail_embedding, head, tail,
     return head_embedding
 
 
-def simplicial_set_embedding(graph, n_components,
+def simplicial_set_embedding(data, graph, n_components,
                              initial_alpha, a, b,
                              gamma, negative_sample_rate, n_epochs,
-                             init, random_state, verbose):
+                             init, random_state, metric, metric_kwds, verbose):
     """Perform a fuzzy simplicial set embedding, using a specified
     initialisation method and then minimizing the fuzzy set cross entropy
     between the 1-skeletons of the high and low dimensional fuzzy simplicial
@@ -862,7 +794,7 @@ def simplicial_set_embedding(graph, n_components,
     n_edge_samples: int
         The total number of edge samples to use in the optimization step.
 
-    init: string (optional, default 'spectral')
+    init: string
         How to initialize the low dimensional embedding. Options are:
             * 'spectral': use a spectral embedding of the fuzzy 1-skeleton
             * 'random': assign initial embedding positions at random.
@@ -870,6 +802,14 @@ def simplicial_set_embedding(graph, n_components,
 
     random_state: numpy RandomState or equivalent
         A state capable being used as a numpy random state.
+
+    metric: string
+        The metric used to measure distance in high dimensional space; used if
+        multiple connected components need to be layed out.
+
+    metric_kwds: dict
+        Key word arguments to be passed to the metric function; used if
+        multiple connected components need to be layed out.
 
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
@@ -884,12 +824,16 @@ def simplicial_set_embedding(graph, n_components,
     graph.sum_duplicates()
     n_vertices = graph.shape[0]
 
+    graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
+    graph.eliminate_zeros()
+
+
     if isinstance(init, str) and init == 'random':
         embedding = random_state.uniform(low=-10.0, high=10.0,
                                          size=(graph.shape[0], n_components))
     elif isinstance(init, str) and init == 'spectral':
         # We add a little noise to avoid local minima for optimization to come
-        initialisation = spectral_layout(graph, n_components, random_state)
+        initialisation = spectral_layout(data, graph, n_components, random_state, metric=metric)
         expansion = 10.0 / initialisation.max()
         embedding = (initialisation * expansion) + \
             random_state.normal(scale=0.001,
@@ -1298,6 +1242,7 @@ class UMAP(BaseEstimator):
             print("Construct embedding")
 
         self.embedding_ = simplicial_set_embedding(
+            self._raw_data,
             self.graph_,
             self.n_components,
             self.initial_alpha,
@@ -1308,6 +1253,8 @@ class UMAP(BaseEstimator):
             n_epochs,
             self.init,
             random_state,
+            self.metric,
+            self.metric_kwds,
             self.verbose
         )
 
