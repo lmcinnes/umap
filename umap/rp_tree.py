@@ -28,7 +28,7 @@ FlatTree = namedtuple('FlatTree', ['hyperplanes', 'offsets',
                                    'children', 'indices'])
 
 
-@numba.njit()
+@numba.njit(fastmath=True)
 def angular_random_projection_split(data, indices, rng_state):
     """Given a set of ``indices`` for data points from ``data``, create
     a random hyperplane to split the data, returning two arrays indices
@@ -130,7 +130,7 @@ def angular_random_projection_split(data, indices, rng_state):
     return indices_left, indices_right, hyperplane_vector, None
 
 
-@numba.njit()
+@numba.njit(fastmath=True)
 def euclidean_random_projection_split(data, indices, rng_state):
     """Given a set of ``indices`` for data points from ``data``, create
     a random hyperplane to split the data, returning two arrays indices
@@ -218,7 +218,7 @@ def euclidean_random_projection_split(data, indices, rng_state):
     return indices_left, indices_right, hyperplane_vector, hyperplane_offset
 
 
-@numba.njit()
+@numba.njit(fastmath=True)
 def sparse_angular_random_projection_split(inds,
                                            indptr,
                                            data,
@@ -334,7 +334,7 @@ def sparse_angular_random_projection_split(inds,
     return indices_left, indices_right, hyperplane, None
 
 
-@numba.njit()
+@numba.njit(fastmath=True)
 def sparse_euclidean_random_projection_split(inds,
                                              indptr,
                                              data,
@@ -643,12 +643,12 @@ def flatten_tree(tree, leaf_size):
         hyperplanes = np.zeros((n_nodes,
                                 tree.hyperplane.shape[0],
                                 tree.hyperplane.shape[1]),
-                               dtype=np.float64)
+                               dtype=np.float32)
     else:
         hyperplanes = np.zeros((n_nodes, tree.hyperplane.shape[0]),
-                               dtype=np.float64)
+                               dtype=np.float32)
 
-    offsets = np.zeros(n_nodes, dtype=np.float64)
+    offsets = np.zeros(n_nodes, dtype=np.float32)
     children = -1 * np.ones((n_nodes, 2), dtype=np.int64)
     indices = -1 * np.ones((n_leaves, leaf_size), dtype=np.int64)
     recursive_flatten(tree, hyperplanes, offsets, children, indices, 0, 0)
