@@ -612,7 +612,7 @@ def clip(val):
         return val
 
 
-@numba.njit('f8(f8[:],f8[:])', fastmath=True)
+@numba.njit('f4(f4[:],f4[:])', fastmath=True)
 def rdist(x, y):
     """Reduced Euclidean distance.
 
@@ -830,15 +830,15 @@ def simplicial_set_embedding(data, graph, n_components,
 
     if isinstance(init, str) and init == 'random':
         embedding = random_state.uniform(low=-10.0, high=10.0,
-                                         size=(graph.shape[0], n_components))
+                                         size=(graph.shape[0], n_components)).astype(np.float32)
     elif isinstance(init, str) and init == 'spectral':
         # We add a little noise to avoid local minima for optimization to come
         initialisation = spectral_layout(data, graph, n_components, random_state, metric=metric)
         expansion = 10.0 / initialisation.max()
-        embedding = (initialisation * expansion) + \
-            random_state.normal(scale=0.001,
-                                size=[graph.shape[0],
-                                      n_components])
+        embedding = (initialisation * expansion).astype(np.float32) + \
+                    random_state.normal(scale=0.001,
+                                        size=[graph.shape[0],
+                                              n_components]).astype(np.float32)
     else:
         try:
             init_data = np.array(init)
