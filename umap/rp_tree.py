@@ -609,6 +609,15 @@ def num_leaves(tree):
         return num_leaves(tree.left_child) + num_leaves(tree.right_child)
 
 
+def max_sparse_hyperplane_size(tree):
+    """Determine the most number on non zeros in a hyperplane entry"""
+    if tree.is_leaf:
+        return 0
+    else:
+        return max(tree.hyperplane.shape[1],
+                   max_sparse_hyperplane_size(tree.left_child),
+                   max_sparse_hyperplane_size(tree.right_child))
+
 def recursive_flatten(tree, hyperplanes, offsets,
                       children, indices, node_num,
                       leaf_num):
@@ -618,7 +627,7 @@ def recursive_flatten(tree, hyperplanes, offsets,
         leaf_num += 1
         return node_num, leaf_num
     else:
-        hyperplanes[node_num] = tree.hyperplane
+        hyperplanes[node_num][:, :tree.hyperplane.shape[1]] = tree.hyperplane
         offsets[node_num] = tree.offset
         children[node_num, 0] = node_num + 1
         old_node_num = node_num
@@ -640,9 +649,10 @@ def flatten_tree(tree, leaf_size):
 
     if len(tree.hyperplane.shape) > 1:
         # sparse case
+        max_hyperplane_nnz = max_sparse_hyperplane_size(tree)
         hyperplanes = np.zeros((n_nodes,
                                 tree.hyperplane.shape[0],
-                                tree.hyperplane.shape[1]),
+                                max_hyperplane_nnz),
                                dtype=np.float32)
     else:
         hyperplanes = np.zeros((n_nodes, tree.hyperplane.shape[0]),
