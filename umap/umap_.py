@@ -824,9 +824,15 @@ def simplicial_set_embedding(data, graph, n_components,
     graph.sum_duplicates()
     n_vertices = graph.shape[0]
 
+    if n_epochs <= 0:
+        # For smaller datasets we can use more epochs
+        if graph.shape[0] <= 10000:
+            n_epochs = 500
+        else:
+            n_epochs = 200
+
     graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
     graph.eliminate_zeros()
-
 
     if isinstance(init, str) and init == 'random':
         embedding = random_state.uniform(low=-10.0, high=10.0,
@@ -852,16 +858,6 @@ def simplicial_set_embedding(data, graph, n_components,
             raise ValueError('Invalid init data passed.'
                              'Should be "random", "spectral" or'
                              ' a numpy array of initial embedding postions')
-
-    if n_epochs <= 0:
-        # For smaller datasets we can use more epochs
-        if graph.shape[0] <= 10000:
-            n_epochs = 500
-        else:
-            n_epochs = 200
-
-    graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
-    graph.eliminate_zeros()
 
     epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs)
 
