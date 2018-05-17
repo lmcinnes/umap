@@ -10,6 +10,8 @@ from sklearn.utils import check_random_state, check_array
 from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import normalize
 
+from sklearn.externals import joblib
+
 import numpy as np
 import scipy.sparse
 import scipy.sparse.csgraph
@@ -1063,6 +1065,7 @@ class UMAP(BaseEstimator):
                  angular_rp_forest=False,
                  target_metric='categorical',
                  target_metric_kwds={},
+                 transform_seed=42,
                  verbose=False
                  ):
 
@@ -1087,6 +1090,7 @@ class UMAP(BaseEstimator):
         self.transform_queue_size = transform_queue_size
         self.target_metric = target_metric
         self.target_metric_kwds = target_metric_kwds
+        self.transform_seed = transform_seed
         self.verbose = verbose
 
         self._transform_available = False
@@ -1254,6 +1258,8 @@ class UMAP(BaseEstimator):
             self.verbose
         )
 
+        self._input_hash = joblib.hash(self._raw_data)
+
         return self
 
     def fit_transform(self, X, y=None):
@@ -1288,11 +1294,17 @@ class UMAP(BaseEstimator):
         X_new : array, shape (n_samples, n_components)
             Embedding of the new data in low-dimensional space.
         """
+        # If we just have the original input then short circuit things
+        X = check_array(X, dtype=np.float32, accept_sparse='csr')
+        x_hash = joblib.hash(X)
+        if x_hash == self._input_hash:
+            return self.embedding_
+
         if self._sparse_data:
             raise ValueError('Transform not available for sparse input.')
 
-        X = check_array(X, dtype=np.float64, order='C')
-        random_state = check_random_state(self.random_state)
+        X = check_array(X, dtype=np.float32, order='C')
+        random_state = check_random_state(self.transform_seed)
         rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(
             np.int64)
 
