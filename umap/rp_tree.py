@@ -627,7 +627,11 @@ def recursive_flatten(tree, hyperplanes, offsets,
         leaf_num += 1
         return node_num, leaf_num
     else:
-        hyperplanes[node_num][:, :tree.hyperplane.shape[1]] = tree.hyperplane
+        if len(tree.hyperplane.shape) > 1:
+            # spare case
+            hyperplanes[node_num][:, :tree.hyperplane.shape[1]] = tree.hyperplane
+        else:
+            hyperplanes[node_num] = tree.hyperplane
         offsets[node_num] = tree.offset
         children[node_num, 0] = node_num + 1
         old_node_num = node_num
