@@ -878,7 +878,7 @@ def simplicial_set_embedding(data, graph, n_components,
 
 @numba.njit()
 def init_transform(indices, weights, embedding):
-    result = np.zeros((indices.shape[0], embedding.shape[1]), dtype=np.float64)
+    result = np.zeros((indices.shape[0], embedding.shape[1]), dtype=np.float32)
 
     for i in range(indices.shape[0]):
         for j in range(indices.shape[1]):
