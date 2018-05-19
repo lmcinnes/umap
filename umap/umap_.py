@@ -1126,7 +1126,7 @@ class UMAP(BaseEstimator):
         """
 
         # Handle other array dtypes (TODO: do this properly)
-        X = check_array(X, accept_sparse='csr').astype(np.float64)
+        X = check_array(X, dtype=np.float32, accept_sparse='csr')
         self._raw_data = X
 
         if X.shape[0] <= self.n_neighbors:
