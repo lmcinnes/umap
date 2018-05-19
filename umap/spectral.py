@@ -137,13 +137,7 @@ def spectral_layout(data, graph, dim, random_state, metric='euclidean', metric_k
             v0=np.ones(L.shape[0]),
             maxiter=graph.shape[0] * 5)
         order = np.argsort(eigenvalues)[1:k]
-        if n_components == 1:
-            return eigenvectors[:, order]
-        else:
-            init = random_state.uniform(low=-10.0, high=10.0,
-                                        size=(n_samples, dim))
-            init[labels == largest_component] = eigenvectors[:, order]
-            return init
+        return eigenvectors[:, order]
     except scipy.sparse.linalg.ArpackError:
         warn('WARNING: spectral initialisation failed! The eigenvector solver\n'
              'failed. This is likely due to too small an eigengap. Consider\n'
