@@ -755,6 +755,8 @@ def optimize_layout(head_embedding, tail_embedding, head, tail,
                                                         i]
 
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
+        if alpha < 0.001:
+            alpha = 0.001
 
         if verbose and n % int(n_epochs / 10) == 0:
             print('\tcompleted ', n, ' / ', n_epochs, 'epochs')
@@ -844,7 +846,7 @@ def simplicial_set_embedding(data, graph, n_components,
         initialisation = spectral_layout(data, graph, n_components, random_state, metric=metric)
         expansion = 10.0 / initialisation.max()
         embedding = (initialisation * expansion).astype(np.float32) + \
-                    random_state.normal(scale=0.001,
+                    random_state.normal(scale=0.0001,
                                         size=[graph.shape[0],
                                               n_components]).astype(np.float32)
     else:
@@ -1057,7 +1059,7 @@ class UMAP(BaseEstimator):
                  bandwidth=1.0,
                  gamma=1.0,
                  negative_sample_rate=5,
-                 transform_queue_size=2.0,
+                 transform_queue_size=4.0,
                  a=None,
                  b=None,
                  random_state=None,
@@ -1350,11 +1352,11 @@ class UMAP(BaseEstimator):
         if self.n_epochs is None:
             # For smaller datasets we can use more epochs
             if graph.shape[0] <= 10000:
-                n_epochs = 300
-            else:
                 n_epochs = 100
+            else:
+                n_epochs = 30
         else:
-            n_epochs = self.n_epochs
+            n_epochs = self.n_epochs // 3.0
 
         graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
         graph.eliminate_zeros()
@@ -1368,7 +1370,7 @@ class UMAP(BaseEstimator):
                                     n_epochs, X.shape[0],
                                     epochs_per_sample, self.a, self.b,
                                     rng_state, self.gamma,
-                                    self.initial_alpha,
+                                    self.initial_alpha / 3.0,
                                     self.negative_sample_rate,
                                     verbose=self.verbose)
 
