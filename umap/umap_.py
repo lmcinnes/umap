@@ -755,8 +755,6 @@ def optimize_layout(head_embedding, tail_embedding, head, tail,
                                                         i]
 
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
-        if alpha < 0.001:
-            alpha = 0.001
 
         if verbose and n % int(n_epochs / 10) == 0:
             print('\tcompleted ', n, ' / ', n_epochs, 'epochs')
