@@ -83,7 +83,7 @@ def minkowski(x, y, p=2):
 
 
 @numba.njit()
-def weighted_minkowski(x, y, w=_mock_identity, p=2):
+def weighted_minkowski(x, y, w=_mock_ones, p=2):
     """A weighted version of Minkowski distance.
 
     ..math::
