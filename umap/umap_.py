@@ -1368,7 +1368,7 @@ class UMAP(BaseEstimator):
                                     n_epochs, X.shape[0],
                                     epochs_per_sample, self.a, self.b,
                                     rng_state, self.gamma,
-                                    self.initial_alpha / 3.0,
+                                    self.initial_alpha,
                                     self.negative_sample_rate,
                                     verbose=self.verbose)
 
