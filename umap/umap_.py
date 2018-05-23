@@ -1408,7 +1408,7 @@ class UMAP(BaseEstimator):
             print("Construct fuzzy simplicial set")
 
         # Handle small cases efficiently by computing all distances
-        if X.shape[0] < 4096:
+        if X.shape[0] < 4096 and not (metric == 'correlation' and scipy.sparse.isspmatrix_csr(X)):
             dmat = pairwise_distances(X, metric=self.metric, **self.metric_kwds)
             self.graph = fuzzy_simplicial_set(
                 dmat,
