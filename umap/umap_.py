@@ -773,6 +773,9 @@ def simplicial_set_embedding(data, graph, n_components,
 
     Parameters
     ----------
+    data: array of shape (n_samples, n_features)
+        The source data to be embedded by UMAP.
+
     graph: sparse matrix
         The 1-skeleton of the high dimensional fuzzy simplicial set as
         represented by a graph for which we require a sparse matrix for the
@@ -878,6 +881,27 @@ def simplicial_set_embedding(data, graph, n_components,
 
 @numba.njit()
 def init_transform(indices, weights, embedding):
+    """Given indices and weights and an original embeddings
+    initialize the positions of new points relative to the
+    indices and weights (of their neighbors in the source data).
+
+    Parameters
+    ----------
+    indices: array of shape (n_new_samples, n_neighbors)
+        The indices of the neighbors of each new sample
+
+    weights: array of shape (n_new_samples, n_neighbors)
+        The membership strengths of associated 1-simplices
+        for each of the new samples.
+
+    embedding: array of shape (n_samples, dim)
+        The original embedding of the source data.
+
+    Returns
+    -------
+    new_embedding: array of shape (n_new_samples, dim)
+        An initial embedding of the new sample points.
+    """
     result = np.zeros((indices.shape[0], embedding.shape[1]), dtype=np.float32)
 
     for i in range(indices.shape[0]):

@@ -8,6 +8,38 @@ from sklearn.metrics import pairwise_distances
 from warnings import warn
 
 def component_layout(data, n_components, component_labels, dim, metric='euclidean', metric_kwds={}):
+    """Provide a layout relating the separate connected components. This is done
+    by taking the centroid of each component and then performing a spectral embedding
+    of the centroids.
+
+    Parameters
+    ----------
+    data: array of shape (n_samples, n_features)
+        The source data -- required so we can generate centroids for each
+        connected component of the graph.
+
+    n_components: int
+        The number of distinct components to be layed out.
+
+    component_labels: array of shape (n_samples)
+        For each vertex in the graph the label of the component to
+        which the vertex belongs.
+
+    dim: int
+        The chosen embedding dimension.
+
+    metric: string or callable (optional, default 'euclidean')
+        The metric used to measure distances among the source data points.
+
+    metric_kwds: dict (optional, default {})
+        Keyword arguments to be passed to the metric function.
+
+    Returns
+    -------
+    component_embedding: array of shape (n_components, dim)
+        The ``dim``-dimensional embedding of the ``n_components``-many
+        connected components.
+    """
 
     component_centroids = np.empty((n_components, data.shape[1]), dtype=np.float64)
 
@@ -23,7 +55,45 @@ def component_layout(data, n_components, component_labels, dim, metric='euclidea
     return component_embedding
 
 
-def multi_component_layout(data, graph, n_components, component_labels, dim, random_state, metric='euclidean', metric_kwds={}):
+def multi_component_layout(data, graph, n_components, component_labels,
+                           dim, random_state, metric='euclidean', metric_kwds={}):
+    """Specialised layout algorithm for dealing with graphs with many connected components.
+    This will first fid relative positions for the components by spectrally embedding
+    their centroids, then spectrally embed each individual connected component positioning
+    them according to the centroid embeddings. This provides a decent embedding of each
+    component while placing the components in good relative positions to one another.
+
+    Parameters
+    ----------
+    data: array of shape (n_samples, n_features)
+        The source data -- required so we can generate centroids for each
+        connected component of the graph.
+
+    graph: sparse matrix
+        The adjacency matrix of the graph to be emebdded.
+
+    n_components: int
+        The number of distinct components to be layed out.
+
+    component_labels: array of shape (n_samples)
+        For each vertex in the graph the label of the component to
+        which the vertex belongs.
+
+    dim: int
+        The chosen embedding dimension.
+
+    metric: string or callable (optional, default 'euclidean')
+        The metric used to measure distances among the source data points.
+
+    metric_kwds: dict (optional, default {})
+        Keyword arguments to be passed to the metric function.
+
+
+    Returns
+    -------
+    embedding: array of shape (n_samples, dim)
+        The initial embedding of ``graph``.
+    """
 
     result = np.empty((graph.shape[0], dim), dtype=np.float32)
 
@@ -44,8 +114,9 @@ def multi_component_layout(data, graph, n_components, component_labels, dim, ran
 
         if component_graph.shape[0] < 2 * dim:
             result[component_labels == label] = \
-                random_state.uniform(low=-data_range, high=data_range, size=(component_graph.shape[0], dim)) + \
-                    meta_embedding[label]
+                random_state.uniform(low=-data_range, high=data_range,
+                                     size=(component_graph.shape[0], dim)) + \
+                meta_embedding[label]
             continue
 
         diag_data = np.asarray(component_graph.sum(axis=0))
@@ -79,8 +150,9 @@ def multi_component_layout(data, graph, n_components, component_labels, dim, ran
                  'adding some noise or jitter to your data.\n\n'
                  'Falling back to random initialisation!')
             result[component_labels == label] = \
-                random_state.uniform(low=-data_range, high=data_range, size=(component_graph.shape[0], dim)) + \
-                    meta_embedding[label]
+                random_state.uniform(low=-data_range, high=data_range,
+                                     size=(component_graph.shape[0], dim)) + \
+                meta_embedding[label]
 
     return result
 
