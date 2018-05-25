@@ -1039,6 +1039,19 @@ class UMAP(BaseEstimator):
         as cosine, correlation etc. In the case of those metrics angular forests
         will be chosen automatically.
 
+    target_metric: string or callable (optional, default 'categorical')
+        The metric used to measure distance for a target array is using supervised
+        dimension reduction. By default this is 'categorical' which will measure
+        distance in terms of whether categories match or are different. Furthermore,
+        if semi-supervised is required target values of -1 will be trated as
+        unlabelled under the 'categorical' metric. If the target array takes
+        continuous values (e.g. for a regression problem) then metric of 'l1'
+        or 'l2' is probably more appropriate.
+
+    target_metric_kwds: dict (optional, default {})
+        Keyword argument to pass to the target metric when performing
+        supervised dimension reduction.
+
     verbose: bool (optional, default False)
         Controls verbosity of logging.
     """
@@ -1116,6 +1129,8 @@ class UMAP(BaseEstimator):
     def fit(self, X, y=None):
         """Fit X into an embedded space.
 
+        Optionally use y for supervised dimension reduction.
+
         Parameters
         ----------
         X : array, shape (n_samples, n_features) or (n_samples, n_samples)
@@ -1123,6 +1138,12 @@ class UMAP(BaseEstimator):
             matrix. Otherwise it contains a sample per row. If the method
             is 'exact', X may be a sparse matrix of type 'csr', 'csc'
             or 'coo'.
+
+        y : array, shape (n_samples)
+            A target array for supervised dimension reduction. How this is
+            handled is determined by parameters UMAP was instantiated with.
+            The relevant attributes are ``target_metric`` and
+            ``target_metric_kwds``.
         """
 
         # Handle other array dtypes (TODO: do this properly)
@@ -1271,6 +1292,12 @@ class UMAP(BaseEstimator):
         X : array, shape (n_samples, n_features) or (n_samples, n_samples)
             If the metric is 'precomputed' X must be a square distance
             matrix. Otherwise it contains a sample per row.
+
+        y : array, shape (n_samples)
+            A target array for supervised dimension reduction. How this is
+            handled is determined by parameters UMAP was instantiated with.
+            The relevant attributes are ``target_metric`` and
+            ``target_metric_kwds``.
 
         Returns
         -------
