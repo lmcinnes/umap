@@ -33,7 +33,7 @@ configuration = {
     'packages' : ['umap'],
     'install_requires' : ['scikit-learn >= 0.16',
                           'scipy >= 0.19',
-                          'numba >= 0.34'],
+                          'numba >= 0.36'],
     'ext_modules' : [],
     'cmdclass' : {},
     'test_suite' : 'nose.collector',
