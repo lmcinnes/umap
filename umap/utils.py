@@ -355,6 +355,24 @@ def deheap_sort(heap):
 
 @numba.njit('i8(f8[:, :, :],i8)')
 def smallest_flagged(heap, row):
+    """Search the heap for the smallest element that is
+    still flagged.
+
+    Parameters
+    ----------
+    heap: array of shape (3, n_samples, n_neighbors)
+        The heaps to search
+
+    row: int
+        Which of the heaps to search
+
+    Returns
+    -------
+    index: int
+        The index of the smallest flagged element
+        of the ``row``th heap, or -1 if no flagged
+        elements remain in the heap.
+    """
     ind = heap[0, row]
     dist = heap[1, row]
     flag = heap[2, row]
