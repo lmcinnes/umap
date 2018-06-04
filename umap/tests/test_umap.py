@@ -132,8 +132,6 @@ def test_sparse_nn_descent_neighbor_accuracy():
     true_indices = tree.query(sparse_nn_data.todense(),
                               10, return_distance=False)
 
-    print(sparse_nn_data.shape)
-
     num_correct = 0.0
     for i in range(nn_data.shape[0]):
         num_correct += np.sum(np.in1d(true_indices[i], knn_indices[i]))
@@ -178,7 +176,7 @@ def test_metrics():
                             for i in range(binary_data.shape[0])])
     assert_array_almost_equal(test_matrix, dist_matrix,
                               err_msg="Distances don't match "
-                                      "for metric {}".format(metric))
+                                      "for metric seuclidean")
 
     # Weighted minkowski
     dist_matrix = pairwise_distances(spatial_data, metric='minkowski', w=v)
@@ -187,7 +185,7 @@ def test_metrics():
                             for i in range(binary_data.shape[0])])
     assert_array_almost_equal(test_matrix, dist_matrix,
                               err_msg="Distances don't match "
-                                      "for metric {}".format(metric))
+                                      "for metric weighted_minkowski")
     # Mahalanobis
     v = np.abs(np.random.randn(spatial_data.shape[1], spatial_data.shape[1]))
     dist_matrix = pairwise_distances(spatial_data, metric='mahalanobis', VI=v)
@@ -196,7 +194,7 @@ def test_metrics():
                             for i in range(binary_data.shape[0])])
     assert_array_almost_equal(test_matrix, dist_matrix,
                               err_msg="Distances don't match "
-                                      "for metric {}".format(metric))
+                                      "for metric mahalnobis")
 
 def test_sparse_metrics():
     for metric in spatial_distances:
@@ -225,7 +223,7 @@ def test_sparse_metrics():
                      for i in range(sparse_spatial_data.shape[0])])
 
             assert_array_almost_equal(test_matrix, dist_matrix,
-                                      err_msg="Distances don't match "
+                                      err_msg="Sparse distances don't match "
                                               "for metric {}".format(metric))
 
 

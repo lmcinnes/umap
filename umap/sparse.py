@@ -286,7 +286,7 @@ def sparse_chebyshev(ind1, data1, ind2, data2):
 
 
 @numba.njit()
-def sparse_minkowski(ind1, data1, ind2, data2, p=2):
+def sparse_minkowski(ind1, data1, ind2, data2, p=2.0):
     aux_inds, aux_data = sparse_diff(ind1, data1, ind2, data2)
     result = 0.0
     for i in range(aux_data.shape[0]):
@@ -360,7 +360,10 @@ def sparse_dice(ind1, data1, ind2, data2):
     num_non_zero = arr_union(ind1, ind2).shape[0]
     num_not_equal = num_non_zero - num_true_true
 
-    return num_not_equal / (2.0 * num_true_true + num_not_equal)
+    if num_not_equal == 0.0:
+        return 0.0
+    else:
+        return num_not_equal / (2.0 * num_true_true + num_not_equal)
 
 
 @numba.njit()
