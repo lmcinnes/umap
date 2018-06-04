@@ -29,7 +29,12 @@ def arr_unique(arr):
 # Just reproduce a simpler version of numpy union1d (not numba supported yet)
 @numba.njit()
 def arr_union(ar1, ar2):
-    return arr_unique(np.concatenate((ar1, ar2)))
+    if ar1.shape[0] == 0:
+        return ar2
+    elif ar2.shape[0] == 0:
+        return ar1
+    else:
+        return arr_unique(np.concatenate((ar1, ar2)))
 
 
 # Just reproduce a simpler version of numpy intersect1d (not numba supported
