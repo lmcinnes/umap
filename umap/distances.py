@@ -151,7 +151,7 @@ def bray_curtis(x, y):
     if denominator > 0.0:
         return float(numerator) / denominator
     else:
-        return np.nan
+        return 0.0
 
 
 @numba.njit()
@@ -191,7 +191,10 @@ def dice(x, y):
         num_true_true += (x_true and y_true)
         num_not_equal += (x_true != y_true)
 
-    return num_not_equal / (2.0 * num_true_true + num_not_equal)
+    if num_not_equal == 0.0:
+        return 0.0
+    else:
+        return num_not_equal / (2.0 * num_true_true + num_not_equal)
 
 
 @numba.njit()
@@ -258,7 +261,10 @@ def sokal_sneath(x, y):
         num_true_true += (x_true and y_true)
         num_not_equal += (x_true != y_true)
 
-    return num_not_equal / (0.5 * num_true_true + num_not_equal)
+    if num_not_equal == 0.0:
+        return 0.0
+    else:
+        return num_not_equal / (0.5 * num_true_true + num_not_equal)
 
 
 @numba.njit()
@@ -286,8 +292,11 @@ def yule(x, y):
     num_false_false = x.shape[0] - num_true_true - num_true_false - \
                       num_false_true
 
-    return (2.0 * num_true_false * num_false_true) / \
-           (num_true_true * num_false_false + num_true_false * num_false_true)
+    if (num_true_false == 0.0 or num_false_true == 0.0):
+        return 0.0
+    else:
+        return (2.0 * num_true_false * num_false_true) / \
+               (num_true_true * num_false_false + num_true_false * num_false_true)
 
 
 @numba.njit()
@@ -300,7 +309,9 @@ def cosine(x, y):
         norm_x += x[i]**2
         norm_y += y[i]**2
 
-    if norm_x == 0.0 or norm_y == 0.0:
+    if norm_x == 0.0 and norm_y == 0.0:
+        return 0.0
+    elif norm_x == 0.0 or norm_y == 0.0:
         return 1.0
     else:
         return 1.0 - (result / np.sqrt(norm_x * norm_y))
@@ -328,7 +339,9 @@ def correlation(x, y):
         norm_y += shifted_y ** 2
         dot_product += shifted_x * shifted_y
 
-    if dot_product == 0.0:
+    if norm_x == 0.0 and norm_y == 0.0:
+        return 0.0
+    elif dot_product == 0.0:
         return 1.0
     else:
         return (1.0 - (dot_product / np.sqrt(norm_x * norm_y)))
