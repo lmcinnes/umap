@@ -106,8 +106,6 @@ def test_nn_descent_neighbor_accuracy():
 
 
 # TODO: Sparse NN descent via trees is currently broken in dev3
-# This should be fixed.
-@SkipTest
 def test_sparse_nn_descent_neighbor_accuracy():
     rng_state = np.random.randint(INT32_MIN, INT32_MAX, size=3)
     nn_descent = spdist.make_sparse_nn_descent(spdist.sparse_euclidean, ())
@@ -167,6 +165,34 @@ def test_metrics():
                                   err_msg="Distances don't match "
                                           "for metric {}".format(metric))
 
+    # Handle the few special distances separately
+    # SEuclidean
+    v = np.abs(np.random.randn(spatial_data.shape[1]))
+    dist_matrix = pairwise_distances(spatial_data, metric='seuclidean', V=v)
+    test_matrix = np.array([[dist.seuclidean(binary_data[i], binary_data[j], v)
+                             for j in range(binary_data.shape[0])]
+                            for i in range(binary_data.shape[0])])
+    assert_array_almost_equal(test_matrix, dist_matrix,
+                              err_msg="Distances don't match "
+                                      "for metric {}".format(metric))
+
+    # Weighted minkowski
+    dist_matrix = pairwise_distances(spatial_data, metric='minkowski', w=v)
+    test_matrix = np.array([[dist.weighted_minkowski(binary_data[i], binary_data[j], v)
+                             for j in range(binary_data.shape[0])]
+                            for i in range(binary_data.shape[0])])
+    assert_array_almost_equal(test_matrix, dist_matrix,
+                              err_msg="Distances don't match "
+                                      "for metric {}".format(metric))
+    # Mahalanobis
+    v = np.abs(np.random.randn(spatial_data.shape[1], spatial_data.shape[1]))
+    dist_matrix = pairwise_distances(spatial_data, metric='mahalanobis', VI=v)
+    test_matrix = np.array([[dist.mahalanobis(binary_data[i], binary_data[j], v)
+                             for j in range(binary_data.shape[0])]
+                            for i in range(binary_data.shape[0])])
+    assert_array_almost_equal(test_matrix, dist_matrix,
+                              err_msg="Distances don't match "
+                                      "for metric {}".format(metric))
 
 def test_sparse_metrics():
     for metric in spatial_distances:
