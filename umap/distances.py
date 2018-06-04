@@ -151,7 +151,7 @@ def bray_curtis(x, y):
     if denominator > 0.0:
         return float(numerator) / denominator
     else:
-        return 0.0
+        return np.nan
 
 
 @numba.njit()
