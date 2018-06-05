@@ -182,7 +182,6 @@ def test_metrics():
                                   err_msg="Distances don't match "
                                           "for metric {}".format(metric))
 
-    # TODO: Fix up these metrics!
     # Handle the few special distances separately
     # SEuclidean
     v = np.abs(np.random.randn(spatial_data.shape[1]))
