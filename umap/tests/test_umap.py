@@ -38,6 +38,7 @@ from umap.umap_ import (
     make_forest,
     rptree_leaf_array,
     nearest_neighbors,
+    smooth_knn_dist,
     UMAP)
 
 np.random.seed(42)
@@ -117,7 +118,9 @@ def test_angular_nn_descent_neighbor_accuracy():
 
 
 def test_sparse_nn_descent_neighbor_accuracy():
-    knn_indices, knn_dists, _ = nearest_neighbors(sparse_nn_data, 10, 'euclidean', {}, False, np.random)
+    knn_indices, knn_dists, _ = nearest_neighbors(sparse_nn_data, 10,
+                                                  'euclidean', {}, False,
+                                                  np.random)
 
     tree = KDTree(sparse_nn_data.todense())
     true_indices = tree.query(sparse_nn_data.todense(),
@@ -148,8 +151,22 @@ def test_sparse_angular_nn_descent_neighbor_accuracy():
     assert_greater_equal(percent_correct, 0.99, 'NN-descent did not get 99% '
                          'accuracy on nearest neighbors')
 
-def test_trustworthiness():
-    pass
+def test_smooth_knn_dist_l1norms():
+    knn_indices, knn_dists, _ = nearest_neighbors(nn_data, 10,
+                                                  'euclidean', {}, False,
+                                                  np.random)
+    sigmas, rhos = smooth_knn_dist(knn_dists, 10)
+    shifted_dists = knn_dists - rhos[:, np.newaxis]
+    shifted_dists[shifted_dists < 0.0] = 0.0
+    vals = np.exp(-(shifted_dists/sigmas[:, np.newaxis]))
+    norms = np.sum(vals, axis=1)
+
+    assert_array_almost_equal(norms,
+                              1.0 + np.log2(10) * np.ones(norms.shape[0]),
+                              decimal=3,
+                              err_msg='Smooth knn-dists does not give expected'
+                                      'norms')
+
 
 
 def test_metrics():
