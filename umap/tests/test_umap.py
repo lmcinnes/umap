@@ -18,7 +18,7 @@ from sklearn.utils.testing import (assert_equal,
                                    assert_no_warnings,
                                    if_matplotlib)
 from sklearn.metrics import pairwise_distances
-from sklearn.neighbors import KDTree
+from sklearn.neighbors import KDTree, BallTree
 from sklearn.utils import shuffle
 from sklearn.preprocessing import StandardScaler
 from scipy.stats import mode
@@ -185,32 +185,43 @@ def test_metrics():
     # TODO: Fix up these metrics!
     # Handle the few special distances separately
     # SEuclidean
-    # v = np.abs(np.random.randn(spatial_data.shape[1]))
-    # dist_matrix = pairwise_distances(spatial_data, metric='seuclidean', V=v)
-    # test_matrix = np.array([[dist.standardised_euclidean(binary_data[i], binary_data[j], v)
-    #                          for j in range(binary_data.shape[0])]
-    #                         for i in range(binary_data.shape[0])])
-    # assert_array_almost_equal(test_matrix, dist_matrix,
-    #                           err_msg="Distances don't match "
-    #                                   "for metric seuclidean")
+    v = np.abs(np.random.randn(spatial_data.shape[1]))
+    dist_matrix = pairwise_distances(spatial_data, metric='seuclidean', V=v)
+    test_matrix = np.array([[dist.standardised_euclidean(spatial_data[i], spatial_data[j], v)
+                             for j in range(spatial_data.shape[0])]
+                            for i in range(spatial_data.shape[0])])
+    assert_array_almost_equal(test_matrix, dist_matrix,
+                              err_msg="Distances don't match "
+                                      "for metric seuclidean")
 
     # Weighted minkowski
-    # dist_matrix = pairwise_distances(spatial_data, metric='minkowski', w=v)
-    # test_matrix = np.array([[dist.weighted_minkowski(binary_data[i], binary_data[j], v)
-    #                          for j in range(binary_data.shape[0])]
-    #                         for i in range(binary_data.shape[0])])
-    # assert_array_almost_equal(test_matrix, dist_matrix,
-    #                           err_msg="Distances don't match "
-    #                                   "for metric weighted_minkowski")
+    dist_matrix = pairwise_distances(spatial_data, metric='wminkowski', w=v, p=3)
+    test_matrix = np.array([[dist.weighted_minkowski(spatial_data[i], spatial_data[j], v, p=3)
+                             for j in range(spatial_data.shape[0])]
+                            for i in range(spatial_data.shape[0])])
+    assert_array_almost_equal(test_matrix, dist_matrix,
+                              err_msg="Distances don't match "
+                                      "for metric weighted_minkowski")
     # Mahalanobis
-    # v = np.abs(np.random.randn(spatial_data.shape[1], spatial_data.shape[1]))
-    # dist_matrix = pairwise_distances(spatial_data, metric='mahalanobis', VI=v)
-    # test_matrix = np.array([[dist.mahalanobis(binary_data[i], binary_data[j], v)
-    #                          for j in range(binary_data.shape[0])]
-    #                         for i in range(binary_data.shape[0])])
-    # assert_array_almost_equal(test_matrix, dist_matrix,
-    #                           err_msg="Distances don't match "
-    #                                   "for metric mahalnobis")
+    v = np.abs(np.random.randn(spatial_data.shape[1], spatial_data.shape[1]))
+    dist_matrix = pairwise_distances(spatial_data, metric='mahalanobis', VI=v)
+    test_matrix = np.array([[dist.mahalanobis(spatial_data[i], spatial_data[j], v)
+                             for j in range(spatial_data.shape[0])]
+                            for i in range(spatial_data.shape[0])])
+    assert_array_almost_equal(test_matrix, dist_matrix,
+                              err_msg="Distances don't match "
+                                      "for metric mahalanobis")
+    # Haversine
+    tree = BallTree(spatial_data[: ,:2], metric='haversine')
+    dist_matrix, _ = tree.query(spatial_data[: ,:2], k=spatial_data.shape[0])
+    test_matrix = np.array([[dist.haversine(spatial_data[i, :2], spatial_data[j, :2])
+                             for j in range(spatial_data.shape[0])]
+                            for i in range(spatial_data.shape[0])])
+    test_matrix.sort(axis=1)
+    assert_array_almost_equal(test_matrix, dist_matrix,
+                              err_msg="Distances don't match "
+                                      "for metric haversine")
+
 
 def test_sparse_metrics():
     for metric in spatial_distances:
