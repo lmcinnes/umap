@@ -400,7 +400,11 @@ def sparse_russellrao(ind1, data1, ind2, data2, n_features):
 
     num_true_true = arr_intersect(ind1, ind2).shape[0]
 
-    return float(n_features - num_true_true) / (n_features)
+    if (num_true_true == np.sum(data1 != 0) and
+        num_true_true == np.sum(data2 != 0)):
+        return 0.0
+    else:
+        return float(n_features - num_true_true) / (n_features)
 
 
 @numba.njit()
@@ -418,7 +422,10 @@ def sparse_sokal_sneath(ind1, data1, ind2, data2):
     num_non_zero = arr_union(ind1, ind2).shape[0]
     num_not_equal = num_non_zero - num_true_true
 
-    return num_not_equal / (0.5 * num_true_true + num_not_equal)
+    if num_not_equal == 0.0:
+        return 0.0
+    else:
+        return num_not_equal / (0.5 * num_true_true + num_not_equal)
 
 
 @numba.njit()

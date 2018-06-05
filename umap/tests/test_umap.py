@@ -219,7 +219,7 @@ def test_sparse_metrics():
                 'correlation':
             dist_matrix = pairwise_distances(sparse_spatial_data.todense(),
                                              metric=metric)
-            if metric in ('braycurtis''jaccard', 'dice', 'sokalsneath', 'yule'):
+            if metric in ('braycurtis', 'dice', 'sokalsneath', 'yule'):
                 dist_matrix[np.where(~np.isfinite(dist_matrix))] = 0.0
             if metric in ('cosine', 'correlation', 'kulsinski', 'russellrao'):
                 dist_matrix[np.where(~np.isfinite(dist_matrix))] = 1.0
@@ -250,6 +250,41 @@ def test_sparse_metrics():
                                       err_msg="Sparse distances don't match "
                                               "for metric {}".format(metric))
 
+    for metric in binary_distances:
+        # Sparse correlation has precision errors right now, leave out ...
+        if metric in spdist.sparse_named_distances:
+            dist_matrix = pairwise_distances(sparse_binary_data.todense(),
+                                             metric=metric)
+            if metric in ('jaccard', 'dice', 'sokalsneath', 'yule'):
+                dist_matrix[np.where(~np.isfinite(dist_matrix))] = 0.0
+            if metric in ('kulsinski', 'russellrao'):
+                dist_matrix[np.where(~np.isfinite(dist_matrix))] = 1.0
+                # And because distance between all zero vectors should be zero
+                dist_matrix[10, 11] = 0.0
+                dist_matrix[11, 10] = 0.0
+
+            dist_function = spdist.sparse_named_distances[metric]
+            if metric in spdist.sparse_need_n_features:
+                test_matrix = np.array(
+                    [[dist_function(sparse_binary_data[i].indices,
+                                    sparse_binary_data[i].data,
+                                    sparse_binary_data[j].indices,
+                                    sparse_binary_data[j].data,
+                                    sparse_binary_data.shape[1])
+                        for j in range(sparse_binary_data.shape[0])]
+                     for i in range(sparse_binary_data.shape[0])])
+            else:
+                test_matrix = np.array(
+                    [[dist_function(sparse_binary_data[i].indices,
+                                    sparse_binary_data[i].data,
+                                    sparse_binary_data[j].indices,
+                                    sparse_binary_data[j].data)
+                        for j in range(sparse_binary_data.shape[0])]
+                     for i in range(sparse_binary_data.shape[0])])
+
+            assert_array_almost_equal(test_matrix, dist_matrix,
+                                      err_msg="Sparse distances don't match "
+                                              "for metric {}".format(metric))
 
 def test_sparse_fit():
     pass
