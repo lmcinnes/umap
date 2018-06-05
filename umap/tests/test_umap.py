@@ -21,6 +21,7 @@ from sklearn.metrics import pairwise_distances
 from sklearn.neighbors import KDTree, BallTree
 from sklearn.utils import shuffle
 from sklearn.preprocessing import StandardScaler, normalize
+from sklearn.manifold.t_sne import trustworthiness
 from scipy.stats import mode
 
 from tempfile import mkdtemp
@@ -298,19 +299,33 @@ def test_sparse_metrics():
                                       err_msg="Sparse distances don't match "
                                               "for metric {}".format(metric))
 
-def test_sparse_fit():
-    pass
+def test_umap_sparse_trustworthiness():
+    embedding = UMAP(n_neighbors=5).fit_transform(sparse_nn_data)
+    trust = trustworthiness(sparse_nn_data.toarray(), embedding, 10)
+    assert_greater_equal(trust, 0.97, 'Insufficiently trustworthy embedding for'
+                                      'sparse test dataset: {}'.format(trust))
 
-
-@SkipTest
-def test_sklearn_digits():
-    digits = datasets.load_digits()
-    data = digits.data
+def test_umap_trustworthiness_on_iris():
+    iris = datasets.load_iris()
+    data = iris.data
     embedding = UMAP(n_neighbors=5, min_dist=0.01,
                      random_state=42).fit_transform(data)
-    #np.save('digits_embedding_42.npy', embedding)
-    to_match = np.load(os.path.join(os.path.dirname(__file__),
-                                    'digits_embedding_42.npy'))
-    assert_array_almost_equal(embedding, to_match, err_msg='Digits embedding '
-                                                           'is not consistent '
-                                                           'with previous runs')
+    trust = trustworthiness(iris.data, embedding, 10)
+    assert_greater_equal(trust, 0.97, 'Insufficiently trustworthy embedding for'
+                                      'iris dataset: {}'.format(trust))
+
+def test_umap_transform_on_iris():
+    iris = datasets.load_iris()
+    selection = np.random.choice([True, False], 150,
+                                 replace=True, p=[0.75, 0.25])
+    data = iris.data[selection]
+    fitter = UMAP(n_neighbors=5, min_dist=0.01,
+                     random_state=42).fit(data)
+
+    new_data = iris.data[~selection]
+    embedding = fitter.transform(new_data)
+
+    trust = trustworthiness(new_data, embedding, 5)
+    assert_greater_equal(trust, 0.95, 'Insufficiently trustworthy transform for'
+                                      'iris dataset: {}'.format(trust))
+
