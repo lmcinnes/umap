@@ -303,9 +303,9 @@ def test_sparse_metrics():
                                               "for metric {}".format(metric))
 
 def test_umap_sparse_trustworthiness():
-    embedding = UMAP(n_neighbors=10).fit_transform(sparse_nn_data)
-    trust = trustworthiness(sparse_nn_data.toarray(), embedding, 10)
-    assert_greater_equal(trust, 0.97, 'Insufficiently trustworthy embedding for'
+    embedding = UMAP(n_neighbors=10).fit_transform(sparse_nn_data[:100])
+    trust = trustworthiness(sparse_nn_data[:100].toarray(), embedding, 10)
+    assert_greater_equal(trust, 0.92, 'Insufficiently trustworthy embedding for'
                                       'sparse test dataset: {}'.format(trust))
 
 def test_umap_trustworthiness_on_iris():
