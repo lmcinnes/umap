@@ -20,7 +20,7 @@ from sklearn.utils.testing import (assert_equal,
 from sklearn.metrics import pairwise_distances
 from sklearn.neighbors import KDTree, BallTree
 from sklearn.utils import shuffle
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, normalize
 from scipy.stats import mode
 
 from tempfile import mkdtemp
@@ -36,7 +36,7 @@ from umap.umap_ import (
     INT32_MIN,
     make_forest,
     rptree_leaf_array,
-    make_nn_descent,
+    nearest_neighbors,
     UMAP)
 
 np.random.seed(42)
@@ -83,19 +83,7 @@ binary_distances = (
 
 
 def test_nn_descent_neighbor_accuracy():
-    rng_state = np.random.randint(INT32_MIN, INT32_MAX, size=3)
-    nn_descent = make_nn_descent(dist.euclidean, ())
-    rp_forest = make_forest(nn_data, 10, 10, rng_state)
-    leaf_array = rptree_leaf_array(rp_forest)
-    tmp_indices, knn_dists = nn_descent(nn_data,
-                                        10,
-                                        rng_state,
-                                        leaf_array=leaf_array)
-    knn_indices = tmp_indices.astype(np.int64)
-    for i in range(knn_indices.shape[0]):
-        order = np.argsort(knn_dists[i])
-        knn_dists[i] = knn_dists[i][order]
-        knn_indices[i] = knn_indices[i][order]
+    knn_indices, knn_dists, _ = nearest_neighbors(nn_data, 10, 'euclidean', {}, False, np.random)
 
     tree = KDTree(nn_data)
     true_indices = tree.query(nn_data, 10, return_distance=False)
@@ -108,25 +96,24 @@ def test_nn_descent_neighbor_accuracy():
     assert_greater_equal(percent_correct, 0.99, 'NN-descent did not get 99% '
                          'accuracy on nearest neighbors')
 
+def test_angular_nn_descent_neighbor_accuracy():
+    knn_indices, knn_dists, _ = nearest_neighbors(nn_data, 10, 'cosine', {}, True, np.random)
 
-# TODO: Sparse NN descent via trees is currently broken in dev3
+    angular_data = normalize(nn_data, norm='l2')
+    tree = KDTree(angular_data)
+    true_indices = tree.query(angular_data, 10, return_distance=False)
+
+    num_correct = 0.0
+    for i in range(nn_data.shape[0]):
+        num_correct += np.sum(np.in1d(true_indices[i], knn_indices[i]))
+
+    percent_correct = num_correct / (spatial_data.shape[0] * 10)
+    assert_greater_equal(percent_correct, 0.99, 'NN-descent did not get 99% '
+                         'accuracy on nearest neighbors')
+
+
 def test_sparse_nn_descent_neighbor_accuracy():
-    rng_state = np.random.randint(INT32_MIN, INT32_MAX, size=3)
-    nn_descent = spdist.make_sparse_nn_descent(spdist.sparse_euclidean, ())
-    rp_forest = make_forest(sparse_nn_data, 10, 10, rng_state)
-    leaf_array = rptree_leaf_array(rp_forest)
-    tmp_indices, knn_dists = nn_descent(sparse_nn_data.indices,
-                                        sparse_nn_data.indptr,
-                                        sparse_nn_data.data,
-                                        sparse_nn_data.shape[0],
-                                        10,
-                                        rng_state,
-                                        leaf_array=leaf_array)
-    knn_indices = tmp_indices.astype(np.int64)
-    for i in range(knn_indices.shape[0]):
-        order = np.argsort(knn_dists[i])
-        knn_dists[i] = knn_dists[i][order]
-        knn_indices[i] = knn_indices[i][order]
+    knn_indices, knn_dists, _ = nearest_neighbors(sparse_nn_data, 10, 'euclidean', {}, False, np.random)
 
     tree = KDTree(sparse_nn_data.todense())
     true_indices = tree.query(sparse_nn_data.todense(),
@@ -141,6 +128,21 @@ def test_sparse_nn_descent_neighbor_accuracy():
                                                 '99% accuracy on nearest '
                                                 'neighbors')
 
+
+def test_sparse_angular_nn_descent_neighbor_accuracy():
+    knn_indices, knn_dists, _ = nearest_neighbors(sparse_nn_data, 10, 'cosine', {}, True, np.random)
+
+    angular_data = normalize(sparse_nn_data, norm='l2').toarray()
+    tree = KDTree(angular_data)
+    true_indices = tree.query(angular_data, 10, return_distance=False)
+
+    num_correct = 0.0
+    for i in range(nn_data.shape[0]):
+        num_correct += np.sum(np.in1d(true_indices[i], knn_indices[i]))
+
+    percent_correct = num_correct / (spatial_data.shape[0] * 10)
+    assert_greater_equal(percent_correct, 0.99, 'NN-descent did not get 99% '
+                         'accuracy on nearest neighbors')
 
 def test_trustworthiness():
     pass
