@@ -29,7 +29,12 @@ def arr_unique(arr):
 # Just reproduce a simpler version of numpy union1d (not numba supported yet)
 @numba.njit()
 def arr_union(ar1, ar2):
-    return arr_unique(np.concatenate((ar1, ar2)))
+    if ar1.shape[0] == 0:
+        return ar2
+    elif ar2.shape[0] == 0:
+        return ar1
+    else:
+        return arr_unique(np.concatenate((ar1, ar2)))
 
 
 # Just reproduce a simpler version of numpy intersect1d (not numba supported
@@ -82,7 +87,7 @@ def sparse_sum(ind1, data1, ind2, data2):
     while i1 < ind1.shape[0]:
         val = data1[i1]
         if val != 0:
-            result_ind[nnz] = j1
+            result_ind[nnz] = i1
             result_data[nnz] = val
             nnz += 1
         i1 += 1
@@ -90,7 +95,7 @@ def sparse_sum(ind1, data1, ind2, data2):
     while i2 < ind2.shape[0]:
         val = data2[i2]
         if val != 0:
-            result_ind[nnz] = j2
+            result_ind[nnz] = i2
             result_data[nnz] = val
             nnz += 1
         i2 += 1
@@ -286,7 +291,7 @@ def sparse_chebyshev(ind1, data1, ind2, data2):
 
 
 @numba.njit()
-def sparse_minkowski(ind1, data1, ind2, data2, p=2):
+def sparse_minkowski(ind1, data1, ind2, data2, p=2.0):
     aux_inds, aux_data = sparse_diff(ind1, data1, ind2, data2)
     result = 0.0
     for i in range(aux_data.shape[0]):
@@ -360,7 +365,10 @@ def sparse_dice(ind1, data1, ind2, data2):
     num_non_zero = arr_union(ind1, ind2).shape[0]
     num_not_equal = num_non_zero - num_true_true
 
-    return num_not_equal / (2.0 * num_true_true + num_not_equal)
+    if num_not_equal == 0.0:
+        return 0.0
+    else:
+        return num_not_equal / (2.0 * num_true_true + num_not_equal)
 
 
 @numba.njit()
@@ -392,7 +400,11 @@ def sparse_russellrao(ind1, data1, ind2, data2, n_features):
 
     num_true_true = arr_intersect(ind1, ind2).shape[0]
 
-    return float(n_features - num_true_true) / (n_features)
+    if (num_true_true == np.sum(data1 != 0) and
+        num_true_true == np.sum(data2 != 0)):
+        return 0.0
+    else:
+        return float(n_features - num_true_true) / (n_features)
 
 
 @numba.njit()
@@ -410,7 +422,10 @@ def sparse_sokal_sneath(ind1, data1, ind2, data2):
     num_non_zero = arr_union(ind1, ind2).shape[0]
     num_not_equal = num_non_zero - num_true_true
 
-    return num_not_equal / (0.5 * num_true_true + num_not_equal)
+    if num_not_equal == 0.0:
+        return 0.0
+    else:
+        return num_not_equal / (0.5 * num_true_true + num_not_equal)
 
 
 @numba.njit()
@@ -423,7 +438,12 @@ def sparse_cosine(ind1, data1, ind2, data2):
     for i in range(aux_data.shape[0]):
         result += aux_data[i]
 
-    return 1.0 - (result / (norm1 * norm2))
+    if norm1 == 0.0 and norm2 == 0.0:
+        return 0.0
+    elif norm1 == 0.0 or norm2 == 0.0:
+        return 1.0
+    else:
+        return 1.0 - (result / (norm1 * norm2))
 
 
 @numba.njit()
@@ -461,7 +481,9 @@ def sparse_correlation(ind1, data1, ind2, data2, n_features):
     for i in range(dot_prod_data.shape[0]):
         dot_product += dot_prod_data[i]
 
-    if dot_product == 0.0:
+    if norm1 == 0.0 and norm2 == 0.0:
+        return 0.0
+    elif dot_product == 0.0:
         return 1.0
     else:
         return (1.0 - (dot_product / (norm1 * norm2)))

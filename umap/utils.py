@@ -160,6 +160,7 @@ def heap_push(heap, row, weight, index, flag):
     -------
     success: The number of new elements successfully pushed into the heap.
     """
+    row = int(row)
     indices = heap[0, row]
     weights = heap[1, row]
     is_new = heap[2, row]
