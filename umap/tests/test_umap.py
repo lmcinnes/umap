@@ -341,7 +341,7 @@ def test_supervised_umap_trustworthiness_on_iris():
     embedding = UMAP(n_neighbors=10, min_dist=0.01,
                      random_state=42).fit_transform(data, iris.target)
     trust = trustworthiness(iris.data, embedding, 10)
-    assert_greater_equal(trust, 0.99, 'Insufficiently trustworthy embedding for'
+    assert_greater_equal(trust, 0.97, 'Insufficiently trustworthy embedding for'
                                       'iris dataset: {}'.format(trust))
 
 def test_initialized_umap_trustworthiness_on_iris():
