@@ -219,6 +219,14 @@ def test_sparse_metrics():
                 'correlation':
             dist_matrix = pairwise_distances(sparse_spatial_data.todense(),
                                              metric=metric)
+            if metric in ('braycurtis''jaccard', 'dice', 'sokalsneath', 'yule'):
+                dist_matrix[np.where(~np.isfinite(dist_matrix))] = 0.0
+            if metric in ('cosine', 'correlation', 'kulsinski', 'russellrao'):
+                dist_matrix[np.where(~np.isfinite(dist_matrix))] = 1.0
+                # And because distance between all zero vectors should be zero
+                dist_matrix[10, 11] = 0.0
+                dist_matrix[11, 10] = 0.0
+
             dist_function = spdist.sparse_named_distances[metric]
             if metric in spdist.sparse_need_n_features:
                 test_matrix = np.array(

@@ -431,7 +431,12 @@ def sparse_cosine(ind1, data1, ind2, data2):
     for i in range(aux_data.shape[0]):
         result += aux_data[i]
 
-    return 1.0 - (result / (norm1 * norm2))
+    if norm1 == 0.0 and norm2 == 0.0:
+        return 0.0
+    elif norm1 == 0.0 or norm2 == 0.0:
+        return 1.0
+    else:
+        return 1.0 - (result / (norm1 * norm2))
 
 
 @numba.njit()
@@ -469,7 +474,9 @@ def sparse_correlation(ind1, data1, ind2, data2, n_features):
     for i in range(dot_prod_data.shape[0]):
         dot_product += dot_prod_data[i]
 
-    if dot_product == 0.0:
+    if norm1 == 0.0 and norm2 == 0.0:
+        return 0.0
+    elif dot_product == 0.0:
         return 1.0
     else:
         return (1.0 - (dot_product / (norm1 * norm2)))
