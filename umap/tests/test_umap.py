@@ -58,6 +58,9 @@ binary_nn_data = np.random.choice(a=[False, True],
 binary_nn_data = np.vstack([binary_nn_data, np.zeros((2, 5))]) # Add some all zero data for corner case test
 sparse_nn_data = sparse.csr_matrix(nn_data * binary_nn_data)
 
+iris_selection = np.random.choice([True, False], 150,
+                                  replace=True, p=[0.75, 0.25])
+
 spatial_distances = (
     'euclidean',
     'manhattan',
@@ -300,7 +303,7 @@ def test_sparse_metrics():
                                               "for metric {}".format(metric))
 
 def test_umap_sparse_trustworthiness():
-    embedding = UMAP(n_neighbors=5).fit_transform(sparse_nn_data)
+    embedding = UMAP(n_neighbors=10).fit_transform(sparse_nn_data)
     trust = trustworthiness(sparse_nn_data.toarray(), embedding, 10)
     assert_greater_equal(trust, 0.97, 'Insufficiently trustworthy embedding for'
                                       'sparse test dataset: {}'.format(trust))
@@ -308,7 +311,7 @@ def test_umap_sparse_trustworthiness():
 def test_umap_trustworthiness_on_iris():
     iris = datasets.load_iris()
     data = iris.data
-    embedding = UMAP(n_neighbors=5, min_dist=0.01,
+    embedding = UMAP(n_neighbors=10, min_dist=0.01,
                      random_state=42).fit_transform(data)
     trust = trustworthiness(iris.data, embedding, 10)
     assert_greater_equal(trust, 0.97, 'Insufficiently trustworthy embedding for'
@@ -316,16 +319,14 @@ def test_umap_trustworthiness_on_iris():
 
 def test_umap_transform_on_iris():
     iris = datasets.load_iris()
-    selection = np.random.choice([True, False], 150,
-                                 replace=True, p=[0.75, 0.25])
-    data = iris.data[selection]
-    fitter = UMAP(n_neighbors=5, min_dist=0.01,
+    data = iris.data[iris_selection]
+    fitter = UMAP(n_neighbors=10, min_dist=0.01,
                      random_state=42).fit(data)
 
-    new_data = iris.data[~selection]
+    new_data = iris.data[~iris_selection]
     embedding = fitter.transform(new_data)
 
-    trust = trustworthiness(new_data, embedding, 5)
+    trust = trustworthiness(new_data, embedding, 10)
     assert_greater_equal(trust, 0.95, 'Insufficiently trustworthy transform for'
                                       'iris dataset: {}'.format(trust))
 
