@@ -22,6 +22,7 @@ from sklearn.neighbors import KDTree, BallTree
 from sklearn.utils import shuffle
 from sklearn.preprocessing import StandardScaler, normalize
 from sklearn.manifold.t_sne import trustworthiness
+from sklearn.cluster import KMeans
 from scipy.stats import mode
 
 from tempfile import mkdtemp
@@ -347,3 +348,26 @@ def test_umap_transform_on_iris():
     assert_greater_equal(trust, 0.95, 'Insufficiently trustworthy transform for'
                                       'iris dataset: {}'.format(trust))
 
+def test_multi_component_layout():
+    data, labels = datasets.make_blobs(100, 2, centers=5, cluster_std=0.5,
+                                  center_box=[-20, 20], random_state=42)
+
+    true_centroids = np.empty((labels.max() + 1, data.shape[1]), dtype=np.float64)
+
+    for label in range(labels.max() + 1):
+        true_centroids[label] = data[labels == label].mean(axis=0)
+
+    true_centroids = normalize(true_centroids, norm='l2')
+
+    embedding = UMAP(n_neighbors=4).fit_transform(data)
+    embed_centroids = np.empty((labels.max() + 1, data.shape[1]), dtype=np.float64)
+    embed_labels = KMeans(n_clusters=5).fit_predict(embedding)
+
+    for label in range(embed_labels.max() + 1):
+        embed_centroids[label] = data[embed_labels == label].mean(axis=0)
+
+    embed_centroids = normalize(embed_centroids, norm='l2')
+
+    error = np.sum((true_centroids - embed_centroids)**2)
+
+    assert_less(error, 15.0, msg='Multi component embedding to far astray')
