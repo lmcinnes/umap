@@ -1120,7 +1120,10 @@ class UMAP(BaseEstimator):
         self.metric = metric
         self.metric_kwds = metric_kwds
         self.n_epochs = n_epochs
-        self.init = check_array(init, dtype=np.float32, accept_sparse=False)
+        if isinstance(init, np.ndarray):
+            self.init = check_array(init, dtype=np.float32, accept_sparse=False)
+        else:
+            self.init = init
         self.n_components = n_components
         self.gamma = gamma
         self.initial_alpha = alpha

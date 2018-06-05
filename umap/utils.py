@@ -439,7 +439,7 @@ def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates,
 
 @numba.njit(parallel=True)
 def new_build_candidates(current_graph, n_vertices, n_neighbors, max_candidates,
-                         rng_state, rho=0.5):
+                         rng_state, rho=0.5):  # pragma: no cover
     """Build a heap of candidate neighbors for nearest neighbor descent. For
     each vertex the candidate neighbors are any current neighbors, and any
     vertices that have the vertex as one of their nearest neighbors.
