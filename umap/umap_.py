@@ -1145,14 +1145,13 @@ class UMAP(BaseEstimator):
 
         self._transform_available = False
 
+        self._validate_parameters()
+
         if a is None or b is None:
             self.a, self.b = find_ab_params(self.spread, self.min_dist)
         else:
             self.a = a
             self.b = b
-
-        if set_op_mix_ratio < 0.0 or set_op_mix_ratio > 1.0:
-            raise ValueError('set_op_mix_ratio must be between 0.0 and 1.0')
 
         if self.verbose:
             print("UMAP(n_neighbors={}, n_components={}, metric='{}', "
@@ -1162,6 +1161,36 @@ class UMAP(BaseEstimator):
                       n_neighbors, n_components, metric, gamma,
                 n_epochs, alpha, init, spread,
                       min_dist, a, b, random_state, metric_kwds, verbose))
+
+    def _validate_parameters(self):
+        if self.set_op_mix_ratio < 0.0 or self.set_op_mix_ratio > 1.0:
+            raise ValueError('set_op_mix_ratio must be between 0.0 and 1.0')
+        if self.gamma < 0.0:
+            raise ValueError('gamma cannot be negative')
+        if self.min_dist > self.spread:
+            raise ValueError('min_dist must be less than spread')
+        if self.min_dist < 0.0:
+            raise ValueError('min_dist must greater than 0.0')
+        if not isinstance(self.init, str) and not isinstance(self.init, np.ndarray):
+            raise ValueError('init must be a string or ndarray')
+        if isinstance(self.init, str) and self.init not in ('spectral', 'random'):
+            raise ValueError('string init values must be "spectral" or "random"')
+        if not isinstance(self.metric, str) and not callable(self.metric):
+            raise ValueError('metric must be string or callable')
+        if self.negative_sample_rate < 0:
+            raise ValueError('negative sample rate must be positive')
+        if self.initial_alpha < 0.0:
+            raise ValueError('alpha must be positive')
+        if self.n_neighbors < 2:
+            raise ValueError('n_neighbors must be greater than 2')
+        if not isinstance(self.n_components, int):
+            raise ValueError('n_components must be an int')
+        if self.n_components < 1:
+            raise ValueError('n_components must be greater than 0')
+        if self.n_epochs is not None and (self.n_epochs < 0 or
+                                          not isinstance(self.n_epochs, int)):
+            raise ValueError('n_epochs must be a positive integer')
+
 
     def fit(self, X, y=None):
         """Fit X into an embedded space.
