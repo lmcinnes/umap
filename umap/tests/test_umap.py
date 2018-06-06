@@ -33,6 +33,11 @@ from sklearn import datasets
 
 import umap.distances as dist
 import umap.sparse as spdist
+from umap.nndescent import (
+    make_initialisations,
+    make_initialized_nnd_search,
+    initialise_search)
+from umap.utils import deheap_sort
 from umap.umap_ import (
     INT32_MAX,
     INT32_MIN,
@@ -40,6 +45,7 @@ from umap.umap_ import (
     rptree_leaf_array,
     nearest_neighbors,
     smooth_knn_dist,
+    fuzzy_simplicial_set,
     UMAP)
 
 np.random.seed(42)
@@ -138,7 +144,8 @@ def test_sparse_nn_descent_neighbor_accuracy():
 
 
 def test_sparse_angular_nn_descent_neighbor_accuracy():
-    knn_indices, knn_dists, _ = nearest_neighbors(sparse_nn_data, 10, 'cosine', {}, True, np.random)
+    knn_indices, knn_dists, _ = nearest_neighbors(sparse_nn_data, 10,
+                                                  'cosine', {}, True, np.random)
 
     angular_data = normalize(sparse_nn_data, norm='l2').toarray()
     tree = KDTree(angular_data)
@@ -168,6 +175,67 @@ def test_smooth_knn_dist_l1norms():
                               err_msg='Smooth knn-dists does not give expected'
                                       'norms')
 
+
+def test_nn_search():
+    train = nn_data[100:]
+    test = nn_data[:100]
+    (knn_indices,
+     knn_dists,
+     rp_forest) = nearest_neighbors(train, 10,
+                                    'euclidean', {}, False,
+                                    np.random)
+
+    graph = fuzzy_simplicial_set(
+        nn_data,
+        10,
+        np.random,
+        'euclidean',
+        {},
+        knn_indices,
+        knn_dists,
+        False,
+        1.0,
+        1.0,
+        1.0,
+        False
+    )
+
+    search_graph = sparse.lil_matrix((train.shape[0],
+                                      train.shape[0]),
+                                     dtype=np.int8)
+    search_graph.rows = knn_indices
+    search_graph.data = (knn_dists != 0).astype(np.int8)
+    search_graph = search_graph.maximum(search_graph.transpose()).tocsr()
+
+    random_init, tree_init = make_initialisations(dist.euclidean, ())
+    search = make_initialized_nnd_search(dist.euclidean, ())
+
+    rng_state = np.random.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
+    init = initialise_search(rp_forest, train,
+                             test,
+                             int(10 * 3),
+                             random_init, tree_init,
+                             rng_state)
+    result = search(train,
+                    search_graph.indptr,
+                    search_graph.indices,
+                    init,
+                    test)
+
+    indices, dists = deheap_sort(result)
+    indices = indices[:, :10]
+
+    tree = KDTree(train)
+    true_indices = tree.query(test, 10, return_distance=False)
+
+    num_correct = 0.0
+    for i in range(test.shape[0]):
+        num_correct += np.sum(np.in1d(true_indices[i], indices[i]))
+
+    percent_correct = num_correct / (test.shape[0] * 10)
+    assert_greater_equal(percent_correct, 0.99, 'Sparse NN-descent did not get '
+                                                '99% accuracy on nearest '
+                                                'neighbors')
 
 
 def test_metrics():
