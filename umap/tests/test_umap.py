@@ -534,7 +534,7 @@ def test_umap_bad_parameters():
     assert_raises(ValueError, UMAP, set_op_mix_ratio=1.5)
     assert_raises(ValueError, UMAP, min_dist=2.0)
     assert_raises(ValueError, UMAP, min_dist=-1)
-    assert_raises(ValueError, UMAP, n_components=-1.0)
+    assert_raises(ValueError, UMAP, n_components=-1)
     assert_raises(ValueError, UMAP, n_components=1.5)
     assert_raises(ValueError, UMAP, n_neighbors=0.5)
     assert_raises(ValueError, UMAP, n_neighbors=-1)
@@ -547,9 +547,10 @@ def test_umap_bad_parameters():
     assert_raises(ValueError, UMAP, init=np.array([[0, 0, 0], [0, 0, 0]]))
     assert_raises(ValueError, UMAP, n_epochs=-2)
 
-    u = UMAP(a=10.0, b=1.5)
-    assert_equal(u.a, 10.0)
-    assert_equal(u.b, 1.5)
+    u = UMAP(a=1.2, b=1.75, n_neighbors=2000)
+    assert_equal(u.a, 1.2)
+    assert_equal(u.b, 1.75)
+    assert_raises(ValueError, u.fit, nn_data)
 
     assert_raises(ValueError, nearest_neighbors,
                   nn_data, 10, 42, {}, False, np.random)
