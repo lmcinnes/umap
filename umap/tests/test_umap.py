@@ -33,6 +33,7 @@ from sklearn import datasets
 
 import umap.distances as dist
 import umap.sparse as spdist
+import umap.validation as valid
 from umap.nndescent import (
     make_initialisations,
     make_initialized_nnd_search,
@@ -353,7 +354,6 @@ def test_sparse_metrics():
                                               "for metric {}".format(metric))
 
     for metric in binary_distances:
-        # Sparse correlation has precision errors right now, leave out ...
         if metric in spdist.sparse_named_distances:
             dist_matrix = pairwise_distances(sparse_binary_data.todense(),
                                              metric=metric)

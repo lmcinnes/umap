@@ -321,7 +321,7 @@ def sparse_canberra(ind1, data1, ind2, data2):
 
 
 @numba.njit()
-def sparse_bray_curtis(ind1, data1, ind2, data2):
+def sparse_bray_curtis(ind1, data1, ind2, data2):  # pragma: no cover
     abs_data1 = np.abs(data1)
     abs_data2 = np.abs(data2)
     denom_inds, denom_data = sparse_sum(ind1, abs_data1, ind2, abs_data2)
@@ -446,8 +446,9 @@ def sparse_cosine(ind1, data1, ind2, data2):
         return 1.0 - (result / (norm1 * norm2))
 
 
+# TODO: Fix sparse correlation -- it is close but has precision issues
 @numba.njit()
-def sparse_correlation(ind1, data1, ind2, data2, n_features):
+def sparse_correlation(ind1, data1, ind2, data2, n_features):  # pragma: no cover
 
     mu_x = 0.0
     mu_y = 0.0
@@ -469,8 +470,8 @@ def sparse_correlation(ind1, data1, ind2, data2, n_features):
     for i in range(data2.shape[0]):
         shifted_data2[i] = data2[i] - mu_y
 
-    norm1 = norm(shifted_data1)
-    norm2 = norm(shifted_data2)
+    norm1 = np.sqrt(norm(shifted_data1) ** 2 + (n_features - ind1.shape[0]) * mu_x ** 2)
+    norm2 = np.sqrt(norm(shifted_data2) ** 2 + (n_features - ind2.shape[0]) * mu_y ** 2)
 
     dot_prod_inds, dot_prod_data = sparse_mul(ind1, shifted_data1,
                                               ind2, shifted_data2)
@@ -478,8 +479,21 @@ def sparse_correlation(ind1, data1, ind2, data2, n_features):
     if dot_prod_data.shape[0] == 0:
         return 1.0
 
+    common_indices = set(dot_prod_inds)
+
     for i in range(dot_prod_data.shape[0]):
         dot_product += dot_prod_data[i]
+
+    for i in range(ind1.shape[0]):
+        if ind1[i] not in common_indices:
+            dot_product -= data1[i] * (mu_y)
+
+    for i in range(ind2.shape[0]):
+        if ind2[i] not in common_indices:
+            dot_product -= data2[i] * (mu_x)
+
+    all_indices = arr_union(ind1, ind2)
+    dot_product += mu_x * mu_y * all_indices.shape[0]
 
     if norm1 == 0.0 and norm2 == 0.0:
         return 0.0
@@ -506,6 +520,7 @@ sparse_named_distances = {
     # Binary distances
     'hamming': sparse_hamming,
     'jaccard': sparse_jaccard,
+    'dice': sparse_dice,
     'matching': sparse_matching,
     'kulsinski': sparse_kulsinski,
     'rogerstanimoto': sparse_rogers_tanimoto,
