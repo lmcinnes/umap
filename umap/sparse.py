@@ -502,7 +502,7 @@ sparse_named_distances = {
     'minkowski': sparse_minkowski,
     # Other distances
     'canberra': sparse_canberra,
-    'braycurtis': sparse_bray_curtis,
+    # 'braycurtis': sparse_bray_curtis,
     # Binary distances
     'hamming': sparse_hamming,
     'jaccard': sparse_jaccard,
@@ -520,8 +520,8 @@ sparse_need_n_features = (
     'hamming',
     'matching',
     'kulsinski',
-    'rogers_tanimoto',
+    'rogerstanimoto',
     'russellrao',
-    'sokal_michener',
+    'sokalmichener',
     'correlation'
 )
