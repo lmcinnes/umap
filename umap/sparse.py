@@ -490,6 +490,7 @@ def sparse_correlation(ind1, data1, ind2, data2, n_features):
 
 
 sparse_named_distances = {
+    # general minkowski distances
     'euclidean': sparse_euclidean,
     'manhattan': sparse_manhattan,
     'l1': sparse_manhattan,
@@ -499,16 +500,18 @@ sparse_named_distances = {
     'linfty': sparse_chebyshev,
     'linfinity': sparse_chebyshev,
     'minkowski': sparse_minkowski,
-    'hamming': sparse_hamming,
+    # Other distances
     'canberra': sparse_canberra,
-    'bray_curtis': sparse_bray_curtis,
+    'braycurtis': sparse_bray_curtis,
+    # Binary distances
+    'hamming': sparse_hamming,
     'jaccard': sparse_jaccard,
     'matching': sparse_matching,
     'kulsinski': sparse_kulsinski,
-    'rogers_tanimoto': sparse_rogers_tanimoto,
+    'rogerstanimoto': sparse_rogers_tanimoto,
     'russellrao': sparse_russellrao,
-    'sokal_michener': sparse_sokal_michener,
-    'sokal_sneath': sparse_sokal_sneath,
+    'sokalmichener': sparse_sokal_michener,
+    'sokalsneath': sparse_sokal_sneath,
     'cosine': sparse_cosine,
     'correlation': sparse_correlation,
 }
