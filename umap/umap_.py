@@ -865,14 +865,7 @@ def simplicial_set_embedding(data, graph, n_components,
                     ).astype(np.float32)
                 else:
                     embedding = init_data
-            else:
-                raise ValueError('Invalid init data passed.'
-                                 'Should be "random", "spectral" or'
-                                 ' a numpy array of initial embedding postions')
-        except:
-            raise ValueError('Invalid init data passed.'
-                             'Should be "random", "spectral" or'
-                             ' a numpy array of initial embedding postions')
+
 
     epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs)
 
@@ -1175,6 +1168,8 @@ class UMAP(BaseEstimator):
             raise ValueError('init must be a string or ndarray')
         if isinstance(self.init, str) and self.init not in ('spectral', 'random'):
             raise ValueError('string init values must be "spectral" or "random"')
+        if isinstance(self.init, np.ndarray) and self.init.shape[1] != self.n_components:
+            raise ValueError('init ndarray must match n_components value')
         if not isinstance(self.metric, str) and not callable(self.metric):
             raise ValueError('metric must be string or callable')
         if self.negative_sample_rate < 0:

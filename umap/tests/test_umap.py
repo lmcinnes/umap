@@ -177,6 +177,51 @@ def test_smooth_knn_dist_l1norms():
                                       'norms')
 
 
+def test_nn_descent_neighbor_accuracy_callable_metric():
+    knn_indices, knn_dists, _ = nearest_neighbors(nn_data, 10,
+                                                  dist.euclidean, {}, False, np.random)
+
+    tree = KDTree(nn_data)
+    true_indices = tree.query(nn_data, 10, return_distance=False)
+
+    num_correct = 0.0
+    for i in range(nn_data.shape[0]):
+        num_correct += np.sum(np.in1d(true_indices[i], knn_indices[i]))
+
+    percent_correct = num_correct / (spatial_data.shape[0] * 10)
+    assert_greater_equal(percent_correct, 0.99, 'NN-descent did not get 99% '
+                                                'accuracy on nearest neighbors with callable metric')
+
+
+def test_smooth_knn_dist_l1norms_w_connectivity():
+    knn_indices, knn_dists, _ = nearest_neighbors(nn_data, 10,
+                                                  'euclidean', {}, False,
+                                                  np.random)
+    sigmas, rhos = smooth_knn_dist(knn_dists, 10, local_connectivity=1.75)
+    shifted_dists = knn_dists - rhos[:, np.newaxis]
+    shifted_dists[shifted_dists < 0.0] = 0.0
+    vals = np.exp(-(shifted_dists / sigmas[:, np.newaxis]))
+    norms = np.sum(vals, axis=1)
+
+    assert_array_almost_equal(norms,
+                              1.0 + np.log2(10) * np.ones(norms.shape[0]),
+                              decimal=3,
+                              err_msg='Smooth knn-dists does not give expected'
+                                      'norms for local_connectivity=1.75')
+
+    sigmas, rhos = smooth_knn_dist(knn_dists, 10, local_connectivity=0.25)
+    shifted_dists = knn_dists - rhos[:, np.newaxis]
+    shifted_dists[shifted_dists < 0.0] = 0.0
+    vals = np.exp(-(shifted_dists / sigmas[:, np.newaxis]))
+    norms = np.sum(vals, axis=1)
+
+    assert_array_almost_equal(norms,
+                              1.0 + np.log2(10) * np.ones(norms.shape[0]),
+                              decimal=3,
+                              err_msg='Smooth knn-dists does not give expected'
+                                      'norms for local_connectivity=0.25')
+
+
 def test_nn_search():
     train = nn_data[100:]
     test = nn_data[:100]
@@ -403,11 +448,33 @@ def test_umap_trustworthiness_on_iris():
     assert_greater_equal(trust, 0.97, 'Insufficiently trustworthy embedding for'
                                       'iris dataset: {}'.format(trust))
 
+
+def test_umap_trustworthiness_on_iris_random_init():
+    iris = datasets.load_iris()
+    data = iris.data
+    embedding = UMAP(n_neighbors=10, min_dist=0.01,
+                     random_state=42, init='random').fit_transform(data)
+    trust = trustworthiness(iris.data, embedding, 10)
+    assert_greater_equal(trust, 0.95, 'Insufficiently trustworthy embedding for'
+                                      'iris dataset: {}'.format(trust))
+
 def test_supervised_umap_trustworthiness_on_iris():
     iris = datasets.load_iris()
     data = iris.data
     embedding = UMAP(n_neighbors=10, min_dist=0.01,
                      random_state=42).fit_transform(data, iris.target)
+    trust = trustworthiness(iris.data, embedding, 10)
+    assert_greater_equal(trust, 0.97, 'Insufficiently trustworthy embedding for'
+                                      'iris dataset: {}'.format(trust))
+
+
+def test_semisupervised_umap_trustworthiness_on_iris():
+    iris = datasets.load_iris()
+    data = iris.data
+    target = iris.target.copy()
+    target[25:75] = -1
+    embedding = UMAP(n_neighbors=10, min_dist=0.01,
+                     random_state=42).fit_transform(data, target)
     trust = trustworthiness(iris.data, embedding, 10)
     assert_greater_equal(trust, 0.97, 'Insufficiently trustworthy embedding for'
                                       'iris dataset: {}'.format(trust))
@@ -476,8 +543,15 @@ def test_umap_bad_parameters():
     assert_raises(ValueError, UMAP, gamma=-0.5)
     assert_raises(ValueError, UMAP, negative_sample_rate=-1)
     assert_raises(ValueError, UMAP, init='foobar')
+    assert_raises(ValueError, UMAP, init=42)
+    assert_raises(ValueError, UMAP, init=np.array([[0, 0, 0], [0, 0, 0]]))
     assert_raises(ValueError, UMAP, n_epochs=-2)
 
     u = UMAP(a=10.0, b=1.5)
     assert_equal(u.a, 10.0)
     assert_equal(u.b, 1.5)
+
+    assert_raises(ValueError, nearest_neighbors,
+                  nn_data, 10, 42, {}, False, np.random)
+    assert_raises(ValueError, nearest_neighbors,
+                  sparse_nn_data, 10, 'seuclidean', {}, False, np.random)
