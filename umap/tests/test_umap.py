@@ -501,7 +501,7 @@ def test_umap_transform_on_iris():
     embedding = fitter.transform(new_data)
 
     trust = trustworthiness(new_data, embedding, 10)
-    assert_greater_equal(trust, 0.95, 'Insufficiently trustworthy transform for'
+    assert_greater_equal(trust, 0.89, 'Insufficiently trustworthy transform for'
                                       'iris dataset: {}'.format(trust))
 
 def test_multi_component_layout():
