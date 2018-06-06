@@ -11,6 +11,7 @@ from scipy import stats
 from sklearn.utils.estimator_checks import check_estimator
 from sklearn.utils.testing import (assert_equal,
                                    assert_array_equal,
+                                   assert_almost_equal,
                                    assert_array_almost_equal,
                                    assert_raises,
                                    assert_in,
@@ -209,17 +210,16 @@ def test_smooth_knn_dist_l1norms_w_connectivity():
                               err_msg='Smooth knn-dists does not give expected'
                                       'norms for local_connectivity=1.75')
 
-    sigmas, rhos = smooth_knn_dist(knn_dists, 10, local_connectivity=0.25)
+    sigmas, rhos = smooth_knn_dist(knn_dists, 10, local_connectivity=0.75)
     shifted_dists = knn_dists - rhos[:, np.newaxis]
     shifted_dists[shifted_dists < 0.0] = 0.0
     vals = np.exp(-(shifted_dists / sigmas[:, np.newaxis]))
     norms = np.sum(vals, axis=1)
+    diff = np.mean(norms) - (1.0 + np.log2(10))
 
-    assert_array_almost_equal(norms,
-                              1.0 + np.log2(10) * np.ones(norms.shape[0]),
-                              decimal=3,
-                              err_msg='Smooth knn-dists does not give expected'
-                                      'norms for local_connectivity=0.25')
+    assert_almost_equal(diff, 0.0, decimal=1,
+                        err_msg='Smooth knn-dists does not give expected'
+                                'norms for local_connectivity=0.75')
 
 
 def test_nn_search():
