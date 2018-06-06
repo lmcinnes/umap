@@ -852,19 +852,18 @@ def simplicial_set_embedding(data, graph, n_components,
                                         size=[graph.shape[0],
                                               n_components]).astype(np.float32)
     else:
-        try:
-            init_data = np.array(init)
-            if len(init_data.shape) == 2:
-                if np.unique(init_data, axis=0).shape[0] < init_data.shape[0]:
-                    tree = KDTree(init_data)
-                    dist, ind = tree.query(init_data, k=2)
-                    nndist = np.mean(dist[:, 1])
-                    embedding = init_data + np.random.normal(
-                        scale=0.001 * nndist,
-                        size=init_data.shape
-                    ).astype(np.float32)
-                else:
-                    embedding = init_data
+        init_data = np.array(init)
+        if len(init_data.shape) == 2:
+            if np.unique(init_data, axis=0).shape[0] < init_data.shape[0]:
+                tree = KDTree(init_data)
+                dist, ind = tree.query(init_data, k=2)
+                nndist = np.mean(dist[:, 1])
+                embedding = init_data + np.random.normal(
+                    scale=0.001 * nndist,
+                    size=init_data.shape
+                ).astype(np.float32)
+            else:
+                embedding = init_data
 
 
     epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs)
