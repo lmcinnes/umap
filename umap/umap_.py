@@ -1303,6 +1303,8 @@ class UMAP(BaseEstimator):
                                                     random_state,
                                                     self.target_metric,
                                                     self.target_metric_kwds,
+                                                    None,
+                                                    None,
                                                     False,
                                                     1.0,
                                                     1.0,

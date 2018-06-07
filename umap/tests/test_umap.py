@@ -68,6 +68,7 @@ binary_nn_data = np.random.choice(a=[False, True],
 binary_nn_data = np.vstack([binary_nn_data, np.zeros((2, 5))]) # Add some all zero data for corner case test
 sparse_nn_data = sparse.csr_matrix(nn_data * binary_nn_data)
 
+iris = datasets.load_iris()
 iris_selection = np.random.choice([True, False], 150,
                                   replace=True, p=[0.75, 0.25])
 
@@ -440,7 +441,6 @@ def test_umap_sparse_trustworthiness():
                                       'sparse test dataset: {}'.format(trust))
 
 def test_umap_trustworthiness_on_iris():
-    iris = datasets.load_iris()
     data = iris.data
     embedding = UMAP(n_neighbors=10, min_dist=0.01,
                      random_state=42).fit_transform(data)
@@ -450,7 +450,6 @@ def test_umap_trustworthiness_on_iris():
 
 
 def test_umap_trustworthiness_on_iris_random_init():
-    iris = datasets.load_iris()
     data = iris.data
     embedding = UMAP(n_neighbors=10, min_dist=0.01,
                      random_state=42, init='random').fit_transform(data)
@@ -459,7 +458,6 @@ def test_umap_trustworthiness_on_iris_random_init():
                                       'iris dataset: {}'.format(trust))
 
 def test_supervised_umap_trustworthiness_on_iris():
-    iris = datasets.load_iris()
     data = iris.data
     embedding = UMAP(n_neighbors=10, min_dist=0.01,
                      random_state=42).fit_transform(data, iris.target)
@@ -469,7 +467,6 @@ def test_supervised_umap_trustworthiness_on_iris():
 
 
 def test_semisupervised_umap_trustworthiness_on_iris():
-    iris = datasets.load_iris()
     data = iris.data
     target = iris.target.copy()
     target[25:75] = -1
@@ -480,7 +477,6 @@ def test_semisupervised_umap_trustworthiness_on_iris():
                                       'iris dataset: {}'.format(trust))
 
 def test_initialized_umap_trustworthiness_on_iris():
-    iris = datasets.load_iris()
     data = iris.data
     embedding = UMAP(n_neighbors=10,
                      min_dist=0.01,
@@ -492,7 +488,6 @@ def test_initialized_umap_trustworthiness_on_iris():
 
 
 def test_umap_transform_on_iris():
-    iris = datasets.load_iris()
     data = iris.data[iris_selection]
     fitter = UMAP(n_neighbors=10, min_dist=0.01,
                      random_state=42).fit(data)
@@ -503,6 +498,15 @@ def test_umap_transform_on_iris():
     trust = trustworthiness(new_data, embedding, 10)
     assert_greater_equal(trust, 0.89, 'Insufficiently trustworthy transform for'
                                       'iris dataset: {}'.format(trust))
+
+
+def test_umap_regression_supervision():
+    boston = datasets.load_boston()
+    data = boston.data
+    embedding = UMAP(n_neighbors=10,
+                     min_dist=0.01,
+                     target_metric='euclidean',
+                     random_state=42).fit_transform(data, boston.target)
 
 def test_multi_component_layout():
     data, labels = datasets.make_blobs(100, 2, centers=5, cluster_std=0.5,
