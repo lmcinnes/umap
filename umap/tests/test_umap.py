@@ -500,17 +500,16 @@ def test_umap_transform_on_iris():
                                       'iris dataset: {}'.format(trust))
 
 
-
-# This test is currently to expensive to run when turning
-# off numba JITting to detect coverage.
-@SkipTest
-def test_umap_regression_supervision(): # pragma: no cover
-    boston = datasets.load_boston()
-    data = boston.data
-    embedding = UMAP(n_neighbors=10,
-                     min_dist=0.01,
-                     target_metric='euclidean',
-                     random_state=42).fit_transform(data, boston.target)
+# # This test is currently to expensive to run when turning
+# # off numba JITting to detect coverage.
+# @SkipTest
+# def test_umap_regression_supervision(): # pragma: no cover
+#     boston = datasets.load_boston()
+#     data = boston.data
+#     embedding = UMAP(n_neighbors=10,
+#                      min_dist=0.01,
+#                      target_metric='euclidean',
+#                      random_state=42).fit_transform(data, boston.target)
 
 
 def test_multi_component_layout():
