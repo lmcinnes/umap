@@ -32,7 +32,7 @@ for Dimension Reduction*, ArXiv e-prints 1802.03426, 2018
 
    basic_usage
    parameters
-   transform[:50000
+   transform
    supervised
    clustering
    faq
