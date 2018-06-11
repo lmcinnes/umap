@@ -554,6 +554,7 @@ def test_umap_bad_parameters():
     assert_raises(ValueError, UMAP, init=42)
     assert_raises(ValueError, UMAP, init=np.array([[0, 0, 0], [0, 0, 0]]))
     assert_raises(ValueError, UMAP, n_epochs=-2)
+    assert_raises(ValueError, UMAP, target_n_neighbor=1)
 
     u = UMAP(a=1.2, b=1.75, n_neighbors=2000)
     assert_equal(u.a, 1.2)

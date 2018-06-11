@@ -1065,6 +1065,10 @@ class UMAP(BaseEstimator):
         as cosine, correlation etc. In the case of those metrics angular forests
         will be chosen automatically.
 
+    target_n_neighbors: int (optional, default -1)
+        The number of nearest neighbors to use to construct the target simplcial
+        set. If set to -1 use the ``n_neighbors`` value.
+
     target_metric: string or callable (optional, default 'categorical')
         The metric used to measure distance for a target array is using supervised
         dimension reduction. By default this is 'categorical' which will measure
@@ -1102,6 +1106,7 @@ class UMAP(BaseEstimator):
                  random_state=None,
                  metric_kwds={},
                  angular_rp_forest=False,
+                 target_n_neighbors=-1,
                  target_metric='categorical',
                  target_metric_kwds={},
                  transform_seed=42,
@@ -1130,6 +1135,7 @@ class UMAP(BaseEstimator):
         self.random_state = random_state
         self.angular_rp_forest = angular_rp_forest
         self.transform_queue_size = transform_queue_size
+        self.target_n_neighbors = target_n_neighbors
         self.target_metric = target_metric
         self.target_metric_kwds = target_metric_kwds
         self.transform_seed = transform_seed
@@ -1177,6 +1183,8 @@ class UMAP(BaseEstimator):
             raise ValueError('alpha must be positive')
         if self.n_neighbors < 2:
             raise ValueError('n_neighbors must be greater than 2')
+        if self.target_n_neighbors < 2 and self.target_n_neighbors != -1:
+            raise ValueError('target_n_neighbors must be greater than 2')
         if not isinstance(self.n_components, int):
             raise ValueError('n_components must be an int')
         if self.n_components < 1:
@@ -1298,8 +1306,13 @@ class UMAP(BaseEstimator):
                 self.graph_ = categorical_simplicial_set_intersection(
                     self.graph_, y)
             else:
+                if self.target_n_neighbors == -1:
+                    target_n_neighbors = self.n_neighbors
+                else:
+                    target_n_neighbors = self.target_n_neighbors
+
                 target_graph = fuzzy_simplicial_set(y[np.newaxis, :].T,
-                                                    self.n_neighbors,
+                                                    target_n_neighbors,
                                                     random_state,
                                                     self.target_metric,
                                                     self.target_metric_kwds,
