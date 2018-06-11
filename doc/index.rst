@@ -26,37 +26,28 @@ The details for the underlying mathematics can be found in
 McInnes, L, Healy, J, *UMAP: Uniform Manifold Approximation and Projection
 for Dimension Reduction*, ArXiv e-prints 1802.03426, 2018
 
-User Guide / Tutorial
----------------------
-
 .. toctree::
    :maxdepth: 2
-   :caption: Tutorial:
+   :caption: User Guide / Tutorial:
 
    basic_usage
    parameters
+   transform[:50000
    supervised
    clustering
    faq
 
-
-Background on UMAP
-------------------
-
 .. toctree::
    :maxdepth: 2
-   :caption: Background:
+   :caption: Background on UMAP:
 
    dimension_reduction
    how_umap_works
    benchmarking
 
 
-API Reference
--------------
-
 .. toctree::
-   :caption: API:
+   :caption: API Reference:
 
    api
 
