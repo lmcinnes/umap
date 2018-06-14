@@ -51,6 +51,7 @@ def component_layout(data, n_components, component_labels, dim, metric='euclidea
 
     component_embedding = SpectralEmbedding(n_components=dim,
                                             affinity='precomputed').fit_transform(affinity_matrix)
+    component_embedding /= component_embedding.max()
 
     return component_embedding
 

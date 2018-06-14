@@ -18,7 +18,7 @@ from sklearn.utils.testing import (assert_equal,
                                    assert_not_in,
                                    assert_no_warnings,
                                    if_matplotlib)
-from sklearn.metrics import pairwise_distances
+from sklearn.metrics import pairwise_distances, adjusted_rand_score
 from sklearn.neighbors import KDTree, BallTree
 from sklearn.utils import shuffle
 from sklearn.preprocessing import StandardScaler, normalize
@@ -510,6 +510,12 @@ def test_umap_transform_on_iris():
 #                      min_dist=0.01,
 #                      target_metric='euclidean',
 #                      random_state=42).fit_transform(data, boston.target)
+
+
+def test_blobs_cluster():
+    data, labels = datasets.make_blobs(n_samples=500, n_features=10, centers=5)
+    embedding = UMAP().fit_transform(data)
+    assert_equal(adjusted_rand_score(labels, KMeans(5).fit_predict(embedding)), 1.0)
 
 
 def test_multi_component_layout():
