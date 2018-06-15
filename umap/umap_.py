@@ -537,6 +537,8 @@ def categorical_simplicial_set_intersection(simplicial_set,
     data is assumed to be categorical label data (a vector of labels),
     and this will update the fuzzy simplicial set to respect that label data.
 
+    TODO: optional category cardinality based weighting of distance
+
     Parameters
     ----------
     simplicial_set: sparse matrix
@@ -569,6 +571,22 @@ def categorical_simplicial_set_intersection(simplicial_set,
 
     return reset_local_connectivity(simplicial_set)
 
+
+@numba.jit()
+def general_simplicial_set_intersection(simplicial_set1,
+                                        simplicial_set2,
+                                        weight):
+
+    result = (simplicial_set1 + simplicial_set2).tocoo()
+    left = simplicial_set1.tocsr()
+    right = simplicial_set2.tocsr()
+
+    sparse.general_sset_intersection(left.indptr, left.indices, left.data,
+                                     right.indptr, right.indices, right.data,
+                                     result.row, result.col, result.data,
+                                     weight)
+
+    return result
 
 @numba.jit()
 def make_epochs_per_sample(weights, n_epochs):
@@ -1082,6 +1100,11 @@ class UMAP(BaseEstimator):
         Keyword argument to pass to the target metric when performing
         supervised dimension reduction.
 
+    target_weight: float (optional, default 0.5)
+        weighting factor between data topology and target topology. A value of
+        0.0 weights entirely on data, a value of 1.0 weights entirely on target.
+        The default of 0.5 balances the weighting equally between data and target.
+
     verbose: bool (optional, default False)
         Controls verbosity of logging.
     """
@@ -1109,6 +1132,7 @@ class UMAP(BaseEstimator):
                  target_n_neighbors=-1,
                  target_metric='categorical',
                  target_metric_kwds={},
+                 target_weight=0.5,
                  transform_seed=42,
                  verbose=False
                  ):
@@ -1138,6 +1162,7 @@ class UMAP(BaseEstimator):
         self.target_n_neighbors = target_n_neighbors
         self.target_metric = target_metric
         self.target_metric_kwds = target_metric_kwds
+        self.target_weight = target_weight
         self.transform_seed = transform_seed
         self.verbose = verbose
 
@@ -1323,10 +1348,16 @@ class UMAP(BaseEstimator):
                                                     1.0,
                                                     1.0,
                                                     False)
-                product = self.graph_.multiply(target_graph)
-                self.graph_ = 0.99 * product + 0.01 * (self.graph_ +
-                                                       target_graph -
-                                                       product)
+                # product = self.graph_.multiply(target_graph)
+                # # self.graph_ = 0.99 * product + 0.01 * (self.graph_ +
+                # #                                        target_graph -
+                # #                                        product)
+                # self.graph_ = product
+                self.graph_ = general_simplicial_set_intersection(
+                    self.graph_,
+                    target_graph,
+                    self.target_weight,
+                )
                 self.graph_ = reset_local_connectivity(self.graph_)
 
         if self.n_epochs is None:
