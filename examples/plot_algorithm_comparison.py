@@ -1,3 +1,10 @@
+"""
+Comparison of Dimension Reduction Techniques
+--------------------------------------------
+
+A comparison of several different dimension reduction
+techniques on a variety of toy datasets.
+"""
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns

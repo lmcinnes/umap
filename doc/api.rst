@@ -1,5 +1,5 @@
-API Reference
-=============
+UMAP API Guide
+==============
 
 UMAP has only a single class :class:`UMAP`.
 
@@ -11,8 +11,8 @@ UMAP
 
 A number of internal functions can also be accessed separately for more fine tuned work.
 
-Functions
----------
+Useful Functions
+----------------
 
 .. automodule:: umap.umap_
    :members:

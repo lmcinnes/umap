@@ -1,3 +1,9 @@
+"""
+UMAP on the MNIST Digits dataset
+--------------------------------
+
+As per the title.
+"""
 import umap
 from sklearn.datasets import fetch_mldata
 import matplotlib.pyplot as plt
