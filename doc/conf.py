@@ -18,7 +18,7 @@
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
 # import os
-# import sys
+import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
 
@@ -170,11 +170,16 @@ texinfo_documents = [
      'Miscellaneous'),
 ]
 
-
-
-
 # Example configuration for intersphinx: refer to the Python standard library.
-intersphinx_mapping = {'https://docs.python.org/': None}
+intersphinx_mapping = {
+    'python': ('https://docs.python.org/{.major}'.format(sys.version_info), None),
+    'numpy': ('https://docs.scipy.org/doc/numpy/', None),
+    'scipy': ('https://docs.scipy.org/doc/scipy/reference', None),
+    'matplotlib': ('https://matplotlib.org/', None),
+    'pandas': ('https://pandas.pydata.org/pandas-docs/stable/', None),
+    'sklearn': ('http://scikit-learn.org/stable/index.html', None),
+    'bokeh': ('http://bokeh.pydata.org/en/latest/', None),
+}
 
 # -- Options for sphinx-gallery ---------------------------------------------
 
@@ -183,4 +188,14 @@ sphinx_gallery_conf = {
     'examples_dirs': '../examples',
     # path where to save gallery generated examples
     'gallery_dirs': 'auto_examples',
+    'reference_url': {
+        'umap': None,
+        'python': 'https://docs.python.org/{.major}'.format(sys.version_info),
+        'numpy': 'https://docs.scipy.org/doc/numpy/',
+        'scipy': 'https://docs.scipy.org/doc/scipy/reference',
+        'matplotlib': 'https://matplotlib.org/',
+        'pandas': 'https://pandas.pydata.org/pandas-docs/stable/',
+        'sklearn': 'http://scikit-learn.org/stable/',
+        'bokeh': 'http://bokeh.pydata.org/en/latest/',
+    }
 }
