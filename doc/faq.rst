@@ -16,7 +16,7 @@ Should I normalise my features?
 The default answer is yes, but, of course, the real answer is
 "it depends". If your features have meaningful relationships
 with one another (say, latitute and longitude vales) then
-normalsing per feature is not a good idea. For features that
+normalising per feature is not a good idea. For features that
 are essentially independent it does make sense to get all the
 features on (relatively) the same scale. The best way to do
 this is to use
