@@ -441,7 +441,8 @@ that are hard even for humans to classify correctly).
     digits_df['image'] = list(map(embeddable_image, digits.images))
     
     datasource = ColumnDataSource(digits_df)
-    color_mapping = CategoricalColorMapper(factors=[str(9 - x) for x in digits.target_names], palette=Spectral10)
+    color_mapping = CategoricalColorMapper(factors=[str(9 - x) for x in digits.target_names],
+                                           palette=Spectral10)
     
     plot_figure = figure(
         title='UMAP projection of the Digits dataset',
@@ -476,7 +477,9 @@ that are hard even for humans to classify correctly).
 
 
 .. bokeh-plot:: bokeh_digits_plot.py
-    :source-position: 'none'
+   :source-position: 'none'
+
+
 
 
 As can be seen, the nines that blend between the ones and the sevens are
@@ -486,7 +489,7 @@ the small disjoint cluster of ones at the bottom of the plot is made up
 of ones with feet (a horizontal line at the base of the one) which are,
 indeed, quite distinct from the general mass of ones.
 
-This concludes our introduction to basic UMAP usage -- hopefulyl this
+This concludes our introduction to basic UMAP usage -- hopefully this
 has given you the tools to get started for yourself. Further tutorials,
 covering UMAP parameters and more advanced usage are also available when
 you wish to dive deeper.
