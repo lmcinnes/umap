@@ -455,7 +455,7 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
     return result
 
 
-@numba.njit(parallel=True)
+@numba.jit()
 def fast_intersection(rows, cols, values, target, unknown_dist=1.0, dist=5.0):
     """Under the assumption of categorical distance for the intersecting
     simplicial set perform a fast intersection.
@@ -1100,17 +1100,20 @@ class UMAP(BaseEstimator):
                  a=None,
                  b=None,
                  random_state=None,
-                 metric_kwds={},
+                 metric_kwds=None,
                  angular_rp_forest=False,
                  target_metric='categorical',
-                 target_metric_kwds={},
+                 target_metric_kwds=None,
                  transform_seed=42,
                  verbose=False
                  ):
 
         self.n_neighbors = n_neighbors
         self.metric = metric
-        self.metric_kwds = metric_kwds
+        if metric_kwds is not None:
+            self._metric_kwds = metric_kwds
+        else:
+            self._metric_kwds = {}
         self.n_epochs = n_epochs
         if isinstance(init, np.ndarray):
             self.init = check_array(init, dtype=np.float32, accept_sparse=False)
@@ -1131,7 +1134,10 @@ class UMAP(BaseEstimator):
         self.angular_rp_forest = angular_rp_forest
         self.transform_queue_size = transform_queue_size
         self.target_metric = target_metric
-        self.target_metric_kwds = target_metric_kwds
+        if target_metric_kwds is not None:
+            self._target_metric_kwds = target_metric_kwds
+        else:
+            self._target_metric_kwds = {}
         self.transform_seed = transform_seed
         self.verbose = verbose
 
@@ -1140,10 +1146,10 @@ class UMAP(BaseEstimator):
         self._validate_parameters()
 
         if a is None or b is None:
-            self.a, self.b = find_ab_params(self.spread, self.min_dist)
+            self._a, self._b = find_ab_params(self.spread, self.min_dist)
         else:
-            self.a = a
-            self.b = b
+            self._a = a
+            self._b = b
 
         if self.verbose:
             print("UMAP(n_neighbors={}, n_components={}, metric='{}', "
@@ -1211,8 +1217,16 @@ class UMAP(BaseEstimator):
         self._raw_data = X
 
         if X.shape[0] <= self.n_neighbors:
-            raise ValueError('n_neighbors must be smaller than the dataset '
-                             'size!')
+            # raise ValueError('n_neighbors must be smaller than the dataset '
+            #                  'size!')
+            if X.shape[0] == 1:
+                return np.array([0.0, 0.0])  # needed to sklearn comparability
+
+            warn('n_neighbors is larger than the dataset size; truncating to '
+                 'X.shape[0] - 1')
+            n_neighbors = X.shape[0] - 1
+        else:
+            n_neighbors = self.n_neighbors
 
         if scipy.sparse.isspmatrix_csr(X) and not X.has_sorted_indices:
             X.sort_indices()
@@ -1228,13 +1242,13 @@ class UMAP(BaseEstimator):
         # Handle small cases efficiently by computing all distances
         if X.shape[0] < 4096:
             self._small_data = True
-            dmat = pairwise_distances(X, metric=self.metric, **self.metric_kwds)
+            dmat = pairwise_distances(X, metric=self.metric, **self._metric_kwds)
             self.graph_ = fuzzy_simplicial_set(
                 dmat,
-                self.n_neighbors,
+                n_neighbors,
                 random_state,
                 'precomputed',
-                self.metric_kwds,
+                self._metric_kwds,
                 None,
                 None,
                 self.angular_rp_forest,
@@ -1248,8 +1262,8 @@ class UMAP(BaseEstimator):
             # Standard case
             (self._knn_indices,
              self._knn_dists,
-             self._rp_forest) = nearest_neighbors(X, self.n_neighbors,
-                                                  self.metric, self.metric_kwds,
+             self._rp_forest) = nearest_neighbors(X, n_neighbors,
+                                                  self.metric, self._metric_kwds,
                                                   self.angular_rp_forest,
                                                   random_state, self.verbose)
 
@@ -1258,7 +1272,7 @@ class UMAP(BaseEstimator):
                 self.n_neighbors,
                 random_state,
                 self.metric,
-                self.metric_kwds,
+                self._metric_kwds,
                 self._knn_indices,
                 self._knn_dists,
                 self.angular_rp_forest,
@@ -1285,7 +1299,7 @@ class UMAP(BaseEstimator):
             else:
                 raise ValueError('Metric is neither callable, ' +
                                  'nor a recognised string')
-            self._dist_args = tuple(self.metric_kwds.values())
+            self._dist_args = tuple(self._metric_kwds.values())
 
             self._random_init, self._tree_init = make_initialisations(
                 self._distance_func,
@@ -1299,10 +1313,10 @@ class UMAP(BaseEstimator):
                     self.graph_, y)
             else:
                 target_graph = fuzzy_simplicial_set(y[np.newaxis, :].T,
-                                                    self.n_neighbors,
+                                                    n_neighbors,
                                                     random_state,
                                                     self.target_metric,
-                                                    self.target_metric_kwds,
+                                                    self._target_metric_kwds,
                                                     None,
                                                     None,
                                                     False,
@@ -1329,15 +1343,15 @@ class UMAP(BaseEstimator):
             self.graph_,
             self.n_components,
             self.initial_alpha,
-            self.a,
-            self.b,
+            self._a,
+            self._b,
             self.gamma,
             self.negative_sample_rate,
             n_epochs,
             self.init,
             random_state,
             self.metric,
-            self.metric_kwds,
+            self._metric_kwds,
             self.verbose
         )
 
@@ -1399,7 +1413,7 @@ class UMAP(BaseEstimator):
 
         if self._small_data:
             dmat = pairwise_distances(X, self._raw_data,
-                                      metric=self.metric, **self.metric_kwds)
+                                      metric=self.metric, **self._metric_kwds)
             indices = np.argsort(dmat)
             dists = np.sort(dmat)  # TODO: more efficient approach
             indices = indices[:, :self.n_neighbors]
@@ -1455,7 +1469,7 @@ class UMAP(BaseEstimator):
 
         embedding = optimize_layout(embedding, self.embedding_, head, tail,
                                     n_epochs, X.shape[0],
-                                    epochs_per_sample, self.a, self.b,
+                                    epochs_per_sample, self._a, self._b,
                                     rng_state, self.gamma,
                                     self.initial_alpha,
                                     self.negative_sample_rate,

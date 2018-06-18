@@ -97,6 +97,9 @@ binary_distances = (
 )
 
 
+def test_scikit_learn_compatibility():
+    check_estimator(UMAP)
+
 def test_nn_descent_neighbor_accuracy():
     knn_indices, knn_dists, _ = nearest_neighbors(nn_data, 10, 'euclidean', {}, False, np.random)
 
@@ -562,9 +565,9 @@ def test_umap_bad_parameters():
     assert_raises(ValueError, UMAP, n_epochs=-2)
 
     u = UMAP(a=1.2, b=1.75, n_neighbors=2000)
-    assert_equal(u.a, 1.2)
-    assert_equal(u.b, 1.75)
-    assert_raises(ValueError, u.fit, nn_data)
+    assert_equal(u._a, 1.2)
+    assert_equal(u._b, 1.75)
+    # assert_raises(ValueError, u.fit, nn_data) we simply warn now
 
     assert_raises(ValueError, nearest_neighbors,
                   nn_data, 10, 42, {}, False, np.random)
