@@ -35,7 +35,7 @@ for Dimension Reduction*, ArXiv e-prints 1802.03426, 2018
    transform
    supervised
    clustering
-      auto_examples/index
+   auto_examples/index
    faq
 
 .. toctree::

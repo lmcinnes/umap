@@ -34,8 +34,9 @@ import sys
 extensions = ['sphinx.ext.autodoc',
     'sphinx.ext.intersphinx',
     'sphinx.ext.mathjax',
-              'sphinx.ext.viewcode',
-              'sphinx_gallery.gen_gallery', ]
+    'sphinx.ext.viewcode',
+    'bokeh.sphinxext.bokeh_plot',
+    'sphinx_gallery.gen_gallery', ]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -177,7 +178,7 @@ intersphinx_mapping = {
     'scipy': ('https://docs.scipy.org/doc/scipy/reference', None),
     'matplotlib': ('https://matplotlib.org/', None),
     'pandas': ('https://pandas.pydata.org/pandas-docs/stable/', None),
-    'sklearn': ('http://scikit-learn.org/stable/index.html', None),
+    'sklearn': ('http://scikit-learn.org/stable/', None),
     'bokeh': ('http://bokeh.pydata.org/en/latest/', None),
 }
 
@@ -199,3 +200,4 @@ sphinx_gallery_conf = {
         'bokeh': 'http://bokeh.pydata.org/en/latest/',
     }
 }
+
