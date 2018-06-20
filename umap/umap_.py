@@ -992,7 +992,7 @@ class UMAP(BaseEstimator):
         embeddings. If None is specified a value will be selected based on
         the size of the input dataset (typically around dataset_size * 10**4).
 
-    alpha: float (optional, default 1.0)
+    learning_rate: float (optional, default 1.0)
         The initial learning rate for the embedding optimization.
 
     init: string (optional, default 'spectral')
@@ -1028,7 +1028,7 @@ class UMAP(BaseEstimator):
         locally. In practice this should be not more than the local intrinsic
         dimension of the manifold.
 
-    gamma: float (optional, default 1.0)
+    repulsion_strength: float (optional, default 1.0)
         Weighting applied to negative samples in low dimensional embedding
         optimization. Values higher than one will result in greater weight
         being given to negative samples.
@@ -1054,9 +1054,9 @@ class UMAP(BaseEstimator):
         If None, the random number generator is the RandomState instance used
         by `np.random`.
 
-    metric_kwds: dict (optional, default {})
+    metric_kwds: dict (optional, default None)
         Arguments to pass on to the metric, such as the ``p`` value for
-        Minkowski distance.
+        Minkowski distance. If None then no arguments are passed on.
 
     angular_rp_forest: bool (optional, default False)
         Whether to use an angular random projection forest to initialise
@@ -1074,9 +1074,9 @@ class UMAP(BaseEstimator):
         continuous values (e.g. for a regression problem) then metric of 'l1'
         or 'l2' is probably more appropriate.
 
-    target_metric_kwds: dict (optional, default {})
+    target_metric_kwds: dict (optional, default None)
         Keyword argument to pass to the target metric when performing
-        supervised dimension reduction.
+        supervised dimension reduction. If None then no arguments are passed on.
 
     verbose: bool (optional, default False)
         Controls verbosity of logging.
@@ -1087,14 +1087,14 @@ class UMAP(BaseEstimator):
                  n_components=2,
                  metric='euclidean',
                  n_epochs=None,
-                 alpha=1.0,
+                 learning_rate=1.0,
                  init='spectral',
                  spread=1.0,
                  min_dist=0.1,
                  set_op_mix_ratio=1.0,
                  local_connectivity=1.0,
                  bandwidth=1.0,
-                 gamma=1.0,
+                 repulsion_strength=1.0,
                  negative_sample_rate=5,
                  transform_queue_size=4.0,
                  a=None,
@@ -1120,9 +1120,9 @@ class UMAP(BaseEstimator):
         else:
             self.init = init
         self.n_components = n_components
-        self.gamma = gamma
-        self.initial_alpha = alpha
-        self.alpha = alpha
+        self.repulsion_strength = repulsion_strength
+        self.initial_alpha = learning_rate
+        self.learning_rate = learning_rate
 
         self.spread = spread
         self.min_dist = min_dist
@@ -1152,19 +1152,13 @@ class UMAP(BaseEstimator):
             self._b = b
 
         if self.verbose:
-            print("UMAP(n_neighbors={}, n_components={}, metric='{}', "
-                  " gamma={}, n_epochs={}, alpha={}, init='{}', "
-                  "spread={}, min_dist={}, a={}, b={}, random_state={}, "
-                  "metric_kwds={}, verbose={})".format(
-                      n_neighbors, n_components, metric, gamma,
-                n_epochs, alpha, init, spread,
-                      min_dist, a, b, random_state, metric_kwds, verbose))
+            print(str(self))
 
     def _validate_parameters(self):
         if self.set_op_mix_ratio < 0.0 or self.set_op_mix_ratio > 1.0:
             raise ValueError('set_op_mix_ratio must be between 0.0 and 1.0')
-        if self.gamma < 0.0:
-            raise ValueError('gamma cannot be negative')
+        if self.repulsion_strength < 0.0:
+            raise ValueError('repulsion_strength cannot be negative')
         if self.min_dist > self.spread:
             raise ValueError('min_dist must be less than spread')
         if self.min_dist < 0.0:
@@ -1180,7 +1174,7 @@ class UMAP(BaseEstimator):
         if self.negative_sample_rate < 0:
             raise ValueError('negative sample rate must be positive')
         if self.initial_alpha < 0.0:
-            raise ValueError('alpha must be positive')
+            raise ValueError('learning_rate must be positive')
         if self.n_neighbors < 2:
             raise ValueError('n_neighbors must be greater than 2')
         if not isinstance(self.n_components, int):
@@ -1212,13 +1206,10 @@ class UMAP(BaseEstimator):
             ``target_metric_kwds``.
         """
 
-        # Handle other array dtypes (TODO: do this properly)
         X = check_array(X, dtype=np.float32, accept_sparse='csr')
         self._raw_data = X
 
         if X.shape[0] <= self.n_neighbors:
-            # raise ValueError('n_neighbors must be smaller than the dataset '
-            #                  'size!')
             if X.shape[0] == 1:
                 return np.array([0.0, 0.0])  # needed to sklearn comparability
 
@@ -1345,7 +1336,7 @@ class UMAP(BaseEstimator):
             self.initial_alpha,
             self._a,
             self._b,
-            self.gamma,
+            self.repulsion_strength,
             self.negative_sample_rate,
             n_epochs,
             self.init,
@@ -1470,7 +1461,7 @@ class UMAP(BaseEstimator):
         embedding = optimize_layout(embedding, self.embedding_, head, tail,
                                     n_epochs, X.shape[0],
                                     epochs_per_sample, self._a, self._b,
-                                    rng_state, self.gamma,
+                                    rng_state, self.repulsion_strength,
                                     self.initial_alpha,
                                     self.negative_sample_rate,
                                     verbose=self.verbose)
