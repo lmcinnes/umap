@@ -493,7 +493,7 @@ def sparse_correlation(ind1, data1, ind2, data2, n_features):  # pragma: no cove
             dot_product -= data2[i] * (mu_x)
 
     all_indices = arr_union(ind1, ind2)
-    dot_product += mu_x * mu_y * all_indices.shape[0]
+    dot_product += mu_x * mu_y * (n_features - all_indices.shape[0])
 
     if norm1 == 0.0 and norm2 == 0.0:
         return 0.0
