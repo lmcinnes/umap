@@ -52,6 +52,33 @@ Second, because it supports arbitrary embedding
 dimensions, UMAP allows embedding to larger dimensional
 spaces that make it more amenable to clustering.
 
+The clusters are all squashed together and I can't see internal structure
+-------------------------------------------------------------------------
+
+One of UMAPs goals is to have distance between clusters of points
+be meaningful. This means that clusters can end up spread out
+with a fair amount of space between them. As a result the
+clusters themselves can end up more visually packed together
+than in, say, t-SNE. This is intended. A catch, however, is
+that many plots (for example matplotlib's scatter plot with
+default parameters) tend to show the clusters only as indistinct
+blobs with no internal structure. The solution for this is
+really a matter of tuning the plot more than anything else.
+
+If you are using matplotlib consider using the ``s`` parameter
+that specifies the glyph size in scatter plots. Depending on
+how much data you have reducing this to anything from 5 to
+0.001 can have a notable effect. The ``size`` parameter in
+bokeh is simialrly useful (but does not need to be quite so small).
+
+More generally the real solution, particular with large datasets,
+is to use `datashader <http://datashader.org/>`_ for plotting.
+Datashader is a plotting llibrary that handles aggregation
+of large scale data in scatter plots in a way that can better
+show the underlying detail that can otherwise be lost. We
+highly recommend investing the time to learn datashader for
+UMAP plot particularly for larger datasets.
+
 Is there GPU or multicore-CPU support?
 --------------------------------------
 
