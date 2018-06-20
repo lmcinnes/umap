@@ -446,13 +446,17 @@ def sparse_cosine(ind1, data1, ind2, data2):
         return 1.0 - (result / (norm1 * norm2))
 
 
-# TODO: Fix sparse correlation -- it is close but has precision issues
 @numba.njit()
-def sparse_correlation(ind1, data1, ind2, data2, n_features):  # pragma: no cover
+def sparse_correlation(ind1, data1, ind2, data2, n_features):
 
     mu_x = 0.0
     mu_y = 0.0
     dot_product = 0.0
+
+    if ind1.shape[0] == 0 and ind2.shape[0] == 0:
+        return 0.0
+    elif ind1.shape[0] == 0 or ind2.shape[0] == 0:
+        return 1.0
 
     for i in range(data1.shape[0]):
         mu_x += data1[i]
@@ -470,50 +474,27 @@ def sparse_correlation(ind1, data1, ind2, data2, n_features):  # pragma: no cove
     for i in range(data2.shape[0]):
         shifted_data2[i] = data2[i] - mu_y
 
-    print(mu_x)
-    print(shifted_data1)
-
     norm1 = np.sqrt((norm(shifted_data1) ** 2) + (n_features - ind1.shape[0]) * (mu_x ** 2))
     norm2 = np.sqrt((norm(shifted_data2) ** 2) + (n_features - ind2.shape[0]) * (mu_y ** 2))
 
-    print(norm1, norm2)
-
     dot_prod_inds, dot_prod_data = sparse_mul(ind1, shifted_data1,
                                               ind2, shifted_data2)
-
-    print(dot_prod_data)
-
-    if dot_prod_data.shape[0] == 0:
-        return 1.0
 
     common_indices = set(dot_prod_inds)
 
     for i in range(dot_prod_data.shape[0]):
         dot_product += dot_prod_data[i]
 
-    print(dot_product)
-    print(common_indices)
-
-    tmp = dot_product
-
     for i in range(ind1.shape[0]):
         if ind1[i] not in common_indices:
             dot_product -= shifted_data1[i] * (mu_y)
-
-    print(dot_product, dot_product - tmp)
-    tmp = dot_product
 
     for i in range(ind2.shape[0]):
         if ind2[i] not in common_indices:
             dot_product -= shifted_data2[i] * (mu_x)
 
-    print(dot_product, dot_product - tmp)
-
     all_indices = arr_union(ind1, ind2)
     dot_product += mu_x * mu_y * (n_features - all_indices.shape[0])
-
-    print(dot_product)
-    print(mu_x * mu_y * (n_features - all_indices.shape[0]))
 
     if norm1 == 0.0 and norm2 == 0.0:
         return 0.0

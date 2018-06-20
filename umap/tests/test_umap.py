@@ -366,9 +366,7 @@ def test_metrics():
 
 def test_sparse_metrics():
     for metric in spatial_distances:
-        # Sparse correlation has precision errors right now, leave out ...
-        if metric in spdist.sparse_named_distances and metric is not \
-                'correlation':
+        if metric in spdist.sparse_named_distances:
             dist_matrix = pairwise_distances(sparse_spatial_data.todense(),
                                              metric=metric)
             if metric in ('braycurtis', 'dice', 'sokalsneath', 'yule'):
