@@ -680,6 +680,11 @@ def sparse_correlation(ind1, data1, ind2, data2, n_features):
     mu_y = 0.0
     dot_product = 0.0
 
+    if ind1.shape[0] == 0 and ind2.shape[0] == 0:
+        return 0.0
+    elif ind1.shape[0] == 0 or ind2.shape[0] == 0:
+        return 1.0
+
     for i in range(data1.shape[0]):
         mu_x += data1[i]
     for i in range(data2.shape[0]):
@@ -688,22 +693,19 @@ def sparse_correlation(ind1, data1, ind2, data2, n_features):
     mu_x /= n_features
     mu_y /= n_features
 
-    shifted_data1 = np.empty(data1.shape[0], dtype=np.float64)
-    shifted_data2 = np.empty(data2.shape[0], dtype=np.float64)
+    shifted_data1 = np.empty(data1.shape[0], dtype=np.float32)
+    shifted_data2 = np.empty(data2.shape[0], dtype=np.float32)
 
     for i in range(data1.shape[0]):
         shifted_data1[i] = data1[i] - mu_x
     for i in range(data2.shape[0]):
         shifted_data2[i] = data2[i] - mu_y
 
-    norm1 = np.sqrt(norm(shifted_data1) ** 2 + (n_features - ind1.shape[0]) * mu_x ** 2)
-    norm2 = np.sqrt(norm(shifted_data2) ** 2 + (n_features - ind2.shape[0]) * mu_y ** 2)
+    norm1 = np.sqrt((norm(shifted_data1) ** 2) + (n_features - ind1.shape[0]) * (mu_x ** 2))
+    norm2 = np.sqrt((norm(shifted_data2) ** 2) + (n_features - ind2.shape[0]) * (mu_y ** 2))
 
     dot_prod_inds, dot_prod_data = sparse_mul(ind1, shifted_data1,
                                               ind2, shifted_data2)
-
-    if dot_prod_data.shape[0] == 0:
-        return 1.0
 
     common_indices = set(dot_prod_inds)
 
@@ -712,19 +714,22 @@ def sparse_correlation(ind1, data1, ind2, data2, n_features):
 
     for i in range(ind1.shape[0]):
         if ind1[i] not in common_indices:
-            dot_product -= data1[i] * (mu_y)
+            dot_product -= shifted_data1[i] * (mu_y)
 
     for i in range(ind2.shape[0]):
         if ind2[i] not in common_indices:
-            dot_product -= data2[i] * (mu_x)
+            dot_product -= shifted_data2[i] * (mu_x)
 
     all_indices = arr_union(ind1, ind2)
-    dot_product += mu_x * mu_y * all_indices.shape[0]
+    dot_product += mu_x * mu_y * (n_features - all_indices.shape[0])
 
-    if dot_product == 0.0:
+    if norm1 == 0.0 and norm2 == 0.0:
+        return 0.0
+    elif dot_product == 0.0:
         return 1.0
     else:
         return (1.0 - (dot_product / (norm1 * norm2)))
+
 
 
 sparse_named_distances = {
