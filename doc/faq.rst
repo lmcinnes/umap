@@ -69,7 +69,7 @@ If you are using matplotlib consider using the ``s`` parameter
 that specifies the glyph size in scatter plots. Depending on
 how much data you have reducing this to anything from 5 to
 0.001 can have a notable effect. The ``size`` parameter in
-bokeh is simialrly useful (but does not need to be quite so small).
+bokeh is similarly useful (but does not need to be quite so small).
 
 More generally the real solution, particular with large datasets,
 is to use `datashader <http://datashader.org/>`_ for plotting.
