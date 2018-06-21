@@ -32,7 +32,7 @@ configuration = {
     'license' : 'BSD',
     'packages' : ['umap'],
     'install_requires' : ['scikit-learn >= 0.16',
-                          'scipy >= 0.19',
+                          'scipy >= 0.19, != 1.0.0',
                           'numba >= 0.34'],
     'ext_modules' : [],
     'cmdclass' : {},
