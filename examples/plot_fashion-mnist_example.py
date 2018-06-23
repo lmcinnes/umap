@@ -54,8 +54,9 @@ img = tf.shade(agg, color_key=color_key, how='eq_hist')
 
 utils.export_image(img, filename='fashion-mnist', background='black')
 
+image = plt.imread('fashion-mnist.png')
 fig, ax = plt.subplots(figsize=(6, 6))
-plt.imshow(img)
+plt.imshow(image)
 plt.setp(ax, xticks=[], yticks=[])
 plt.title("Fashion MNIST data embedded\n"
           "into two dimensions by UMAP\n"
