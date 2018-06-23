@@ -2,7 +2,16 @@
 UMAP on the MNIST Digits dataset
 --------------------------------
 
-As per the title.
+A simple example demonstrating how to use UMAP on a larger
+dataset such as MNIST. We first pull the MNIST dataset and
+then use UMAP to reduce it to only 2-dimensions for
+easy visualisation.
+
+Note that UMAP manages to both group the individual digit
+classes, but also to retain the overall global structure
+among the different digit classes -- keeping 1 far from
+0, and grouping triplets of 3,5,8 and 4,7,9 which can
+blend into one another in some cases.
 """
 import umap
 from sklearn.datasets import fetch_mldata

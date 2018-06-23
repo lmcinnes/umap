@@ -3,7 +3,45 @@ Comparison of Dimension Reduction Techniques
 --------------------------------------------
 
 A comparison of several different dimension reduction
-techniques on a variety of toy datasets.
+techniques on a variety of toy datasets. The datasets
+are all toy datasets, but should provide a representative
+range of the strengths and weaknesses of the different
+algorithms.
+
+The time to perform the dimension reduction with each
+algorithm and each dataset is recorded in the lower
+right of each plot.
+
+Things to note about the datasets:
+
+- Blobs: A set of five gaussian blobs in 10 dimensional
+         space. This should be a prototypical example
+         of something that should clearly separate
+         even in a reduced dimension space.
+- Iris: a classic small dataset with one distinct class
+        and two classes that are not clearly separated.
+- Digits: handwritten digits -- ideally different digit
+          classes should form distinct groups. Due to
+          the nature of handwriting digits may have several
+          forms (crossed or uncrossed sevens, capped or
+          straight line oes, etc.)
+- Wine: wine characteristics ideally used for a toy
+        regression. Ultimately the data is essentially
+        one dimensional in nature.
+- Swiss Roll: data is essentially a rectangle, but
+              has been "rolled up" like a swiss roll
+              in three dimensional space. Ideally a
+              dimension reduction technique should
+              be able to "unroll" it. The data
+              has been coloured according to one dimension
+              of the rectangle, so should form
+              a rectangle of smooth color variation.
+- Sphere: the two dimensional surface of a three
+          dimensional sphere. This cannot be represented
+          accurately in two dimensions without tearing.
+          The sphere has been coloured with hue around
+          the equator and black to white from the south
+          to north pole.
 """
 import numpy as np
 import matplotlib.pyplot as plt

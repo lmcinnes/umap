@@ -2,7 +2,14 @@
 UMAP on the Fashion MNIST Digits dataset using Datashader
 ---------------------------------------------------------
 
-As per the title.
+This is a simple example of using UMAP on the Fashion-MNIST
+dataset. The goal of this example is largely to demonstrate
+the use of datashader as an effective tool for visualising
+UMAP results. In particular datashader allows visualisation
+of very large datasets where overplotting can be a serious
+problem. It supports coloring by categorical variables
+(as shown in this example), or by continuous variables,
+or by density (as is common in datashader examples).
 """
 import umap
 import numpy as np
