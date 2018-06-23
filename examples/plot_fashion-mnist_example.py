@@ -41,7 +41,6 @@ pal = [
  '#5e4fa2'
 ]
 color_key = {str(d):c for d,c in enumerate(pal)}
-color_key = {str(d):c for d,c in enumerate(pal)}
 
 reducer = umap.UMAP(random_state=42)
 embedding = reducer.fit_transform(data)
