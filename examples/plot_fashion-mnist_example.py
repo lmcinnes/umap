@@ -10,6 +10,7 @@ import pandas as pd
 import requests
 import os
 import datashader as ds
+import datashader.utils as util
 import datashader.transfer_functions as tf
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -37,15 +38,17 @@ embedding = reducer.fit_transform(data)
 df = pd.DataFrame(embedding, columns=('x', 'y'))
 df['class'] = pd.Series([str(x) for x in target], dtype="category")
 
-
-
-cvs = ds.Canvas(plot_width=800, plot_height=800)
+cvs = ds.Canvas(plot_width=400, plot_height=400)
 agg = cvs.points(df, 'x', 'y', ds.count_cat('class'))
 img = tf.shade(agg, color_key=color_key, how='eq_hist')
 
-fig, ax = plt.subplots(figsize=(12, 12))
-plt.imshow(img)
+util.export_image(img, filename='fashion-mnist', background='black')
+
+image = plt.imread('fashion-mnist.png')
+
+fig, ax = plt.subplots(figsize=(6, 6))
+plt.imshow(image)
 plt.setp(ax, xticks=[], yticks=[])
-plt.title("Fashion MNIST data embedded into two dimensions by UMAP", fontsize=18)
+plt.title("Fashion MNIST data embedded into two dimensions by UMAP", fontsize=14)
 
 plt.show()
