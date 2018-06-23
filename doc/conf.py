@@ -189,6 +189,7 @@ sphinx_gallery_conf = {
     'examples_dirs': '../examples',
     # path where to save gallery generated examples
     'gallery_dirs': 'auto_examples',
+    'plot_gallery': False,  # Turn off running the examples for now
     'reference_url': {
         'umap': None,
         'python': 'https://docs.python.org/{.major}'.format(sys.version_info),
