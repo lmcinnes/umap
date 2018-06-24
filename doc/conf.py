@@ -35,7 +35,7 @@ extensions = ['sphinx.ext.autodoc',
     'sphinx.ext.intersphinx',
     'sphinx.ext.mathjax',
     'sphinx.ext.viewcode',
-    'bokeh.sphinxext.bokeh_plot',
+              #    'bokeh.sphinxext.bokeh_plot',
     'sphinx_gallery.gen_gallery', ]
 
 # Add any paths that contain templates here, relative to this directory.

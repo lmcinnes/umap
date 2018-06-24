@@ -16,7 +16,7 @@ for basic array manipulation. Since we will be visualising the results
 we will need ``matplotlib`` and ``seaborn``. Finally we will need
 ``umap`` for doing the dimension reduction itself.
 
-.. code:: ipython3
+.. code:: python3
 
     import numpy as np
     import matplotlib.pyplot as plt
@@ -25,7 +25,7 @@ we will need ``matplotlib`` and ``seaborn``. Finally we will need
     import umap
     %matplotlib inline
 
-.. code:: ipython3
+.. code:: python3
 
     sns.set(style='white', context='poster', rc={'figure.figsize':(14,10)})
 
@@ -38,7 +38,7 @@ each point can colored according to its 4-dimensional value. For this we
 can use ``numpy``. We will fix a random seed for the sake of
 consistency.
 
-.. code:: ipython3
+.. code:: python3
 
     np.random.seed(42)
     data = np.random.rand(800, 4)
@@ -47,7 +47,7 @@ Now we need to find a low dimensional representation of the data. As in
 the Basic Usage documentation, we can do this by using the
 :meth:`~umap.umap_.UMAP.fit_transform` method on a :class:`~umap.umap_.UMAP` object.
 
-.. code:: ipython3
+.. code:: python3
 
     fit = umap.UMAP()
     %time u = fit.fit_transform(data)
@@ -64,7 +64,7 @@ We can visualise the result by using ``matplotlib`` to draw a scatter
 plot of ``u``. We can color each point of the scatter plot by the
 associated 4-dimensional color from the source data.
 
-.. code:: ipython3
+.. code:: python3
 
     plt.scatter(u[:,0], u[:,1], c=data)
     plt.title('UMAP embedding of random colours');
@@ -93,7 +93,7 @@ in turn. To make exploration simpler we will first write a short utility
 function that can fit the data with UMAP given a set of parameter
 choices, and plot the result.
 
-.. code:: ipython3
+.. code:: python3
 
     def draw_umap(n_neighbors=15, min_dist=0.1, n_components=2, metric='euclidean', title=''):
         fit = umap.UMAP(
@@ -133,7 +133,7 @@ range of ``n_neighbors`` values. The default value of ``n_neighbors``
 for UMAP (as used above) is 15, but we will look at values ranging from
 2 (a very local view of the manifold) up to 200 (a quarter of the data).
 
-.. code:: ipython3
+.. code:: python3
 
     for n in (2, 5, 10, 20, 50, 100, 200):
         draw_umap(n_neighbors=n, title='n_neighbors = {}'.format(n))
@@ -207,7 +207,7 @@ instead.
 The default value for ``min_dist`` (as used above) is 0.1. We will look
 at a range of values from 0.0 through to 0.99.
 
-.. code:: ipython3
+.. code:: python3
 
     for d in (0.0, 0.1, 0.25, 0.5, 0.8, 0.99):
         draw_umap(min_dist=d, title='min_dist = {}'.format(d))
@@ -262,7 +262,7 @@ the data in a line. For visualisation purposes we will randomly
 distribute the data on the y-axis to provide some separation between
 points.
 
-.. code:: ipython3
+.. code:: python3
 
     draw_umap(n_components=1, title='n_components = 1')
 
@@ -273,7 +273,7 @@ points.
 Now we will try ``n_components=3``. For visualisation we will make use
 of ``matplotlib``'s basic 3-dimensional plotting.
 
-.. code:: ipython3
+.. code:: python3
 
     draw_umap(n_components=3, title='n_components = 3')
 
@@ -328,14 +328,14 @@ metrics as long as those metrics can be compiled in ``nopython`` mode by
 numba. For this notebook we will be looking at such custom metrics. To
 define such metrics we'll need numba ...
 
-.. code:: ipython3
+.. code:: python3
 
     import numba
 
 For our first custom metric we'll define the distance to be the absolute
 value of difference in the red channel.
 
-.. code:: ipython3
+.. code:: python3
 
     @numba.njit()
     def red_channel_dist(a,b):
@@ -345,7 +345,7 @@ To get more adventurous it will be useful to have some colorspace
 conversion -- to keep things simple we'll just use HSL formulas to
 extract the hue, saturation, and lightness from an (R,G,B) tuple.
 
-.. code:: ipython3
+.. code:: python3
 
     @numba.njit()
     def hue(r, g, b):
@@ -381,7 +381,7 @@ measures the difference in hue, the second measures the euclidean
 distance in a combined saturation and lightness space, while the third
 measures distance in the full HSL space.
 
-.. code:: ipython3
+.. code:: python3
 
     @numba.njit()
     def hue_dist(a, b):
@@ -415,7 +415,7 @@ that ``numba`` provides significant flexibility in what we can do in
 defining distance functions. Despite this we retain the high performance
 we expect from UMAP even using such custom functions.
 
-.. code:: ipython3
+.. code:: python3
 
     for m in ("euclidean", red_channel_dist, sl_dist, hue_dist, hsl_dist):
         name = m if type(m) is str else m.__name__

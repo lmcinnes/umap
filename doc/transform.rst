@@ -19,7 +19,7 @@ digits dataset contained therein (see :doc:`basic_usage` for an example
 of the digits dataset). First let's load all the modules we'll need to
 get this done.
 
-.. code:: ipython3
+.. code:: python3
 
     import numpy as np
     from sklearn.datasets import load_digits
@@ -31,11 +31,11 @@ get this done.
     import seaborn as sns
     %matplotlib inline
 
-.. code:: ipython3
+.. code:: python3
 
     sns.set(context='notebook', style='white', rc={'figure.figsize':(14,10)})
 
-.. code:: ipython3
+.. code:: python3
 
     digits = load_digits()
 
@@ -44,7 +44,7 @@ separate out a training and test set (stratified over the different
 digit types). By default ``train_test_split`` will carve off 25% of the
 data for testing, which seems suitable in this case.
 
-.. code:: ipython3
+.. code:: python3
 
     X_train, X_test, y_train, y_test = train_test_split(digits.data, 
                                                         digits.target, 
@@ -58,7 +58,7 @@ KNN classifier. Ideally we should be tuning hyper-parameters (perhaps a
 grid search using k-fold cross validation), but for the purposes of this
 simple demo we will simply use default parameters for both classifiers.
 
-.. code:: ipython3
+.. code:: python3
 
     svc = SVC().fit(X_train, y_train)
     knn = KNeighborsClassifier().fit(X_train, y_train)
@@ -67,7 +67,7 @@ The next question is how well these classifiers perform on the test set.
 Conveniently sklearn provides a ``score`` method that can output the
 accuracy on the tets set.
 
-.. code:: ipython3
+.. code:: python3
 
     svc.score(X_test, y_test), knn.score(X_test, y_test)
 
@@ -88,7 +88,7 @@ The goal now is to make use of UMAP as a preprocessing step that one
 could potentially fit into a pipeline. We will therefore obviously need
 the ``umap`` module loaded.
 
-.. code:: ipython3
+.. code:: python3
 
     import umap
 
@@ -98,7 +98,7 @@ example using the fit method. In this case we simply hand it the
 training data and it will learn an appropriate (two dimensional by
 default) embedding.
 
-.. code:: ipython3
+.. code:: python3
 
     trans = umap.UMAP(n_neighbors=5, random_state=42).fit(X_train)
 
@@ -110,7 +110,7 @@ colored by the class they come from. Note that the embedded training
 data can be accessed as the ``.embedding_`` attribute of the UMAP model
 once we have fit the model to some data.
 
-.. code:: ipython3
+.. code:: python3
 
     plt.scatter(trans.embedding_[:, 0], trans.embedding_[:, 1], s= 5, c=y_train, cmap='Spectral')
     plt.title('Embedding of the training set by UMAP', fontsize=24);
@@ -132,7 +132,7 @@ it the embedded data. Note that calling ``transform`` on input identical
 to what the model was trained on will simply return the ``embedding_``
 attribute, so sklearn pipelines will work as expected.
 
-.. code:: ipython3
+.. code:: python3
 
     svc = SVC().fit(trans.embedding_, y_train)
     knn = KNeighborsClassifier().fit(trans.embedding_, y_train)
@@ -144,7 +144,7 @@ unseen test data. We will assign this to ``test_embedding`` so that we
 can take a closer look at the result of applying an existing UMAP model
 to new data.
 
-.. code:: ipython3
+.. code:: python3
 
     %time test_embedding = trans.transform(X_test)
 
@@ -169,7 +169,7 @@ the training set. We can check this by visualising the data (since we
 are in two dimensions) to see if this is true. A simple scatterplot as
 before will suffice.
 
-.. code:: ipython3
+.. code:: python3
 
     plt.scatter(test_embedding[:, 0], test_embedding[:, 1], s= 5, c=y_test, cmap='Spectral')
     plt.title('Embedding of the test set by UMAP', fontsize=24);
@@ -185,7 +185,7 @@ embedded into two dimensions in exactly the locations we should expect
 This means we can now try out of models that were trained on the
 embedded training data by handing them the newly transformed test set.
 
-.. code:: ipython3
+.. code:: python3
 
     svc.score(trans.transform(X_test), y_test), knn.score(trans.transform(X_test), y_test)
 
@@ -214,17 +214,17 @@ more complex datasets where more dimensions may allow for a much more
 faithful embedding it is worth noting that we are not restricted to only
 two dimension.
 
-.. code:: ipython3
+.. code:: python3
 
     trans = umap.UMAP(n_neighbors=5, n_components=10, random_state=42).fit(X_train)
 
 
-.. code:: ipython3
+.. code:: python3
 
     svc = SVC().fit(trans.embedding_, y_train)
     knn = KNeighborsClassifier().fit(trans.embedding_, y_train)
 
-.. code:: ipython3
+.. code:: python3
 
     svc.score(trans.transform(X_test), y_test), knn.score(trans.transform(X_test), y_test)
 

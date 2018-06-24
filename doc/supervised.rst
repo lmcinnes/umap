@@ -12,7 +12,7 @@ First we will need to load some base libraries -- ``numpy``, obviously,
 but also ``mnist`` to read in the Fashion-MNIST data, and matplotlib and
 seaborn for plotting.
 
-.. code:: ipython3
+.. code:: python3
 
     import numpy as np
     from mnist import MNIST
@@ -33,7 +33,7 @@ library <https://pypi.org/project/python-mnist/>`__. We can then package
 up the train and test sets into one large dataset, normalise the values
 (to be in the range [0,1]), and set up labels for the 10 classes.
 
-.. code:: ipython3
+.. code:: python3
 
     mndata = MNIST('fashion-mnist/data/fashion')
     train, train_labels = mndata.load_training()
@@ -55,7 +55,7 @@ up the train and test sets into one large dataset, normalise the values
 Next we'll load the ``umap`` library so we can do dimension reduction on
 this dataset.
 
-.. code:: ipython3
+.. code:: python3
 
     import umap
 
@@ -71,7 +71,7 @@ interested mostly in very local information), then calling the
 UMAP reduces to two dimensions, so we'll be able to view the results as
 a scatterplot.
 
-.. code:: ipython3
+.. code:: python3
 
     %%time
     embedding = umap.UMAP(n_neighbors=5).fit_transform(data)
@@ -88,7 +88,7 @@ data points in 784 dimensional space. We can simply plot the results as
 a scatterplot, colored by the class of the fashion item. We can use
 matplotlibs colorbar with suitable tick-labels to give us the color key.
 
-.. code:: ipython3
+.. code:: python3
 
     fig, ax = plt.subplots(1, figsize=(14, 10))
     plt.scatter(*embedding.T, s=0.3, c=target, cmap='Spectral', alpha=1.0)
@@ -125,7 +125,7 @@ model). We can simply pass the :class:`~umap.umap_.UMAP` model that target data 
 fitting and it will make use of it to perform supervised dimension
 reduction!
 
-.. code:: ipython3
+.. code:: python3
 
     %%time
     embedding = umap.UMAP().fit_transform(data, y=target)
@@ -144,7 +144,7 @@ because we need to condition on the label data. As before we have
 reduced the data down to two dimensions so we can again visualize the
 data with a scatterplot, coloring by class.
 
-.. code:: ipython3
+.. code:: python3
 
     fig, ax = plt.subplots(1, figsize=(14, 10))
     plt.scatter(*embedding.T, s=0.1, c=target, cmap='Spectral', alpha=1.0)
@@ -191,7 +191,7 @@ the target information -- we'll do this by using the sklearn standard of
 having unlabelled point be given the label of -1 (such as, for example,
 the noise points from a DBSCAN clustering).
 
-.. code:: ipython3
+.. code:: python3
 
     masked_target = target.copy().astype(np.int8)
     masked_target[np.random.choice(70000, size=10000, replace=False)] = -1
@@ -201,7 +201,7 @@ perform supervised learning again. Everything works as before, but UMAP
 will interpret the -1 label as beingan unlabelled point and learn
 accordingly.
 
-.. code:: ipython3
+.. code:: python3
 
     %%time
     fitter = umap.UMAP().fit(data, y=masked_target)
@@ -216,7 +216,7 @@ accordingly.
 
 Again we can look at a scatterplot of the data colored by class.
 
-.. code:: ipython3
+.. code:: python3
 
     fig, ax = plt.subplots(1, figsize=(14, 10))
     plt.scatter(*embedding.T, s=0.1, c=target, cmap='Spectral', alpha=1.0)
@@ -255,7 +255,7 @@ model to be transformed to the new space.
 To try this out with UMAP let's use the train/test split provided by
 Fashion MNIST:
 
-.. code:: ipython3
+.. code:: python3
 
     train_data = np.array(train)
     test_data = np.array(test)
@@ -263,7 +263,7 @@ Fashion MNIST:
 Now we can fit a model to the training data, making use of the training
 labels to learn a supervised embedding.
 
-.. code:: ipython3
+.. code:: python3
 
     %%time
     mapper = umap.UMAP(n_neighbors=10).fit(train_data, np.array(train_labels))
@@ -279,7 +279,7 @@ Next we can use the :meth:`~umap.umap_.UMAP.transform` method on that model to t
 test set into the learned space. This time we won't pass the label
 information and let the model attempt to place the data correctly.
 
-.. code:: ipython3
+.. code:: python3
 
     %%time
     test_embedding = mapper.transform(test_data)
@@ -297,7 +297,7 @@ managed to embed the test data into the existing learned space. To start
 let's visualise the embedding of the training data so we can get a sense
 of where things *should* go.
 
-.. code:: ipython3
+.. code:: python3
 
     fig, ax = plt.subplots(1, figsize=(14, 10))
     plt.scatter(*mapper.embedding_.T, s=0.3, c=np.array(train_labels), cmap='Spectral', alpha=1.0)
@@ -318,7 +318,7 @@ structure and the overall global structure. We can now look at how the
 test set, for which we provided no label information, was embedded via
 the `:meth:`~umap.umap_.UMAP.transform` method.
 
-.. code:: ipython3
+.. code:: python3
 
     fig, ax = plt.subplots(1, figsize=(14, 10))
     plt.scatter(*test_embedding.T, s=2, c=np.array(test_labels), cmap='Spectral', alpha=1.0)

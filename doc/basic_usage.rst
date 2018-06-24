@@ -17,7 +17,7 @@ well as the ``train_test_split`` function to divide up data. Finally
 we'll need some plotting tools (matplotlib and seaborn) to help us
 visualise the results of UMAP, and pandas to make that a littl easier.
 
-.. code:: ipython3
+.. code:: python3
 
     import numpy as np
     from sklearn.datasets import load_iris, load_digits
@@ -27,7 +27,7 @@ visualise the results of UMAP, and pandas to make that a littl easier.
     import pandas as pd
     %matplotlib inline
 
-.. code:: ipython3
+.. code:: python3
 
     sns.set(style='white', context='notebook', rc={'figure.figsize':(14,10)})
 
@@ -42,7 +42,7 @@ small both in number of points and number of features, and will let us
 get an idea of what the dimension reduction is doing. We can load the
 iris dataset from sklearn.
 
-.. code:: ipython3
+.. code:: python3
 
     iris = load_iris()
     print(iris.DESCR)
@@ -124,7 +124,7 @@ can just to a pairwise feature scatterplot matrix to get an ideas of
 what is going on. Seaborn makes this easy (once we get the data into a
 pandas dataframe).
 
-.. code:: ipython3
+.. code:: python3
 
     iris_df = pd.DataFrame(iris.data, columns=iris.feature_names)
     iris_df['species'] = pd.Series(iris.target).map(dict(zip(range(3),iris.target_names)))
@@ -148,11 +148,11 @@ To use UMAP for this task we need to first construct a UMAP object that
 will do the job for us. That is as simple as instantiating the class. So
 let's import the umap library and do that.
 
-.. code:: ipython3
+.. code:: python3
 
     import umap
 
-.. code:: ipython3
+.. code:: python3
 
     reducer = umap.UMAP()
 
@@ -163,7 +163,7 @@ day, we are going to want to reduced representation of the data we will
 use, instead, the ``fit_transform`` method which first calls ``fit`` and
 then returns the transformed data as a numpy array.
 
-.. code:: ipython3
+.. code:: python3
 
     embedding = reducer.fit_transform(iris.data)
     embedding.shape
@@ -183,7 +183,7 @@ representation of the corresponding flower. Thus we can plot the
 (since it applies to the transformed data which is in the same order as
 the original).
 
-.. code:: ipython3
+.. code:: python3
 
     plt.scatter(embedding[:, 0], embedding[:, 1], c=[sns.color_palette()[x] for x in iris.target])
     plt.gca().set_aspect('equal', 'datalim')
@@ -209,7 +209,7 @@ Digits data
 
 First we will load the dataset from sklearn.
 
-.. code:: ipython3
+.. code:: python3
 
     digits = load_digits()
     print(digits.DESCR)
@@ -269,7 +269,7 @@ We can plot a number of the images to get an idea of what we are looking
 at. This just involves matplotlib building a grid of axes and then
 looping through them plotting an image into each one in turn.
 
-.. code:: ipython3
+.. code:: python3
 
     fig, ax_array = plt.subplots(20, 20)
     axes = ax_array.flatten()
@@ -302,7 +302,7 @@ scatterplot matrix -- in this case just of the first 10 dimensions so
 that it is at least plottable, but as you can quickly see that approach
 is not going to be sufficient for this data.
 
-.. code:: ipython3
+.. code:: python3
 
     digits_df = pd.DataFrame(digits.data[:,:10])
     digits_df['digit'] = pd.Series(digits.target).map(lambda x: 'Digit {}'.format(x))
@@ -319,7 +319,7 @@ data. TO demonstrate more of UMAP we'll go about it differently this
 time and simply use the ``fit`` method rather than the ``fit_transform``
 approach we used for Iris.
 
-.. code:: ipython3
+.. code:: python3
 
     reducer = umap.UMAP(random_state=42)
     reducer.fit(digits.data)
@@ -342,7 +342,7 @@ object, now having trained on the dataset we passed it. To access the
 resulting transform we can either look at the ``embedding_`` attribute
 of the reducer object, or call transform on the original data.
 
-.. code:: ipython3
+.. code:: python3
 
     embedding = reducer.transform(digits.data)
     # Verify that the result of calling transform is 
@@ -364,7 +364,7 @@ sample), but only 2 columns. As with the Iris example we can now plot
 the resulting embedding, coloring the data points by the class that
 theyr belong to (i.e. the digit they represent).
 
-.. code:: ipython3
+.. code:: python3
 
     plt.scatter(embedding[:, 0], embedding[:, 1], c=digits.target, cmap='Spectral', s=5)
     plt.gca().set_aspect('equal', 'datalim')
@@ -389,13 +389,15 @@ tooltips of the images.
 
 First we'll need to encode all the images for inclusion in a dataframe.
 
-.. code:: ipython3
+.. code:: python3
 
     from io import BytesIO
     from PIL import Image
     import base64
 
-.. code:: ipython3
+
+
+.. code:: python3
 
     def embeddable_image(data):
         img_data = 255 - 15 * data.astype(np.uint8)
@@ -405,10 +407,12 @@ First we'll need to encode all the images for inclusion in a dataframe.
         for_encoding = buffer.getvalue()
         return 'data:image/png;base64,' + base64.b64encode(for_encoding).decode()
 
+
+
 Next we need to load up bokeh and the various tools from it that will be
 needed to generate a suitable interactive plot.
 
-.. code:: ipython3
+.. code:: python3
 
     from bokeh.plotting import figure, show, output_notebook
     from bokeh.models import HoverTool, ColumnDataSource, CategoricalColorMapper
@@ -434,7 +438,7 @@ embeds the image of the digit in question in it, along with the digit
 class that the digit is actually from (this can be useful for digits
 that are hard even for humans to classify correctly).
 
-.. code:: ipython3
+.. code:: python3
 
     digits_df = pd.DataFrame(embedding, columns=('x', 'y'))
     digits_df['digit'] = [str(x) for x in digits.target]
@@ -475,12 +479,8 @@ that are hard even for humans to classify correctly).
     show(plot_figure)
 
 
-
-.. bokeh-plot:: bokeh_digits_plot.py
-   :source-position: 'none'
-
-
-
+.. raw:: html
+   :file: basic_usage_bokeh_example.html
 
 As can be seen, the nines that blend between the ones and the sevens are
 odd looking nines (that aren't very rounded) and do, indeed, interpolate
