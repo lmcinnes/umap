@@ -306,18 +306,37 @@ The final UMAP parameter we will be considering in this notebook is the
 ambient space of the input data. By default UMAP supports a wide variety
 of metrics, including:
 
-**Minkowski style metrics** \* euclidean \* manhattan \* chebyshev \*
-minkowski
+**Minkowski style metrics**
+- euclidean
+- manhattan
+- chebyshev
+- minkowski
 
-**Miscellaneous spatial metrics** \* canberra \* braycurtis \* haversine
+**Miscellaneous spatial metrics**
 
-**Normalized spatial metrics** \* mahalanobis \* wminkowski \*
-seuclidean
+- canberra
+- braycurtis
+- haversine
 
-**Angular and correlation metrics** \* cosine \* correlation
+**Normalized spatial metrics**
+- mahalanobis
+- wminkowski
+- seuclidean
 
-**Metrics for binary data** \* hamming \* jaccard \* dice \* russelrao
-\* kulsinski \* rogerstanimoto \* sokalmichener \* sokalsneath \* yule
+**Angular and correlation metrics**
+- cosine
+- correlation
+
+**Metrics for binary data**
+- hamming
+- jaccard
+- dice
+- russelrao
+- kulsinski
+- rogerstanimoto
+- sokalmichener
+- sokalsneath
+- yule
 
 Any of which can be specified by setting ``metric='<metric name>'``; for
 example to use cosine distance as the metric you would use
