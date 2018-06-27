@@ -307,6 +307,7 @@ ambient space of the input data. By default UMAP supports a wide variety
 of metrics, including:
 
 **Minkowski style metrics**
+
 - euclidean
 - manhattan
 - chebyshev
@@ -319,15 +320,18 @@ of metrics, including:
 - haversine
 
 **Normalized spatial metrics**
+
 - mahalanobis
 - wminkowski
 - seuclidean
 
 **Angular and correlation metrics**
+
 - cosine
 - correlation
 
 **Metrics for binary data**
+
 - hamming
 - jaccard
 - dice
