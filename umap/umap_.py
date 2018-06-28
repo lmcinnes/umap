@@ -537,6 +537,8 @@ def categorical_simplicial_set_intersection(simplicial_set,
     data is assumed to be categorical label data (a vector of labels),
     and this will update the fuzzy simplicial set to respect that label data.
 
+    TODO: optional category cardinality based weighting of distance
+
     Parameters
     ----------
     simplicial_set: sparse matrix
@@ -569,6 +571,22 @@ def categorical_simplicial_set_intersection(simplicial_set,
 
     return reset_local_connectivity(simplicial_set)
 
+
+@numba.jit()
+def general_simplicial_set_intersection(simplicial_set1,
+                                        simplicial_set2,
+                                        weight):
+
+    result = (simplicial_set1 + simplicial_set2).tocoo()
+    left = simplicial_set1.tocsr()
+    right = simplicial_set2.tocsr()
+
+    sparse.general_sset_intersection(left.indptr, left.indices, left.data,
+                                     right.indptr, right.indices, right.data,
+                                     result.row, result.col, result.data,
+                                     weight)
+
+    return result
 
 @numba.jit()
 def make_epochs_per_sample(weights, n_epochs):
@@ -1065,6 +1083,10 @@ class UMAP(BaseEstimator):
         as cosine, correlation etc. In the case of those metrics angular forests
         will be chosen automatically.
 
+    target_n_neighbors: int (optional, default -1)
+        The number of nearest neighbors to use to construct the target simplcial
+        set. If set to -1 use the ``n_neighbors`` value.
+
     target_metric: string or callable (optional, default 'categorical')
         The metric used to measure distance for a target array is using supervised
         dimension reduction. By default this is 'categorical' which will measure
@@ -1077,6 +1099,11 @@ class UMAP(BaseEstimator):
     target_metric_kwds: dict (optional, default None)
         Keyword argument to pass to the target metric when performing
         supervised dimension reduction. If None then no arguments are passed on.
+
+    target_weight: float (optional, default 0.5)
+        weighting factor between data topology and target topology. A value of
+        0.0 weights entirely on data, a value of 1.0 weights entirely on target.
+        The default of 0.5 balances the weighting equally between data and target.
 
     verbose: bool (optional, default False)
         Controls verbosity of logging.
@@ -1102,8 +1129,10 @@ class UMAP(BaseEstimator):
                  random_state=None,
                  metric_kwds=None,
                  angular_rp_forest=False,
+                 target_n_neighbors=-1,
                  target_metric='categorical',
                  target_metric_kwds=None,
+                 target_weight=0.5,
                  transform_seed=42,
                  verbose=False
                  ):
@@ -1133,11 +1162,13 @@ class UMAP(BaseEstimator):
         self.random_state = random_state
         self.angular_rp_forest = angular_rp_forest
         self.transform_queue_size = transform_queue_size
+        self.target_n_neighbors = target_n_neighbors
         self.target_metric = target_metric
         if target_metric_kwds is not None:
             self._target_metric_kwds = target_metric_kwds
         else:
             self._target_metric_kwds = {}
+        self.target_weight = target_weight
         self.transform_seed = transform_seed
         self.verbose = verbose
 
@@ -1177,6 +1208,8 @@ class UMAP(BaseEstimator):
             raise ValueError('learning_rate must be positive')
         if self.n_neighbors < 2:
             raise ValueError('n_neighbors must be greater than 2')
+        if self.target_n_neighbors < 2 and self.target_n_neighbors != -1:
+            raise ValueError('target_n_neighbors must be greater than 2')
         if not isinstance(self.n_components, int):
             raise ValueError('n_components must be an int')
         if self.n_components < 1:
@@ -1300,11 +1333,20 @@ class UMAP(BaseEstimator):
 
         if y is not None:
             if self.target_metric == 'categorical':
+                if self.target_weight < 1.0:
+                    dist = 2.5 * (1.0 / (1.0 - self.target_weight))
+                else:
+                    dist = 1.0e12
                 self.graph_ = categorical_simplicial_set_intersection(
-                    self.graph_, y)
+                    self.graph_, y, dist=dist)
             else:
+                if self.target_n_neighbors == -1:
+                    target_n_neighbors = self.n_neighbors
+                else:
+                    target_n_neighbors = self.target_n_neighbors
+
                 target_graph = fuzzy_simplicial_set(y[np.newaxis, :].T,
-                                                    n_neighbors,
+                                                    target_n_neighbors,
                                                     random_state,
                                                     self.target_metric,
                                                     self._target_metric_kwds,
@@ -1315,10 +1357,16 @@ class UMAP(BaseEstimator):
                                                     1.0,
                                                     1.0,
                                                     False)
-                product = self.graph_.multiply(target_graph)
-                self.graph_ = 0.99 * product + 0.01 * (self.graph_ +
-                                                       target_graph -
-                                                       product)
+                # product = self.graph_.multiply(target_graph)
+                # # self.graph_ = 0.99 * product + 0.01 * (self.graph_ +
+                # #                                        target_graph -
+                # #                                        product)
+                # self.graph_ = product
+                self.graph_ = general_simplicial_set_intersection(
+                    self.graph_,
+                    target_graph,
+                    self.target_weight,
+                )
                 self.graph_ = reset_local_connectivity(self.graph_)
 
         if self.n_epochs is None:
