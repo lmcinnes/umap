@@ -1328,8 +1328,12 @@ class UMAP(BaseEstimator):
 
         if y is not None:
             if self.target_metric == 'categorical':
+                if self.target_weight < 1.0:
+                    dist = 2.5 * (1.0 / (1.0 - self.target_weight))
+                else:
+                    dist = 1.0e12
                 self.graph_ = categorical_simplicial_set_intersection(
-                    self.graph_, y)
+                    self.graph_, y, dist=dist)
             else:
                 if self.target_n_neighbors == -1:
                     target_n_neighbors = self.n_neighbors
