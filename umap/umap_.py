@@ -24,15 +24,17 @@ import umap.sparse as sparse
 
 from umap.utils import tau_rand_int, deheap_sort
 from umap.rp_tree import rptree_leaf_array, make_forest
-from umap.nndescent import (make_nn_descent,
-                            make_initialisations,
-                            make_initialized_nnd_search,
-                            initialise_search)
+from umap.nndescent import (
+    make_nn_descent,
+    make_initialisations,
+    make_initialized_nnd_search,
+    initialise_search,
+)
 from umap.spectral import spectral_layout
 
 import locale
 
-locale.setlocale(locale.LC_NUMERIC, 'C')
+locale.setlocale(locale.LC_NUMERIC, "C")
 
 INT32_MIN = np.iinfo(np.int32).min + 1
 INT32_MAX = np.iinfo(np.int32).max - 1
@@ -43,8 +45,7 @@ NPY_INFINITY = np.inf
 
 
 @numba.njit(parallel=True, fastmath=True)
-def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0,
-                    bandwidth=1.0):
+def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0):
     """Compute a continuous version of the distance to the kth nearest
     neighbor. That is, this is similar to knn-distance but allows continuous
     k values rather than requiring an integral k. In esscence we are simply
@@ -146,8 +147,9 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0,
     return result, rho
 
 
-def nearest_neighbors(X, n_neighbors, metric, metric_kwds, angular,
-                      random_state, verbose=False):
+def nearest_neighbors(
+    X, n_neighbors, metric, metric_kwds, angular, random_state, verbose=False
+):
     """Compute the ``n_neighbors`` nearest points for each data point in ``X``
     under ``metric``. This may be exact, but more likely is approximated via
     nearest neighbor descent.
@@ -183,7 +185,7 @@ def nearest_neighbors(X, n_neighbors, metric, metric_kwds, angular,
     knn_dists: array of shape (n_samples, n_neighbors)
         The distances to the ``n_neighbors`` closest points in the dataset.
     """
-    if metric == 'precomputed':
+    if metric == "precomputed":
         # Note that this does not support sparse distance matrices yet ...
         # Compute indices of n nearest neighbors
         knn_indices = np.argsort(X)[:, :n_neighbors]
@@ -198,25 +200,25 @@ def nearest_neighbors(X, n_neighbors, metric, metric_kwds, angular,
         elif metric in dist.named_distances:
             distance_func = dist.named_distances[metric]
         else:
-            raise ValueError('Metric is neither callable, ' +
-                             'nor a recognised string')
+            raise ValueError("Metric is neither callable, " + "nor a recognised string")
 
-        if metric in ('cosine', 'correlation', 'dice', 'jaccard'):
+        if metric in ("cosine", "correlation", "dice", "jaccard"):
             angular = True
 
-        rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3) \
-            .astype(np.int64)
+        rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
         if scipy.sparse.isspmatrix_csr(X):
             if metric in sparse.sparse_named_distances:
                 distance_func = sparse.sparse_named_distances[metric]
                 if metric in sparse.sparse_need_n_features:
-                    metric_kwds['n_features'] = X.shape[1]
+                    metric_kwds["n_features"] = X.shape[1]
             else:
-                raise ValueError('Metric {} not supported for sparse ' +
-                                 'data'.format(metric))
+                raise ValueError(
+                    "Metric {} not supported for sparse " + "data".format(metric)
+                )
             metric_nn_descent = sparse.make_sparse_nn_descent(
-                distance_func, tuple(metric_kwds.values()))
+                distance_func, tuple(metric_kwds.values())
+            )
 
             # TODO: Hacked values for now
             n_trees = 5 + int(round((X.shape[0]) ** 0.5 / 20.0))
@@ -224,39 +226,46 @@ def nearest_neighbors(X, n_neighbors, metric, metric_kwds, angular,
 
             rp_forest = make_forest(X, n_neighbors, n_trees, rng_state, angular)
             leaf_array = rptree_leaf_array(rp_forest)
-            knn_indices, knn_dists = metric_nn_descent(X.indices,
-                                                       X.indptr,
-                                                       X.data,
-                                                       X.shape[0],
-                                                       n_neighbors,
-                                                       rng_state,
-                                                       max_candidates=60,
-                                                       rp_tree_init=True,
-                                                       leaf_array=leaf_array,
-                                                       n_iters=n_iters,
-                                                       verbose=verbose)
+            knn_indices, knn_dists = metric_nn_descent(
+                X.indices,
+                X.indptr,
+                X.data,
+                X.shape[0],
+                n_neighbors,
+                rng_state,
+                max_candidates=60,
+                rp_tree_init=True,
+                leaf_array=leaf_array,
+                n_iters=n_iters,
+                verbose=verbose,
+            )
         else:
-            metric_nn_descent = make_nn_descent(distance_func,
-                                                tuple(metric_kwds.values()))
+            metric_nn_descent = make_nn_descent(
+                distance_func, tuple(metric_kwds.values())
+            )
             # TODO: Hacked values for now
             n_trees = 5 + int(round((X.shape[0]) ** 0.5 / 20.0))
             n_iters = max(5, int(round(np.log2(X.shape[0]))))
 
             rp_forest = make_forest(X, n_neighbors, n_trees, rng_state, angular)
             leaf_array = rptree_leaf_array(rp_forest)
-            knn_indices, knn_dists = metric_nn_descent(X,
-                                                       n_neighbors,
-                                                       rng_state,
-                                                       max_candidates=60,
-                                                       rp_tree_init=True,
-                                                       leaf_array=leaf_array,
-                                                       n_iters=n_iters,
-                                                       verbose=verbose)
+            knn_indices, knn_dists = metric_nn_descent(
+                X,
+                n_neighbors,
+                rng_state,
+                max_candidates=60,
+                rp_tree_init=True,
+                leaf_array=leaf_array,
+                n_iters=n_iters,
+                verbose=verbose,
+            )
 
         if np.any(knn_indices < 0):
-            warn('Failed to correctly find n_neighbors for some samples.'
-                 'Results may be less than ideal. Try re-running with'
-                 'different parameters.')
+            warn(
+                "Failed to correctly find n_neighbors for some samples."
+                "Results may be less than ideal. Try re-running with"
+                "different parameters."
+            )
 
     return knn_indices, knn_dists, rp_forest
 
@@ -319,14 +328,20 @@ def compute_membership_strengths(knn_indices, knn_dists, sigmas, rhos):
 
 
 @numba.jit()
-def fuzzy_simplicial_set(X, n_neighbors, random_state,
-                         metric, metric_kwds={},
-                         knn_indices=None,
-                         knn_dists=None,
-                         angular=False,
-                         set_op_mix_ratio=1.0,
-                         local_connectivity=1.0, bandwidth=1.0,
-                         verbose=False):
+def fuzzy_simplicial_set(
+    X,
+    n_neighbors,
+    random_state,
+    metric,
+    metric_kwds={},
+    knn_indices=None,
+    knn_dists=None,
+    angular=False,
+    set_op_mix_ratio=1.0,
+    local_connectivity=1.0,
+    bandwidth=1.0,
+    verbose=False,
+):
     """Given a set of data X, a neighborhood size, and a measure of distance
     compute the fuzzy simplicial set (here represented as a fuzzy graph in
     the form of a sparse matrix) associated to the data. This is done by
@@ -428,27 +443,31 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
         1-simplex between the ith and jth sample points.
     """
     if knn_indices is None or knn_dists is None:
-        knn_indices, knn_dists, _ = \
-            nearest_neighbors(X, n_neighbors,
-                              metric, metric_kwds, angular,
-                              random_state, verbose=verbose)
+        knn_indices, knn_dists, _ = nearest_neighbors(
+            X, n_neighbors, metric, metric_kwds, angular, random_state, verbose=verbose
+        )
 
-    sigmas, rhos = smooth_knn_dist(knn_dists, n_neighbors,
-                                   local_connectivity=local_connectivity)
+    sigmas, rhos = smooth_knn_dist(
+        knn_dists, n_neighbors, local_connectivity=local_connectivity
+    )
 
-    rows, cols, vals = compute_membership_strengths(knn_indices, knn_dists,
-                                                    sigmas, rhos)
+    rows, cols, vals = compute_membership_strengths(
+        knn_indices, knn_dists, sigmas, rhos
+    )
 
-    result = scipy.sparse.coo_matrix((vals, (rows, cols)),
-                                     shape=(X.shape[0], X.shape[0]))
+    result = scipy.sparse.coo_matrix(
+        (vals, (rows, cols)), shape=(X.shape[0], X.shape[0])
+    )
     result.eliminate_zeros()
 
     transpose = result.transpose()
 
     prod_matrix = result.multiply(transpose)
 
-    result = set_op_mix_ratio * (result + transpose - prod_matrix) + \
-             (1.0 - set_op_mix_ratio) * prod_matrix
+    result = (
+        set_op_mix_ratio * (result + transpose - prod_matrix)
+        + (1.0 - set_op_mix_ratio) * prod_matrix
+    )
 
     result.eliminate_zeros()
 
@@ -518,7 +537,7 @@ def reset_local_connectivity(simplicial_set):
         The recalculated simplicial set, now with the local connectivity
         assumption restored.
     """
-    simplicial_set = normalize(simplicial_set, norm='max')
+    simplicial_set = normalize(simplicial_set, norm="max")
     transpose = simplicial_set.transpose()
     prod_matrix = simplicial_set.multiply(transpose)
     simplicial_set = simplicial_set + transpose - prod_matrix
@@ -528,10 +547,9 @@ def reset_local_connectivity(simplicial_set):
 
 
 @numba.jit()
-def categorical_simplicial_set_intersection(simplicial_set,
-                                            target,
-                                            unknown_dist=1.0,
-                                            far_dist=5.0):
+def categorical_simplicial_set_intersection(
+    simplicial_set, target, unknown_dist=1.0, far_dist=5.0
+):
     """Combine a fuzzy simplicial set with another fuzzy simplicial set
     generated from categorical data using categorical distances. The target
     data is assumed to be categorical label data (a vector of labels),
@@ -560,12 +578,14 @@ def categorical_simplicial_set_intersection(simplicial_set,
     """
     simplicial_set = simplicial_set.tocoo()
 
-    fast_intersection(simplicial_set.row,
-                      simplicial_set.col,
-                      simplicial_set.data,
-                      target,
-                      unknown_dist,
-                      far_dist)
+    fast_intersection(
+        simplicial_set.row,
+        simplicial_set.col,
+        simplicial_set.data,
+        target,
+        unknown_dist,
+        far_dist,
+    )
 
     simplicial_set.eliminate_zeros()
 
@@ -573,20 +593,27 @@ def categorical_simplicial_set_intersection(simplicial_set,
 
 
 @numba.jit()
-def general_simplicial_set_intersection(simplicial_set1,
-                                        simplicial_set2,
-                                        weight):
+def general_simplicial_set_intersection(simplicial_set1, simplicial_set2, weight):
 
     result = (simplicial_set1 + simplicial_set2).tocoo()
     left = simplicial_set1.tocsr()
     right = simplicial_set2.tocsr()
 
-    sparse.general_sset_intersection(left.indptr, left.indices, left.data,
-                                     right.indptr, right.indices, right.data,
-                                     result.row, result.col, result.data,
-                                     weight)
+    sparse.general_sset_intersection(
+        left.indptr,
+        left.indices,
+        left.data,
+        right.indptr,
+        right.indices,
+        right.data,
+        result.row,
+        result.col,
+        result.data,
+        weight,
+    )
 
     return result
+
 
 @numba.jit()
 def make_epochs_per_sample(weights, n_epochs):
@@ -633,7 +660,7 @@ def clip(val):
         return val
 
 
-@numba.njit('f4(f4[:],f4[:])', fastmath=True)
+@numba.njit("f4(f4[:],f4[:])", fastmath=True)
 def rdist(x, y):
     """Reduced Euclidean distance.
 
@@ -654,10 +681,22 @@ def rdist(x, y):
 
 
 @numba.njit(fastmath=True)
-def optimize_layout(head_embedding, tail_embedding, head, tail,
-                    n_epochs, n_vertices, epochs_per_sample,
-                    a, b, rng_state, gamma=1.0, initial_alpha=1.0,
-                    negative_sample_rate=5.0, verbose=False):
+def optimize_layout(
+    head_embedding,
+    tail_embedding,
+    head,
+    tail,
+    n_epochs,
+    n_vertices,
+    epochs_per_sample,
+    a,
+    b,
+    rng_state,
+    gamma=1.0,
+    initial_alpha=1.0,
+    negative_sample_rate=5.0,
+    verbose=False,
+):
     """Improve an embedding using stochastic gradient descent to minimize the
     fuzzy set cross entropy between the 1-skeletons of the high dimensional
     and low dimensional fuzzy simplicial sets. In practice this is done by
@@ -737,8 +776,8 @@ def optimize_layout(head_embedding, tail_embedding, head, tail,
 
                 dist_squared = rdist(current, other)
 
-                grad_coeff = (-2.0 * a * b * pow(dist_squared, b - 1.0))
-                grad_coeff /= (a * pow(dist_squared, b) + 1.0)
+                grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
+                grad_coeff /= a * pow(dist_squared, b) + 1.0
 
                 for d in range(dim):
                     grad_d = clip(grad_coeff * (current[d] - other[d]))
@@ -748,8 +787,10 @@ def optimize_layout(head_embedding, tail_embedding, head, tail,
 
                 epoch_of_next_sample[i] += epochs_per_sample[i]
 
-                n_neg_samples = int((n - epoch_of_next_negative_sample[i]) /
-                                    epochs_per_negative_sample[i])
+                n_neg_samples = int(
+                    (n - epoch_of_next_negative_sample[i])
+                    / epochs_per_negative_sample[i]
+                )
 
                 for p in range(n_neg_samples):
                     k = tau_rand_int(rng_state) % n_vertices
@@ -758,9 +799,10 @@ def optimize_layout(head_embedding, tail_embedding, head, tail,
 
                     dist_squared = rdist(current, other)
 
-                    grad_coeff = (2.0 * gamma * b)
+                    grad_coeff = 2.0 * gamma * b
                     grad_coeff /= (0.001 + dist_squared) * (
-                        a * pow(dist_squared, b) + 1)
+                        a * pow(dist_squared, b) + 1
+                    )
 
                     if not np.isfinite(grad_coeff):
                         grad_coeff = 4.0
@@ -769,22 +811,34 @@ def optimize_layout(head_embedding, tail_embedding, head, tail,
                         grad_d = clip(grad_coeff * (current[d] - other[d]))
                         current[d] += grad_d * alpha
 
-                epoch_of_next_negative_sample[i] += n_neg_samples * \
-                                                    epochs_per_negative_sample[
-                                                        i]
+                epoch_of_next_negative_sample[i] += (
+                    n_neg_samples * epochs_per_negative_sample[i]
+                )
 
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
 
         if verbose and n % int(n_epochs / 10) == 0:
-            print('\tcompleted ', n, ' / ', n_epochs, 'epochs')
+            print("\tcompleted ", n, " / ", n_epochs, "epochs")
 
     return head_embedding
 
 
-def simplicial_set_embedding(data, graph, n_components,
-                             initial_alpha, a, b,
-                             gamma, negative_sample_rate, n_epochs,
-                             init, random_state, metric, metric_kwds, verbose):
+def simplicial_set_embedding(
+    data,
+    graph,
+    n_components,
+    initial_alpha,
+    a,
+    b,
+    gamma,
+    negative_sample_rate,
+    n_epochs,
+    init,
+    random_state,
+    metric,
+    metric_kwds,
+    verbose,
+):
     """Perform a fuzzy simplicial set embedding, using a specified
     initialisation method and then minimizing the fuzzy set cross entropy
     between the 1-skeletons of the high and low dimensional fuzzy simplicial
@@ -858,18 +912,28 @@ def simplicial_set_embedding(data, graph, n_components,
     graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
     graph.eliminate_zeros()
 
-    if isinstance(init, str) and init == 'random':
-        embedding = random_state.uniform(low=-10.0, high=10.0,
-                                         size=(graph.shape[0], n_components)).astype(np.float32)
-    elif isinstance(init, str) and init == 'spectral':
+    if isinstance(init, str) and init == "random":
+        embedding = random_state.uniform(
+            low=-10.0, high=10.0, size=(graph.shape[0], n_components)
+        ).astype(np.float32)
+    elif isinstance(init, str) and init == "spectral":
         # We add a little noise to avoid local minima for optimization to come
-        initialisation = spectral_layout(data, graph, n_components, random_state, metric=metric,
-                                         metric_kwds=metric_kwds)
+        initialisation = spectral_layout(
+            data,
+            graph,
+            n_components,
+            random_state,
+            metric=metric,
+            metric_kwds=metric_kwds,
+        )
         expansion = 10.0 / initialisation.max()
-        embedding = (initialisation * expansion).astype(np.float32) + \
-                    random_state.normal(scale=0.0001,
-                                        size=[graph.shape[0],
-                                              n_components]).astype(np.float32)
+        embedding = (initialisation * expansion).astype(
+            np.float32
+        ) + random_state.normal(
+            scale=0.0001, size=[graph.shape[0], n_components]
+        ).astype(
+            np.float32
+        )
     else:
         init_data = np.array(init)
         if len(init_data.shape) == 2:
@@ -878,12 +942,10 @@ def simplicial_set_embedding(data, graph, n_components,
                 dist, ind = tree.query(init_data, k=2)
                 nndist = np.mean(dist[:, 1])
                 embedding = init_data + np.random.normal(
-                    scale=0.001 * nndist,
-                    size=init_data.shape
+                    scale=0.001 * nndist, size=init_data.shape
                 ).astype(np.float32)
             else:
                 embedding = init_data
-
 
     epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs)
 
@@ -891,11 +953,22 @@ def simplicial_set_embedding(data, graph, n_components,
     tail = graph.col
 
     rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
-    embedding = optimize_layout(embedding, embedding, head, tail,
-                                n_epochs, n_vertices,
-                                epochs_per_sample, a, b, rng_state, gamma,
-                                initial_alpha, negative_sample_rate,
-                                verbose=verbose)
+    embedding = optimize_layout(
+        embedding,
+        embedding,
+        head,
+        tail,
+        n_epochs,
+        n_vertices,
+        epochs_per_sample,
+        a,
+        b,
+        rng_state,
+        gamma,
+        initial_alpha,
+        negative_sample_rate,
+        verbose=verbose,
+    )
 
     return embedding
 
@@ -946,8 +1019,7 @@ def find_ab_params(spread, min_dist):
     xv = np.linspace(0, spread * 3, 300)
     yv = np.zeros(xv.shape)
     yv[xv < min_dist] = 1.0
-    yv[xv >= min_dist] = np.exp(
-        -(xv[xv >= min_dist] - min_dist) / spread)
+    yv[xv >= min_dist] = np.exp(-(xv[xv >= min_dist] - min_dist) / spread)
     params, covar = curve_fit(curve, xv, yv)
     return params[0], params[1]
 
@@ -1110,33 +1182,34 @@ class UMAP(BaseEstimator):
         Controls verbosity of logging.
     """
 
-    def __init__(self,
-                 n_neighbors=15,
-                 n_components=2,
-                 metric='euclidean',
-                 n_epochs=None,
-                 learning_rate=1.0,
-                 init='spectral',
-                 spread=1.0,
-                 min_dist=0.1,
-                 set_op_mix_ratio=1.0,
-                 local_connectivity=1.0,
-                 bandwidth=1.0,
-                 repulsion_strength=1.0,
-                 negative_sample_rate=5,
-                 transform_queue_size=4.0,
-                 a=None,
-                 b=None,
-                 random_state=None,
-                 metric_kwds=None,
-                 angular_rp_forest=False,
-                 target_n_neighbors=-1,
-                 target_metric='categorical',
-                 target_metric_kwds=None,
-                 target_weight=0.5,
-                 transform_seed=42,
-                 verbose=False
-                 ):
+    def __init__(
+        self,
+        n_neighbors=15,
+        n_components=2,
+        metric="euclidean",
+        n_epochs=None,
+        learning_rate=1.0,
+        init="spectral",
+        spread=1.0,
+        min_dist=0.1,
+        set_op_mix_ratio=1.0,
+        local_connectivity=1.0,
+        bandwidth=1.0,
+        repulsion_strength=1.0,
+        negative_sample_rate=5,
+        transform_queue_size=4.0,
+        a=None,
+        b=None,
+        random_state=None,
+        metric_kwds=None,
+        angular_rp_forest=False,
+        target_n_neighbors=-1,
+        target_metric="categorical",
+        target_metric_kwds=None,
+        target_weight=0.5,
+        transform_seed=42,
+        verbose=False,
+    ):
 
         self.n_neighbors = n_neighbors
         self.metric = metric
@@ -1188,37 +1261,40 @@ class UMAP(BaseEstimator):
 
     def _validate_parameters(self):
         if self.set_op_mix_ratio < 0.0 or self.set_op_mix_ratio > 1.0:
-            raise ValueError('set_op_mix_ratio must be between 0.0 and 1.0')
+            raise ValueError("set_op_mix_ratio must be between 0.0 and 1.0")
         if self.repulsion_strength < 0.0:
-            raise ValueError('repulsion_strength cannot be negative')
+            raise ValueError("repulsion_strength cannot be negative")
         if self.min_dist > self.spread:
-            raise ValueError('min_dist must be less than spread')
+            raise ValueError("min_dist must be less than spread")
         if self.min_dist < 0.0:
-            raise ValueError('min_dist must greater than 0.0')
+            raise ValueError("min_dist must greater than 0.0")
         if not isinstance(self.init, str) and not isinstance(self.init, np.ndarray):
-            raise ValueError('init must be a string or ndarray')
-        if isinstance(self.init, str) and self.init not in ('spectral', 'random'):
+            raise ValueError("init must be a string or ndarray")
+        if isinstance(self.init, str) and self.init not in ("spectral", "random"):
             raise ValueError('string init values must be "spectral" or "random"')
-        if isinstance(self.init, np.ndarray) and self.init.shape[1] != self.n_components:
-            raise ValueError('init ndarray must match n_components value')
+        if (
+            isinstance(self.init, np.ndarray)
+            and self.init.shape[1] != self.n_components
+        ):
+            raise ValueError("init ndarray must match n_components value")
         if not isinstance(self.metric, str) and not callable(self.metric):
-            raise ValueError('metric must be string or callable')
+            raise ValueError("metric must be string or callable")
         if self.negative_sample_rate < 0:
-            raise ValueError('negative sample rate must be positive')
+            raise ValueError("negative sample rate must be positive")
         if self.initial_alpha < 0.0:
-            raise ValueError('learning_rate must be positive')
+            raise ValueError("learning_rate must be positive")
         if self.n_neighbors < 2:
-            raise ValueError('n_neighbors must be greater than 2')
+            raise ValueError("n_neighbors must be greater than 2")
         if self.target_n_neighbors < 2 and self.target_n_neighbors != -1:
-            raise ValueError('target_n_neighbors must be greater than 2')
+            raise ValueError("target_n_neighbors must be greater than 2")
         if not isinstance(self.n_components, int):
-            raise ValueError('n_components must be an int')
+            raise ValueError("n_components must be an int")
         if self.n_components < 1:
-            raise ValueError('n_components must be greater than 0')
-        if self.n_epochs is not None and (self.n_epochs < 0 or
-                                          not isinstance(self.n_epochs, int)):
-            raise ValueError('n_epochs must be a positive integer')
-
+            raise ValueError("n_components must be greater than 0")
+        if self.n_epochs is not None and (
+            self.n_epochs < 0 or not isinstance(self.n_epochs, int)
+        ):
+            raise ValueError("n_epochs must be a positive integer")
 
     def fit(self, X, y=None):
         """Fit X into an embedded space.
@@ -1240,15 +1316,17 @@ class UMAP(BaseEstimator):
             ``target_metric_kwds``.
         """
 
-        X = check_array(X, dtype=np.float32, accept_sparse='csr')
+        X = check_array(X, dtype=np.float32, accept_sparse="csr")
         self._raw_data = X
 
         if X.shape[0] <= self.n_neighbors:
             if X.shape[0] == 1:
                 return np.array([0.0, 0.0])  # needed to sklearn comparability
 
-            warn('n_neighbors is larger than the dataset size; truncating to '
-                 'X.shape[0] - 1')
+            warn(
+                "n_neighbors is larger than the dataset size; truncating to "
+                "X.shape[0] - 1"
+            )
             n_neighbors = X.shape[0] - 1
         else:
             n_neighbors = self.n_neighbors
@@ -1272,7 +1350,7 @@ class UMAP(BaseEstimator):
                 dmat,
                 n_neighbors,
                 random_state,
-                'precomputed',
+                "precomputed",
                 self._metric_kwds,
                 None,
                 None,
@@ -1280,17 +1358,20 @@ class UMAP(BaseEstimator):
                 self.set_op_mix_ratio,
                 self.local_connectivity,
                 self.bandwidth,
-                self.verbose
+                self.verbose,
             )
         else:
             self._small_data = False
             # Standard case
-            (self._knn_indices,
-             self._knn_dists,
-             self._rp_forest) = nearest_neighbors(X, n_neighbors,
-                                                  self.metric, self._metric_kwds,
-                                                  self.angular_rp_forest,
-                                                  random_state, self.verbose)
+            (self._knn_indices, self._knn_dists, self._rp_forest) = nearest_neighbors(
+                X,
+                n_neighbors,
+                self.metric,
+                self._metric_kwds,
+                self.angular_rp_forest,
+                random_state,
+                self.verbose,
+            )
 
             self.graph_ = fuzzy_simplicial_set(
                 X,
@@ -1304,69 +1385,73 @@ class UMAP(BaseEstimator):
                 self.set_op_mix_ratio,
                 self.local_connectivity,
                 self.bandwidth,
-                self.verbose
+                self.verbose,
             )
 
             self._raw_data = X
             self._transform_available = True
-            self._search_graph = scipy.sparse.lil_matrix((X.shape[0],
-                                                          X.shape[0]),
-                                                         dtype=np.int8)
+            self._search_graph = scipy.sparse.lil_matrix(
+                (X.shape[0], X.shape[0]), dtype=np.int8
+            )
             self._search_graph.rows = self._knn_indices
             self._search_graph.data = (self._knn_dists != 0).astype(np.int8)
             self._search_graph = self._search_graph.maximum(
-                self._search_graph.transpose()).tocsr()
+                self._search_graph.transpose()
+            ).tocsr()
 
             if callable(self.metric):
                 self._distance_func = self.metric
             elif self.metric in dist.named_distances:
                 self._distance_func = dist.named_distances[self.metric]
             else:
-                raise ValueError('Metric is neither callable, ' +
-                                 'nor a recognised string')
+                raise ValueError(
+                    "Metric is neither callable, " + "nor a recognised string"
+                )
             self._dist_args = tuple(self._metric_kwds.values())
 
             self._random_init, self._tree_init = make_initialisations(
-                self._distance_func,
-                self._dist_args)
-            self._search = make_initialized_nnd_search(self._distance_func,
-                                                       self._dist_args)
+                self._distance_func, self._dist_args
+            )
+            self._search = make_initialized_nnd_search(
+                self._distance_func, self._dist_args
+            )
 
         if y is not None:
-            if self.target_metric == 'categorical':
+            if self.target_metric == "categorical":
                 if self.target_weight < 1.0:
                     far_dist = 2.5 * (1.0 / (1.0 - self.target_weight))
                 else:
                     far_dist = 1.0e12
                 self.graph_ = categorical_simplicial_set_intersection(
-                    self.graph_, y, far_dist=far_dist)
+                    self.graph_, y, far_dist=far_dist
+                )
             else:
                 if self.target_n_neighbors == -1:
                     target_n_neighbors = self.n_neighbors
                 else:
                     target_n_neighbors = self.target_n_neighbors
 
-                target_graph = fuzzy_simplicial_set(y[np.newaxis, :].T,
-                                                    target_n_neighbors,
-                                                    random_state,
-                                                    self.target_metric,
-                                                    self._target_metric_kwds,
-                                                    None,
-                                                    None,
-                                                    False,
-                                                    1.0,
-                                                    1.0,
-                                                    1.0,
-                                                    False)
+                target_graph = fuzzy_simplicial_set(
+                    y[np.newaxis, :].T,
+                    target_n_neighbors,
+                    random_state,
+                    self.target_metric,
+                    self._target_metric_kwds,
+                    None,
+                    None,
+                    False,
+                    1.0,
+                    1.0,
+                    1.0,
+                    False,
+                )
                 # product = self.graph_.multiply(target_graph)
                 # # self.graph_ = 0.99 * product + 0.01 * (self.graph_ +
                 # #                                        target_graph -
                 # #                                        product)
                 # self.graph_ = product
                 self.graph_ = general_simplicial_set_intersection(
-                    self.graph_,
-                    target_graph,
-                    self.target_weight,
+                    self.graph_, target_graph, self.target_weight
                 )
                 self.graph_ = reset_local_connectivity(self.graph_)
 
@@ -1392,7 +1477,7 @@ class UMAP(BaseEstimator):
             random_state,
             self.metric,
             self._metric_kwds,
-            self.verbose
+            self.verbose,
         )
 
         self._input_hash = joblib.hash(self._raw_data)
@@ -1438,54 +1523,59 @@ class UMAP(BaseEstimator):
             Embedding of the new data in low-dimensional space.
         """
         # If we just have the original input then short circuit things
-        X = check_array(X, dtype=np.float32, accept_sparse='csr')
+        X = check_array(X, dtype=np.float32, accept_sparse="csr")
         x_hash = joblib.hash(X)
         if x_hash == self._input_hash:
             return self.embedding_
 
         if self._sparse_data:
-            raise ValueError('Transform not available for sparse input.')
+            raise ValueError("Transform not available for sparse input.")
 
-        X = check_array(X, dtype=np.float32, order='C')
+        X = check_array(X, dtype=np.float32, order="C")
         random_state = check_random_state(self.transform_seed)
-        rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(
-            np.int64)
+        rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
         if self._small_data:
-            dmat = pairwise_distances(X, self._raw_data,
-                                      metric=self.metric, **self._metric_kwds)
+            dmat = pairwise_distances(
+                X, self._raw_data, metric=self.metric, **self._metric_kwds
+            )
             indices = np.argsort(dmat)
             dists = np.sort(dmat)  # TODO: more efficient approach
-            indices = indices[:, :self.n_neighbors]
-            dists = dists[:, :self.n_neighbors]
+            indices = indices[:, : self.n_neighbors]
+            dists = dists[:, : self.n_neighbors]
         else:
-            init = initialise_search(self._rp_forest, self._raw_data,
-                                     X,
-                                     int(self.n_neighbors *
-                                         self.transform_queue_size),
-                                     self._random_init, self._tree_init,
-                                     rng_state)
-            result = self._search(self._raw_data,
-                                  self._search_graph.indptr,
-                                  self._search_graph.indices,
-                                  init,
-                                  X)
+            init = initialise_search(
+                self._rp_forest,
+                self._raw_data,
+                X,
+                int(self.n_neighbors * self.transform_queue_size),
+                self._random_init,
+                self._tree_init,
+                rng_state,
+            )
+            result = self._search(
+                self._raw_data,
+                self._search_graph.indptr,
+                self._search_graph.indices,
+                init,
+                X,
+            )
 
             indices, dists = deheap_sort(result)
-            indices = indices[:, :self.n_neighbors]
-            dists = dists[:, :self.n_neighbors]
+            indices = indices[:, : self.n_neighbors]
+            dists = dists[:, : self.n_neighbors]
 
-        sigmas, rhos = smooth_knn_dist(indices, self.n_neighbors,
-                                       local_connectivity=self.local_connectivity)
+        sigmas, rhos = smooth_knn_dist(
+            indices, self.n_neighbors, local_connectivity=self.local_connectivity
+        )
 
-        rows, cols, vals = compute_membership_strengths(indices, dists,
-                                                        sigmas, rhos)
+        rows, cols, vals = compute_membership_strengths(indices, dists, sigmas, rhos)
 
-        graph = scipy.sparse.coo_matrix((vals, (rows, cols)),
-                                        shape=(X.shape[0],
-                                               self._raw_data.shape[0]))
+        graph = scipy.sparse.coo_matrix(
+            (vals, (rows, cols)), shape=(X.shape[0], self._raw_data.shape[0])
+        )
 
-        csr_graph = normalize(graph.tocsr(), norm='l1')
+        csr_graph = normalize(graph.tocsr(), norm="l1")
         inds = csr_graph.indices.reshape(X.shape[0], self.n_neighbors)
         weights = csr_graph.data.reshape(X.shape[0], self.n_neighbors)
         embedding = init_transform(inds, weights, self.embedding_)
@@ -1507,12 +1597,21 @@ class UMAP(BaseEstimator):
         head = graph.row
         tail = graph.col
 
-        embedding = optimize_layout(embedding, self.embedding_, head, tail,
-                                    n_epochs, X.shape[0],
-                                    epochs_per_sample, self._a, self._b,
-                                    rng_state, self.repulsion_strength,
-                                    self.initial_alpha,
-                                    self.negative_sample_rate,
-                                    verbose=self.verbose)
+        embedding = optimize_layout(
+            embedding,
+            self.embedding_,
+            head,
+            tail,
+            n_epochs,
+            X.shape[0],
+            epochs_per_sample,
+            self._a,
+            self._b,
+            rng_state,
+            self.repulsion_strength,
+            self.initial_alpha,
+            self.negative_sample_rate,
+            verbose=self.verbose,
+        )
 
         return embedding

@@ -8,24 +8,21 @@ from warnings import warn
 import numpy as np
 import numba
 
-from umap.sparse import (sparse_mul,
-                         sparse_diff,
-                         sparse_sum)
+from umap.sparse import sparse_mul, sparse_diff, sparse_sum
 
-from umap.utils import (tau_rand_int,
-                        norm)
+from umap.utils import tau_rand_int, norm
 
 import scipy.sparse
 import locale
 
-locale.setlocale(locale.LC_NUMERIC, 'C')
+locale.setlocale(locale.LC_NUMERIC, "C")
 
-RandomProjectionTreeNode = namedtuple('RandomProjectionTreeNode',
-                                      ['indices', 'is_leaf', 'hyperplane',
-                                       'offset', 'left_child', 'right_child'])
+RandomProjectionTreeNode = namedtuple(
+    "RandomProjectionTreeNode",
+    ["indices", "is_leaf", "hyperplane", "offset", "left_child", "right_child"],
+)
 
-FlatTree = namedtuple('FlatTree', ['hyperplanes', 'offsets',
-                                   'children', 'indices'])
+FlatTree = namedtuple("FlatTree", ["hyperplanes", "offsets", "children", "indices"])
 
 
 @numba.njit(fastmath=True)
@@ -66,10 +63,10 @@ def angular_random_projection_split(data, indices, rng_state):
 
     left_norm = norm(data[left])
     right_norm = norm(data[right])
-    
+
     if left_norm == 0.0:
         left_norm = 1.0
-        
+
     if right_norm == 0.0:
         right_norm = 1.0
 
@@ -78,13 +75,14 @@ def angular_random_projection_split(data, indices, rng_state):
     hyperplane_vector = np.empty(dim, dtype=np.float32)
 
     for d in range(dim):
-        hyperplane_vector[d] = ((data[left, d] / left_norm) -
-                                (data[right, d] / right_norm))
+        hyperplane_vector[d] = (data[left, d] / left_norm) - (
+            data[right, d] / right_norm
+        )
 
     hyperplane_norm = norm(hyperplane_vector)
     if hyperplane_norm == 0.0:
         hyperplane_norm = 1.0
-        
+
     for d in range(dim):
         hyperplane_vector[d] = hyperplane_vector[d] / hyperplane_norm
 
@@ -173,8 +171,9 @@ def euclidean_random_projection_split(data, indices, rng_state):
 
     for d in range(dim):
         hyperplane_vector[d] = data[left, d] - data[right, d]
-        hyperplane_offset -= hyperplane_vector[d] * (
-            data[left, d] + data[right, d]) / 2.0
+        hyperplane_offset -= (
+            hyperplane_vector[d] * (data[left, d] + data[right, d]) / 2.0
+        )
 
     # For each point compute the margin (project into normal vector, add offset)
     # If we are on lower side of the hyperplane put in one pile, otherwise
@@ -219,11 +218,7 @@ def euclidean_random_projection_split(data, indices, rng_state):
 
 
 @numba.njit(fastmath=True)
-def sparse_angular_random_projection_split(inds,
-                                           indptr,
-                                           data,
-                                           indices,
-                                           rng_state):
+def sparse_angular_random_projection_split(inds, indptr, data, indices, rng_state):
     """Given a set of ``indices`` for data points from a sparse data set
     presented in csr sparse format as inds, indptr and data, create
     a random hyperplane to split the data, returning two arrays indices
@@ -261,10 +256,10 @@ def sparse_angular_random_projection_split(inds,
     left = indices[left_index]
     right = indices[right_index]
 
-    left_inds = inds[indptr[left]:indptr[left + 1]]
-    left_data = data[indptr[left]:indptr[left + 1]]
-    right_inds = inds[indptr[right]:indptr[right + 1]]
-    right_data = data[indptr[right]:indptr[right + 1]]
+    left_inds = inds[indptr[left] : indptr[left + 1]]
+    left_data = data[indptr[left] : indptr[left + 1]]
+    right_inds = inds[indptr[right] : indptr[right + 1]]
+    right_data = data[indptr[right] : indptr[right + 1]]
 
     left_norm = norm(left_data)
     right_norm = norm(right_data)
@@ -273,10 +268,9 @@ def sparse_angular_random_projection_split(inds,
     # the two points)
     normalized_left_data = left_data / left_norm
     normalized_right_data = right_data / right_norm
-    hyperplane_inds, hyperplane_data = sparse_diff(left_inds,
-                                                   normalized_left_data,
-                                                   right_inds,
-                                                   normalized_right_data)
+    hyperplane_inds, hyperplane_data = sparse_diff(
+        left_inds, normalized_left_data, right_inds, normalized_right_data
+    )
 
     hyperplane_norm = norm(hyperplane_data)
     for d in range(hyperplane_data.shape[0]):
@@ -291,13 +285,12 @@ def sparse_angular_random_projection_split(inds,
     for i in range(indices.shape[0]):
         margin = 0.0
 
-        i_inds = inds[indptr[indices[i]]:indptr[indices[i] + 1]]
-        i_data = data[indptr[indices[i]]:indptr[indices[i] + 1]]
+        i_inds = inds[indptr[indices[i]] : indptr[indices[i] + 1]]
+        i_data = data[indptr[indices[i]] : indptr[indices[i] + 1]]
 
-        mul_inds, mul_data = sparse_mul(hyperplane_inds,
-                                        hyperplane_data,
-                                        i_inds,
-                                        i_data)
+        mul_inds, mul_data = sparse_mul(
+            hyperplane_inds, hyperplane_data, i_inds, i_data
+        )
         for d in range(mul_data.shape[0]):
             margin += mul_data[d]
 
@@ -335,11 +328,7 @@ def sparse_angular_random_projection_split(inds,
 
 
 @numba.njit(fastmath=True)
-def sparse_euclidean_random_projection_split(inds,
-                                             indptr,
-                                             data,
-                                             indices,
-                                             rng_state):
+def sparse_euclidean_random_projection_split(inds, indptr, data, indices, rng_state):
     """Given a set of ``indices`` for data points from a sparse data set
     presented in csr sparse format as inds, indptr and data, create
     a random hyperplane to split the data, returning two arrays indices
@@ -377,27 +366,22 @@ def sparse_euclidean_random_projection_split(inds,
     left = indices[left_index]
     right = indices[right_index]
 
-    left_inds = inds[indptr[left]:indptr[left + 1]]
-    left_data = data[indptr[left]:indptr[left + 1]]
-    right_inds = inds[indptr[right]:indptr[right + 1]]
-    right_data = data[indptr[right]:indptr[right + 1]]
+    left_inds = inds[indptr[left] : indptr[left + 1]]
+    left_data = data[indptr[left] : indptr[left + 1]]
+    right_inds = inds[indptr[right] : indptr[right + 1]]
+    right_data = data[indptr[right] : indptr[right + 1]]
 
     # Compute the normal vector to the hyperplane (the vector between
     # the two points) and the offset from the origin
     hyperplane_offset = 0.0
-    hyperplane_inds, hyperplane_data = sparse_diff(left_inds,
-                                                   left_data,
-                                                   right_inds,
-                                                   right_data)
-    offset_inds, offset_data = sparse_sum(left_inds,
-                                          left_data,
-                                          right_inds,
-                                          right_data)
+    hyperplane_inds, hyperplane_data = sparse_diff(
+        left_inds, left_data, right_inds, right_data
+    )
+    offset_inds, offset_data = sparse_sum(left_inds, left_data, right_inds, right_data)
     offset_data = offset_data / 2.0
-    offset_inds, offset_data = sparse_mul(hyperplane_inds,
-                                          hyperplane_data,
-                                          offset_inds,
-                                          offset_data)
+    offset_inds, offset_data = sparse_mul(
+        hyperplane_inds, hyperplane_data, offset_inds, offset_data
+    )
 
     for d in range(offset_data.shape[0]):
         hyperplane_offset -= offset_data[d]
@@ -410,13 +394,12 @@ def sparse_euclidean_random_projection_split(inds,
     side = np.empty(indices.shape[0], np.int8)
     for i in range(indices.shape[0]):
         margin = hyperplane_offset
-        i_inds = inds[indptr[indices[i]]:indptr[indices[i] + 1]]
-        i_data = data[indptr[indices[i]]:indptr[indices[i] + 1]]
+        i_inds = inds[indptr[indices[i]] : indptr[indices[i] + 1]]
+        i_data = data[indptr[indices[i]] : indptr[indices[i] + 1]]
 
-        mul_inds, mul_data = sparse_mul(hyperplane_inds,
-                                        hyperplane_data,
-                                        i_inds,
-                                        i_data)
+        mul_inds, mul_data = sparse_mul(
+            hyperplane_inds, hyperplane_data, i_inds, i_data
+        )
         for d in range(mul_data.shape[0]):
             margin += mul_data[d]
 
@@ -456,20 +439,16 @@ def sparse_euclidean_random_projection_split(inds,
 @numba.jit()
 def make_euclidean_tree(data, indices, rng_state, leaf_size=30):
     if indices.shape[0] > leaf_size:
-        left_indices, right_indices, hyperplane, offset = \
-            euclidean_random_projection_split(data, indices, rng_state)
+        left_indices, right_indices, hyperplane, offset = euclidean_random_projection_split(
+            data, indices, rng_state
+        )
 
-        left_node = make_euclidean_tree(data,
-                                        left_indices,
-                                        rng_state,
-                                        leaf_size)
-        right_node = make_euclidean_tree(data,
-                                         right_indices,
-                                         rng_state,
-                                         leaf_size)
+        left_node = make_euclidean_tree(data, left_indices, rng_state, leaf_size)
+        right_node = make_euclidean_tree(data, right_indices, rng_state, leaf_size)
 
-        node = RandomProjectionTreeNode(None, False, hyperplane, offset,
-                                        left_node, right_node)
+        node = RandomProjectionTreeNode(
+            None, False, hyperplane, offset, left_node, right_node
+        )
     else:
         node = RandomProjectionTreeNode(indices, True, None, None, None, None)
 
@@ -479,20 +458,16 @@ def make_euclidean_tree(data, indices, rng_state, leaf_size=30):
 @numba.jit()
 def make_angular_tree(data, indices, rng_state, leaf_size=30):
     if indices.shape[0] > leaf_size:
-        left_indices, right_indices, hyperplane, offset = \
-            angular_random_projection_split(data, indices, rng_state)
+        left_indices, right_indices, hyperplane, offset = angular_random_projection_split(
+            data, indices, rng_state
+        )
 
-        left_node = make_angular_tree(data,
-                                      left_indices,
-                                      rng_state,
-                                      leaf_size)
-        right_node = make_angular_tree(data,
-                                       right_indices,
-                                       rng_state,
-                                       leaf_size)
+        left_node = make_angular_tree(data, left_indices, rng_state, leaf_size)
+        right_node = make_angular_tree(data, right_indices, rng_state, leaf_size)
 
-        node = RandomProjectionTreeNode(None, False, hyperplane, offset,
-                                        left_node, right_node)
+        node = RandomProjectionTreeNode(
+            None, False, hyperplane, offset, left_node, right_node
+        )
     else:
         node = RandomProjectionTreeNode(indices, True, None, None, None, None)
 
@@ -500,24 +475,22 @@ def make_angular_tree(data, indices, rng_state, leaf_size=30):
 
 
 @numba.jit()
-def make_sparse_euclidean_tree(inds, indptr, data, indices, rng_state,
-                               leaf_size=30):
+def make_sparse_euclidean_tree(inds, indptr, data, indices, rng_state, leaf_size=30):
     if indices.shape[0] > leaf_size:
-        left_indices, right_indices, hyperplane, offset = \
-            sparse_euclidean_random_projection_split(inds, indptr, data,
-                                                     indices, rng_state)
+        left_indices, right_indices, hyperplane, offset = sparse_euclidean_random_projection_split(
+            inds, indptr, data, indices, rng_state
+        )
 
-        left_node = make_sparse_euclidean_tree(inds, indptr, data,
-                                               left_indices,
-                                               rng_state,
-                                               leaf_size)
-        right_node = make_sparse_euclidean_tree(inds, indptr, data,
-                                                right_indices,
-                                                rng_state,
-                                                leaf_size)
+        left_node = make_sparse_euclidean_tree(
+            inds, indptr, data, left_indices, rng_state, leaf_size
+        )
+        right_node = make_sparse_euclidean_tree(
+            inds, indptr, data, right_indices, rng_state, leaf_size
+        )
 
-        node = RandomProjectionTreeNode(None, False, hyperplane, offset,
-                                        left_node, right_node)
+        node = RandomProjectionTreeNode(
+            None, False, hyperplane, offset, left_node, right_node
+        )
     else:
         node = RandomProjectionTreeNode(indices, True, None, None, None, None)
 
@@ -525,24 +498,22 @@ def make_sparse_euclidean_tree(inds, indptr, data, indices, rng_state,
 
 
 @numba.jit()
-def make_sparse_angular_tree(inds, indptr, data, indices, rng_state,
-                             leaf_size=30):
+def make_sparse_angular_tree(inds, indptr, data, indices, rng_state, leaf_size=30):
     if indices.shape[0] > leaf_size:
-        left_indices, right_indices, hyperplane, offset = \
-            sparse_angular_random_projection_split(inds, indptr, data, indices,
-                                                   rng_state)
+        left_indices, right_indices, hyperplane, offset = sparse_angular_random_projection_split(
+            inds, indptr, data, indices, rng_state
+        )
 
-        left_node = make_sparse_angular_tree(inds, indptr, data,
-                                             left_indices,
-                                             rng_state,
-                                             leaf_size)
-        right_node = make_sparse_angular_tree(inds, indptr, data,
-                                              right_indices,
-                                              rng_state,
-                                              leaf_size)
+        left_node = make_sparse_angular_tree(
+            inds, indptr, data, left_indices, rng_state, leaf_size
+        )
+        right_node = make_sparse_angular_tree(
+            inds, indptr, data, right_indices, rng_state, leaf_size
+        )
 
-        node = RandomProjectionTreeNode(None, False, hyperplane, offset,
-                                        left_node, right_node)
+        node = RandomProjectionTreeNode(
+            None, False, hyperplane, offset, left_node, right_node
+        )
     else:
         node = RandomProjectionTreeNode(indices, True, None, None, None, None)
 
@@ -581,11 +552,13 @@ def make_tree(data, rng_state, leaf_size=30, angular=False):
         spdata = data.data
 
         if angular:
-            return make_sparse_angular_tree(inds, indptr, spdata, indices,
-                                            rng_state, leaf_size)
+            return make_sparse_angular_tree(
+                inds, indptr, spdata, indices, rng_state, leaf_size
+            )
         else:
-            return make_sparse_euclidean_tree(inds, indptr, spdata, indices,
-                                              rng_state, leaf_size)
+            return make_sparse_euclidean_tree(
+                inds, indptr, spdata, indices, rng_state, leaf_size
+            )
     else:
         if angular:
             return make_angular_tree(data, indices, rng_state, leaf_size)
@@ -614,36 +587,49 @@ def max_sparse_hyperplane_size(tree):
     if tree.is_leaf:
         return 0
     else:
-        return max(tree.hyperplane.shape[1],
-                   max_sparse_hyperplane_size(tree.left_child),
-                   max_sparse_hyperplane_size(tree.right_child))
+        return max(
+            tree.hyperplane.shape[1],
+            max_sparse_hyperplane_size(tree.left_child),
+            max_sparse_hyperplane_size(tree.right_child),
+        )
 
-def recursive_flatten(tree, hyperplanes, offsets,
-                      children, indices, node_num,
-                      leaf_num):
+
+def recursive_flatten(
+    tree, hyperplanes, offsets, children, indices, node_num, leaf_num
+):
     if tree.is_leaf:
         children[node_num, 0] = -leaf_num
-        indices[leaf_num, :tree.indices.shape[0]] = tree.indices
+        indices[leaf_num, : tree.indices.shape[0]] = tree.indices
         leaf_num += 1
         return node_num, leaf_num
     else:
         if len(tree.hyperplane.shape) > 1:
             # spare case
-            hyperplanes[node_num][:, :tree.hyperplane.shape[1]] = tree.hyperplane
+            hyperplanes[node_num][:, : tree.hyperplane.shape[1]] = tree.hyperplane
         else:
             hyperplanes[node_num] = tree.hyperplane
         offsets[node_num] = tree.offset
         children[node_num, 0] = node_num + 1
         old_node_num = node_num
-        node_num, leaf_num = recursive_flatten(tree.left_child,
-                                               hyperplanes, offsets,
-                                               children, indices,
-                                               node_num + 1, leaf_num)
+        node_num, leaf_num = recursive_flatten(
+            tree.left_child,
+            hyperplanes,
+            offsets,
+            children,
+            indices,
+            node_num + 1,
+            leaf_num,
+        )
         children[old_node_num, 1] = node_num + 1
-        node_num, leaf_num = recursive_flatten(tree.right_child,
-                                               hyperplanes, offsets,
-                                               children, indices,
-                                               node_num + 1, leaf_num)
+        node_num, leaf_num = recursive_flatten(
+            tree.right_child,
+            hyperplanes,
+            offsets,
+            children,
+            indices,
+            node_num + 1,
+            leaf_num,
+        )
         return node_num, leaf_num
 
 
@@ -654,13 +640,11 @@ def flatten_tree(tree, leaf_size):
     if len(tree.hyperplane.shape) > 1:
         # sparse case
         max_hyperplane_nnz = max_sparse_hyperplane_size(tree)
-        hyperplanes = np.zeros((n_nodes,
-                                tree.hyperplane.shape[0],
-                                max_hyperplane_nnz),
-                               dtype=np.float32)
+        hyperplanes = np.zeros(
+            (n_nodes, tree.hyperplane.shape[0], max_hyperplane_nnz), dtype=np.float32
+        )
     else:
-        hyperplanes = np.zeros((n_nodes, tree.hyperplane.shape[0]),
-                               dtype=np.float32)
+        hyperplanes = np.zeros((n_nodes, tree.hyperplane.shape[0]), dtype=np.float32)
 
     offsets = np.zeros(n_nodes, dtype=np.float32)
     children = -1 * np.ones((n_nodes, 2), dtype=np.int64)
@@ -688,10 +672,7 @@ def select_side(hyperplane, offset, point, rng_state):
 
 
 @numba.njit()
-def search_flat_tree(point,
-                     hyperplanes, offsets,
-                     children, indices,
-                     rng_state):
+def search_flat_tree(point, hyperplanes, offsets, children, indices, rng_state):
     node = 0
     while children[node, 0] > 0:
         side = select_side(hyperplanes[node], offsets[node], point, rng_state)
@@ -722,14 +703,16 @@ def make_forest(data, n_neighbors, n_trees, rng_state, angular=False):
     result = []
     leaf_size = max(10, n_neighbors)
     try:
-        result = [flatten_tree(
-            make_tree(data, rng_state, leaf_size, angular),
-            leaf_size)
-                  for i in range(n_trees)]
+        result = [
+            flatten_tree(make_tree(data, rng_state, leaf_size, angular), leaf_size)
+            for i in range(n_trees)
+        ]
     except (RuntimeError, RecursionError):
-        warn('Random Projection forest initialisation failed due to recursion'
-             'limit being reached. Something is a little strange with your '
-             'data, and this may take longer than normal to compute.')
+        warn(
+            "Random Projection forest initialisation failed due to recursion"
+            "limit being reached. Something is a little strange with your "
+            "data, and this may take longer than normal to compute."
+        )
 
     return result
 
