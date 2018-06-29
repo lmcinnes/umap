@@ -456,7 +456,7 @@ def fuzzy_simplicial_set(X, n_neighbors, random_state,
 
 
 @numba.jit()
-def fast_intersection(rows, cols, values, target, unknown_dist=1.0, dist=5.0):
+def fast_intersection(rows, cols, values, target, unknown_dist=1.0, far_dist=5.0):
     """Under the assumption of categorical distance for the intersecting
     simplicial set perform a fast intersection.
 
@@ -480,7 +480,7 @@ def fast_intersection(rows, cols, values, target, unknown_dist=1.0, dist=5.0):
     unknown_dist: float (optional, default 1.0)
         The distance an unknown label (-1) is assumed to be from any point.
 
-    dist float (optional, default 5.0)
+    far_dist float (optional, default 5.0)
         The distance between unmatched labels.
 
     Returns
@@ -494,7 +494,7 @@ def fast_intersection(rows, cols, values, target, unknown_dist=1.0, dist=5.0):
         if target[i] == -1 or target[j] == -1:
             values[nz] *= np.exp(-unknown_dist)
         elif target[i] != target[j]:
-            values[nz] *= np.exp(-dist)
+            values[nz] *= np.exp(-far_dist)
 
     return
 
@@ -531,7 +531,7 @@ def reset_local_connectivity(simplicial_set):
 def categorical_simplicial_set_intersection(simplicial_set,
                                             target,
                                             unknown_dist=1.0,
-                                            dist=5.0):
+                                            far_dist=5.0):
     """Combine a fuzzy simplicial set with another fuzzy simplicial set
     generated from categorical data using categorical distances. The target
     data is assumed to be categorical label data (a vector of labels),
@@ -550,7 +550,7 @@ def categorical_simplicial_set_intersection(simplicial_set,
     unknown_dist: float (optional, default 1.0)
         The distance an unknown label (-1) is assumed to be from any point.
 
-    dist float (optional, default 5.0)
+    far_dist float (optional, default 5.0)
         The distance between unmatched labels.
 
     Returns
@@ -565,7 +565,7 @@ def categorical_simplicial_set_intersection(simplicial_set,
                       simplicial_set.data,
                       target,
                       unknown_dist,
-                      dist)
+                      far_dist)
 
     simplicial_set.eliminate_zeros()
 
@@ -1339,7 +1339,7 @@ class UMAP(BaseEstimator):
                 else:
                     far_dist = 1.0e12
                 self.graph_ = categorical_simplicial_set_intersection(
-                    self.graph_, y, dist=far_dist)
+                    self.graph_, y, far_dist=far_dist)
             else:
                 if self.target_n_neighbors == -1:
                     target_n_neighbors = self.n_neighbors
