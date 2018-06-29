@@ -812,7 +812,7 @@ def simplicial_set_embedding(data, graph, n_components,
     b: float
         Parameter of differentiable approximation of right adjoint functor
 
-    gamma: float (optional, default 1.0)
+    gamma: float
         Weight to apply to negative samples.
 
     n_edge_samples: int
@@ -1335,11 +1335,11 @@ class UMAP(BaseEstimator):
         if y is not None:
             if self.target_metric == 'categorical':
                 if self.target_weight < 1.0:
-                    dist = 2.5 * (1.0 / (1.0 - self.target_weight))
+                    far_dist = 2.5 * (1.0 / (1.0 - self.target_weight))
                 else:
-                    dist = 1.0e12
+                    far_dist = 1.0e12
                 self.graph_ = categorical_simplicial_set_intersection(
-                    self.graph_, y, dist=dist)
+                    self.graph_, y, dist=far_dist)
             else:
                 if self.target_n_neighbors == -1:
                     target_n_neighbors = self.n_neighbors
