@@ -339,7 +339,6 @@ def fuzzy_simplicial_set(
     angular=False,
     set_op_mix_ratio=1.0,
     local_connectivity=1.0,
-    bandwidth=1.0,
     verbose=False,
 ):
     """Given a set of data X, a neighborhood size, and a measure of distance
@@ -869,8 +868,17 @@ def simplicial_set_embedding(
     gamma: float
         Weight to apply to negative samples.
 
-    n_edge_samples: int
-        The total number of edge samples to use in the optimization step.
+    negative_sample_rate: int (optional, default 5)
+        The number of negative samples to select per positive sample
+        in the optimization process. Increasing this value will result
+        in greater repulsive force being applied, greater optimization
+        cost, but slightly more accuracy.
+
+    n_epochs: int (optional, default 0)
+        The number of training epochs to be used in optimizing the
+        low dimensional embedding. Larger values result in more accurate
+        embeddings. If 0 is specified a value will be selected based on
+        the size of the input dataset (200 for large datasets, 500 for small).
 
     init: string
         How to initialize the low dimensional embedding. Options are:
@@ -1077,11 +1085,11 @@ class UMAP(BaseEstimator):
         time care must be taken and dictionary elements must be ordered
         appropriately; this will hopefully be fixed in the future.
 
-    n_edge_samples: int (optional, default None)
-        The number of edge/1-simplex samples to be used in optimizing the
+    n_epochs: int (optional, default None)
+        The number of training epochs to be used in optimizing the
         low dimensional embedding. Larger values result in more accurate
         embeddings. If None is specified a value will be selected based on
-        the size of the input dataset (typically around dataset_size * 10**4).
+        the size of the input dataset (200 for large datasets, 500 for small).
 
     learning_rate: float (optional, default 1.0)
         The initial learning rate for the embedding optimization.
@@ -1124,11 +1132,17 @@ class UMAP(BaseEstimator):
         optimization. Values higher than one will result in greater weight
         being given to negative samples.
 
-    bandwidth: float (optional, default 1.0)
-        The effective bandwidth of the kernel if we view the algorithm as
-        similar to Laplacian eigenmaps. Larger values induce more
-        connectivity and a more global view of the data, smaller values
-        concentrate more locally.
+    negative_sample_rate: int (optional, default 5)
+        The number of negative samples to select per positive sample
+        in the optimization process. Increasing this value will result
+        in greater repulsive force being applied, greater optimization
+        cost, but slightly more accuracy.
+
+    transform_queue_size: float (optional, default 4.0)
+        For transform operations (embedding new points using a trained model_
+        this will control how aggressively to search for nearest neighbors.
+        Larger values will result in slower performance but more accurate
+        nearest neighbor evaluation.
 
     a: float (optional, default None)
         More specific parameters controlling the embedding. If None these
@@ -1178,6 +1192,10 @@ class UMAP(BaseEstimator):
         0.0 weights entirely on data, a value of 1.0 weights entirely on target.
         The default of 0.5 balances the weighting equally between data and target.
 
+    transform_seed: int (optional, default 42)
+        Random seed used for the stochastic aspects of the transform operation.
+        This ensures consistency in transform operations.
+
     verbose: bool (optional, default False)
         Controls verbosity of logging.
     """
@@ -1190,11 +1208,10 @@ class UMAP(BaseEstimator):
         n_epochs=None,
         learning_rate=1.0,
         init="spectral",
+            min_dist=0.1,
         spread=1.0,
-        min_dist=0.1,
         set_op_mix_ratio=1.0,
         local_connectivity=1.0,
-        bandwidth=1.0,
         repulsion_strength=1.0,
         negative_sample_rate=5,
         transform_queue_size=4.0,
@@ -1231,7 +1248,6 @@ class UMAP(BaseEstimator):
         self.min_dist = min_dist
         self.set_op_mix_ratio = set_op_mix_ratio
         self.local_connectivity = local_connectivity
-        self.bandwidth = bandwidth
         self.negative_sample_rate = negative_sample_rate
         self.random_state = random_state
         self.angular_rp_forest = angular_rp_forest
@@ -1357,7 +1373,6 @@ class UMAP(BaseEstimator):
                 self.angular_rp_forest,
                 self.set_op_mix_ratio,
                 self.local_connectivity,
-                self.bandwidth,
                 self.verbose,
             )
         else:
@@ -1384,7 +1399,6 @@ class UMAP(BaseEstimator):
                 self.angular_rp_forest,
                 self.set_op_mix_ratio,
                 self.local_connectivity,
-                self.bandwidth,
                 self.verbose,
             )
 
