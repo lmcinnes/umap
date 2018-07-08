@@ -277,7 +277,6 @@ def test_nn_search():
         False,
         1.0,
         1.0,
-        1.0,
         False,
     )
 
