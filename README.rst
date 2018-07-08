@@ -7,7 +7,12 @@
 .. image:: https://travis-ci.org/lmcinnes/umap.svg
     :target: https://travis-ci.org/lmcinnes/umap
     :alt: Travis Build Status
-
+.. image:: https://coveralls.io/repos/github/lmcinnes/umap/badge.svg
+    :target: https://coveralls.io/github/lmcinnes/umap
+    :alt: Test Coverage Status
+.. image:: //readthedocs.org/projects/umap-learn/badge/?version=latest
+    :target: https://umap-learn.readthedocs.io/en/latest/?badge=latest
+    :alt: Documentation Status
 
 ====
 UMAP
@@ -18,7 +23,7 @@ technique that can be used for visualisation similarly to t-SNE, but also for
 general non-linear dimension reduction. The algorithm is founded on three
 assumptions about the data
 
-1. The data is uniformly distributed on Riemannian manifold;
+1. The data is uniformly distributed on a Riemannian manifold;
 2. The Riemannian metric is locally constant (or can be approximated as such);
 3. The manifold is locally connected.
 
@@ -33,10 +38,11 @@ The details for the underlying mathematics can be found in
 McInnes, L, Healy, J, *UMAP: Uniform Manifold Approximation and Projection
 for Dimension Reduction*, ArXiv e-prints 1802.03426, 2018
 
-
 The important thing is that you don't need to worry about that -- you can use
 UMAP right now for dimension reduction and visualisation as easily as a drop
 in replacement for scikit-learn's t-SNE.
+
+Documentation is `available via ReadTheDocs <https://umap-learn.readthedocs.io/>`_.
 
 ---------------
 How to use UMAP
@@ -86,10 +92,8 @@ An example of making use of these options:
                           min_dist=0.3,
                           metric='correlation').fit_transform(digits.data)
 
-UMAP also supports fitting to sparse matrix data. This is currently
-experimental and may be slower than the eventual final implementation.
-
-Further details and tutorials are coming.
+UMAP also supports fitting to sparse matrix data. For more details
+please see `the UMAP documentation <https://umap-learn.readthedocs.io/>`_
 
 ----------------
 Benefits of UMAP
@@ -116,10 +120,21 @@ Fourth, UMAP supports a wide variety of distance functions, including
 non-metric distance functions such as *cosine distance* and *correlation
 distance*. You can finally embed word vectors properly using cosine distance!
 
-Finally UMAP has solid theoretical foundations in manifold learning (paper
-forthcoming). This both justifies the approach and allows for further
-extensions that will soon be added to the library (embedding dataframes,
-semi-supervised dimension reduction, etc.).
+Fifth, UMAP supports adding new points to an existing embedding via
+the standard sklearn ``transform`` method. This means that UMAP can be
+used as a preprocessing transformer in sklearn pipelines.
+
+Sixth, UMAP supports supervised and semi-supervised dimension reduction.
+This means that if you have label information that you wish to use as
+extra information for dimension reduction (even if it is just partial
+labelling) you can do that -- as simply as providing it as the ``y``
+parameter in the fit method.
+
+Finally UMAP has solid theoretical foundations in manifold learning
+(see `our paper on ArXiv <https://arxiv.org/abs/1802.03426>`_).
+This both justifies the approach and allows for further
+extensions that will soon be added to the library
+(embedding dataframes etc.).
 
 ------------------------
 Performance and Examples
@@ -220,11 +235,11 @@ Install the package
 Help and Support
 ----------------
 
-This project is still very young. I am currently trying to get example
-notebooks and documentation prepared, but it may be a while before those are
-available. In the meantime please `open an issue <https://github.com/lmcinnes/umap/issues/new>`_
-and I will try to provide any help and guidance that I can. Please also check
-the docstrings on the code, which provide some descriptions of the parameters.
+Documentation is at `ReadTheDocs <https://umap-learn.readthedocs.io/>`_.
+The documentation `includes a FAQ <https://umap-learn.readthedocs.io/faq.html>`_ that
+may answer your questions. If you still have questions then please
+`open an issue <https://github.com/lmcinnes/umap/issues/new>`_
+and I will try to provide any help and guidance that I can.
 
 --------
 Citation
@@ -252,7 +267,11 @@ current reference:
 License
 -------
 
-The umap package is 3-clause BSD licensed. Enjoy.
+The umap package is 3-clause BSD licensed.
+
+We would like to note that the umap package makes heavy use of
+NumFOCUS sponsored projects, and would not be possible without
+their support, so please `consider contributing to NumFOCUS <>`_.
 
 ------------
 Contributing
