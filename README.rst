@@ -258,12 +258,15 @@ current reference:
 
    @article{2018arXivUMAP,
         author = {{McInnes}, L. and {Healy}, J.},
-        title = "{UMAP: Uniform Manifold Approximation and Projection for Dimension Reduction}",
+        title = "{UMAP: Uniform Manifold Approximation
+        and Projection for Dimension Reduction}",
         journal = {ArXiv e-prints},
         archivePrefix = "arXiv",
         eprint = {1802.03426},
         primaryClass = "stat.ML",
-        keywords = {Statistics - Machine Learning, Computer Science - Computational Geometry, Computer Science - Learning},
+        keywords = {Statistics - Machine Learning,
+                    Computer Science - Computational Geometry,
+                    Computer Science - Learning},
         year = 2018,
         month = feb,
    }
@@ -287,7 +290,9 @@ Contributions are more than welcome! There are lots of opportunities
 for potential projects, so please get in touch if you would like to
 help out. Everything from code to notebooks to
 examples and documentation are all *equally valuable* so please don't feel
-you can't contribute. To contribute please `fork the project <https://github.com/lmcinnes/umap/issues#fork-destination-box>`_ make your changes and
+you can't contribute. To contribute please
+`fork the project <https://github.com/lmcinnes/umap/issues#fork-destination-box>`_
+make your changes and
 submit a pull request. We will do our best to work through any issues with
 you and get your code merged into the main branch.
 
