@@ -1,6 +1,12 @@
 .. image:: https://img.shields.io/pypi/v/umap-learn.svg
     :target: https://pypi.python.org/pypi/umap-learn/
     :alt: PyPI Version
+.. image:: https://anaconda.org/conda-forge/umap-learn/badges/version.svg
+    :target: https://anaconda.org/conda-forge/umap-learn
+    :alt: Conda-forge Version
+.. image:: https://anaconda.org/conda-forge/umap-learn/badges/downloads.svg
+    :target: https://anaconda.org/conda-forge/umap-learn
+    :alt: Downloads from conda-forge
 .. image:: https://img.shields.io/pypi/l/umap-learn.svg
     :target: https://github.com/lmcinnes/umap/blob/master/LICENSE
     :alt: License
