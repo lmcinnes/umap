@@ -280,7 +280,7 @@ The umap package is 3-clause BSD licensed.
 
 We would like to note that the umap package makes heavy use of
 NumFOCUS sponsored projects, and would not be possible without
-their support, so please `consider contributing to NumFOCUS <https://www.numfocus.org/membership>`_.
+their support of those projects, so please `consider contributing to NumFOCUS <https://www.numfocus.org/membership>`_.
 
 ------------
 Contributing
