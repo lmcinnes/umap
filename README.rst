@@ -193,6 +193,14 @@ Requirements:
 
 **Install Options**
 
+Conda install, via the excellent work of the conda-forge team:
+
+.. code:: bash
+
+    conda install -c conda-forge umap-learn
+
+The conda-forge packages are available for linux, OS X, and Windows 64 bit.
+
 PyPI install, presuming you have numba and sklearn and all its requirements
 (numpy and scipy) installed:
 
