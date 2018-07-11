@@ -7,6 +7,7 @@ mkdir -p $TEST_DIR
 cd $TEST_DIR
 
 if [[ "$COVERAGE" == "true" ]]; then
+    export NUMBA_DISABLE_JIT=1
     nosetests -s --with-coverage --cover-package=$MODULE $MODULE
 else
     nosetests -s $MODULE

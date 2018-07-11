@@ -1,0 +1,8 @@
+numpy>=1.13
+scipy>=0.19
+scikit-learn>=0.19
+numba>=0.37
+bokeh>=0.13
+datashader>=0.6
+seaborn>=0.8
+sphinx-gallery

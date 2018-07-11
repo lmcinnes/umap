@@ -4,31 +4,35 @@ import numba
 from sklearn.neighbors import KDTree
 from umap.distances import named_distances
 
+
 @numba.njit()
-def trustworthiness_vector_bulk(indices_source, indices_embedded, max_k):
-    
+def trustworthiness_vector_bulk(
+    indices_source, indices_embedded, max_k
+):  # pragma: no cover
+
     n_samples = indices_embedded.shape[0]
     trustworthiness = np.zeros(max_k + 1, dtype=np.float64)
-    
+
     for i in range(n_samples):
         for j in range(max_k):
-            
+
             rank = 0
             while indices_source[i, rank] != indices_embedded[i, j]:
                 rank += 1
-            
+
             for k in range(j + 1, max_k + 1):
                 if rank > k:
                     trustworthiness[k] += rank - k
-                    
+
     for k in range(1, max_k + 1):
-        trustworthiness[k] = 1.0 - trustworthiness[k] * (2.0 / (n_samples * k *
-                                (2.0 * n_samples - 3.0 * k -1.0)))
-                                
+        trustworthiness[k] = 1.0 - trustworthiness[k] * (
+            2.0 / (n_samples * k * (2.0 * n_samples - 3.0 * k - 1.0))
+        )
+
     return trustworthiness
 
 
-def make_trustworthiness_calculator(metric):
+def make_trustworthiness_calculator(metric):  # pragma: no cover
     @numba.njit(parallel=True)
     def trustworthiness_vector_lowmem(source, indices_embedded, max_k):
 
@@ -55,8 +59,8 @@ def make_trustworthiness_calculator(metric):
 
         for k in range(1, max_k + 1):
             trustworthiness[k] = 1.0 - trustworthiness[k] * (
-            2.0 / (n_samples * k *
-                   (2.0 * n_samples - 3.0 * k - 1.0)))
+                2.0 / (n_samples * k * (2.0 * n_samples - 3.0 * k - 1.0))
+            )
 
         trustworthiness[0] = 1.0
 
@@ -66,7 +70,9 @@ def make_trustworthiness_calculator(metric):
 
 
 @numba.jit()
-def trustworthiness_vector(source, embedding, max_k, metric='euclidean'):
+def trustworthiness_vector(
+    source, embedding, max_k, metric="euclidean"
+):  # pragma: no cover
     tree = KDTree(embedding, metric=metric)
     indices_embedded = tree.query(embedding, k=max_k, return_distance=False)
     # Drop the actual point itself

@@ -6,7 +6,7 @@ def readme():
 
 configuration = {
     'name' : 'umap-learn',
-    'version': '0.2.5',
+    'version': '0.3.0',
     'description' : 'Uniform Manifold Approximation and Projection',
     'long_description' : readme(),
     'classifiers' : [
@@ -31,9 +31,10 @@ configuration = {
     'maintainer_email' : 'leland.mcinnes@gmail.com',
     'license' : 'BSD',
     'packages' : ['umap'],
-    'install_requires' : ['scikit-learn >= 0.16',
+    'install_requires': ['numpy >= 1.13',
+                         'scikit-learn >= 0.16',
                           'scipy >= 0.19',
-                          'numba >= 0.34'],
+                         'numba >= 0.37'],
     'ext_modules' : [],
     'cmdclass' : {},
     'test_suite' : 'nose.collector',

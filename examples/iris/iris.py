@@ -7,7 +7,7 @@ from sklearn.datasets import load_iris
 
 iris = load_iris()
 embedding = umap.UMAP(n_neighbors=50,
-                      alpha=0.5,
+                      learning_rate=0.5,
                       init="random",
                       min_dist=0.001)\
                 .fit_transform(iris.data)
