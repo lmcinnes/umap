@@ -16,7 +16,7 @@
 .. image:: https://coveralls.io/repos/github/lmcinnes/umap/badge.svg
     :target: https://coveralls.io/github/lmcinnes/umap
     :alt: Test Coverage Status
-.. image:: //readthedocs.org/projects/umap-learn/badge/?version=latest
+.. image:: https://readthedocs.org/projects/umap-learn/badge/?version=latest
     :target: https://umap-learn.readthedocs.io/en/latest/?badge=latest
     :alt: Documentation Status
 
