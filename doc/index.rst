@@ -26,6 +26,8 @@ The details for the underlying mathematics can be found in
 McInnes, L, Healy, J, *UMAP: Uniform Manifold Approximation and Projection
 for Dimension Reduction*, ArXiv e-prints 1802.03426, 2018
 
+You can find the software `on github <https://github.com/lmcinnes/>`_.
+
 .. toctree::
    :maxdepth: 2
    :caption: User Guide / Tutorial:
