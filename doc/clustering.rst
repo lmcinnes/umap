@@ -72,7 +72,7 @@ color for each digit. This will help frame what follows.
     standard_embedding = umap.UMAP(random_state=42).fit_transform(mnist.data)
     plt.scatter(standard_embedding[:, 0], standard_embedding[:, 1], c=mnist.target, s=0.1, cmap='Spectral');
 
-.. image:: clustering_files/clustering_6_1.png
+.. image:: images/clustering_6_1.png
 
 
 Traditional clustering
@@ -97,7 +97,7 @@ out UMAP embedded data by cluster membership.
     plt.scatter(standard_embedding[:, 0], standard_embedding[:, 1], c=kmeans_labels, s=0.1, cmap='Spectral');
 
 
-.. image:: clustering_files/clustering_10_1.png
+.. image:: images/clustering_10_1.png
 
 
 This is not really the result we were looking for (though it does expose
@@ -168,7 +168,7 @@ color the remaining points according to the cluster membership.
 
 
 
-.. image:: clustering_files/clustering_16_1.png
+.. image:: images/clustering_16_1.png
 
 
 This looks somewhat underwhelming. It meets HDBSCAN's approach of "not
@@ -294,7 +294,7 @@ visualization attuned parameters:
                 c=mnist.target, s=0.1, cmap='Spectral');
 
 
-.. image:: clustering_files/clustering_27_1.png
+.. image:: images/clustering_27_1.png
 
 
 As you can see we still have the general global structure, but we are
@@ -330,7 +330,7 @@ And now we can visualize the results, just as before.
                 cmap='Spectral');
 
 
-.. image:: clustering_files/clustering_31_1.png
+.. image:: images/clustering_31_1.png
 
 
 We can see that we have done a much better job of finding clusters
