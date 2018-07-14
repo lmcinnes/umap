@@ -51,6 +51,8 @@ construction allows for easy generalization to arbitrary dimensions.
 
    Low dimensional simplices
 
+
+
 This has a very simple combinatorial underlying structure, and
 ultimately one can regard a :math:`k`-simplex as an arbitrary set of
 :math:`k+1` objects with faces (and faces of faces etc.) given by
@@ -120,6 +122,8 @@ To demonstrate the process let's consider a test dataset like this
 
    Test data set of a noisy sine wave
 
+
+
 If we fix a radius we can then picture the open sets of our cover as
 circles (since we are in a nice visualizable two dimensional case). The
 result is something like this
@@ -129,6 +133,8 @@ result is something like this
 
    A basic open cover of the test data
 
+
+
 We can then depict the the simplicial complex of 0-, 1-, and 2-simplices
 as points, lines, and triangles
 
@@ -136,6 +142,8 @@ as points, lines, and triangles
     :alt: A simplicial complex built from the test data
 
    A simplicial complex built from the test data
+
+
 
 It is harder to easily depict the higher dimensional simplices, but you
 can imagine how they would fit in. There are two things to note here:
@@ -223,6 +231,8 @@ pretty good:
 
    Open balls over uniformly\_distributed\_data
 
+
+
 Because the data is evenly spread we actually cover the underlying
 manifold and don't end up with clumping. In other words, all this theory
 works well assuming that the data is uniformly distributed over the
@@ -256,6 +266,8 @@ that local distance function!
     :alt: Open balls of radius one with a locally varying metric
 
    Open balls of radius one with a locally varying metric
+
+
 
 This theoretically derived result matches well with many traditional
 graph based algorithms: a standard approach for such algorithms is to
@@ -302,6 +314,8 @@ looking something like this
 
    Fuzzy open balls of radius one with a locally varying metric
 
+
+
 None of that is very concrete or formal -- it is merely an intuitive
 picture of what we would like to have happen. It turns out that we can
 actually formalize all of this by stealing the `singular
@@ -345,6 +359,7 @@ again.
 
    Local connectivity and fuzzy open sets
 
+
 Again this can be formalized in terms of the aforementioned mathematical
 machinery from algebraic topology. From a practical standpoint this
 plays an important role for high dimensional data -- in high dimensions
@@ -372,6 +387,7 @@ weights something like this.
     :alt: Edges with incompatible weights
 
    Edges with incompatible weights
+
 
 Between any two points we might have up to two edges and the weights on
 those edges disagree with one another. There are a number of options for
@@ -403,6 +419,8 @@ looks like this.
     :alt: Graph with combined edge weights
 
    Graph with combined edge weights
+
+
 
 So in some sense in the end we have simply constructed a weighted graph
 (although we could make use of higher dimensional simplices if we
