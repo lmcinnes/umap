@@ -47,7 +47,7 @@ tetrahedron (with four 2-simplices as "faces"). Such a simple
 construction allows for easy generalization to arbitrary dimensions.
 
 .. figure:: images/simplices.png
-    :alt: Low dimensional simplices
+   :alt: Low dimensional simplices
 
    Low dimensional simplices
 
@@ -129,7 +129,7 @@ circles (since we are in a nice visualizable two dimensional case). The
 result is something like this
 
 .. figure:: images/how_umap_works_open_cover.png
-    :alt: A basic open cover of the test data
+   :alt: A basic open cover of the test data
 
    A basic open cover of the test data
 
@@ -139,7 +139,7 @@ We can then depict the the simplicial complex of 0-, 1-, and 2-simplices
 as points, lines, and triangles
 
 .. figure:: images/how_umap_works_basic_graph.png
-    :alt: A simplicial complex built from the test data
+   :alt: A simplicial complex built from the test data
 
    A simplicial complex built from the test data
 
@@ -227,7 +227,7 @@ average distance between points) and the resulting open cover looks
 pretty good:
 
 .. figure:: images/how_umap_works_uniform_distribution_cover.png
-    :alt: Open balls over uniformly\_distributed\_data
+   :alt: Open balls over uniformly\_distributed\_data
 
    Open balls over uniformly\_distributed\_data
 
@@ -263,7 +263,7 @@ function, and we can simply select balls of radius one with respect to
 that local distance function!
 
 .. figure:: images/how_umap_works_local_metric_open_cover.png
-    :alt: Open balls of radius one with a locally varying metric
+   :alt: Open balls of radius one with a locally varying metric
 
    Open balls of radius one with a locally varying metric
 
@@ -310,7 +310,7 @@ from the center of the ball. We could visualize such a fuzzy cover as
 looking something like this
 
 .. figure:: images/how_umap_works_fuzzy_open_cover.png
-    :alt: Fuzzy open balls of radius one with a locally varying metric
+   :alt: Fuzzy open balls of radius one with a locally varying metric
 
    Fuzzy open balls of radius one with a locally varying metric
 
@@ -355,7 +355,7 @@ neighbor. We can visualize the result in terms of our example dataset
 again.
 
 .. figure:: images/how_umap_works_umap_open_cover.png
-    :alt: Local connectivity and fuzzy open sets
+   :alt: Local connectivity and fuzzy open sets
 
    Local connectivity and fuzzy open sets
 
@@ -384,7 +384,7 @@ intuition we can think of this as having directed edges with varying
 weights something like this.
 
 .. figure:: images/how_umap_works_raw_graph.png
-    :alt: Edges with incompatible weights
+   :alt: Edges with incompatible weights
 
    Edges with incompatible weights
 
@@ -416,7 +416,7 @@ applying the edge weight combination formula across the whole graph
 looks like this.
 
 .. figure:: images/how_umap_works_umap_graph.png
-    :alt: Graph with combined edge weights
+   :alt: Graph with combined edge weights
 
    Graph with combined edge weights
 
