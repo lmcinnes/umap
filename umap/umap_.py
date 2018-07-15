@@ -100,31 +100,29 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
             index = int(np.floor(local_connectivity))
             interpolation = local_connectivity - index
             if index > 0:
-                if interpolation <= SMOOTH_K_TOLERANCE:
-                    rho[i] = non_zero_dists[index - 1]
-                else:
-                    rho[i] = non_zero_dists[index - 1] + interpolation * (
-                        non_zero_dists[index] - non_zero_dists[index - 1]
-                    )
+                rho[i] = non_zero_dists[index - 1]
+                if interpolation > SMOOTH_K_TOLERANCE:
+                    rho[i] += interpolation * (non_zero_dists[index] - non_zero_dists[index - 1])
             else:
                 rho[i] = interpolation * non_zero_dists[0]
         elif non_zero_dists.shape[0] > 0:
             rho[i] = np.max(non_zero_dists)
-        else:
-            rho[i] = 0.0
 
         for n in range(n_iter):
 
             psum = 0.0
             for j in range(1, distances.shape[1]):
-                d = max(0, (distances[i, j] - rho[i]))
-                psum += np.exp(-(d / mid))
-            val = psum
+                d = distances[i, j] - rho[i]
+                if d > 0:
+                    psum += np.exp(-(d / mid))
+                else:
+                    psum += 1.0
 
-            if np.fabs(val - target) < SMOOTH_K_TOLERANCE:
+
+            if np.fabs(psum - target) < SMOOTH_K_TOLERANCE:
                 break
 
-            if val > target:
+            if psum > target:
                 hi = mid
                 mid = (lo + hi) / 2.0
             else:
