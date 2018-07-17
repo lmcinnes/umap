@@ -39,7 +39,8 @@ UMAP supports a number of useful features, including the ability to use labels
 (or partial labels) for supervised (or semi-supervised) dimension reduction,
 and the ability to transform new unseen data into a pretrained embedding space.
 
-For details of the mathematical underpinnings see [@umap_arxiv].
+For details of the mathematical underpinnings see [@umap_arxiv]. The implementation
+can be found at
 
 -![Fashion MNIST embedded via UMAP](images/umap_example_fashion_mnist1.png)
 
