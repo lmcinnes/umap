@@ -40,7 +40,7 @@ UMAP supports a number of useful features, including the ability to use labels
 and the ability to transform new unseen data into a pretrained embedding space.
 
 For details of the mathematical underpinnings see [@umap_arxiv]. The implementation
-can be found at
+can be found at [@umap_repo].
 
 -![Fashion MNIST embedded via UMAP](images/umap_example_fashion_mnist1.png)
 
