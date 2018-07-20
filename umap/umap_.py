@@ -1413,7 +1413,7 @@ class UMAP(BaseEstimator):
 
             if callable(self.metric):
                 self._distance_func = self.metric
-            elif self.metric in dist.named_distances:
+            elif self.metric in dist.named_distances or self.metric == 'precomputed':
                 self._distance_func = dist.named_distances[self.metric]
             else:
                 raise ValueError(
