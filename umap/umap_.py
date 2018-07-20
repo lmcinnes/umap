@@ -1413,20 +1413,24 @@ class UMAP(BaseEstimator):
 
             if callable(self.metric):
                 self._distance_func = self.metric
-            elif self.metric in dist.named_distances or self.metric == 'precomputed':
+            elif self.metric in dist.named_distances:
                 self._distance_func = dist.named_distances[self.metric]
+            elif self.metric == 'precomputed':
+                warn('Using precomputed metric; transform will be unavailable for new data')
             else:
                 raise ValueError(
                     "Metric is neither callable, " + "nor a recognised string"
                 )
-            self._dist_args = tuple(self._metric_kwds.values())
 
-            self._random_init, self._tree_init = make_initialisations(
-                self._distance_func, self._dist_args
-            )
-            self._search = make_initialized_nnd_search(
-                self._distance_func, self._dist_args
-            )
+            if self.metric != 'precomputed':
+                self._dist_args = tuple(self._metric_kwds.values())
+
+                self._random_init, self._tree_init = make_initialisations(
+                    self._distance_func, self._dist_args
+                )
+                self._search = make_initialized_nnd_search(
+                    self._distance_func, self._dist_args
+                )
 
         if y is not None:
             if self.target_metric == "categorical":
@@ -1542,6 +1546,9 @@ class UMAP(BaseEstimator):
 
         if self._sparse_data:
             raise ValueError("Transform not available for sparse input.")
+        elif self.metric == 'precomputed':
+            raise ValueError("Transform  of new data not available for "
+                             "precomputed metric.")
 
         X = check_array(X, dtype=np.float32, order="C")
         random_state = check_random_state(self.transform_seed)
