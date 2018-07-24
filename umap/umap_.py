@@ -906,7 +906,7 @@ def simplicial_set_embedding(
     """
     graph = graph.tocoo()
     graph.sum_duplicates()
-    n_vertices = graph.shape[0]
+    n_vertices = graph.shape[1]
 
     if n_epochs <= 0:
         # For smaller datasets we can use more epochs
