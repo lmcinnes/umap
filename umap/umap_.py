@@ -1622,7 +1622,7 @@ class UMAP(BaseEstimator):
             head,
             tail,
             n_epochs,
-            X.shape[0],
+            graph.shape[1],
             epochs_per_sample,
             self._a,
             self._b,
