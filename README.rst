@@ -250,7 +250,7 @@ Help and Support
 ----------------
 
 Documentation is at `ReadTheDocs <https://umap-learn.readthedocs.io/>`_.
-The documentation `includes a FAQ <https://umap-learn.readthedocs.io/faq.html>`_ that
+The documentation `includes a FAQ <https://umap-learn.readthedocs.io/en/latest/faq.html>`_ that
 may answer your questions. If you still have questions then please
 `open an issue <https://github.com/lmcinnes/umap/issues/new>`_
 and I will try to provide any help and guidance that I can.
