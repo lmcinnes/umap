@@ -800,12 +800,13 @@ def make_optimize_layout(
                         current, other,*output_metric_kwds
                     )
 
+                    # Derivative of the first term of the cross entropy
+                    # with resepct to the distance between points in the embedding space
                     grad_coeff = -2.0 * a * b * pow(dist_output, 2*b - 1)
                     grad_coeff /= (a * pow(dist_output, 2*b) + 1.0)
 
                     for d in range(dim):
                         grad_d = clip(grad_coeff * grad_dist_output[d])
-                        # grad_d = clip(grad_coeff * (current[d] - other[d]) / (0.001 + dist_output))
 
                         current[d] += grad_d * alpha
                         if move_other:
@@ -837,7 +838,6 @@ def make_optimize_layout(
 
                         for d in range(dim):
                             grad_d = clip(grad_coeff * grad_dist_output[d])
-                            # grad_d = clip(grad_coeff * (current[d] - other[d]) / (0.001 + dist_output))
                             current[d] += grad_d * alpha
 
                     epoch_of_next_negative_sample[i] += (
@@ -1304,14 +1304,19 @@ class UMAP(BaseEstimator):
             self._output_distance_grad_func = self.output_metric_grad
         elif self.output_metric_grad in umap.distances.named_gradients:
             self._output_distance_grad_func = umap.distances.named_gradients[self.output_metric_grad]
-        elif self.output_metric == 'precomputed':
+        elif self.output_metric_grad == 'precomputed':
             raise ValueError(
                 "output_metric_grad cannnot be 'precomputed'"
             )
         else:
-            raise ValueError(
-                "output_metric_grad is neither callable, " + "nor a recognised string"
-            )
+            if self.output_metric_grad in umap.distances.named_distances:
+                raise ValueError(
+                    "gradient function is not yet implemented for " + repr(self.output_metric_grad) + "."
+                )
+            else:
+                raise ValueError(
+                    "output_metric_grad is neither callable, " + "nor a recognised string"
+                )
 
         self.n_epochs = n_epochs
         if isinstance(init, np.ndarray):
