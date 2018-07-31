@@ -678,9 +678,30 @@ def rdist(x, y):
 
 
 def make_optimize_layout(
-    output_metric,
+    output_metric_grad,
     output_metric_kwds,
 ):
+    """Create a numba accelerated function to improve an embedding using
+    stochastic gradient descent to minimize the fuzzy set cross entropy
+    between the 1-skeletons of the high dimensional and low dimensional
+    fuzzy simplicial sets. In practice this is done by sampling edges
+    based on their membership strength (with the (1-p) terms coming from
+    negative sampling similar to word2vec).
+
+    Parameters
+    ----------
+    output_metric_grad: function
+        Function returning the distance between two points in embedding
+        space and the gradient of the distance wrt the first argument.
+
+    output_metric_kwds: dict
+        Key word arguments to be passed to the output_metric_grad function
+
+    Returns
+    -------
+    A numba JITd function for optimizing an embeddinng that is specialised
+    to the given metric in the embedding space.
+    """
     @numba.njit(fastmath=True)
     def optimize_layout(
         head_embedding,
@@ -775,13 +796,17 @@ def make_optimize_layout(
                     current = head_embedding[j]
                     other = tail_embedding[k]
 
-                    dist_squared = output_metric(current, other, *output_metric_kwds)**2
+                    dist_output, grad_dist_output = output_metric_grad(
+                        current, other,*output_metric_kwds
+                    )
 
-                    grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
-                    grad_coeff /= a * pow(dist_squared, b) + 1.0
+                    grad_coeff = -2.0 * a * b * pow(dist_output, 2*b - 1)
+                    grad_coeff /= (a * pow(dist_output, 2*b) + 1.0)
 
                     for d in range(dim):
-                        grad_d = clip(grad_coeff * (current[d] - other[d]))
+                        grad_d = clip(grad_coeff * grad_dist_output[d])
+                        # grad_d = clip(grad_coeff * (current[d] - other[d]) / (0.001 + dist_output))
+
                         current[d] += grad_d * alpha
                         if move_other:
                             other[d] += -grad_d * alpha
@@ -798,18 +823,21 @@ def make_optimize_layout(
 
                         other = tail_embedding[k]
 
-                        dist_squared = output_metric(current, other, *output_metric_kwds)**2
+                        dist_output, grad_dist_output = output_metric_grad(
+                            current, other, *output_metric_kwds
+                        )
 
                         grad_coeff = 2.0 * gamma * b
-                        grad_coeff /= (0.001 + dist_squared) * (
-                            a * pow(dist_squared, b) + 1
+                        grad_coeff /= (0.001 + dist_output) * (
+                            a * pow(dist_output, 2*b) + 1
                         )
 
                         if not np.isfinite(grad_coeff):
                             grad_coeff = 4.0
 
                         for d in range(dim):
-                            grad_d = clip(grad_coeff * (current[d] - other[d]))
+                            grad_d = clip(grad_coeff * grad_dist_output[d])
+                            # grad_d = clip(grad_coeff * (current[d] - other[d]) / (0.001 + dist_output))
                             current[d] += grad_d * alpha
 
                     epoch_of_next_negative_sample[i] += (
@@ -839,7 +867,7 @@ def simplicial_set_embedding(
     random_state,
     input_metric,
     input_metric_kwds,
-    output_metric,
+    output_metric_grad,
     output_metric_kwds,
     verbose,
 ):
@@ -894,13 +922,20 @@ def simplicial_set_embedding(
     random_state: numpy RandomState or equivalent
         A state capable being used as a numpy random state.
 
-    input_metric: string
-        The input_metric used to measure distance in high dimensional space; used if
+    input_metric: function
+        Function used to measure distance in high dimensional space; used if
         multiple connected components need to be layed out.
 
     input_metric_kwds: dict
         Key word arguments to be passed to the input_metric function; used if
         multiple connected components need to be layed out.
+
+    output_metric_grad: function
+        Function returning the distance between two points in embedding space and
+        the gradient of the distance wrt the first argument.
+
+    output_metric_kwds: dict
+        Key word arguments to be passed to the output_metric_grad function.
 
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
@@ -939,7 +974,7 @@ def simplicial_set_embedding(
             metric=input_metric,
             metric_kwds=input_metric_kwds,
         )
-        expansion = 1.0#10.0 / initialisation.max()
+        expansion = 10.0 / initialisation.max()
         embedding = (initialisation * expansion).astype(
             np.float32
         ) + random_state.normal(
@@ -968,10 +1003,11 @@ def simplicial_set_embedding(
     rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
     optimize_layout = make_optimize_layout(
-        output_metric,
+        output_metric_grad,
         tuple(output_metric_kwds.values()),
     )
 
+    embedding = (embedding - np.min(embedding, 0)) / (np.max(embedding, 0) - np.min(embedding, 0))
     embedding = optimize_layout(
         embedding,
         embedding,
@@ -1217,7 +1253,7 @@ class UMAP(BaseEstimator):
         n_components=2,
         input_metric="euclidean",
         input_metric_kwds=None,
-        output_metric="euclidean",
+        output_metric_grad="euclidean",
         output_metric_kwds=None,
         n_epochs=None,
         learning_rate=1.0,
@@ -1247,7 +1283,7 @@ class UMAP(BaseEstimator):
             self._input_metric_kwds = input_metric_kwds
         else:
             self._input_metric_kwds = {}
-        self.output_metric = output_metric
+        self.output_metric_grad = output_metric_grad
         if output_metric_kwds is not None:
             self._output_metric_kwds = output_metric_kwds
         else:
@@ -1264,17 +1300,17 @@ class UMAP(BaseEstimator):
                 "input_Metric is neither callable, " + "nor a recognised string"
             )
 
-        if callable(self.output_metric):
-            self._output_distance_func = self.output_metric
-        elif self.output_metric in umap.distances.named_distances:
-            self._output_distance_func = umap.distances.named_distances[self.output_metric]
+        if callable(self.output_metric_grad):
+            self._output_distance_grad_func = self.output_metric_grad
+        elif self.output_metric_grad in umap.distances.named_gradients:
+            self._output_distance_grad_func = umap.distances.named_gradients[self.output_metric_grad]
         elif self.output_metric == 'precomputed':
             raise ValueError(
-                "output_metric cannnot be 'precomputed'"
+                "output_metric_grad cannnot be 'precomputed'"
             )
         else:
             raise ValueError(
-                "output_metric is neither callable, " + "nor a recognised string"
+                "output_metric_grad is neither callable, " + "nor a recognised string"
             )
 
         self.n_epochs = n_epochs
@@ -1338,8 +1374,8 @@ class UMAP(BaseEstimator):
             raise ValueError("init ndarray must match n_components value")
         if not isinstance(self.input_metric, str) and not callable(self.input_metric):
             raise ValueError("input_metric must be string or callable")
-        if not isinstance(self.output_metric, str) and not callable(self.output_metric):
-            raise ValueError("output_metric must be string or callable")
+        if not isinstance(self.output_metric_grad, str) and not callable(self.output_metric_grad):
+            raise ValueError("output_metric_grad must be string or callable")
         if self.negative_sample_rate < 0:
             raise ValueError("negative sample rate must be positive")
         if self.initial_alpha < 0.0:
@@ -1530,7 +1566,7 @@ class UMAP(BaseEstimator):
             random_state,
             self.input_metric,
             self._input_metric_kwds,
-            self._output_distance_func,
+            self._output_distance_grad_func,
             self._output_metric_kwds,
             self.verbose,
         )
@@ -1656,7 +1692,7 @@ class UMAP(BaseEstimator):
         tail = graph.col
 
         optimize_layout = make_optimize_layout(
-            self._output_distance_func,
+            self._output_distance_grad_func,
             tuple(self.output_metric_kwds.values()),
         )
 

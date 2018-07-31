@@ -20,6 +20,20 @@ def euclidean(x, y):
         result += (x[i] - y[i]) ** 2
     return np.sqrt(result)
 
+@numba.njit(fastmath=True)
+def euclidean_grad(x, y):
+    """Standard euclidean distance and its gradient.
+
+    ..math::
+        D(x, y) = \sqrt{\sum_i (x_i - y_i)^2}
+        \frac{dD(x, y)}{dx} = (x_i - y_i)/D(x,y)
+    """
+    result = 0.0
+    for i in range(x.shape[0]):
+        result += (x[i] - y[i]) ** 2
+    d = np.sqrt(result)
+    grad = (x-y)/(1e-6 + d)
+    return d, grad
 
 @numba.njit()
 def standardised_euclidean(x, y, sigma=_mock_ones):
@@ -278,6 +292,31 @@ def haversine(x, y):
 
 
 @numba.njit()
+def haversine_grad(x, y):
+    # spectral initialization puts many points near the poles
+    # currently, adding pi/2 to the latitude avoids problems
+    # TODO: reimplement with quaternions to avoid singularity
+
+    if x.shape[0] != 2:
+        raise ValueError("haversine is only defined for 2 dimensional data")
+    sin_lat = np.sin(0.5 * (x[0] - y[0]))
+    cos_lat = np.cos(0.5 * (x[0] - y[0]))
+    sin_long = np.sin(0.5 * (x[1] - y[1]))
+    cos_long = np.cos(0.5 * (x[1] - y[1]))
+
+    a_0 = np.cos(x[0]+np.pi/2) * np.cos(y[0]+np.pi/2) * sin_long ** 2
+    a_1 = a_0 + sin_lat ** 2
+
+    d = 2.0 * np.arcsin(np.sqrt(min(max(abs(a_1), 0), 1)))
+    denom = (np.sqrt(abs(a_1 - 1)) * np.sqrt(abs(a_1)))
+    grad = np.array([
+        (sin_lat * cos_lat - np.sin(x[0]+np.pi/2) * np.cos(y[0]+np.pi/2) * sin_long ** 2),
+        (np.cos(x[0]+np.pi/2) * np.cos(y[0]+np.pi/2) * sin_long * cos_long),
+    ]) / (denom + 1e-6)
+    return d, grad
+
+
+@numba.njit()
 def yule(x, y):
     num_true_true = 0.0
     num_true_false = 0.0
@@ -382,4 +421,11 @@ named_distances = {
     "sokalsneath": sokal_sneath,
     "sokalmichener": sokal_michener,
     "yule": yule,
+}
+
+named_gradients = {
+    # general minkowski distances
+    "euclidean": euclidean_grad,
+    "l2": euclidean_grad,
+    "haversine": haversine_grad,
 }
