@@ -8,7 +8,7 @@ from scipy.optimize import minimize
 
 
 from mayavi import mlab
-
+import matplotlib.pyplot as plt
 
 digits = load_digits()
 
@@ -19,6 +19,22 @@ X_train, X_test, y_train, y_test = train_test_split(
     random_state=42
 )
 
+if True:
+    # embed onto a plane
+    # note: this is a topological torus, not a geometric torus. Think
+    # Pacman, not donut.
+
+    trans = umap.UMAP(
+        n_neighbors=10,
+        random_state=42,
+        input_metric='euclidean',
+        output_metric_grad='euclidean',
+        init='spectral',
+    ).fit(X_train)
+
+    plt.scatter(trans.embedding_[:, 0], trans.embedding_[:, 1], c=y_train, cmap='Spectral')
+    plt.show()
+    exit()
 
 if False:
     # embed onto a torus
@@ -78,7 +94,7 @@ if False:
     mlab.show()
     exit()
 
-if True:
+if False:
     # embed onto a sphere
     trans = umap.UMAP(
         n_neighbors=10,

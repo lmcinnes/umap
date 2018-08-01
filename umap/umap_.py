@@ -708,6 +708,8 @@ def make_optimize_layout(
         tail_embedding,
         head,
         tail,
+        weight,
+        sigmas,
         n_epochs,
         n_vertices,
         epochs_per_sample,
@@ -718,6 +720,7 @@ def make_optimize_layout(
         initial_alpha=1.0,
         negative_sample_rate=5.0,
         verbose=False,
+        inverse=False
     ):
         """Improve an embedding using stochastic gradient descent to minimize the
         fuzzy set cross entropy between the 1-skeletons of the high dimensional
@@ -741,6 +744,9 @@ def make_optimize_layout(
 
         tail: array of shape (n_1_simplices)
             The indices of the tails of 1-simplices with non-zero membership.
+
+        weight: array of shape (n_1_simplices)
+            The membership weights of the 1-simplices.
 
         n_epochs: int
             The number of training epochs to use in optimization.
@@ -792,18 +798,20 @@ def make_optimize_layout(
                 if epoch_of_next_sample[i] <= n:
                     j = head[i]
                     k = tail[i]
+                    w_h = weight[i]
 
                     current = head_embedding[j]
                     other = tail_embedding[k]
 
                     dist_output, grad_dist_output = output_metric_grad(
-                        current, other,*output_metric_kwds
+                        current, other, *output_metric_kwds
                     )
 
-                    # Derivative of the first term of the cross entropy
-                    # with resepct to the distance between points in the embedding space
-                    grad_coeff = -2.0 * a * b * pow(dist_output, 2*b - 1)
-                    grad_coeff /= (a * pow(dist_output, 2*b) + 1.0)
+                    w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
+                    if inverse:
+                        grad_coeff = (w_l - 1) / ((1 - w_h) * sigmas[i])
+                    else:
+                        grad_coeff = 2 * b * (w_l - 1)/(dist_output + 0.001)
 
                     for d in range(dim):
                         grad_d = clip(grad_coeff * grad_dist_output[d])
@@ -828,10 +836,11 @@ def make_optimize_layout(
                             current, other, *output_metric_kwds
                         )
 
-                        grad_coeff = 2.0 * gamma * b
-                        grad_coeff /= (0.001 + dist_output) * (
-                            a * pow(dist_output, 2*b) + 1
-                        )
+                        w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
+                        if inverse:
+                            grad_coeff = gamma * w_l / ((1 - w_h) * sigmas[i])
+                        else:
+                            grad_coeff = gamma * 2 * b * w_l / (dist_output + 0.001)
 
                         if not np.isfinite(grad_coeff):
                             grad_coeff = 4.0
@@ -856,6 +865,7 @@ def make_optimize_layout(
 def simplicial_set_embedding(
     data,
     graph,
+    sigmas,
     n_components,
     initial_alpha,
     a,
@@ -999,6 +1009,7 @@ def simplicial_set_embedding(
 
     head = graph.row
     tail = graph.col
+    weight = graph.data
 
     rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
@@ -1013,6 +1024,8 @@ def simplicial_set_embedding(
         embedding,
         head,
         tail,
+        weight,
+        sigmas,
         n_epochs,
         n_vertices,
         epochs_per_sample,
@@ -1557,9 +1570,18 @@ class UMAP(BaseEstimator):
         if self.verbose:
             print("Construct embedding")
 
+
+        csr_graph = self.graph_.tocsr()
+        inds = csr_graph.indices.reshape(-1, self.n_neighbors)
+
+        sigmas, rhos = smooth_knn_dist(
+            inds, self.n_neighbors, local_connectivity=self.local_connectivity
+        )
+
         self.embedding_ = simplicial_set_embedding(
             self._raw_data,
             self.graph_,
+            sigmas,
             self.n_components,
             self.initial_alpha,
             self._a,
@@ -1695,6 +1717,7 @@ class UMAP(BaseEstimator):
 
         head = graph.row
         tail = graph.col
+        weight = graph.data
 
         optimize_layout = make_optimize_layout(
             self._output_distance_grad_func,
@@ -1706,6 +1729,8 @@ class UMAP(BaseEstimator):
             self.embedding_,
             head,
             tail,
+            weight,
+            sigmas,
             n_epochs,
             graph.shape[1],
             epochs_per_sample,
