@@ -1458,7 +1458,6 @@ class UMAP(BaseEstimator):
                     False,
                     1.0,
                     1.0,
-                    1.0,
                     False,
                 )
                 # product = self.graph_.multiply(target_graph)
