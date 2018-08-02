@@ -1583,8 +1583,9 @@ class UMAP(BaseEstimator):
             indices = indices[:, : self.n_neighbors]
             dists = dists[:, : self.n_neighbors]
 
+        adjusted_local_connectivity = max(0, self.local_connectivity - 1.0)
         sigmas, rhos = smooth_knn_dist(
-            indices, self.n_neighbors, local_connectivity=self.local_connectivity
+            dists, self.n_neighbors, local_connectivity=adjusted_local_connectivity - 1.0
         )
 
         rows, cols, vals = compute_membership_strengths(indices, dists, sigmas, rhos)
