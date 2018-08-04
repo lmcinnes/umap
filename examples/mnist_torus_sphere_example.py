@@ -5,13 +5,12 @@ from sklearn.datasets import load_digits
 from sklearn.model_selection import train_test_split
 import umap
 from scipy.optimize import minimize
-
+import numba
 
 from mayavi import mlab
 import matplotlib.pyplot as plt
 
 digits = load_digits()
-
 X_train, X_test, y_train, y_test = train_test_split(
     digits.data,
     digits.target,
@@ -21,22 +20,20 @@ X_train, X_test, y_train, y_test = train_test_split(
 
 if True:
     # embed onto a plane
-    # note: this is a topological torus, not a geometric torus. Think
-    # Pacman, not donut.
 
     trans = umap.UMAP(
         n_neighbors=10,
         random_state=42,
         input_metric='euclidean',
-        output_metric_grad='euclidean',
+        output_metric='euclidean',
         init='spectral',
+        verbose=True,
     ).fit(X_train)
 
     plt.scatter(trans.embedding_[:, 0], trans.embedding_[:, 1], c=y_train, cmap='Spectral')
     plt.show()
-    exit()
 
-if False:
+if True:
     # embed onto a torus
     # note: this is a topological torus, not a geometric torus. Think
     # Pacman, not donut.
@@ -66,10 +63,11 @@ if False:
         n_neighbors=10,
         random_state=42,
         input_metric='euclidean',
-        output_metric_grad=torus_euclidean_grad,
+        output_metric=torus_euclidean_grad,
         init='spectral',
         spread=0.5,
         # min_dist=0.01,
+        verbose=True,
     ).fit(X_train)
 
 
@@ -100,9 +98,10 @@ if False:
         n_neighbors=10,
         random_state=42,
         input_metric='euclidean',
-        output_metric_grad='haversine',
+        output_metric='haversine',
         init='spectral',
         spread=0.5,
+        verbose=True,
     ).fit(X_train)
 
     mlab.clf()

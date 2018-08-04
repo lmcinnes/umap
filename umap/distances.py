@@ -423,7 +423,7 @@ named_distances = {
     "yule": yule,
 }
 
-named_gradients = {
+named_distances_with_gradients = {
     # general minkowski distances
     "euclidean": euclidean_grad,
     "l2": euclidean_grad,

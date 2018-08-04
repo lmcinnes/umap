@@ -43,6 +43,37 @@ SMOOTH_K_TOLERANCE = 1e-5
 MIN_K_DIST_SCALE = 1e-3
 NPY_INFINITY = np.inf
 
+def bfs(adjmat, start, min_vertices):
+    # keep track of all visited nodes
+    explored = []
+    # keep track of nodes to be checked
+    queue = [start]
+ 
+    levels = {}         # this dict keeps track of levels
+    levels[start] = 0    # depth of start node is 0
+    max_level = np.inf
+ 
+    visited = [start]     # to avoid inserting the same node twice into the queue
+ 
+    # keep looping until there are nodes still to be checked
+    while queue:
+        # pop shallowest node (first node) from queue
+        node = queue.pop(0)
+        explored.append(node)
+        if max_level == np.inf and len(explored) > min_vertices:
+            max_level = max(levels.values())
+ 
+        if levels[node] + 1 < max_level:
+            neighbors = adjmat[node].indices
+            # add neighbors of node to queue
+            for neighbour in neighbors:
+                if neighbour not in visited:
+                    queue.append(neighbour)
+                    visited.append(neighbour)
+ 
+                    levels[neighbour] = levels[node] + 1
+ 
+    return np.array(explored)
 
 @numba.njit(parallel=True, fastmath=True)
 def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0):
@@ -678,7 +709,7 @@ def rdist(x, y):
 
 
 def make_optimize_layout(
-    output_metric_grad,
+    output_metric,
     output_metric_kwds,
 ):
     """Create a numba accelerated function to improve an embedding using
@@ -690,12 +721,12 @@ def make_optimize_layout(
 
     Parameters
     ----------
-    output_metric_grad: function
+    output_metric: function
         Function returning the distance between two points in embedding
         space and the gradient of the distance wrt the first argument.
 
     output_metric_kwds: dict
-        Key word arguments to be passed to the output_metric_grad function
+        Key word arguments to be passed to the output_metric function
 
     Returns
     -------
@@ -720,7 +751,7 @@ def make_optimize_layout(
         initial_alpha=1.0,
         negative_sample_rate=5.0,
         verbose=False,
-        inverse=False
+        inverse=False,
     ):
         """Improve an embedding using stochastic gradient descent to minimize the
         fuzzy set cross entropy between the 1-skeletons of the high dimensional
@@ -803,15 +834,18 @@ def make_optimize_layout(
                     current = head_embedding[j]
                     other = tail_embedding[k]
 
-                    dist_output, grad_dist_output = output_metric_grad(
+                    dist_output, grad_dist_output = output_metric(
                         current, other, *output_metric_kwds
                     )
 
                     w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
                     if inverse:
-                        grad_coeff = (w_l - 1) / ((1 - w_h) * sigmas[i])
+                        grad_coeff = (
+                            (w_l - 1) /
+                            ((1 - w_h) * sigmas[j] + 1e-6)
+                        )
                     else:
-                        grad_coeff = 2 * b * (w_l - 1)/(dist_output + 0.001)
+                        grad_coeff = 2 * b * (w_l - 1)/(dist_output + 1e-6)
 
                     for d in range(dim):
                         grad_d = clip(grad_coeff * grad_dist_output[d])
@@ -829,18 +863,27 @@ def make_optimize_layout(
 
                     for p in range(n_neg_samples):
                         k = tau_rand_int(rng_state) % n_vertices
+                        # for negative samples, the edge does not exist so
+                        # w_h == 0.0
+                        w_h = 0.0
 
                         other = tail_embedding[k]
 
-                        dist_output, grad_dist_output = output_metric_grad(
+                        dist_output, grad_dist_output = output_metric(
                             current, other, *output_metric_kwds
                         )
 
                         w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
                         if inverse:
-                            grad_coeff = gamma * w_l / ((1 - w_h) * sigmas[i])
+                            grad_coeff = (
+                                gamma * w_l /
+                                ((1 - w_h) * sigmas[j] + 1e-6)
+                            )
                         else:
-                            grad_coeff = gamma * 2 * b * w_l / (dist_output + 0.001)
+                            grad_coeff = (
+                                gamma * 2 * b * w_l /
+                                (dist_output + 1e-6)
+                            )
 
                         if not np.isfinite(grad_coeff):
                             grad_coeff = 4.0
@@ -877,7 +920,7 @@ def simplicial_set_embedding(
     random_state,
     input_metric,
     input_metric_kwds,
-    output_metric_grad,
+    output_metric,
     output_metric_kwds,
     verbose,
 ):
@@ -940,12 +983,12 @@ def simplicial_set_embedding(
         Key word arguments to be passed to the input_metric function; used if
         multiple connected components need to be layed out.
 
-    output_metric_grad: function
+    output_metric: function
         Function returning the distance between two points in embedding space and
         the gradient of the distance wrt the first argument.
 
     output_metric_kwds: dict
-        Key word arguments to be passed to the output_metric_grad function.
+        Key word arguments to be passed to the output_metric function.
 
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
@@ -1014,7 +1057,7 @@ def simplicial_set_embedding(
     rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
     optimize_layout = make_optimize_layout(
-        output_metric_grad,
+        output_metric,
         tuple(output_metric_kwds.values()),
     )
 
@@ -1266,7 +1309,7 @@ class UMAP(BaseEstimator):
         n_components=2,
         input_metric="euclidean",
         input_metric_kwds=None,
-        output_metric_grad="euclidean",
+        output_metric="euclidean",
         output_metric_kwds=None,
         n_epochs=None,
         learning_rate=1.0,
@@ -1296,7 +1339,7 @@ class UMAP(BaseEstimator):
             self._input_metric_kwds = input_metric_kwds
         else:
             self._input_metric_kwds = {}
-        self.output_metric_grad = output_metric_grad
+        self.output_metric = output_metric
         if output_metric_kwds is not None:
             self._output_metric_kwds = output_metric_kwds
         else:
@@ -1313,22 +1356,22 @@ class UMAP(BaseEstimator):
                 "input_Metric is neither callable, " + "nor a recognised string"
             )
 
-        if callable(self.output_metric_grad):
-            self._output_distance_grad_func = self.output_metric_grad
-        elif self.output_metric_grad in umap.distances.named_gradients:
-            self._output_distance_grad_func = umap.distances.named_gradients[self.output_metric_grad]
-        elif self.output_metric_grad == 'precomputed':
+        if callable(self.output_metric):
+            self._output_distance_func = self.output_metric
+        elif self.output_metric in umap.distances.named_distances and self.output_metric in umap.distances.named_distances_with_gradients:
+            self._output_distance_func = umap.distances.named_distances_with_gradients[self.output_metric]
+        elif self.output_metric == 'precomputed':
             raise ValueError(
-                "output_metric_grad cannnot be 'precomputed'"
+                "output_metric cannnot be 'precomputed'"
             )
         else:
-            if self.output_metric_grad in umap.distances.named_distances:
+            if self.output_metric in umap.distances.named_distances:
                 raise ValueError(
-                    "gradient function is not yet implemented for " + repr(self.output_metric_grad) + "."
+                    "gradient function is not yet implemented for " + repr(self.output_metric) + "."
                 )
             else:
                 raise ValueError(
-                    "output_metric_grad is neither callable, " + "nor a recognised string"
+                    "output_metric is neither callable, " + "nor a recognised string"
                 )
 
         self.n_epochs = n_epochs
@@ -1392,8 +1435,8 @@ class UMAP(BaseEstimator):
             raise ValueError("init ndarray must match n_components value")
         if not isinstance(self.input_metric, str) and not callable(self.input_metric):
             raise ValueError("input_metric must be string or callable")
-        if not isinstance(self.output_metric_grad, str) and not callable(self.output_metric_grad):
-            raise ValueError("output_metric_grad must be string or callable")
+        if not isinstance(self.output_metric, str) and not callable(self.output_metric):
+            raise ValueError("output_metric must be string or callable")
         if self.negative_sample_rate < 0:
             raise ValueError("negative sample rate must be positive")
         if self.initial_alpha < 0.0:
@@ -1571,11 +1614,9 @@ class UMAP(BaseEstimator):
             print("Construct embedding")
 
 
-        csr_graph = self.graph_.tocsr()
-        inds = csr_graph.indices.reshape(-1, self.n_neighbors)
-
+        indices = self.graph_.tocsr().indices.reshape(-1, self.n_neighbors)
         sigmas, rhos = smooth_knn_dist(
-            inds, self.n_neighbors, local_connectivity=self.local_connectivity
+            indices, self.n_neighbors, local_connectivity=self.local_connectivity
         )
 
         self.embedding_ = simplicial_set_embedding(
@@ -1593,7 +1634,7 @@ class UMAP(BaseEstimator):
             random_state,
             self.input_metric,
             self._input_metric_kwds,
-            self._output_distance_grad_func,
+            self._output_distance_func,
             self._output_metric_kwds,
             self.verbose,
         )
@@ -1658,7 +1699,7 @@ class UMAP(BaseEstimator):
 
         if self._small_data:
             dmat = pairwise_distances(
-                X, self._raw_data, metric=self.input_metric, **self._metric_kwds
+                X, self._raw_data, metric=self.input_metric, **self._input_metric_kwds
             )
             indices = np.argsort(dmat)
             dists = np.sort(dmat)  # TODO: more efficient approach
@@ -1720,8 +1761,8 @@ class UMAP(BaseEstimator):
         weight = graph.data
 
         optimize_layout = make_optimize_layout(
-            self._output_distance_grad_func,
-            tuple(self.output_metric_kwds.values()),
+            self._output_distance_func,
+            tuple(self._output_metric_kwds.values()),
         )
 
         embedding = optimize_layout(
@@ -1741,6 +1782,149 @@ class UMAP(BaseEstimator):
             self.initial_alpha,
             self.negative_sample_rate,
             verbose=self.verbose,
+            inverse=True,
         )
 
         return embedding
+
+    def inverse_transform(self, X):
+        """Transform X in the existing embedded space back into the input
+        data space and return that transformed output.
+
+        Parameters
+        ----------
+        X : array, shape (n_samples, n_components)
+            New points to be inverse transformed.
+
+        Returns
+        -------
+        X_new : array, shape (n_samples, n_features)
+            Generated data points new data in data space.
+        """
+
+        if self._sparse_data:
+            raise ValueError("Inverse transform not available for sparse input.")
+        elif self.input_metric == 'precomputed':
+            raise ValueError("Inverse transform  of new data not available for "
+                             "precomputed input_metric.")
+
+        X = check_array(X, dtype=np.float32, order="C")
+        random_state = check_random_state(self.transform_seed)
+        rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
+
+
+        # build Delaunay complex
+        d_embedding = self.embedding_.shape[1]
+        deltri = scipy.spatial.Delaunay(self.embedding_, incremental=True, qhull_options='QJ')
+        neighbors = deltri.simplices[deltri.find_simplex(X)]
+        adjmat = scipy.sparse.lil_matrix((self.embedding_.shape[0], self.embedding_.shape[0]), dtype=int)
+        for i in np.arange(0, deltri.simplices.shape[0]):
+            for j in deltri.simplices[i]:
+                if j < self.embedding_.shape[0]:
+                    idx = deltri.simplices[i][deltri.simplices[i] < self.embedding_.shape[0]]
+                    adjmat[j, idx] = 1
+                    adjmat[idx, j] = 1
+     
+        adjmat = scipy.sparse.csr_matrix(adjmat)
+     
+        min_vertices = self._raw_data.shape[-1]
+     
+        neighborhood = [bfs(adjmat, v[0], min_vertices=min_vertices) for v in neighbors]
+        distances = [np.array([umap.distances.euclidean(X[i], self.embedding_[nb]) for nb in neighborhood[i]]) for i in range(X.shape[0])]
+        idx = np.array([np.argsort(e)[:min_vertices] for e in distances])
+
+        dists_output_space = np.array([distances[i][idx[i]] for i in range(len(distances))])
+        indices = np.array([neighborhood[i][idx[i]] for i in range(len(neighborhood))])
+
+        rows, cols, distances = np.array([
+            [i, indices[i,j], dists_output_space[i,j]]
+            for i in range(indices.shape[0])
+            for j in range(min_vertices)
+        ]).T
+
+        # calculate membership strength of each edge
+        weights = 1 / (1 + self._a * distances ** (2 * self._b))
+
+        # compute 1-skeleton
+        # convert 1-skeleton into coo_matrix adjacency matrix
+        graph = scipy.sparse.coo_matrix(
+            (weights, (rows, cols)), shape=(X.shape[0], self._raw_data.shape[0])
+        )
+
+        a = np.array(neighborhood)
+        b = 1 / (1 + self._a * np.array(distances) ** (2 * self._b))
+
+        # initialize transformationn with linear combinations of neighboring points
+        inv_transformed_points = init_transform(
+            indices,
+            1 / (1 + self._a * np.array(dists_output_space) ** (2 * self._b)),
+            self._raw_data
+        )
+
+        if self.n_epochs is None:
+            # For smaller datasets we can use more epochs
+            if graph.shape[0] <= 10000:
+                n_epochs = 100
+            else:
+                n_epochs = 30
+        else:
+            n_epochs = self.n_epochs // 3.0
+
+        graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
+        graph.eliminate_zeros()
+
+        epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs)
+
+        head = graph.row
+        tail = graph.col
+        weight = graph.data
+
+        if callable(self.input_metric):
+            _input_distance_func = self.input_metric
+        elif self.input_metric in umap.distances.named_distances and self.input_metric in umap.distances.named_distances_with_gradients:
+            _input_distance_func = umap.distances.named_distances_with_gradients[self.input_metric]
+        elif self.input_metric == 'precomputed':
+            raise ValueError(
+                "input_metric cannnot be 'precomputed'"
+            )
+        else:
+            if self.output_metric in umap.distances.named_distances:
+                raise ValueError(
+                    "gradient function is not yet implemented for " + repr(self.output_metric) + "."
+                )
+            else:
+                raise ValueError(
+                    "output_metric is neither callable, " + "nor a recognised string"
+                )
+
+
+        optimize_layout = make_optimize_layout(
+            _input_distance_func,
+            tuple(self._input_metric_kwds.values()),
+        )
+
+        sigmas, rhos = smooth_knn_dist(
+            indices, self.n_neighbors, local_connectivity=self.local_connectivity
+        )
+
+        inv_transformed_points = optimize_layout(
+            inv_transformed_points,
+            self._raw_data,
+            head,
+            tail,
+            weight,
+            sigmas,
+            n_epochs,
+            graph.shape[1],
+            epochs_per_sample,
+            self._a,
+            self._b,
+            rng_state,
+            self.repulsion_strength,
+            self.initial_alpha,
+            self.negative_sample_rate,
+            verbose=self.verbose,
+            inverse=True
+        )
+
+        return inv_transformed_points
