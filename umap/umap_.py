@@ -43,21 +43,17 @@ SMOOTH_K_TOLERANCE = 1e-5
 MIN_K_DIST_SCALE = 1e-3
 NPY_INFINITY = np.inf
 
-def bfs(adjmat, start, min_vertices):
-    # keep track of all visited nodes
+def breath_first_search(adjmat, start, min_vertices):
     explored = []
-    # keep track of nodes to be checked
     queue = [start]
  
-    levels = {}         # this dict keeps track of levels
-    levels[start] = 0    # depth of start node is 0
+    levels = {}
+    levels[start] = 0
     max_level = np.inf
  
-    visited = [start]     # to avoid inserting the same node twice into the queue
+    visited = [start]
  
-    # keep looping until there are nodes still to be checked
     while queue:
-        # pop shallowest node (first node) from queue
         node = queue.pop(0)
         explored.append(node)
         if max_level == np.inf and len(explored) > min_vertices:
@@ -65,7 +61,6 @@ def bfs(adjmat, start, min_vertices):
  
         if levels[node] + 1 < max_level:
             neighbors = adjmat[node].indices
-            # add neighbors of node to queue
             for neighbour in neighbors:
                 if neighbour not in visited:
                     queue.append(neighbour)
@@ -1829,7 +1824,7 @@ class UMAP(BaseEstimator):
      
         min_vertices = self._raw_data.shape[-1]
      
-        neighborhood = [bfs(adjmat, v[0], min_vertices=min_vertices) for v in neighbors]
+        neighborhood = [breath_first_search(adjmat, v[0], min_vertices=min_vertices) for v in neighbors]
         distances = [np.array([umap.distances.euclidean(X[i], self.embedding_[nb]) for nb in neighborhood[i]]) for i in range(X.shape[0])]
         idx = np.array([np.argsort(e)[:min_vertices] for e in distances])
 
@@ -1868,7 +1863,7 @@ class UMAP(BaseEstimator):
             else:
                 n_epochs = 30
         else:
-            n_epochs = self.n_epochs // 3.0
+            n_epochs = self.n_epochs
 
         graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
         graph.eliminate_zeros()
