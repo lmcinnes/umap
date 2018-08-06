@@ -225,7 +225,7 @@ def spectral_layout(data, graph, dim, random_state, metric="euclidean", metric_k
 
     if n_components > 1:
         warn(
-            "Embedding {} connected components using meta-embedding (experimental)".format(
+            "Embedding a total of {} separate connected components using meta-embedding (experimental)".format(
                 n_components
             )
         )
