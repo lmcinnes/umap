@@ -1346,8 +1346,9 @@ class UMAP(BaseEstimator):
         else:
             n_neighbors = self.n_neighbors
 
-        if scipy.sparse.isspmatrix_csr(X) and not X.has_sorted_indices:
-            X.sort_indices()
+        if scipy.sparse.isspmatrix_csr(X):
+            if not X.has_sorted_indices:
+                X.sort_indices()
             self._sparse_data = True
         else:
             self._sparse_data = False
@@ -1401,7 +1402,6 @@ class UMAP(BaseEstimator):
                 self.verbose,
             )
 
-            self._raw_data = X
             self._transform_available = True
             self._search_graph = scipy.sparse.lil_matrix(
                 (X.shape[0], X.shape[0]), dtype=np.int8
