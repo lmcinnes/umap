@@ -1335,7 +1335,7 @@ class UMAP(BaseEstimator):
 
         if X.shape[0] <= self.n_neighbors:
             if X.shape[0] == 1:
-                self.embedding_ = np.array([0.0, 0.0])  # needed to sklearn comparability
+                self.embedding_ = np.zeros((1, self.n_components))  # needed to sklearn comparability
                 return self
 
             warn(
