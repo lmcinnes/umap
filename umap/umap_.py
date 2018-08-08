@@ -501,8 +501,7 @@ def fast_intersection(rows, cols, values, target, unknown_dist=1.0, far_dist=5.0
 
     Returns
     -------
-    simplicial_set: sparse matrix
-        The resulting intersected fuzzy simplicial set.
+    None
     """
     for nz in range(rows.shape[0]):
         i = rows[nz]
