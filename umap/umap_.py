@@ -1279,9 +1279,9 @@ class UMAP(BaseEstimator):
         if self.repulsion_strength < 0.0:
             raise ValueError("repulsion_strength cannot be negative")
         if self.min_dist > self.spread:
-            raise ValueError("min_dist must be less than spread")
+            raise ValueError("min_dist must be less than or equal to spread")
         if self.min_dist < 0.0:
-            raise ValueError("min_dist must greater than 0.0")
+            raise ValueError("min_dist must be greater than 0.0")
         if not isinstance(self.init, str) and not isinstance(self.init, np.ndarray):
             raise ValueError("init must be a string or ndarray")
         if isinstance(self.init, str) and self.init not in ("spectral", "random"):
