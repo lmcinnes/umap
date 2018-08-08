@@ -1537,6 +1537,10 @@ class UMAP(BaseEstimator):
         X_new : array, shape (n_samples, n_components)
             Embedding of the new data in low-dimensional space.
         """
+        # If we fit just a single instance then error
+        if self.embedding_.shape[0] == 1:
+            raise ValueError('Transform unavailable when model was fit with'
+                             'only a single data sample.')
         # If we just have the original input then short circuit things
         X = check_array(X, dtype=np.float32, accept_sparse="csr")
         x_hash = joblib.hash(X)
