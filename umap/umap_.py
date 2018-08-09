@@ -1618,6 +1618,9 @@ class UMAP(BaseEstimator):
             (vals, (rows, cols)), shape=(X.shape[0], self._raw_data.shape[0])
         )
 
+        # This was a very specially constructed graph with constant degree.
+        # That lets us do fancy unpacking by reshaping the csr matrix indices
+        # and data. Doing so relies on the constant degree assumption!
         csr_graph = normalize(graph.tocsr(), norm="l1")
         inds = csr_graph.indices.reshape(X.shape[0], self.n_neighbors)
         weights = csr_graph.data.reshape(X.shape[0], self.n_neighbors)
