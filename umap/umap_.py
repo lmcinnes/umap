@@ -1447,19 +1447,39 @@ class UMAP(BaseEstimator):
                 else:
                     target_n_neighbors = self.target_n_neighbors
 
-                target_graph = fuzzy_simplicial_set(
-                    y[np.newaxis, :].T,
-                    target_n_neighbors,
-                    random_state,
-                    self.target_metric,
-                    self._target_metric_kwds,
-                    None,
-                    None,
-                    False,
-                    1.0,
-                    1.0,
-                    False,
-                )
+                # Handle the small case as precomputed as before
+                if y.shape[0] < 4096:
+                    ydmat = pairwise_distances(y[np.newaxis, :].T,
+                                               metric=self.target_metric,
+                                               **self._target_metric_kwds)
+                    target_graph = fuzzy_simplicial_set(
+                        ydmat,
+                        target_n_neighbors,
+                        random_state,
+                        "precomputed",
+                        self._target_metric_kwds,
+                        None,
+                        None,
+                        False,
+                        1.0,
+                        1.0,
+                        False
+                    )
+                else:
+                    # Standard case
+                    target_graph = fuzzy_simplicial_set(
+                        y[np.newaxis, :].T,
+                        target_n_neighbors,
+                        random_state,
+                        self.target_metric,
+                        self._target_metric_kwds,
+                        None,
+                        None,
+                        False,
+                        1.0,
+                        1.0,
+                        False,
+                    )
                 # product = self.graph_.multiply(target_graph)
                 # # self.graph_ = 0.99 * product + 0.01 * (self.graph_ +
                 # #                                        target_graph -
