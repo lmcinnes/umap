@@ -22,7 +22,7 @@ import umap.distances as dist
 
 import umap.sparse as sparse
 
-from umap.utils import tau_rand_int, deheap_sort
+from umap.utils import tau_rand_int, deheap_sort, submatrix
 from umap.rp_tree import rptree_leaf_array, make_forest
 from umap.nndescent import (
     make_nn_descent,
@@ -1581,10 +1581,13 @@ class UMAP(BaseEstimator):
             dmat = pairwise_distances(
                 X, self._raw_data, metric=self.metric, **self._metric_kwds
             )
-            indices = np.argsort(dmat)
-            dists = np.sort(dmat)  # TODO: more efficient approach
-            indices = indices[:, : self._n_neighbors]
-            dists = dists[:, : self._n_neighbors]
+            indices = np.argpartition(dmat,
+                                      self._n_neighbors)[:, :self._n_neighbors]
+            dmat_shortened = submatrix(dmat, indices, self._n_neighbors)
+            indices_sorted = np.argsort(dmat_shortened)
+            indices = submatrix(indices, indices_sorted, self._n_neighbors)
+            dists = submatrix(dmat_shortened, indices_sorted,
+                              self._n_neighbors)
         else:
             init = initialise_search(
                 self._rp_forest,
