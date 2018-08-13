@@ -772,8 +772,11 @@ def optimize_layout(
 
                 dist_squared = rdist(current, other)
 
-                grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
-                grad_coeff /= a * pow(dist_squared, b) + 1.0
+                if dist_squared > 0.0:
+                    grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
+                    grad_coeff /= a * pow(dist_squared, b) + 1.0
+                else:
+                    grad_coeff = 0.0
 
                 for d in range(dim):
                     grad_d = clip(grad_coeff * (current[d] - other[d]))
@@ -799,9 +802,6 @@ def optimize_layout(
                     grad_coeff /= (0.001 + dist_squared) * (
                         a * pow(dist_squared, b) + 1
                     )
-
-                    if not np.isfinite(grad_coeff):
-                        grad_coeff = 4.0
 
                     for d in range(dim):
                         grad_d = clip(grad_coeff * (current[d] - other[d]))
