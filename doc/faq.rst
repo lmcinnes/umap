@@ -163,3 +163,66 @@ It is worth checking the
 `issues page on github <https://github.com/lmcinnes/umap/issues>`_
 for potential solutions. If all else fails please add an
 `issue on github <https://github.com/lmcinnes/umap/issues/new>`_.
+
+What is the difference between UMAP / VAEs / PCA?
+-------------------------------------------------
+
+This is an example of an embedding for a popular Fashion MNIST dataset.
+
+.. figure:: images/umap_vae_pca.png
+    :alt: Comparison of UMAP / PCA / VAE embeddings
+
+    Comparison of UMAP / PCA / VAE embeddings
+
+Note that FMNIST is mostly a toy dataset (MNIST on steroids).
+On such a simplistic case UMAP shows distillation results
+(i.e. if we use its embedding in a downsteam task like classification)
+comparable to VAEs, which are more computationally expensive.
+
+By definition:
+
+- PCA is linear transformation, you can apply it
+  to mostly any kind of data in an unsupervised fashion.
+  Also it works really fast. For most real world tasks
+  its embeddings are mostly too simplistic / useless.
+- VAE is a kind of encoder-decoder neural network,
+  trained with KLD loss and BCE (or MSE) loss
+  to enforce the resulting embedding to be continuous.
+  VAE is and extension of auto-encoder network,
+  which by design should produce embeddings that are
+  not only relevant to actually encoding the data, but are
+  also smooth.
+
+From a more practical standpoint:
+
+- PCA mostly works for any reasonable dataset on a modern machine.
+  (up to tens or hundreds of millions of rows);
+- VAEs have been shown to work only for toy datasets
+  and to our knowledge there was no real life useful application to
+  a real world sized dataset (i.e. ImageNet);
+- Applying UMAP to real world tasks usually provides a good starting
+  point for downstream tasks (data visualization, clustering, classification)
+  and works reasonably fast;
+- Consider a typical pipeline: high-dimensional embedding (300+)
+  => PCA to reduce to 50 dimensions => UMAP to reduce to 10-20 dimensions
+  => HDBSCAN for clustering / some plain algorithm for classification;
+
+Which tool should I use?
+
+- PCA for very large or high dimensional datasets (or maybe consider finding
+  a domain specific matrix factorization technique, e.g. topic modelling for texts);
+- UMAP for smaller datasets;
+- VAEs are mostly experimental;
+
+Where can I learn more?
+
+- While PCA is ubiqutous, you may `look <https://github.com/snakers4/playing_with_vae>`_
+  at this example comparing PCA / UMAP / VAEs;
+
+Successful use-cases
+--------------------
+
+UMAP can be / has been Successfully applied to the following domains:
+
+- Pre-processing phrase vectors for clustering;
+- Pre-processing image embeddings (Inception) for clustering;
