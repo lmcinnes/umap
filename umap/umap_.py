@@ -22,7 +22,7 @@ import umap.distances as dist
 
 import umap.sparse as sparse
 
-from umap.utils import tau_rand_int, deheap_sort
+from umap.utils import tau_rand_int, deheap_sort, submatrix
 from umap.rp_tree import rptree_leaf_array, make_forest
 from umap.nndescent import (
     make_nn_descent,
@@ -1341,9 +1341,9 @@ class UMAP(BaseEstimator):
                 "n_neighbors is larger than the dataset size; truncating to "
                 "X.shape[0] - 1"
             )
-            n_neighbors = X.shape[0] - 1
+            self._n_neighbors = X.shape[0] - 1
         else:
-            n_neighbors = self.n_neighbors
+            self._n_neighbors = self.n_neighbors
 
         if scipy.sparse.isspmatrix_csr(X):
             if not X.has_sorted_indices:
@@ -1363,7 +1363,7 @@ class UMAP(BaseEstimator):
             dmat = pairwise_distances(X, metric=self.metric, **self._metric_kwds)
             self.graph_ = fuzzy_simplicial_set(
                 dmat,
-                n_neighbors,
+                self._n_neighbors,
                 random_state,
                 "precomputed",
                 self._metric_kwds,
@@ -1379,7 +1379,7 @@ class UMAP(BaseEstimator):
             # Standard case
             (self._knn_indices, self._knn_dists, self._rp_forest) = nearest_neighbors(
                 X,
-                n_neighbors,
+                self._n_neighbors,
                 self.metric,
                 self._metric_kwds,
                 self.angular_rp_forest,
@@ -1443,7 +1443,7 @@ class UMAP(BaseEstimator):
                 )
             else:
                 if self.target_n_neighbors == -1:
-                    target_n_neighbors = self.n_neighbors
+                    target_n_neighbors = self._n_neighbors
                 else:
                     target_n_neighbors = self.target_n_neighbors
 
@@ -1581,16 +1581,19 @@ class UMAP(BaseEstimator):
             dmat = pairwise_distances(
                 X, self._raw_data, metric=self.metric, **self._metric_kwds
             )
-            indices = np.argsort(dmat)
-            dists = np.sort(dmat)  # TODO: more efficient approach
-            indices = indices[:, : self.n_neighbors]
-            dists = dists[:, : self.n_neighbors]
+            indices = np.argpartition(dmat,
+                                      self._n_neighbors)[:, :self._n_neighbors]
+            dmat_shortened = submatrix(dmat, indices, self._n_neighbors)
+            indices_sorted = np.argsort(dmat_shortened)
+            indices = submatrix(indices, indices_sorted, self._n_neighbors)
+            dists = submatrix(dmat_shortened, indices_sorted,
+                              self._n_neighbors)
         else:
             init = initialise_search(
                 self._rp_forest,
                 self._raw_data,
                 X,
-                int(self.n_neighbors * self.transform_queue_size),
+                int(self._n_neighbors * self.transform_queue_size),
                 self._random_init,
                 self._tree_init,
                 rng_state,
@@ -1604,12 +1607,12 @@ class UMAP(BaseEstimator):
             )
 
             indices, dists = deheap_sort(result)
-            indices = indices[:, : self.n_neighbors]
-            dists = dists[:, : self.n_neighbors]
+            indices = indices[:, : self._n_neighbors]
+            dists = dists[:, : self._n_neighbors]
 
         adjusted_local_connectivity = max(0, self.local_connectivity - 1.0)
         sigmas, rhos = smooth_knn_dist(
-            dists, self.n_neighbors, local_connectivity=adjusted_local_connectivity
+            dists, self._n_neighbors, local_connectivity=adjusted_local_connectivity
         )
 
         rows, cols, vals = compute_membership_strengths(indices, dists, sigmas, rhos)
@@ -1622,8 +1625,8 @@ class UMAP(BaseEstimator):
         # That lets us do fancy unpacking by reshaping the csr matrix indices
         # and data. Doing so relies on the constant degree assumption!
         csr_graph = normalize(graph.tocsr(), norm="l1")
-        inds = csr_graph.indices.reshape(X.shape[0], self.n_neighbors)
-        weights = csr_graph.data.reshape(X.shape[0], self.n_neighbors)
+        inds = csr_graph.indices.reshape(X.shape[0], self._n_neighbors)
+        weights = csr_graph.data.reshape(X.shape[0], self._n_neighbors)
         embedding = init_transform(inds, weights, self.embedding_)
 
         if self.n_epochs is None:
