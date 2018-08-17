@@ -108,7 +108,7 @@ custom loss functions a little difficult to handle. Now
 that Numba (as of version 0.38) supports passing functions
 it is posisble that future versions of UMAP may support
 such functionality. In the meantime you should definitely
-look into `smallvis <https://github.com/jmelville/smallvis>`_,
+look into `smallvis <https://github.com/jlmelville/smallvis>`_,
 a library for t-SNE, LargeVis, UMAP, and related algorithms.
 Smallvis only works for small datasets, but provides
 much greater flexibility and control.
