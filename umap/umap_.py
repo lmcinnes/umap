@@ -1205,7 +1205,7 @@ class UMAP(BaseEstimator):
         n_epochs=None,
         learning_rate=1.0,
         init="spectral",
-            min_dist=0.1,
+        min_dist=0.1,
         spread=1.0,
         set_op_mix_ratio=1.0,
         local_connectivity=1.0,
@@ -1305,9 +1305,10 @@ class UMAP(BaseEstimator):
         if self.n_components < 1:
             raise ValueError("n_components must be greater than 0")
         if self.n_epochs is not None and (
-            self.n_epochs < 0 or not isinstance(self.n_epochs, int)
+            self.n_epochs <= 10 or not isinstance(self.n_epochs, int)
         ):
-            raise ValueError("n_epochs must be a positive integer")
+            raise ValueError("n_epochs must be a positive integer "
+                             "larger than 10")
 
     def fit(self, X, y=None):
         """Fit X into an embedded space.
