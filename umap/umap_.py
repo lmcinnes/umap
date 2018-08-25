@@ -367,27 +367,30 @@ def fuzzy_simplicial_set(
         returns a float can be provided. For performance purposes it is
         required that this be a numba jit'd function. Valid string metrics
         include:
-            * euclidean
-            * manhattan
-            * chebyshev
-            * minkowski
-            * canberra
+            * euclidean (or l2)
+            * manhattan (or l1)
+            * cityblock
             * braycurtis
-            * mahalanobis
-            * wminkowski
-            * seuclidean
-            * cosine
+            * canberra
+            * chebyshev
             * correlation
-            * haversine
+            * cosine
+            * dice
             * hamming
             * jaccard
-            * dice
-            * russelrao
             * kulsinski
+            * mahalanobis
+            * matching
+            * minkowski
             * rogerstanimoto
+            * russellrao
+            * seuclidean
             * sokalmichener
             * sokalsneath
+            * sqeuclidean
             * yule
+            * wminkowski
+
         Metrics that take arguments (such as minkowski, mahalanobis etc.)
         can have arguments passed via the metric_kwds dictionary. At this
         time care must be taken and dictionary elements must be ordered

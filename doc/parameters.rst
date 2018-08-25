@@ -335,7 +335,7 @@ of metrics, including:
 - hamming
 - jaccard
 - dice
-- russelrao
+- russellrao
 - kulsinski
 - rogerstanimoto
 - sokalmichener
