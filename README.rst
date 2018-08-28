@@ -19,6 +19,9 @@
 .. image:: https://readthedocs.org/projects/umap-learn/badge/?version=latest
     :target: https://umap-learn.readthedocs.io/en/latest/?badge=latest
     :alt: Documentation Status
+.. raw:: html
+    <script type='text/javascript' src='https://d1bxh8uas1mnw7.cloudfront.net/assets/embed.js'></script>
+    <div class='altmetric-embed' data-badge-type='1' data-arxiv-id='1802.03426'></div>
 
 ====
 UMAP
