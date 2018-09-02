@@ -19,6 +19,9 @@
 .. image:: https://readthedocs.org/projects/umap-learn/badge/?version=latest
     :target: https://umap-learn.readthedocs.io/en/latest/?badge=latest
     :alt: Documentation Status
+.. image:: http://joss.theoj.org/papers/10.21105/joss.00861/status.svg
+   :target: https://doi.org/10.21105/joss.00861
+    :alt: JOSS article for this repository
 
 ====
 UMAP
