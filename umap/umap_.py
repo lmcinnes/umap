@@ -801,13 +801,19 @@ def optimize_layout(
 
                     dist_squared = rdist(current, other)
 
-                    grad_coeff = 2.0 * gamma * b
-                    grad_coeff /= (0.001 + dist_squared) * (
-                        a * pow(dist_squared, b) + 1
-                    )
+                    if dist_squared > 0.0:
+                        grad_coeff = 2.0 * gamma * b
+                        grad_coeff /= (0.001 + dist_squared) * (
+                            a * pow(dist_squared, b) + 1
+                        )
+                    else:
+                        grad_coeff = 0.0
 
                     for d in range(dim):
-                        grad_d = clip(grad_coeff * (current[d] - other[d]))
+                        if grad_coeff > 0.0:
+                            grad_d = clip(grad_coeff * (current[d] - other[d]))
+                        else:
+                            grad_d = 4.0
                         current[d] += grad_d * alpha
 
                 epoch_of_next_negative_sample[i] += (
