@@ -316,7 +316,7 @@ As you can see this has done a similar job as before, successfully
 embedding the separate classes while retaining both the internal
 structure and the overall global structure. We can now look at how the
 test set, for which we provided no label information, was embedded via
-the `:meth:`~umap.umap_.UMAP.transform` method.
+the :meth:`~umap.umap_.UMAP.transform` method.
 
 .. code:: python3
 
