@@ -168,7 +168,7 @@ def heap_push(heap, row, weight, index, flag):
     weights = heap[1, row]
     is_new = heap[2, row]
 
-    if weight > weights[0]:
+    if weight >= weights[0]:
         return 0
 
     # break if we already have this element.

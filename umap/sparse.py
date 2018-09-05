@@ -570,6 +570,67 @@ def sparse_correlation(ind1, data1, ind2, data2, n_features):
         return 1.0 - (dot_product / (norm1 * norm2))
 
 
+@numba.njit()
+def approx_log_Gamma(x):
+    if x == 1:
+        return 0
+#    x2= 1/(x*x);
+    return x*np.log(x) - x + 0.5*np.log(2.0*np.pi/x) + 1.0/(x*12.0)# + x2*(-1.0/360.0 + x2* (1.0/1260.0 + x2*(-1.0/(1680.0)
+#                + x2*(1.0/1188.0 + x2*(-691.0/360360.0 + x2*(1.0/156.0 + x2*(-3617.0/122400.0 + x2*(43687.0/244188.0 + x2*(-174611.0/125400.0)
+#                + x2*(77683.0/5796.0 + x2*(-236364091.0/1506960.0 + x2*(657931.0/300.0))))))))))))
+                
+@numba.njit()
+def log_beta(x,y):
+    a = min(x,y)
+    b = max(x,y)
+    if b < 5:
+        value = -np.log(b)
+        for i in range(1,a):
+            value += np.log(i)-np.log(b+i)
+        return value
+    else:
+        return approx_log_Gamma(x) + approx_log_Gamma(y) - approx_log_Gamma(x + y)
+
+@numba.njit()
+def log_single_beta(x):
+    return np.log(2.0)*(-2.0*x+0.5) + 0.5*np.log(2.0*np.pi/x) + 0.125/x # + x2*(-1.0/192.0 + x2* (1.0/640.0 + x2*(-17.0/(14336.0)
+ #                + x2*(31.0/18432.0 + x2*(-691.0/180224.0 + x2*(5461.0/425984.0 + x2*(-929569.0/15728640.0 + x2*(3189151.0/8912896.0 + x2*(-221930581.0/79691776.0)
+ #                + x2*(4722116521.0/176160768.0 + x2*(-968383680827.0/3087007744.0 + x2*(14717667114151.0/3355443200.0 ))))))))))))
+
+@numba.njit()
+def sparse_ll_dirichlet(ind1, data1, ind2, data2):
+    # The probability of rolling data2 in sum(data2) trials on a die that rolled data1 in sum(data1) trials
+       
+    n1 = np.sum(data1)
+    n2 = np.sum(data2)
+
+    log_b = 0.0
+    i1 = 0
+    i2 = 0
+    while (i1 < ind1.shape[0] and i2 < ind2.shape[0]):
+        j1 = ind1[i1]
+        j2 = ind2[i2]
+
+        if j1 == j2:
+            if data1[i1]*data2[i2] !=0:
+                log_b += log_beta(data1[i1], data2[i2])
+            i1 += 1
+            i2 += 1
+        elif j1 < j2:
+            i1 += 1
+        else:
+            i2 += 1
+
+    self_denom1 = 0.0
+    for d1 in data1:
+        self_denom1 += log_single_beta(d1) 
+
+    self_denom2 = 0.0
+    for d2 in data2:
+        self_denom2 += log_single_beta(d2) 
+
+    return np.sqrt(1.0/n2*(log_b - log_beta(n1,n2) - (self_denom2 - log_single_beta(n2))) + 1.0/n1*(log_b - log_beta(n2,n1) - (self_denom1 - log_single_beta(n1))))
+
 sparse_named_distances = {
     # general minkowski distances
     "euclidean": sparse_euclidean,
@@ -583,6 +644,7 @@ sparse_named_distances = {
     "minkowski": sparse_minkowski,
     # Other distances
     "canberra": sparse_canberra,
+    "ll_dirichlet": sparse_ll_dirichlet,
     # 'braycurtis': sparse_bray_curtis,
     # Binary distances
     "hamming": sparse_hamming,

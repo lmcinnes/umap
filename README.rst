@@ -19,6 +19,9 @@
 .. image:: https://readthedocs.org/projects/umap-learn/badge/?version=latest
     :target: https://umap-learn.readthedocs.io/en/latest/?badge=latest
     :alt: Documentation Status
+.. image:: http://joss.theoj.org/papers/10.21105/joss.00861/status.svg
+    :target: https://doi.org/10.21105/joss.00861
+    :alt: JOSS article for this repository
 
 ====
 UMAP
@@ -259,10 +262,25 @@ and I will try to provide any help and guidance that I can.
 Citation
 --------
 
+If you make use of this software for your work we would appreciate it if you
+would cite the paper from the Journal of Open Source Software:
+
+.. code:: bibtex
+
+    @article{mcinnes2018umap-software,
+      title={UMAP: Uniform Manifold Approximation and Projection},
+      author={McInnes, Leland and Healy, John and Saul, Nathaniel and Großberger, Lukas},
+      journal={The Journal of Open Source Software},
+      volume={3},
+      number={29},
+      pages={861},
+      year={2018}
+    }
+
 If you would like to cite this algorithm in your work the ArXiv paper is the
 current reference:
 
-::
+.. code:: bibtex
 
    @article{2018arXivUMAP,
         author = {{McInnes}, L. and {Healy}, J.},
@@ -278,7 +296,6 @@ current reference:
         year = 2018,
         month = feb,
    }
-
 
 -------
 License

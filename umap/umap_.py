@@ -200,7 +200,7 @@ def nearest_neighbors(
         else:
             raise ValueError("Metric is neither callable, " + "nor a recognised string")
 
-        if metric in ("cosine", "correlation", "dice", "jaccard"):
+        if metric in ("cosine", "correlation", "dice", "jaccard", "ll_dirichlet"):
             angular = True
 
         rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
@@ -367,27 +367,31 @@ def fuzzy_simplicial_set(
         returns a float can be provided. For performance purposes it is
         required that this be a numba jit'd function. Valid string metrics
         include:
-            * euclidean
-            * manhattan
-            * chebyshev
-            * minkowski
-            * canberra
+            * euclidean (or l2)
+            * manhattan (or l1)
+            * cityblock
             * braycurtis
-            * mahalanobis
-            * wminkowski
-            * seuclidean
-            * cosine
+            * canberra
+            * chebyshev
             * correlation
-            * haversine
+            * cosine
+            * dice
             * hamming
             * jaccard
-            * dice
-            * russelrao
             * kulsinski
+            * ll_dirichlet
+            * mahalanobis
+            * matching
+            * minkowski
             * rogerstanimoto
+            * russellrao
+            * seuclidean
             * sokalmichener
             * sokalsneath
+            * sqeuclidean
             * yule
+            * wminkowski
+
         Metrics that take arguments (such as minkowski, mahalanobis etc.)
         can have arguments passed via the metric_kwds dictionary. At this
         time care must be taken and dictionary elements must be ordered
@@ -772,8 +776,11 @@ def optimize_layout(
 
                 dist_squared = rdist(current, other)
 
-                grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
-                grad_coeff /= a * pow(dist_squared, b) + 1.0
+                if dist_squared > 0.0:
+                    grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
+                    grad_coeff /= a * pow(dist_squared, b) + 1.0
+                else:
+                    grad_coeff = 0.0
 
                 for d in range(dim):
                     grad_d = clip(grad_coeff * (current[d] - other[d]))
@@ -795,16 +802,19 @@ def optimize_layout(
 
                     dist_squared = rdist(current, other)
 
-                    grad_coeff = 2.0 * gamma * b
-                    grad_coeff /= (0.001 + dist_squared) * (
-                        a * pow(dist_squared, b) + 1
-                    )
-
-                    if not np.isfinite(grad_coeff):
-                        grad_coeff = 4.0
+                    if dist_squared > 0.0:
+                        grad_coeff = 2.0 * gamma * b
+                        grad_coeff /= (0.001 + dist_squared) * (
+                            a * pow(dist_squared, b) + 1
+                        )
+                    else:
+                        grad_coeff = 0.0
 
                     for d in range(dim):
-                        grad_d = clip(grad_coeff * (current[d] - other[d]))
+                        if grad_coeff > 0.0:
+                            grad_d = clip(grad_coeff * (current[d] - other[d]))
+                        else:
+                            grad_d = 4.0
                         current[d] += grad_d * alpha
 
                 epoch_of_next_negative_sample[i] += (
@@ -1073,6 +1083,7 @@ class UMAP(BaseEstimator):
             * dice
             * russelrao
             * kulsinski
+            * ll_dirichlet
             * rogerstanimoto
             * sokalmichener
             * sokalsneath
@@ -1205,7 +1216,7 @@ class UMAP(BaseEstimator):
         n_epochs=None,
         learning_rate=1.0,
         init="spectral",
-            min_dist=0.1,
+        min_dist=0.1,
         spread=1.0,
         set_op_mix_ratio=1.0,
         local_connectivity=1.0,
@@ -1305,9 +1316,10 @@ class UMAP(BaseEstimator):
         if self.n_components < 1:
             raise ValueError("n_components must be greater than 0")
         if self.n_epochs is not None and (
-            self.n_epochs < 0 or not isinstance(self.n_epochs, int)
+            self.n_epochs <= 10 or not isinstance(self.n_epochs, int)
         ):
-            raise ValueError("n_epochs must be a positive integer")
+            raise ValueError("n_epochs must be a positive integer "
+                             "larger than 10")
 
     def fit(self, X, y=None):
         """Fit X into an embedded space.
@@ -1358,7 +1370,7 @@ class UMAP(BaseEstimator):
             print("Construct fuzzy simplicial set")
 
         # Handle small cases efficiently by computing all distances
-        if X.shape[0] < 4096:
+        if X.shape[0] < 4096 and not self.metric == "ll_dirichlet":
             self._small_data = True
             dmat = pairwise_distances(X, metric=self.metric, **self._metric_kwds)
             self.graph_ = fuzzy_simplicial_set(
