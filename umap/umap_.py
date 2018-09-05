@@ -200,7 +200,7 @@ def nearest_neighbors(
         else:
             raise ValueError("Metric is neither callable, " + "nor a recognised string")
 
-        if metric in ("cosine", "correlation", "dice", "jaccard"):
+        if metric in ("cosine", "correlation", "dice", "jaccard", "ll_dirichlet"):
             angular = True
 
         rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
@@ -379,6 +379,7 @@ def fuzzy_simplicial_set(
             * hamming
             * jaccard
             * kulsinski
+            * ll_dirichlet
             * mahalanobis
             * matching
             * minkowski
@@ -1082,6 +1083,7 @@ class UMAP(BaseEstimator):
             * dice
             * russelrao
             * kulsinski
+            * ll_dirichlet
             * rogerstanimoto
             * sokalmichener
             * sokalsneath
