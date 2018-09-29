@@ -1,14 +1,13 @@
 #!/usr/bin/env python
 
+import matplotlib.pyplot as plt
+import numba
 import numpy as np
+from mayavi import mlab
 from sklearn.datasets import load_digits
 from sklearn.model_selection import train_test_split
-import umap
-from scipy.optimize import minimize
-import numba
 
-from mayavi import mlab
-import matplotlib.pyplot as plt
+import umap
 
 digits = load_digits()
 X_train, X_test, y_train, y_test = train_test_split(
@@ -24,7 +23,7 @@ if True:
     trans = umap.UMAP(
         n_neighbors=10,
         random_state=42,
-        input_metric='euclidean',
+        metric='euclidean',
         output_metric='euclidean',
         init='spectral',
         verbose=True,
@@ -33,7 +32,9 @@ if True:
     plt.scatter(trans.embedding_[:, 0], trans.embedding_[:, 1], c=y_train, cmap='Spectral')
     plt.show()
 
-if True:
+target_space = 'torus'
+
+if target_space == 'torus':
     # embed onto a torus
     # note: this is a topological torus, not a geometric torus. Think
     # Pacman, not donut.
@@ -62,7 +63,7 @@ if True:
     trans = umap.UMAP(
         n_neighbors=10,
         random_state=42,
-        input_metric='euclidean',
+        metric='euclidean',
         output_metric=torus_euclidean_grad,
         init='spectral',
         spread=0.5,
@@ -70,17 +71,14 @@ if True:
         verbose=True,
     ).fit(X_train)
 
-
     mlab.clf()
     x, y, z = np.mgrid[-3:3:50j, -3:3:50j, -3:3:50j]
-
 
     # Plot a torus
     R = 2
     r = 1
     values = (R - np.sqrt(x**2 + y**2))**2 + z**2 - r**2
-    mlab.contour3d(x, y, z, values, color=(1.0,1.0,1.0), contours=[0])
-
+    mlab.contour3d(x, y, z, values, color=(1.0, 1.0, 1.0), contours=[0])
 
     # torus angles -> 3D
     x = (R + r * np.cos(trans.embedding_[:, 0])) * np.cos(trans.embedding_[:, 1])
@@ -92,12 +90,12 @@ if True:
     mlab.show()
     exit()
 
-if False:
+if target_space == 'sphere':
     # embed onto a sphere
     trans = umap.UMAP(
         n_neighbors=10,
         random_state=42,
-        input_metric='euclidean',
+        metric='euclidean',
         output_metric='haversine',
         init='spectral',
         spread=0.5,
@@ -107,12 +105,10 @@ if False:
     mlab.clf()
     x, y, z = np.mgrid[-3:3:50j, -3:3:50j, -3:3:50j]
 
-
     # Plot a sphere
     r = 1
     values = x**2 + y**2 + z**2 - r
-    mlab.contour3d(x, y, z, values, color=(1.0,1.0,1.0), contours=[0])
-
+    mlab.contour3d(x, y, z, values, color=(1.0, 1.0, 1.0), contours=[0])
 
     # latitude, longitude -> 3D
     x = r * np.sin(trans.embedding_[:, 0]) * np.cos(trans.embedding_[:, 1])

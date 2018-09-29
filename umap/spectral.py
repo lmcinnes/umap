@@ -1,11 +1,10 @@
-import numpy as np
+from warnings import warn
 
+import numpy as np
 import scipy.sparse
 import scipy.sparse.csgraph
-
 from sklearn.manifold import SpectralEmbedding
 from sklearn.metrics import pairwise_distances
-from warnings import warn
 
 
 def component_layout(
@@ -225,7 +224,7 @@ def spectral_layout(data, graph, dim, random_state, metric="euclidean", metric_k
 
     if n_components > 1:
         warn(
-            "Embedding {} connected components using meta-embedding (experimental)".format(
+            "Embedding a total of {} separate connected components using meta-embedding (experimental)".format(
                 n_components
             )
         )

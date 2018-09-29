@@ -2,8 +2,8 @@
 #
 # License: BSD 3 clause
 
-import numpy as np
 import numba
+import numpy as np
 
 
 @numba.njit("i4(i8[:])")
@@ -92,6 +92,7 @@ def rejection_sample(n_samples, pool_size, rng_state):
     result = np.empty(n_samples, dtype=np.int64)
     for i in range(n_samples):
         reject_sample = True
+        j = 0
         while reject_sample:
             j = tau_rand_int(rng_state) % pool_size
             for k in range(i):
@@ -168,7 +169,7 @@ def heap_push(heap, row, weight, index, flag):
     weights = heap[1, row]
     is_new = heap[2, row]
 
-    if weight > weights[0]:
+    if weight >= weights[0]:
         return 0
 
     # break if we already have this element.
@@ -499,3 +500,31 @@ def new_build_candidates(
                     current_graph[2, i, j] = 0
 
     return new_candidate_neighbors, old_candidate_neighbors
+
+
+@numba.njit(parallel=True)
+def submatrix(dmat, indices_col, n_neighbors):
+    """Return a submatrix given an orginal matrix and the indices to keep.
+
+    Parameters
+    ----------
+    dmat: array, shape (n_samples, n_samples)
+        Original matrix.
+
+    indices_col: array, shape (n_samples, n_neighbors)
+        Indices to keep. Each row consists of the indices of the columns.
+
+    n_neighbors: int
+        Number of neighbors.
+
+    Returns
+    -------
+    submat: array, shape (n_samples, n_neighbors)
+        The corresponding submatrix.
+    """
+    n_samples_transform, n_samples_fit = dmat.shape
+    submat = np.zeros((n_samples_transform, n_neighbors), dtype=dmat.dtype)
+    for i in numba.prange(n_samples_transform):
+        for j in numba.prange(n_neighbors):
+            submat[i, j] = dmat[i, indices_col[i, j]]
+    return submat
