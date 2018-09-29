@@ -2,37 +2,33 @@
 #
 # License: BSD 3 clause
 from __future__ import print_function
+
+import locale
 from warnings import warn
 
-from scipy.optimize import curve_fit
-from sklearn.base import BaseEstimator
-from sklearn.utils import check_random_state, check_array
-from sklearn.metrics import pairwise_distances
-from sklearn.preprocessing import normalize
-from sklearn.neighbors import KDTree
-
-from sklearn.externals import joblib
-
+import numba
 import numpy as np
 import scipy.sparse
 import scipy.sparse.csgraph
-import numba
+from scipy.optimize import curve_fit
+from sklearn.base import BaseEstimator
+from sklearn.externals import joblib
+from sklearn.metrics import pairwise_distances
+from sklearn.neighbors import KDTree
+from sklearn.preprocessing import normalize
+from sklearn.utils import check_random_state, check_array
 
 import umap.distances as dist
-
 import umap.sparse as sparse
-
-from umap.utils import tau_rand_int, deheap_sort, submatrix
-from umap.rp_tree import rptree_leaf_array, make_forest
 from umap.nndescent import (
     make_nn_descent,
     make_initialisations,
     make_initialized_nnd_search,
     initialise_search,
 )
+from umap.rp_tree import rptree_leaf_array, make_forest
 from umap.spectral import spectral_layout
-
-import locale
+from umap.utils import tau_rand_int, deheap_sort, submatrix
 
 locale.setlocale(locale.LC_NUMERIC, "C")
 
@@ -46,7 +42,6 @@ NPY_INFINITY = np.inf
 def breath_first_search(adjmat, start, min_vertices):
     explored = []
     queue = [start]
- 
     levels = {}
     levels[start] = 0
     max_level = np.inf
@@ -498,7 +493,7 @@ def fuzzy_simplicial_set(
 
     result.eliminate_zeros()
 
-    return result
+    return result, sigmas, rhos
 
 
 @numba.jit()
@@ -723,7 +718,7 @@ def make_optimize_layout(
         Function returning the distance between two points in embedding
         space and the gradient of the distance wrt the first argument.
 
-    output_metric_kwds: dict
+    output_metric_kwds: tuple
         Key word arguments to be passed to the output_metric function
 
     Returns
@@ -783,7 +778,7 @@ def make_optimize_layout(
         n_vertices: int
             The number of vertices (0-simplices) in the dataset.
 
-        epochs_per_samples: array of shape (n_1_simplices)
+        epochs_per_sample: array of shape (n_1_simplices)
             A float value of the number of epochs per 1-simplex. 1-simplices with
             weaker membership strength will have more epochs between being sampled.
 
@@ -973,7 +968,7 @@ def simplicial_set_embedding(
     random_state: numpy RandomState or equivalent
         A state capable being used as a numpy random state.
 
-    metric: string
+    metric: string or callable
         The metric used to measure distance in high dimensional space; used if
         multiple connected components need to be layed out.
 
@@ -1346,8 +1341,8 @@ class UMAP(BaseEstimator):
 
         if callable(self.metric):
             self._input_distance_func = self.metric
-        elif self.metric in umap.distances.named_distances:
-            self._input_distance_func = umap.distances.named_distances[self.metric]
+        elif self.metric in dist.named_distances:
+            self._input_distance_func = dist.named_distances[self.metric]
         elif self.metric == 'precomputed':
             warn('Using precomputed metric; transform will be unavailable for new data')
         else:
@@ -1357,14 +1352,14 @@ class UMAP(BaseEstimator):
 
         if callable(self.output_metric):
             self._output_distance_func = self.output_metric
-        elif self.output_metric in umap.distances.named_distances and self.output_metric in umap.distances.named_distances_with_gradients:
-            self._output_distance_func = umap.distances.named_distances_with_gradients[self.output_metric]
+        elif self.output_metric in dist.named_distances and self.output_metric in dist.named_distances_with_gradients:
+            self._output_distance_func = dist.named_distances_with_gradients[self.output_metric]
         elif self.output_metric == 'precomputed':
             raise ValueError(
                 "output_metric cannnot be 'precomputed'"
             )
         else:
-            if self.output_metric in umap.distances.named_distances:
+            if self.output_metric in dist.named_distances:
                 raise ValueError(
                     "gradient function is not yet implemented for " + repr(self.output_metric) + "."
                 )
@@ -1410,6 +1405,9 @@ class UMAP(BaseEstimator):
         else:
             self._a = a
             self._b = b
+
+        self._sigmas = None
+        self._rhos = None
 
         if self.verbose:
             print(str(self))
@@ -1504,7 +1502,7 @@ class UMAP(BaseEstimator):
         if X.shape[0] < 4096 and not self.metric == "ll_dirichlet":
             self._small_data = True
             dmat = pairwise_distances(X, metric=self.metric, **self._metric_kwds)
-            self.graph_ = fuzzy_simplicial_set(
+            self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
                 dmat,
                 self._n_neighbors,
                 random_state,
@@ -1530,7 +1528,7 @@ class UMAP(BaseEstimator):
                 self.verbose,
             )
 
-            self.graph_ = fuzzy_simplicial_set(
+            self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
                 X,
                 self.n_neighbors,
                 random_state,
@@ -1595,7 +1593,7 @@ class UMAP(BaseEstimator):
                     ydmat = pairwise_distances(y[np.newaxis, :].T,
                                                metric=self.target_metric,
                                                **self._target_metric_kwds)
-                    target_graph = fuzzy_simplicial_set(
+                    target_graph, target_sigmas, target_rhos = fuzzy_simplicial_set(
                         ydmat,
                         target_n_neighbors,
                         random_state,
@@ -1610,7 +1608,7 @@ class UMAP(BaseEstimator):
                     )
                 else:
                     # Standard case
-                    target_graph = fuzzy_simplicial_set(
+                    target_graph, target_sigmas, target_rhos = fuzzy_simplicial_set(
                         y[np.newaxis, :].T,
                         target_n_neighbors,
                         random_state,
@@ -1642,15 +1640,10 @@ class UMAP(BaseEstimator):
             print("Construct embedding")
 
 
-        indices = self.graph_.tocsr().indices.reshape(-1, self.n_neighbors)
-        sigmas, rhos = smooth_knn_dist(
-            indices, self.n_neighbors, local_connectivity=self.local_connectivity
-        )
-
         self.embedding_ = simplicial_set_embedding(
             self._raw_data,
             self.graph_,
-            sigmas,
+            self._sigmas,
             self.n_components,
             self.initial_alpha,
             self._a,
@@ -1853,7 +1846,6 @@ class UMAP(BaseEstimator):
 
 
         # build Delaunay complex
-        d_embedding = self.embedding_.shape[1]
         deltri = scipy.spatial.Delaunay(self.embedding_, incremental=True, qhull_options='QJ')
         neighbors = deltri.simplices[deltri.find_simplex(X)]
         adjmat = scipy.sparse.lil_matrix((self.embedding_.shape[0], self.embedding_.shape[0]), dtype=int)
@@ -1863,13 +1855,14 @@ class UMAP(BaseEstimator):
                     idx = deltri.simplices[i][deltri.simplices[i] < self.embedding_.shape[0]]
                     adjmat[j, idx] = 1
                     adjmat[idx, j] = 1
-     
+
         adjmat = scipy.sparse.csr_matrix(adjmat)
-     
+
         min_vertices = self._raw_data.shape[-1]
-     
+
         neighborhood = [breath_first_search(adjmat, v[0], min_vertices=min_vertices) for v in neighbors]
-        distances = [np.array([umap.distances.euclidean(X[i], self.embedding_[nb]) for nb in neighborhood[i]]) for i in range(X.shape[0])]
+        distances = [np.array([dist.euclidean(X[i], self.embedding_[nb]) for nb in neighborhood[i]]) for i in
+                     range(X.shape[0])]
         idx = np.array([np.argsort(e)[:min_vertices] for e in distances])
 
         dists_output_space = np.array([distances[i][idx[i]] for i in range(len(distances))])
@@ -1889,9 +1882,6 @@ class UMAP(BaseEstimator):
         graph = scipy.sparse.coo_matrix(
             (weights, (rows, cols)), shape=(X.shape[0], self._raw_data.shape[0])
         )
-
-        a = np.array(neighborhood)
-        b = 1 / (1 + self._a * np.array(distances) ** (2 * self._b))
 
         # initialize transformationn with linear combinations of neighboring points
         inv_transformed_points = init_transform(
@@ -1920,14 +1910,14 @@ class UMAP(BaseEstimator):
 
         if callable(self.metric):
             _input_distance_func = self.metric
-        elif self.metric in umap.distances.named_distances and self.metric in umap.distances.named_distances_with_gradients:
-            _input_distance_func = umap.distances.named_distances_with_gradients[self.metric]
+        elif self.metric in dist.named_distances and self.metric in dist.named_distances_with_gradients:
+            _input_distance_func = dist.named_distances_with_gradients[self.metric]
         elif self.metric == 'precomputed':
             raise ValueError(
                 "metric cannnot be 'precomputed'"
             )
         else:
-            if self.output_metric in umap.distances.named_distances:
+            if self.output_metric in dist.named_distances:
                 raise ValueError(
                     "gradient function is not yet implemented for " + repr(self.output_metric) + "."
                 )

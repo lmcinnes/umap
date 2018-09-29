@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 
+import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.datasets import fetch_mldata
 from sklearn.model_selection import train_test_split
+
 import umap
-import matplotlib.pyplot as plt
 
 mnist = fetch_mldata('MNIST original')
 X_train, X_test, y_train, y_test = train_test_split(
@@ -17,7 +18,7 @@ X_train, X_test, y_train, y_test = train_test_split(
 trans = umap.UMAP(
     n_neighbors=10,
     random_state=42,
-    input_metric='euclidean',
+    metric='euclidean',
     output_metric='euclidean',
     init='spectral',
     verbose=True,

@@ -17,7 +17,9 @@ X_train, X_test, y_train, y_test = train_test_split(
     random_state=42
 )
 
-if True:
+target_spaces = ['plane', 'torus', 'sphere']
+
+if 'plane' in target_spaces:
     # embed onto a plane
 
     trans = umap.UMAP(
@@ -32,9 +34,7 @@ if True:
     plt.scatter(trans.embedding_[:, 0], trans.embedding_[:, 1], c=y_train, cmap='Spectral')
     plt.show()
 
-target_space = 'torus'
-
-if target_space == 'torus':
+if 'torus' in target_spaces:
     # embed onto a torus
     # note: this is a topological torus, not a geometric torus. Think
     # Pacman, not donut.
@@ -88,9 +88,8 @@ if target_space == 'torus':
     pts = mlab.points3d(x, y, z, y_train, colormap="spectral", scale_mode='none', scale_factor=.1)
 
     mlab.show()
-    exit()
 
-if target_space == 'sphere':
+if 'sphere' in target_spaces:
     # embed onto a sphere
     trans = umap.UMAP(
         n_neighbors=10,
@@ -118,4 +117,3 @@ if target_space == 'sphere':
     pts = mlab.points3d(x, y, z, y_train, colormap="spectral", scale_mode='none', scale_factor=.1)
 
     mlab.show()
-    exit()
