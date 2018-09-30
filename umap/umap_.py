@@ -39,13 +39,13 @@ SMOOTH_K_TOLERANCE = 1e-5
 MIN_K_DIST_SCALE = 1e-3
 NPY_INFINITY = np.inf
 
-def breath_first_search(adjmat, start, min_vertices):
+
+def breadth_first_search(adjmat, start, min_vertices):
     explored = []
     queue = [start]
     levels = {}
     levels[start] = 0
     max_level = np.inf
- 
     visited = [start]
  
     while queue:
@@ -734,6 +734,7 @@ def make_optimize_layout(
         tail,
         weight,
         sigmas,
+            rhos,
         n_epochs,
         n_vertices,
         epochs_per_sample,
@@ -822,7 +823,6 @@ def make_optimize_layout(
                 if epoch_of_next_sample[i] <= n:
                     j = head[i]
                     k = tail[i]
-                    w_h = weight[i]
 
                     current = head_embedding[j]
                     other = tail_embedding[k]
@@ -831,14 +831,14 @@ def make_optimize_layout(
                         current, other, *output_metric_kwds
                     )
 
-                    w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
                     if inverse:
-                        grad_coeff = (
-                            (w_l - 1) /
-                            ((1 - w_h) * sigmas[j] + 1e-6)
-                        )
-                    else:
-                        grad_coeff = 2 * b * (w_l - 1)/(dist_output + 1e-6)
+                        w_l = weight[i]
+                        w_h = np.exp(-(dist_output - rhos[j]) / (sigmas[j] + 1e-6))
+                        grad_coeff = (1 / (w_l * sigmas[j] + 1e-6))
+                    else:  # typical operation
+                        w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
+                        w_h = weight[i]
+                        grad_coeff = 2 * b * (w_l - 1) / (w_h * dist_output + 1e-6)
 
                     for d in range(dim):
                         grad_d = clip(grad_coeff * grad_dist_output[d])
@@ -856,9 +856,6 @@ def make_optimize_layout(
 
                     for p in range(n_neg_samples):
                         k = tau_rand_int(rng_state) % n_vertices
-                        # for negative samples, the edge does not exist so
-                        # w_h == 0.0
-                        w_h = 0.0
 
                         other = tail_embedding[k]
 
@@ -866,17 +863,18 @@ def make_optimize_layout(
                             current, other, *output_metric_kwds
                         )
 
-                        w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
                         if inverse:
-                            grad_coeff = (
-                                gamma * w_l /
+                            # w_l = 0.0 # for negative samples, the edge does not exist
+                            w_h = np.exp(-(dist_output - rhos[j]) / (sigmas[j] + 1e-6))
+                            grad_coeff = gamma * (
+                                    (0 - w_h) /
                                 ((1 - w_h) * sigmas[j] + 1e-6)
                             )
-                        else:
-                            grad_coeff = (
-                                gamma * 2 * b * w_l /
-                                (dist_output + 1e-6)
-                            )
+
+                        else:  # typical operation
+                            w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
+                            # w_h = 0.0 # for negative samples, the edge does not exist
+                            grad_coeff = gamma * 2 * b * (w_l - 0) / (dist_output + 1e-6)
 
                         if not np.isfinite(grad_coeff):
                             grad_coeff = 4.0
@@ -902,6 +900,7 @@ def simplicial_set_embedding(
     data,
     graph,
     sigmas,
+        rhos,
     n_components,
     initial_alpha,
     a,
@@ -1062,6 +1061,7 @@ def simplicial_set_embedding(
         tail,
         weight,
         sigmas,
+        rhos,
         n_epochs,
         n_vertices,
         epochs_per_sample,
@@ -1644,6 +1644,7 @@ class UMAP(BaseEstimator):
             self._raw_data,
             self.graph_,
             self._sigmas,
+            self._rhos,
             self.n_components,
             self.initial_alpha,
             self._a,
@@ -1804,6 +1805,7 @@ class UMAP(BaseEstimator):
             tail,
             weight,
             sigmas,
+            rhos,
             n_epochs,
             graph.shape[1],
             epochs_per_sample,
@@ -1814,7 +1816,7 @@ class UMAP(BaseEstimator):
             self.initial_alpha,
             self.negative_sample_rate,
             verbose=self.verbose,
-            inverse=True,
+            inverse=False,
         )
 
         return embedding
@@ -1860,7 +1862,7 @@ class UMAP(BaseEstimator):
 
         min_vertices = self._raw_data.shape[-1]
 
-        neighborhood = [breath_first_search(adjmat, v[0], min_vertices=min_vertices) for v in neighbors]
+        neighborhood = [breadth_first_search(adjmat, v[0], min_vertices=min_vertices) for v in neighbors]
         distances = [np.array([dist.euclidean(X[i], self.embedding_[nb]) for nb in neighborhood[i]]) for i in
                      range(X.shape[0])]
         idx = np.array([np.argsort(e)[:min_vertices] for e in distances])
@@ -1943,6 +1945,7 @@ class UMAP(BaseEstimator):
             tail,
             weight,
             sigmas,
+            rhos,
             n_epochs,
             graph.shape[1],
             epochs_per_sample,

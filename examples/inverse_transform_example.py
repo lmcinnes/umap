@@ -3,17 +3,11 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.datasets import fetch_mldata
-from sklearn.model_selection import train_test_split
 
 import umap
 
-mnist = fetch_mldata('MNIST original')
-X_train, X_test, y_train, y_test = train_test_split(
-    mnist.data,
-    mnist.target,
-    stratify=mnist.target,
-    random_state=42
-)
+mnist = fetch_mldata("MNIST original")
+
 
 trans = umap.UMAP(
     n_neighbors=10,
@@ -22,13 +16,13 @@ trans = umap.UMAP(
     output_metric='euclidean',
     init='spectral',
     verbose=True,
-).fit(X_train)
+).fit(mnist.data)
 
 corners = np.array([
-    [ -6.2,  2.2], # 7
-    [ -2.6,  8.1], # 4
-    [ -7.0,-10.3], # 1
-    [ 11.0,  4.5], # 0
+    [-5.1, 2.9],  # 7
+    [-1.9, 6.4],  # 4
+    [-3.0, -6.5],  # 1
+    [8.6, 2.6],  # 0
 ])
 
 test_pts = np.array([
@@ -40,7 +34,7 @@ test_pts = np.array([
 
 inv_transformed_points = trans.inverse_transform(test_pts)
 
-plt.scatter(trans.embedding_[:, 0], trans.embedding_[:, 1], c=y_train, cmap='tab10')
+plt.scatter(trans.embedding_[:, 0], trans.embedding_[:, 1], c=mnist.target, cmap='tab10')
 plt.scatter(test_pts[:, 0], test_pts[:, 1], marker='x', c='k')
 
 fig, ax = plt.subplots(10, 10)

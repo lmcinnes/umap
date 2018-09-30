@@ -59,15 +59,13 @@ if 'torus' in target_spaces:
         distance = np.sqrt(distance_sqr)
         return distance, g/(1e-6 + distance)
 
-
     trans = umap.UMAP(
         n_neighbors=10,
         random_state=42,
         metric='euclidean',
         output_metric=torus_euclidean_grad,
         init='spectral',
-        spread=0.5,
-        # min_dist=0.01,
+        min_dist=0.15,  # requires adjustment since the torus has limited space
         verbose=True,
     ).fit(X_train)
 
@@ -97,7 +95,7 @@ if 'sphere' in target_spaces:
         metric='euclidean',
         output_metric='haversine',
         init='spectral',
-        spread=0.5,
+        min_dist=0.15,  # requires adjustment since the sphere has limited space
         verbose=True,
     ).fit(X_train)
 
@@ -105,8 +103,8 @@ if 'sphere' in target_spaces:
     x, y, z = np.mgrid[-3:3:50j, -3:3:50j, -3:3:50j]
 
     # Plot a sphere
-    r = 1
-    values = x**2 + y**2 + z**2 - r
+    r = 3
+    values = x ** 2 + y ** 2 + z ** 2 - r ** 2
     mlab.contour3d(x, y, z, values, color=(1.0, 1.0, 1.0), contours=[0])
 
     # latitude, longitude -> 3D
@@ -114,6 +112,6 @@ if 'sphere' in target_spaces:
     y = r * np.sin(trans.embedding_[:, 0]) * np.sin(trans.embedding_[:, 1])
     z = r * np.cos(trans.embedding_[:, 0])
 
-    pts = mlab.points3d(x, y, z, y_train, colormap="spectral", scale_mode='none', scale_factor=.1)
+    pts = mlab.points3d(x, y, z, y_train, colormap="spectral", scale_mode='none', scale_factor=.2)
 
     mlab.show()
