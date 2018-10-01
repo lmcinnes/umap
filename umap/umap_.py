@@ -1885,12 +1885,13 @@ class UMAP(BaseEstimator):
             (weights, (rows, cols)), shape=(X.shape[0], self._raw_data.shape[0])
         )
 
-        # initialize transformationn with linear combinations of neighboring points
-        inv_transformed_points = init_transform(
-            indices,
-            1 / (1 + self._a * np.array(dists_output_space) ** (2 * self._b)),
-            self._raw_data
-        )
+        # That lets us do fancy unpacking by reshaping the csr matrix indices
+        # and data. Doing so relies on the constant degree assumption!
+        # csr_graph = graph.tocsr()
+        csr_graph = normalize(graph.tocsr(), norm="l1")
+        inds = csr_graph.indices.reshape(X.shape[0], self._raw_data.shape[1])
+        weights = csr_graph.data.reshape(X.shape[0], self._raw_data.shape[1])
+        inv_transformed_points = init_transform(inds, weights, self._raw_data)
 
         if self.n_epochs is None:
             # For smaller datasets we can use more epochs
@@ -1934,9 +1935,9 @@ class UMAP(BaseEstimator):
             tuple(self._metric_kwds.values()),
         )
 
-        sigmas, rhos = smooth_knn_dist(
-            indices, self.n_neighbors, local_connectivity=self.local_connectivity
-        )
+        # sigmas, rhos = smooth_knn_dist(
+        #     indices, self.n_neighbors, local_connectivity=self.local_connectivity
+        # )
 
         inv_transformed_points = optimize_layout(
             inv_transformed_points,
@@ -1944,8 +1945,8 @@ class UMAP(BaseEstimator):
             head,
             tail,
             weight,
-            sigmas,
-            rhos,
+            self._sigmas,
+            self._rhos,
             n_epochs,
             graph.shape[1],
             epochs_per_sample,
