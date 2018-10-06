@@ -20,6 +20,7 @@ from sklearn.utils import check_random_state, check_array
 
 import umap.distances as dist
 import umap.sparse as sparse
+
 from umap.nndescent import (
     make_nn_descent,
     make_initialisations,
@@ -1593,6 +1594,7 @@ class UMAP(BaseEstimator):
                     ydmat = pairwise_distances(y[np.newaxis, :].T,
                                                metric=self.target_metric,
                                                **self._target_metric_kwds)
+                    
                     target_graph, target_sigmas, target_rhos = fuzzy_simplicial_set(
                         ydmat,
                         target_n_neighbors,

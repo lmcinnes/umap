@@ -38,7 +38,7 @@ X_train, X_test, y_train, y_test = train_test_split(
 
 # Classification with a linear SVM
 svc = LinearSVC(dual=False, random_state=123)
-params_grid = {"C": [10 ** k for k in range(-3, 4)]}
+params_grid = {"C": [10**k for k in range(-3, 4)]}
 clf = GridSearchCV(svc, params_grid)
 clf.fit(X_train, y_train)
 print("Accuracy on the test set with raw data: {:.3f}".format(
@@ -50,7 +50,8 @@ pipeline = Pipeline([("umap", umap),
                      ("svc", svc)])
 params_grid_pipeline = {"umap__n_neighbors": [5, 20],
                         "umap__n_components": [15, 25, 50],
-                        "svc__C": [10 ** k for k in range(-3, 4)]}
+                        "svc__C": [10**k for k in range(-3, 4)]}
+
 
 clf_pipeline = GridSearchCV(pipeline, params_grid_pipeline)
 clf_pipeline.fit(X_train, y_train)
