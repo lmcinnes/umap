@@ -679,7 +679,7 @@ def rdist(x, y):
     return result
 
 
-@numba.njit(fastmath=True)
+@numba.njit(fastmath=True, parallel=True)
 def optimize_layout(
     head_embedding,
     tail_embedding,
