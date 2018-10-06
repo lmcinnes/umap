@@ -3,11 +3,13 @@
 #
 # License: BSD 3 clause
 from __future__ import print_function
-import numpy as np
+
+import locale
+
 import numba
+import numpy as np
 
 from umap.utils import (
-    tau_rand_int,
     tau_rand,
     norm,
     make_heap,
@@ -16,8 +18,6 @@ from umap.utils import (
     build_candidates,
     deheap_sort,
 )
-
-import locale
 
 locale.setlocale(locale.LC_NUMERIC, "C")
 
@@ -600,7 +600,6 @@ def log_single_beta(x):
 @numba.njit()
 def sparse_ll_dirichlet(ind1, data1, ind2, data2):
     # The probability of rolling data2 in sum(data2) trials on a die that rolled data1 in sum(data1) trials
-       
     n1 = np.sum(data1)
     n2 = np.sum(data2)
 
@@ -612,7 +611,7 @@ def sparse_ll_dirichlet(ind1, data1, ind2, data2):
         j2 = ind2[i2]
 
         if j1 == j2:
-            if data1[i1]*data2[i2] !=0:
+            if data1[i1] * data2[i2] != 0:
                 log_b += log_beta(data1[i1], data2[i2])
             i1 += 1
             i2 += 1
@@ -623,13 +622,15 @@ def sparse_ll_dirichlet(ind1, data1, ind2, data2):
 
     self_denom1 = 0.0
     for d1 in data1:
-        self_denom1 += log_single_beta(d1) 
+
+        self_denom1 += log_single_beta(d1)
 
     self_denom2 = 0.0
     for d2 in data2:
-        self_denom2 += log_single_beta(d2) 
+        self_denom2 += log_single_beta(d2)
 
-    return np.sqrt(1.0/n2*(log_b - log_beta(n1,n2) - (self_denom2 - log_single_beta(n2))) + 1.0/n1*(log_b - log_beta(n2,n1) - (self_denom1 - log_single_beta(n1))))
+    return np.sqrt(1.0 / n2 * (log_b - log_beta(n1, n2) - (self_denom2 - log_single_beta(n2))) + 1.0 / n1 * (
+            log_b - log_beta(n2, n1) - (self_denom1 - log_single_beta(n1))))
 
 sparse_named_distances = {
     # general minkowski distances

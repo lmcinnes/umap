@@ -2,37 +2,34 @@
 #
 # License: BSD 3 clause
 from __future__ import print_function
+
+import locale
 from warnings import warn
 
-from scipy.optimize import curve_fit
-from sklearn.base import BaseEstimator
-from sklearn.utils import check_random_state, check_array
-from sklearn.metrics import pairwise_distances
-from sklearn.preprocessing import normalize
-from sklearn.neighbors import KDTree
-
-from sklearn.externals import joblib
-
+import numba
 import numpy as np
 import scipy.sparse
 import scipy.sparse.csgraph
-import numba
+from scipy.optimize import curve_fit
+from sklearn.base import BaseEstimator
+from sklearn.externals import joblib
+from sklearn.metrics import pairwise_distances
+from sklearn.neighbors import KDTree
+from sklearn.preprocessing import normalize
+from sklearn.utils import check_random_state, check_array
 
 import umap.distances as dist
-
 import umap.sparse as sparse
 
-from umap.utils import tau_rand_int, deheap_sort, submatrix
-from umap.rp_tree import rptree_leaf_array, make_forest
 from umap.nndescent import (
     make_nn_descent,
     make_initialisations,
     make_initialized_nnd_search,
     initialise_search,
 )
+from umap.rp_tree import rptree_leaf_array, make_forest
 from umap.spectral import spectral_layout
-
-import locale
+from umap.utils import tau_rand_int, deheap_sort, submatrix
 
 locale.setlocale(locale.LC_NUMERIC, "C")
 
@@ -43,6 +40,31 @@ SMOOTH_K_TOLERANCE = 1e-5
 MIN_K_DIST_SCALE = 1e-3
 NPY_INFINITY = np.inf
 
+
+def breadth_first_search(adjmat, start, min_vertices):
+    explored = []
+    queue = [start]
+    levels = {}
+    levels[start] = 0
+    max_level = np.inf
+    visited = [start]
+ 
+    while queue:
+        node = queue.pop(0)
+        explored.append(node)
+        if max_level == np.inf and len(explored) > min_vertices:
+            max_level = max(levels.values())
+ 
+        if levels[node] + 1 < max_level:
+            neighbors = adjmat[node].indices
+            for neighbour in neighbors:
+                if neighbour not in visited:
+                    queue.append(neighbour)
+                    visited.append(neighbour)
+ 
+                    levels[neighbour] = levels[node] + 1
+ 
+    return np.array(explored)
 
 @numba.njit(parallel=True, fastmath=True)
 def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0):
@@ -472,7 +494,7 @@ def fuzzy_simplicial_set(
 
     result.eliminate_zeros()
 
-    return result
+    return result, sigmas, rhos
 
 
 @numba.jit()
@@ -680,158 +702,206 @@ def rdist(x, y):
     return result
 
 
-@numba.njit(fastmath=True)
-def optimize_layout(
-    head_embedding,
-    tail_embedding,
-    head,
-    tail,
-    n_epochs,
-    n_vertices,
-    epochs_per_sample,
-    a,
-    b,
-    rng_state,
-    gamma=1.0,
-    initial_alpha=1.0,
-    negative_sample_rate=5.0,
-    verbose=False,
+def make_optimize_layout(
+    output_metric,
+    output_metric_kwds,
 ):
-    """Improve an embedding using stochastic gradient descent to minimize the
-    fuzzy set cross entropy between the 1-skeletons of the high dimensional
-    and low dimensional fuzzy simplicial sets. In practice this is done by
-    sampling edges based on their membership strength (with the (1-p) terms
-    coming from negative sampling similar to word2vec).
+    """Create a numba accelerated function to improve an embedding using
+    stochastic gradient descent to minimize the fuzzy set cross entropy
+    between the 1-skeletons of the high dimensional and low dimensional
+    fuzzy simplicial sets. In practice this is done by sampling edges
+    based on their membership strength (with the (1-p) terms coming from
+    negative sampling similar to word2vec).
 
     Parameters
     ----------
-    head_embedding: array of shape (n_samples, n_components)
-        The initial embedding to be improved by SGD.
+    output_metric: function
+        Function returning the distance between two points in embedding
+        space and the gradient of the distance wrt the first argument.
 
-    tail_embedding: array of shape (source_samples, n_components)
-        The reference embedding of embedded points. If not embedding new
-        previously unseen points with respect to an existing embedding this
-        is simply the head_embedding (again); otherwise it provides the
-        existing embedding to embed with respect to.
-
-    head: array of shape (n_1_simplices)
-        The indices of the heads of 1-simplices with non-zero membership.
-
-    tail: array of shape (n_1_simplices)
-        The indices of the tails of 1-simplices with non-zero membership.
-
-    n_epochs: int
-        The number of training epochs to use in optimization.
-
-    n_vertices: int
-        The number of vertices (0-simplices) in the dataset.
-
-    epochs_per_samples: array of shape (n_1_simplices)
-        A float value of the number of epochs per 1-simplex. 1-simplices with
-        weaker membership strength will have more epochs between being sampled.
-
-    a: float
-        Parameter of differentiable approximation of right adjoint functor
-
-    b: float
-        Parameter of differentiable approximation of right adjoint functor
-
-    rng_state: array of int64, shape (3,)
-        The internal state of the rng
-
-    gamma: float (optional, default 1.0)
-        Weight to apply to negative samples.
-
-    initial_alpha: float (optional, default 1.0)
-        Initial learning rate for the SGD.
-
-    negative_sample_rate: int (optional, default 5)
-        Number of negative samples to use per positive sample.
-
-    verbose: bool (optional, default False)
-        Whether to report information on the current progress of the algorithm.
+    output_metric_kwds: tuple
+        Key word arguments to be passed to the output_metric function
 
     Returns
     -------
-    embedding: array of shape (n_samples, n_components)
-        The optimized embedding.
+    A numba JITd function for optimizing an embeddinng that is specialised
+    to the given metric in the embedding space.
     """
+    @numba.njit(fastmath=True)
+    def optimize_layout(
+        head_embedding,
+        tail_embedding,
+        head,
+        tail,
+        weight,
+        sigmas,
+            rhos,
+        n_epochs,
+        n_vertices,
+        epochs_per_sample,
+        a,
+        b,
+        rng_state,
+        gamma=1.0,
+        initial_alpha=1.0,
+        negative_sample_rate=5.0,
+        verbose=False,
+        inverse=False,
+    ):
+        """Improve an embedding using stochastic gradient descent to minimize the
+        fuzzy set cross entropy between the 1-skeletons of the high dimensional
+        and low dimensional fuzzy simplicial sets. In practice this is done by
+        sampling edges based on their membership strength (with the (1-p) terms
+        coming from negative sampling similar to word2vec).
 
-    dim = head_embedding.shape[1]
-    move_other = head_embedding.shape[0] == tail_embedding.shape[0]
-    alpha = initial_alpha
+        Parameters
+        ----------
+        head_embedding: array of shape (n_samples, n_components)
+            The initial embedding to be improved by SGD.
 
-    epochs_per_negative_sample = epochs_per_sample / negative_sample_rate
-    epoch_of_next_negative_sample = epochs_per_negative_sample.copy()
-    epoch_of_next_sample = epochs_per_sample.copy()
+        tail_embedding: array of shape (source_samples, n_components)
+            The reference embedding of embedded points. If not embedding new
+            previously unseen points with respect to an existing embedding this
+            is simply the head_embedding (again); otherwise it provides the
+            existing embedding to embed with respect to.
 
-    for n in range(n_epochs):
-        for i in range(epochs_per_sample.shape[0]):
-            if epoch_of_next_sample[i] <= n:
-                j = head[i]
-                k = tail[i]
+        head: array of shape (n_1_simplices)
+            The indices of the heads of 1-simplices with non-zero membership.
 
-                current = head_embedding[j]
-                other = tail_embedding[k]
+        tail: array of shape (n_1_simplices)
+            The indices of the tails of 1-simplices with non-zero membership.
 
-                dist_squared = rdist(current, other)
+        weight: array of shape (n_1_simplices)
+            The membership weights of the 1-simplices.
 
-                if dist_squared > 0.0:
-                    grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
-                    grad_coeff /= a * pow(dist_squared, b) + 1.0
-                else:
-                    grad_coeff = 0.0
+        n_epochs: int
+            The number of training epochs to use in optimization.
 
-                for d in range(dim):
-                    grad_d = clip(grad_coeff * (current[d] - other[d]))
-                    current[d] += grad_d * alpha
-                    if move_other:
-                        other[d] += -grad_d * alpha
+        n_vertices: int
+            The number of vertices (0-simplices) in the dataset.
 
-                epoch_of_next_sample[i] += epochs_per_sample[i]
+        epochs_per_sample: array of shape (n_1_simplices)
+            A float value of the number of epochs per 1-simplex. 1-simplices with
+            weaker membership strength will have more epochs between being sampled.
 
-                n_neg_samples = int(
-                    (n - epoch_of_next_negative_sample[i])
-                    / epochs_per_negative_sample[i]
-                )
+        a: float
+            Parameter of differentiable approximation of right adjoint functor
 
-                for p in range(n_neg_samples):
-                    k = tau_rand_int(rng_state) % n_vertices
+        b: float
+            Parameter of differentiable approximation of right adjoint functor
 
+        rng_state: array of int64, shape (3,)
+            The internal state of the rng
+
+        gamma: float (optional, default 1.0)
+            Weight to apply to negative samples.
+
+        initial_alpha: float (optional, default 1.0)
+            Initial learning rate for the SGD.
+
+        negative_sample_rate: int (optional, default 5)
+            Number of negative samples to use per positive sample.
+
+        verbose: bool (optional, default False)
+            Whether to report information on the current progress of the algorithm.
+
+        Returns
+        -------
+        embedding: array of shape (n_samples, n_components)
+            The optimized embedding.
+        """
+
+        dim = head_embedding.shape[1]
+        move_other = head_embedding.shape[0] == tail_embedding.shape[0]
+        alpha = initial_alpha
+
+        epochs_per_negative_sample = epochs_per_sample / negative_sample_rate
+        epoch_of_next_negative_sample = epochs_per_negative_sample.copy()
+        epoch_of_next_sample = epochs_per_sample.copy()
+
+        for n in range(n_epochs):
+            for i in range(epochs_per_sample.shape[0]):
+                if epoch_of_next_sample[i] <= n:
+                    j = head[i]
+                    k = tail[i]
+
+                    current = head_embedding[j]
                     other = tail_embedding[k]
 
-                    dist_squared = rdist(current, other)
+                    dist_output, grad_dist_output = output_metric(
+                        current, other, *output_metric_kwds
+                    )
 
-                    if dist_squared > 0.0:
-                        grad_coeff = 2.0 * gamma * b
-                        grad_coeff /= (0.001 + dist_squared) * (
-                            a * pow(dist_squared, b) + 1
-                        )
-                    else:
-                        grad_coeff = 0.0
+                    if inverse:
+                        w_l = weight[i]
+                        w_h = np.exp(-(dist_output - rhos[j]) / (sigmas[j] + 1e-6))
+                        grad_coeff = (1 / (w_l * sigmas[j] + 1e-6))
+                    else:  # typical operation
+                        w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
+                        w_h = weight[i]
+                        grad_coeff = 2 * b * (w_l - 1) / (w_h * dist_output + 1e-6)
 
                     for d in range(dim):
-                        if grad_coeff > 0.0:
-                            grad_d = clip(grad_coeff * (current[d] - other[d]))
-                        else:
-                            grad_d = 4.0
+                        grad_d = clip(grad_coeff * grad_dist_output[d])
+
                         current[d] += grad_d * alpha
+                        if move_other:
+                            other[d] += -grad_d * alpha
 
-                epoch_of_next_negative_sample[i] += (
-                    n_neg_samples * epochs_per_negative_sample[i]
-                )
+                    epoch_of_next_sample[i] += epochs_per_sample[i]
 
-        alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
+                    n_neg_samples = int(
+                        (n - epoch_of_next_negative_sample[i])
+                        / epochs_per_negative_sample[i]
+                    )
 
-        if verbose and n % int(n_epochs / 10) == 0:
-            print("\tcompleted ", n, " / ", n_epochs, "epochs")
+                    for p in range(n_neg_samples):
+                        k = tau_rand_int(rng_state) % n_vertices
 
-    return head_embedding
+                        other = tail_embedding[k]
+
+                        dist_output, grad_dist_output = output_metric(
+                            current, other, *output_metric_kwds
+                        )
+
+                        if inverse:
+                            # w_l = 0.0 # for negative samples, the edge does not exist
+                            w_h = np.exp(-(dist_output - rhos[j]) / (sigmas[j] + 1e-6))
+                            grad_coeff = gamma * (
+                                    (0 - w_h) /
+                                ((1 - w_h) * sigmas[j] + 1e-6)
+                            )
+
+                        else:  # typical operation
+                            w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
+                            # w_h = 0.0 # for negative samples, the edge does not exist
+                            grad_coeff = gamma * 2 * b * (w_l - 0) / (dist_output + 1e-6)
+
+                        if not np.isfinite(grad_coeff):
+                            grad_coeff = 4.0
+
+                        for d in range(dim):
+                            grad_d = clip(grad_coeff * grad_dist_output[d])
+                            current[d] += grad_d * alpha
+
+                    epoch_of_next_negative_sample[i] += (
+                        n_neg_samples * epochs_per_negative_sample[i]
+                    )
+
+            alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
+
+            if verbose and n % int(n_epochs / 10) == 0:
+                print("\tcompleted ", n, " / ", n_epochs, "epochs")
+
+        return head_embedding
+    return optimize_layout
 
 
 def simplicial_set_embedding(
     data,
     graph,
+    sigmas,
+        rhos,
     n_components,
     initial_alpha,
     a,
@@ -843,6 +913,8 @@ def simplicial_set_embedding(
     random_state,
     metric,
     metric_kwds,
+    output_metric,
+    output_metric_kwds,
     verbose,
 ):
     """Perform a fuzzy simplicial set embedding, using a specified
@@ -896,13 +968,20 @@ def simplicial_set_embedding(
     random_state: numpy RandomState or equivalent
         A state capable being used as a numpy random state.
 
-    metric: string
+    metric: string or callable
         The metric used to measure distance in high dimensional space; used if
         multiple connected components need to be layed out.
 
     metric_kwds: dict
         Key word arguments to be passed to the metric function; used if
         multiple connected components need to be layed out.
+
+    output_metric: function
+        Function returning the distance between two points in embedding space and
+        the gradient of the distance wrt the first argument.
+
+    output_metric_kwds: dict
+        Key word arguments to be passed to the output_metric function.
 
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
@@ -966,13 +1045,24 @@ def simplicial_set_embedding(
 
     head = graph.row
     tail = graph.col
+    weight = graph.data
 
     rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
+
+    optimize_layout = make_optimize_layout(
+        output_metric,
+        tuple(output_metric_kwds.values()),
+    )
+
+    embedding = (embedding - np.min(embedding, 0)) / (np.max(embedding, 0) - np.min(embedding, 0))
     embedding = optimize_layout(
         embedding,
         embedding,
         head,
         tail,
+        weight,
+        sigmas,
+        rhos,
         n_epochs,
         n_vertices,
         epochs_per_sample,
@@ -1213,6 +1303,9 @@ class UMAP(BaseEstimator):
         n_neighbors=15,
         n_components=2,
         metric="euclidean",
+        metric_kwds=None,
+        output_metric="euclidean",
+        output_metric_kwds=None,
         n_epochs=None,
         learning_rate=1.0,
         init="spectral",
@@ -1226,7 +1319,6 @@ class UMAP(BaseEstimator):
         a=None,
         b=None,
         random_state=None,
-        metric_kwds=None,
         angular_rp_forest=False,
         target_n_neighbors=-1,
         target_metric="categorical",
@@ -1242,6 +1334,41 @@ class UMAP(BaseEstimator):
             self._metric_kwds = metric_kwds
         else:
             self._metric_kwds = {}
+        self.output_metric = output_metric
+        if output_metric_kwds is not None:
+            self._output_metric_kwds = output_metric_kwds
+        else:
+            self._output_metric_kwds = {}
+
+        if callable(self.metric):
+            self._input_distance_func = self.metric
+        elif self.metric in dist.named_distances:
+            self._input_distance_func = dist.named_distances[self.metric]
+        elif self.metric == 'precomputed':
+            warn('Using precomputed metric; transform will be unavailable for new data')
+        else:
+            raise ValueError(
+                "metric is neither callable, " + "nor a recognised string"
+            )
+
+        if callable(self.output_metric):
+            self._output_distance_func = self.output_metric
+        elif self.output_metric in dist.named_distances and self.output_metric in dist.named_distances_with_gradients:
+            self._output_distance_func = dist.named_distances_with_gradients[self.output_metric]
+        elif self.output_metric == 'precomputed':
+            raise ValueError(
+                "output_metric cannnot be 'precomputed'"
+            )
+        else:
+            if self.output_metric in dist.named_distances:
+                raise ValueError(
+                    "gradient function is not yet implemented for " + repr(self.output_metric) + "."
+                )
+            else:
+                raise ValueError(
+                    "output_metric is neither callable, " + "nor a recognised string"
+                )
+
         self.n_epochs = n_epochs
         if isinstance(init, np.ndarray):
             self.init = check_array(init, dtype=np.float32, accept_sparse=False)
@@ -1279,6 +1406,9 @@ class UMAP(BaseEstimator):
         else:
             self._a = a
             self._b = b
+
+        self._sigmas = None
+        self._rhos = None
 
         if self.verbose:
             print(str(self))
@@ -1373,7 +1503,7 @@ class UMAP(BaseEstimator):
         if X.shape[0] < 4096 and not self.metric == "ll_dirichlet":
             self._small_data = True
             dmat = pairwise_distances(X, metric=self.metric, **self._metric_kwds)
-            self.graph_ = fuzzy_simplicial_set(
+            self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
                 dmat,
                 self._n_neighbors,
                 random_state,
@@ -1399,7 +1529,7 @@ class UMAP(BaseEstimator):
                 self.verbose,
             )
 
-            self.graph_ = fuzzy_simplicial_set(
+            self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
                 X,
                 self.n_neighbors,
                 random_state,
@@ -1464,7 +1594,8 @@ class UMAP(BaseEstimator):
                     ydmat = pairwise_distances(y[np.newaxis, :].T,
                                                metric=self.target_metric,
                                                **self._target_metric_kwds)
-                    target_graph = fuzzy_simplicial_set(
+                    
+                    target_graph, target_sigmas, target_rhos = fuzzy_simplicial_set(
                         ydmat,
                         target_n_neighbors,
                         random_state,
@@ -1479,7 +1610,7 @@ class UMAP(BaseEstimator):
                     )
                 else:
                     # Standard case
-                    target_graph = fuzzy_simplicial_set(
+                    target_graph, target_sigmas, target_rhos = fuzzy_simplicial_set(
                         y[np.newaxis, :].T,
                         target_n_neighbors,
                         random_state,
@@ -1510,9 +1641,12 @@ class UMAP(BaseEstimator):
         if self.verbose:
             print("Construct embedding")
 
+
         self.embedding_ = simplicial_set_embedding(
             self._raw_data,
             self.graph_,
+            self._sigmas,
+            self._rhos,
             self.n_components,
             self.initial_alpha,
             self._a,
@@ -1524,6 +1658,8 @@ class UMAP(BaseEstimator):
             random_state,
             self.metric,
             self._metric_kwds,
+            self._output_distance_func,
+            self._output_metric_kwds,
             self.verbose,
         )
 
@@ -1657,12 +1793,21 @@ class UMAP(BaseEstimator):
 
         head = graph.row
         tail = graph.col
+        weight = graph.data
+
+        optimize_layout = make_optimize_layout(
+            self._output_distance_func,
+            tuple(self._output_metric_kwds.values()),
+        )
 
         embedding = optimize_layout(
             embedding,
             self.embedding_,
             head,
             tail,
+            weight,
+            sigmas,
+            rhos,
             n_epochs,
             graph.shape[1],
             epochs_per_sample,
@@ -1673,6 +1818,148 @@ class UMAP(BaseEstimator):
             self.initial_alpha,
             self.negative_sample_rate,
             verbose=self.verbose,
+            inverse=False,
         )
 
         return embedding
+
+    def inverse_transform(self, X):
+        """Transform X in the existing embedded space back into the input
+        data space and return that transformed output.
+
+        Parameters
+        ----------
+        X : array, shape (n_samples, n_components)
+            New points to be inverse transformed.
+
+        Returns
+        -------
+        X_new : array, shape (n_samples, n_features)
+            Generated data points new data in data space.
+        """
+
+        if self._sparse_data:
+            raise ValueError("Inverse transform not available for sparse input.")
+        elif self.metric == 'precomputed':
+            raise ValueError("Inverse transform  of new data not available for "
+                             "precomputed metric.")
+
+        X = check_array(X, dtype=np.float32, order="C")
+        random_state = check_random_state(self.transform_seed)
+        rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
+
+
+        # build Delaunay complex
+        deltri = scipy.spatial.Delaunay(self.embedding_, incremental=True, qhull_options='QJ')
+        neighbors = deltri.simplices[deltri.find_simplex(X)]
+        adjmat = scipy.sparse.lil_matrix((self.embedding_.shape[0], self.embedding_.shape[0]), dtype=int)
+        for i in np.arange(0, deltri.simplices.shape[0]):
+            for j in deltri.simplices[i]:
+                if j < self.embedding_.shape[0]:
+                    idx = deltri.simplices[i][deltri.simplices[i] < self.embedding_.shape[0]]
+                    adjmat[j, idx] = 1
+                    adjmat[idx, j] = 1
+
+        adjmat = scipy.sparse.csr_matrix(adjmat)
+
+        min_vertices = self._raw_data.shape[-1]
+
+        neighborhood = [breadth_first_search(adjmat, v[0], min_vertices=min_vertices) for v in neighbors]
+        distances = [np.array([dist.euclidean(X[i], self.embedding_[nb]) for nb in neighborhood[i]]) for i in
+                     range(X.shape[0])]
+        idx = np.array([np.argsort(e)[:min_vertices] for e in distances])
+
+        dists_output_space = np.array([distances[i][idx[i]] for i in range(len(distances))])
+        indices = np.array([neighborhood[i][idx[i]] for i in range(len(neighborhood))])
+
+        rows, cols, distances = np.array([
+            [i, indices[i,j], dists_output_space[i,j]]
+            for i in range(indices.shape[0])
+            for j in range(min_vertices)
+        ]).T
+
+        # calculate membership strength of each edge
+        weights = 1 / (1 + self._a * distances ** (2 * self._b))
+
+        # compute 1-skeleton
+        # convert 1-skeleton into coo_matrix adjacency matrix
+        graph = scipy.sparse.coo_matrix(
+            (weights, (rows, cols)), shape=(X.shape[0], self._raw_data.shape[0])
+        )
+
+        # That lets us do fancy unpacking by reshaping the csr matrix indices
+        # and data. Doing so relies on the constant degree assumption!
+        # csr_graph = graph.tocsr()
+        csr_graph = normalize(graph.tocsr(), norm="l1")
+        inds = csr_graph.indices.reshape(X.shape[0], self._raw_data.shape[1])
+        weights = csr_graph.data.reshape(X.shape[0], self._raw_data.shape[1])
+        inv_transformed_points = init_transform(inds, weights, self._raw_data)
+
+        if self.n_epochs is None:
+            # For smaller datasets we can use more epochs
+            if graph.shape[0] <= 10000:
+                n_epochs = 100
+            else:
+                n_epochs = 30
+        else:
+            n_epochs = self.n_epochs
+
+        graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
+        graph.eliminate_zeros()
+
+        epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs)
+
+        head = graph.row
+        tail = graph.col
+        weight = graph.data
+
+        if callable(self.metric):
+            _input_distance_func = self.metric
+        elif self.metric in dist.named_distances and self.metric in dist.named_distances_with_gradients:
+            _input_distance_func = dist.named_distances_with_gradients[self.metric]
+        elif self.metric == 'precomputed':
+            raise ValueError(
+                "metric cannnot be 'precomputed'"
+            )
+        else:
+            if self.output_metric in dist.named_distances:
+                raise ValueError(
+                    "gradient function is not yet implemented for " + repr(self.output_metric) + "."
+                )
+            else:
+                raise ValueError(
+                    "output_metric is neither callable, " + "nor a recognised string"
+                )
+
+
+        optimize_layout = make_optimize_layout(
+            _input_distance_func,
+            tuple(self._metric_kwds.values()),
+        )
+
+        # sigmas, rhos = smooth_knn_dist(
+        #     indices, self.n_neighbors, local_connectivity=self.local_connectivity
+        # )
+
+        inv_transformed_points = optimize_layout(
+            inv_transformed_points,
+            self._raw_data,
+            head,
+            tail,
+            weight,
+            self._sigmas,
+            self._rhos,
+            n_epochs,
+            graph.shape[1],
+            epochs_per_sample,
+            self._a,
+            self._b,
+            rng_state,
+            self.repulsion_strength,
+            self.initial_alpha,
+            self.negative_sample_rate,
+            verbose=self.verbose,
+            inverse=True
+        )
+
+        return inv_transformed_points

@@ -1,8 +1,8 @@
 # Author: Leland McInnes <leland.mcinnes@gmail.com>
 #
 # License: BSD 3 clause
-import numpy as np
 import numba
+import numpy as np
 
 _mock_identity = np.eye(2, dtype=np.float64)
 _mock_ones = np.ones(2, dtype=np.float64)
@@ -21,6 +21,22 @@ def euclidean(x, y):
     return np.sqrt(result)
 
 
+@numba.njit(fastmath=True)
+def euclidean_grad(x, y):
+    """Standard euclidean distance and its gradient.
+
+    ..math::
+        D(x, y) = \sqrt{\sum_i (x_i - y_i)^2}
+        \frac{dD(x, y)}{dx} = (x_i - y_i)/D(x,y)
+    """
+    result = 0.0
+    for i in range(x.shape[0]):
+        result += (x[i] - y[i]) ** 2
+    d = np.sqrt(result)
+    grad = (x-y)/(1e-6 + d)
+    return d, grad
+
+
 @numba.njit()
 def standardised_euclidean(x, y, sigma=_mock_ones):
     """Euclidean distance standardised against a vector of standard
@@ -34,6 +50,22 @@ def standardised_euclidean(x, y, sigma=_mock_ones):
         result += ((x[i] - y[i]) ** 2) / sigma[i]
 
     return np.sqrt(result)
+
+
+@numba.njit(fastmath=True)
+def standardised_euclidean_grad(x, y, sigma=_mock_ones):
+    """Euclidean distance standardised against a vector of standard
+    deviations per coordinate with gradient.
+
+    ..math::
+        D(x, y) = \sqrt{\sum_i \frac{(x_i - y_i)**2}{v_i}}
+    """
+    result = 0.0
+    for i in range(x.shape[0]):
+        result += (x[i] - y[i]) ** 2 / sigma[i]
+    d = np.sqrt(result)
+    grad = (x-y)/(1e-6 + d * sigma)
+    return d, grad
 
 
 @numba.njit()
@@ -51,6 +83,21 @@ def manhattan(x, y):
 
 
 @numba.njit()
+def manhattan_grad(x, y):
+    """Manhatten, taxicab, or l1 distance with gradient.
+
+    ..math::
+        D(x, y) = \sum_i |x_i - y_i|
+    """
+    result = 0.0
+    grad = np.zeros(x.shape)
+    for i in range(x.shape[0]):
+        result += np.abs(x[i] - y[i])
+        grad[i] = np.sign(x[i] - y[i])
+    return result, grad
+
+
+@numba.njit()
 def chebyshev(x, y):
     """Chebyshev or l-infinity distance.
 
@@ -62,6 +109,26 @@ def chebyshev(x, y):
         result = max(result, np.abs(x[i] - y[i]))
 
     return result
+
+
+@numba.njit()
+def chebyshev_grad(x, y):
+    """Chebyshev or l-infinity distance with gradient.
+
+    ..math::
+        D(x, y) = \max_i |x_i - y_i|
+    """
+    result = 0.0
+    max_i = 0
+    for i in range(x.shape[0]):
+        v = np.abs(x[i] - y[i])
+        if v > result:
+            result = v
+            max_i = i
+    grad = np.zeros(x.shape)
+    grad[max_i] = np.sign(x[max_i] - y[max_i])
+
+    return result, grad
 
 
 @numba.njit()
@@ -84,6 +151,26 @@ def minkowski(x, y, p=2):
 
 
 @numba.njit()
+def minkowski_grad(x, y, p=2):
+    """Minkowski distance with gradient.
+
+    ..math::
+        D(x, y) = \left(\sum_i |x_i - y_i|^p\right)^{\frac{1}{p}}
+
+    This is a general distance. For p=1 it is equivalent to
+    manhattan distance, for p=2 it is Euclidean distance, and
+    for p=infinity it is Chebyshev distance. In general it is better
+    to use the more specialised functions for those distances.
+    """
+    result = 0.0
+    for i in range(x.shape[0]):
+        result += (np.abs(x[i] - y[i])) ** p
+    grad = np.abs(x - y) ** (p - 1) * np.sign(x - y) * result ** (1.0 / p - 1)
+
+    return result ** (1.0 / p), grad
+
+
+@numba.njit()
 def weighted_minkowski(x, y, w=_mock_ones, p=2):
     """A weighted version of Minkowski distance.
 
@@ -102,6 +189,25 @@ def weighted_minkowski(x, y, w=_mock_ones, p=2):
 
 
 @numba.njit()
+def weighted_minkowski_grad(x, y, w=_mock_ones, p=2):
+    """A weighted version of Minkowski distance with gradient.
+
+    ..math::
+        D(x, y) = \left(\sum_i w_i |x_i - y_i|^p\right)^{\frac{1}{p}}
+
+    If weights w_i are inverse standard deviations of data in each dimension
+    then this represented a standardised Minkowski distance (and is
+    equivalent to standardised Euclidean distance for p=1).
+    """
+    result = 0.0
+    for i in range(x.shape[0]):
+        result += (w[i] * np.abs(x[i] - y[i])) ** p
+    grad = w ** p * abs(x - y) ** (p - 1) * np.sign(x - y) * result ** (1.0 / p - 1)
+
+    return result ** (1.0 / p), grad
+
+
+@numba.njit()
 def mahalanobis(x, y, vinv=_mock_identity):
     result = 0.0
 
@@ -117,6 +223,27 @@ def mahalanobis(x, y, vinv=_mock_identity):
         result += tmp * diff[i]
 
     return np.sqrt(result)
+
+
+@numba.njit()
+def mahalanobis_grad(x, y, vinv=_mock_identity):
+    result = 0.0
+
+    diff = np.empty(x.shape[0], dtype=np.float64)
+
+    for i in range(x.shape[0]):
+        diff[i] = x[i] - y[i]
+
+    grad_tmp = np.zeros(x.shape)
+    for i in range(x.shape[0]):
+        tmp = 0.0
+        for j in range(x.shape[0]):
+            tmp += vinv[i, j] * diff[j]
+            grad_tmp[i] += vinv[i, j] * diff[j]
+        result += tmp * diff[i]
+    dist = np.sqrt(result)
+    grad = grad_tmp / (1e-6 + dist)
+    return dist, grad
 
 
 @numba.njit()
@@ -141,6 +268,19 @@ def canberra(x, y):
 
 
 @numba.njit()
+def canberra_grad(x, y):
+    result = 0.0
+    grad = np.zeros(x.shape)
+    for i in range(x.shape[0]):
+        denominator = np.abs(x[i]) + np.abs(y[i])
+        if denominator > 0:
+            result += np.abs(x[i] - y[i]) / denominator
+            grad[i] = np.sign(x[i] - y[i]) / denominator - np.abs(x[i] - y[i]) * np.sign(x[i]) / denominator**2
+
+    return result, grad
+
+
+@numba.njit()
 def bray_curtis(x, y):
     numerator = 0.0
     denominator = 0.0
@@ -152,6 +292,24 @@ def bray_curtis(x, y):
         return float(numerator) / denominator
     else:
         return 0.0
+
+
+@numba.njit()
+def bray_curtis_grad(x, y):
+    numerator = 0.0
+    denominator = 0.0
+    for i in range(x.shape[0]):
+        numerator += np.abs(x[i] - y[i])
+        denominator += np.abs(x[i] + y[i])
+
+    if denominator > 0.0:
+        dist = float(numerator) / denominator
+        grad = (np.sign(x - y) - dist) / denominator
+    else:
+        dist = 0.0
+        grad = np.zeros(x.shape)
+
+    return dist, grad
 
 
 @numba.njit()
@@ -278,6 +436,31 @@ def haversine(x, y):
 
 
 @numba.njit()
+def haversine_grad(x, y):
+    # spectral initialization puts many points near the poles
+    # currently, adding pi/2 to the latitude avoids problems
+    # TODO: reimplement with quaternions to avoid singularity
+
+    if x.shape[0] != 2:
+        raise ValueError("haversine is only defined for 2 dimensional data")
+    sin_lat = np.sin(0.5 * (x[0] - y[0]))
+    cos_lat = np.cos(0.5 * (x[0] - y[0]))
+    sin_long = np.sin(0.5 * (x[1] - y[1]))
+    cos_long = np.cos(0.5 * (x[1] - y[1]))
+
+    a_0 = np.cos(x[0]+np.pi/2) * np.cos(y[0]+np.pi/2) * sin_long ** 2
+    a_1 = a_0 + sin_lat ** 2
+
+    d = 2.0 * np.arcsin(np.sqrt(min(max(abs(a_1), 0), 1)))
+    denom = (np.sqrt(abs(a_1 - 1)) * np.sqrt(abs(a_1)))
+    grad = np.array([
+        (sin_lat * cos_lat - np.sin(x[0]+np.pi/2) * np.cos(y[0]+np.pi/2) * sin_long ** 2),
+        (np.cos(x[0]+np.pi/2) * np.cos(y[0]+np.pi/2) * sin_long * cos_long),
+    ]) / (denom + 1e-6)
+    return d, grad
+
+
+@numba.njit()
 def yule(x, y):
     num_true_true = 0.0
     num_true_false = 0.0
@@ -315,6 +498,29 @@ def cosine(x, y):
         return 1.0
     else:
         return 1.0 - (result / np.sqrt(norm_x * norm_y))
+
+
+@numba.njit(fastmath=True)
+def cosine_grad(x, y):
+    result = 0.0
+    norm_x = 0.0
+    norm_y = 0.0
+    for i in range(x.shape[0]):
+        result += x[i] * y[i]
+        norm_x += x[i] ** 2
+        norm_y += y[i] ** 2
+
+    if norm_x == 0.0 and norm_y == 0.0:
+        dist = 0.0
+        grad = np.zeros(x.shape)
+    elif norm_x == 0.0 or norm_y == 0.0:
+        dist = 1.0
+        grad = np.zeros(x.shape)
+    else:
+        grad = -(x * result - y * norm_x) / np.sqrt(norm_x**3 * norm_y)
+        dist = 1.0 - (result / np.sqrt(norm_x * norm_y))
+
+    return dist, grad
 
 
 @numba.njit()
@@ -404,6 +610,205 @@ def ll_dirichlet(data1, data2):
     return np.sqrt(1.0/n2*(log_b - log_beta(n1,n2) - (self_denom2 - log_single_beta(n2))) + 1.0/n1*(log_b - log_beta(n2,n1) - (self_denom1 - log_single_beta(n1))))
 
 
+@numba.njit()
+def correlation_grad(x, y):
+    mu_x = 0.0
+    mu_y = 0.0
+    norm_x = 0.0
+    norm_y = 0.0
+    dot_product = 0.0
+
+    for i in range(x.shape[0]):
+        mu_x += x[i]
+        mu_y += y[i]
+
+    mu_x /= x.shape[0]
+    mu_y /= x.shape[0]
+
+    for i in range(x.shape[0]):
+        shifted_x = x[i] - mu_x
+        shifted_y = y[i] - mu_y
+        norm_x += shifted_x ** 2
+        norm_y += shifted_y ** 2
+        dot_product += shifted_x * shifted_y
+
+    if norm_x == 0.0 and norm_y == 0.0:
+        dist = 0.0
+        grad = np.zeros(x.shape)
+    elif dot_product == 0.0:
+        dist = 1.0
+        grad = np.zeros(x.shape)
+    else:
+        dist = 1.0 - (dot_product / np.sqrt(norm_x * norm_y))
+        grad = ((x - mu_x) / norm_x - (y - mu_y) / dot_product) * dist
+
+    return dist, grad
+
+
+@numba.njit()
+def approx_log_Gamma(x):
+    if x == 1:
+        return 0
+    # x2= 1/(x*x);
+    return (
+            x * np.log(x) -
+            x +
+            0.5 * np.log(
+        (2.0 * np.pi) / x
+    ) +
+            1.0 / (x * 12.0)  # +
+        # x2 * (-1.0/360.0)
+        # + x2 * (
+        #     1.0/1260.0 + x2 * (
+        #         (-1.0 / 1680.0) +
+        #         x2 * (
+        #             (1.0 / 1188.0) + x2 * (
+        #                     (-691.0 / 360360.0) + x2 * (
+        #                     (1.0 / 156.0) + x2 * (
+        #                         (-3617.0 / 122400.0) +
+        #                         x2 * (
+        #                             (43687.0 / 244188.0) + x2 * (
+        #                                 (-174611.0 / 125400.0)
+        #                             ) +
+        #                             x2 * (
+        #                                 (77683.0 / 5796.0) +
+        #                                 x2 * (
+        #                                     (-236364091.0/1506960.0) +
+        #                                     x2 * (657931.0/300.0)
+        #                                 )
+        #                             )
+        #                         )
+        #                     )
+        #                 )
+        #             )
+        #         )
+        #     )
+        # )
+    )
+
+
+@numba.njit()
+def log_beta(x, y):
+    a = min(x, y)
+    b = max(x, y)
+    if b < 5:
+        value = -np.log(b)
+        for i in range(1, a):
+            value += np.log(i) - np.log(b + i)
+        return value
+    else:
+        return approx_log_Gamma(x) + approx_log_Gamma(y) - approx_log_Gamma(x + y)
+
+
+@numba.njit()
+def log_single_beta(x):
+    return (
+            np.log(2.0) * (-2 * x + 0.5) +
+            0.5 * np.log(2 * np.pi / x) +
+            (0.125 / x)  # +
+        # x2 * (
+        #     (-1.0 / 192.0) +
+        #     x2 * (
+        #         (1.0 / 640.0) +
+        #         x2 * (
+        #             (-17.0 / 14336.0) +
+        #             x2 * (
+        #                 (31.0 / 18432.0) +
+        #                 x2 * (
+        #                     (-691.0 / 180224.0) +
+        #                     x2 * (
+        #                         (5461.0 / 425984.0) +
+        #                         x2 * (
+        #                             (-929569.0 / 15728640.0) +
+        #                             x2 * (
+        #                                 (3189151.0 / 8912896.0) +
+        #                                 x2 * (-221930581.0 / 79691776.0) +
+        #                                 x2 * (
+        #                                     4722116521.0 / 176160768.0 +
+        #                                     x2 * (
+        #                                         -968383680827.0 / 3087007744.0 +
+        #                                         x2 * (
+        #                                             14717667114151.0 / 3355443200.0
+        #                                         )
+        #                                     )
+        #                                 )
+        #                             )
+        #                         )
+        #                     )
+        #                 )
+        #             )
+        #         )
+        #     )
+        # )
+    )
+
+
+@numba.njit()
+def ll_dirichlet(data1, data2):
+    """ The symmetric relative log likelihood of rolling data2 vs data 1 in n trials on a die that rolled data1 in
+    sum(data1) trials.
+
+    ..math::
+        D(data1, data2) = DirichletMultinomail(data2 | data1)
+    """
+
+    n1 = np.sum(data1)
+    n2 = np.sum(data2)
+
+    log_b = 0.0
+    self_denom1 = 0.0
+    self_denom2 = 0.0
+
+    for i in range(data1.shape[0]):
+        if data1[i] * data2[i] > 0.9:
+            log_b += log_beta(data1[i], data2[i])
+            self_denom1 += log_single_beta(data1[i])
+            self_denom2 += log_single_beta(data2[i])
+
+        else:
+            if data1[i] > 0.9:
+                self_denom1 += log_single_beta(data1[i])
+
+            if data2[i] > 0.9:
+                self_denom2 += log_single_beta(data2[i])
+
+    # return np.sqrt(
+    #     1.0 / n2 * (
+    #         log_denom1 -
+    #         np.log(n2) -
+    #         log_beta(n1, n2) -
+    #         (
+    #             self_denom2 -
+    #             np.log(n2) -
+    #             log_beta(n2, n2)
+    #         )
+    #     ) +
+    #      1.0 / n1 * (
+    #         log_denom2 -
+    #         np.log(n1) -
+    #         log_beta(n2, n1) -
+    #         (
+    #                 self_denom1 -
+    #                 np.log(n1) -
+    #                 log_beta(n1,n1)
+    #         )
+    #     )
+    # )
+
+    return np.sqrt(
+        1.0 / n2 * (
+                log_b -
+                log_beta(n1, n2) -
+                (self_denom2 - log_single_beta(n2))
+        ) +
+        1.0 / n1 * (
+                log_b -
+                log_beta(n2, n1) -
+                (self_denom1 - log_single_beta(n1))
+        )
+    )
+
+
 named_distances = {
     # general minkowski distances
     "euclidean": euclidean,
@@ -440,4 +845,30 @@ named_distances = {
     "sokalsneath": sokal_sneath,
     "sokalmichener": sokal_michener,
     "yule": yule,
+}
+
+named_distances_with_gradients = {
+    # general minkowski distances
+    "euclidean": euclidean_grad,
+    "l2": euclidean_grad,
+    "manhattan": manhattan_grad,
+    "taxicab": manhattan_grad,
+    "l1": manhattan_grad,
+    "chebyshev": chebyshev_grad,
+    "linfinity": chebyshev_grad,
+    "linfty": chebyshev_grad,
+    "linf": chebyshev_grad,
+    "minkowski": minkowski_grad,
+    # Standardised/weighted distances
+    "seuclidean": standardised_euclidean_grad,
+    "standardised_euclidean": standardised_euclidean_grad,
+    "wminkowski": weighted_minkowski_grad,
+    "weighted_minkowski": weighted_minkowski_grad,
+    "mahalanobis": mahalanobis_grad,
+    # Other distances
+    "canberra": canberra_grad,
+    "cosine": cosine_grad,
+    "correlation": correlation_grad,
+    "haversine": haversine_grad,
+    "braycurtis": bray_curtis_grad,
 }

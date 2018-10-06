@@ -1,11 +1,10 @@
-import numpy as np
+from warnings import warn
 
+import numpy as np
 import scipy.sparse
 import scipy.sparse.csgraph
-
 from sklearn.manifold import SpectralEmbedding
 from sklearn.metrics import pairwise_distances
-from warnings import warn
 
 
 def component_layout(

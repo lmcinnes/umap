@@ -2,8 +2,8 @@
 #
 # License: BSD 3 clause
 
-import numpy as np
 import numba
+import numpy as np
 
 
 @numba.njit("i4(i8[:])")
@@ -92,6 +92,7 @@ def rejection_sample(n_samples, pool_size, rng_state):
     result = np.empty(n_samples, dtype=np.int64)
     for i in range(n_samples):
         reject_sample = True
+        j = 0
         while reject_sample:
             j = tau_rand_int(rng_state) % pool_size
             for k in range(i):
@@ -507,7 +508,7 @@ def submatrix(dmat, indices_col, n_neighbors):
 
     Parameters
     ----------
-    mat: array, shape (n_samples, n_samples)
+    dmat: array, shape (n_samples, n_samples)
         Original matrix.
 
     indices_col: array, shape (n_samples, n_neighbors)
