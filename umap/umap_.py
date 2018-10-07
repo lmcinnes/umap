@@ -22,9 +22,11 @@ import umap.distances as dist
 import umap.sparse as sparse
 
 from umap.nndescent import (
-    make_nn_descent,
-    make_initialisations,
-    make_initialized_nnd_search,
+    # make_nn_descent,
+    # make_initialisations,
+    # make_initialized_nnd_search,
+    nn_descent,
+    initialized_nnd_search,
     initialise_search,
 )
 from umap.rp_tree import rptree_leaf_array, make_forest
@@ -241,9 +243,9 @@ def nearest_neighbors(
                 raise ValueError(
                     "Metric {} not supported for sparse " + "data".format(metric)
                 )
-            metric_nn_descent = sparse.make_sparse_nn_descent(
-                distance_func, tuple(metric_kwds.values())
-            )
+            # metric_nn_descent = sparse.make_sparse_nn_descent(
+            #     distance_func, tuple(metric_kwds.values())
+            # )
 
             # TODO: Hacked values for now
             n_trees = 5 + int(round((X.shape[0]) ** 0.5 / 20.0))
@@ -251,13 +253,15 @@ def nearest_neighbors(
 
             rp_forest = make_forest(X, n_neighbors, n_trees, rng_state, angular)
             leaf_array = rptree_leaf_array(rp_forest)
-            knn_indices, knn_dists = metric_nn_descent(
+            knn_indices, knn_dists = sparse.sparse_nn_descent(
                 X.indices,
                 X.indptr,
                 X.data,
                 X.shape[0],
                 n_neighbors,
                 rng_state,
+                distance_func,
+                tuple(metric_kwds.values()),
                 max_candidates=60,
                 rp_tree_init=True,
                 leaf_array=leaf_array,
@@ -265,19 +269,21 @@ def nearest_neighbors(
                 verbose=verbose,
             )
         else:
-            metric_nn_descent = make_nn_descent(
-                distance_func, tuple(metric_kwds.values())
-            )
+            # metric_nn_descent = make_nn_descent(
+            #     distance_func, tuple(metric_kwds.values())
+            # )
             # TODO: Hacked values for now
             n_trees = 5 + int(round((X.shape[0]) ** 0.5 / 20.0))
             n_iters = max(5, int(round(np.log2(X.shape[0]))))
 
             rp_forest = make_forest(X, n_neighbors, n_trees, rng_state, angular)
             leaf_array = rptree_leaf_array(rp_forest)
-            knn_indices, knn_dists = metric_nn_descent(
+            knn_indices, knn_dists = nn_descent(
                 X,
                 n_neighbors,
                 rng_state,
+                distance_func,
+                tuple(metric_kwds.values()),
                 max_candidates=60,
                 rp_tree_init=True,
                 leaf_array=leaf_array,
@@ -1351,12 +1357,12 @@ class UMAP(BaseEstimator):
             if self.metric != 'precomputed':
                 self._dist_args = tuple(self._metric_kwds.values())
 
-                self._random_init, self._tree_init = make_initialisations(
-                    self._distance_func, self._dist_args
-                )
-                self._search = make_initialized_nnd_search(
-                    self._distance_func, self._dist_args
-                )
+                # self._random_init, self._tree_init = make_initialisations(
+                #     self._distance_func, self._dist_args
+                # )
+                # self._search = make_initialized_nnd_search(
+                #     self._distance_func, self._dist_args
+                # )
 
         if y is not None:
             if self.target_metric == "categorical":
@@ -1524,16 +1530,20 @@ class UMAP(BaseEstimator):
                 self._raw_data,
                 X,
                 int(self._n_neighbors * self.transform_queue_size),
-                self._random_init,
-                self._tree_init,
+                # self._random_init,
+                # self._tree_init,
                 rng_state,
+                self._distance_func,
+                self._dist_args
             )
-            result = self._search(
+            result = initialized_nnd_search(
                 self._raw_data,
                 self._search_graph.indptr,
                 self._search_graph.indices,
                 init,
                 X,
+                self._distance_func,
+                self._dist_args
             )
 
             indices, dists = deheap_sort(result)
