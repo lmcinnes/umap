@@ -668,8 +668,6 @@ def make_epochs_per_sample(weights, n_epochs):
 def simplicial_set_embedding(
     data,
     graph,
-    sigmas,
-        rhos,
     n_components,
     initial_alpha,
     a,
@@ -683,6 +681,7 @@ def simplicial_set_embedding(
     metric_kwds,
     output_metric,
     output_metric_kwds,
+        euclidean_output,
     verbose,
 ):
     """Perform a fuzzy simplicial set embedding, using a specified
@@ -751,6 +750,9 @@ def simplicial_set_embedding(
     output_metric_kwds: dict
         Key word arguments to be passed to the output_metric function.
 
+    euclidean_output: bool
+        Whether to use the faster code specialised for euclidean output metrics
+
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
 
@@ -817,13 +819,9 @@ def simplicial_set_embedding(
 
     rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
-    # optimize_layout = make_optimize_layout(
-    #     output_metric,
-    #     tuple(output_metric_kwds.values()),
-    # )
 
     embedding = (embedding - np.min(embedding, 0)) / (np.max(embedding, 0) - np.min(embedding, 0))
-    if output_metric == dist.euclidean:
+    if euclidean_output:
         embedding = optimize_layout_euclidean(
             embedding,
             embedding,
@@ -1427,12 +1425,9 @@ class UMAP(BaseEstimator):
         if self.verbose:
             print("Construct embedding")
 
-
         self.embedding_ = simplicial_set_embedding(
             self._raw_data,
             self.graph_,
-            self._sigmas,
-            self._rhos,
             self.n_components,
             self.initial_alpha,
             self._a,
@@ -1446,6 +1441,7 @@ class UMAP(BaseEstimator):
             self._metric_kwds,
             self._output_distance_func,
             self._output_metric_kwds,
+            self.output_metric in ('euclidean', 'l2'),
             self.verbose,
         )
 
@@ -1751,7 +1747,7 @@ class UMAP(BaseEstimator):
             self.repulsion_strength,
             self.initial_alpha,
             self.negative_sample_rate,
-            self._input_distance_func,
+            _input_distance_func,
             tuple(self._metric_kwds.values()),
             verbose=self.verbose,
         )
