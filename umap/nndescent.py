@@ -43,7 +43,7 @@ from umap.rp_tree import search_flat_tree
 #     specialised to the given metric.
 #     """
 
-@numba.njit(parallel=True)
+@numba.njit()
 def nn_descent(
         data,
         n_neighbors,
