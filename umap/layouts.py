@@ -283,7 +283,10 @@ def optimize_layout_generic(
                     current, other, *output_metric_kwds
                 )
 
-                w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
+                if dist_output > 0.0:
+                    w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
+                else:
+                    w_l = 1.0
                 grad_coeff = 2 * b * (w_l - 1) / (dist_output + 1e-6)
 
                 for d in range(dim):
@@ -438,7 +441,7 @@ def optimize_layout_inverse(
                 )
 
                 w_l = weight[i]
-                w_h = np.exp(-(dist_output - rhos[j]) / (sigmas[j] + 1e-6))
+                # w_h = np.exp(-(dist_output - rhos[j]) / (sigmas[j] + 1e-6))
                 grad_coeff = (1 / (w_l * sigmas[j] + 1e-6))
 
                 for d in range(dim):
