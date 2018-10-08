@@ -13,27 +13,11 @@ from umap.utils import (
     unchecked_heap_push,
     smallest_flagged,
     rejection_sample,
-    build_candidates,
     new_build_candidates,
     deheap_sort,
 )
 
 from umap.rp_tree import search_flat_tree
-
-
-@numba.njit(fastmath=True)
-def pairwise_distances(data, indices, dist, dist_args):
-    n = indices.shape[0]
-    result = -1.0 * np.ones((n, n), np.float32)
-    for i in range(n):
-        if indices[i] < 0:
-            continue
-        for j in range(i + 1, n):
-            if indices[j] < 0:
-                continue
-            result[i, j] = dist(data[indices[i]], data[indices[j]], *dist_args)
-
-    return result
 
 
 @numba.njit()
@@ -52,6 +36,7 @@ def nn_descent(
         verbose=False,
 ):
     n_vertices = data.shape[0]
+    tried = set([(-1, -1)])
 
     current_graph = make_heap(data.shape[0], n_neighbors)
     for i in range(data.shape[0]):
@@ -60,23 +45,11 @@ def nn_descent(
             d = dist(data[i], data[indices[j]], *dist_args)
             heap_push(current_graph, i, d, indices[j], 1)
             heap_push(current_graph, indices[j], d, i, 1)
+            tried.add((i, indices[j]))
+            tried.add((indices[j], i))
 
     if rp_tree_init:
-        tried = set([(-1, -1)])
         for n in range(leaf_array.shape[0]):
-            # ds = pairwise_distances(data, leaf_array[n], dist, dist_args)
-            # for i in range(leaf_array.shape[1]):
-            #     if ds[i, 0] < 0.0:
-            #         continue
-            #     for j in range(i + 1, leaf_array.shape[1]):
-            #         if ds[i, j] < 0.0:
-            #             continue
-            #         heap_push(
-            #             current_graph, leaf_array[n, i], ds[i,j], leaf_array[n, j], 1
-            #         )
-            #         heap_push(
-            #             current_graph, leaf_array[n, j], ds[i,j], leaf_array[n, i], 1
-            #         )
             for i in range(leaf_array.shape[1]):
                 if leaf_array[n, i] < 0:
                     break
@@ -119,8 +92,8 @@ def nn_descent(
                         continue
 
                     d = dist(data[p], data[q], *dist_args)
-                    c += heap_push(current_graph, p, d, q, 1)
-                    c += heap_push(current_graph, q, d, p, 1)
+                    c += unchecked_heap_push(current_graph, p, d, q, 1)
+                    c += unchecked_heap_push(current_graph, q, d, p, 1)
                     tried.add((p, q))
                     tried.add((q, p))
 
@@ -130,8 +103,8 @@ def nn_descent(
                         continue
 
                     d = dist(data[p], data[q], *dist_args)
-                    c += heap_push(current_graph, p, d, q, 1)
-                    c += heap_push(current_graph, q, d, p, 1)
+                    c += unchecked_heap_push(current_graph, p, d, q, 1)
+                    c += unchecked_heap_push(current_graph, q, d, p, 1)
                     tried.add((p, q))
                     tried.add((q, p))
 
@@ -140,10 +113,7 @@ def nn_descent(
 
     return deheap_sort(current_graph)
 
-    # return nn_descent
 
-
-# def make_initialisations(dist, dist_args):
 @numba.njit(parallel=True)
 def init_from_random(n_neighbors, data, query_points, heap, rng_state, dist, dist_args):
     for i in range(query_points.shape[0]):
@@ -176,8 +146,6 @@ def init_from_tree(tree, data, query_points, heap, rng_state, dist, dist_args):
 
     return
 
-    # return init_from_random, init_from_tree
-
 
 def initialise_search(
         forest, data, query_points, n_neighbors, rng_state, dist, dist_args
@@ -191,7 +159,6 @@ def initialise_search(
     return results
 
 
-# def make_initialized_nnd_search(dist, dist_args):
 @numba.njit(parallel=True)
 def initialized_nnd_search(data, indptr, indices, initialization, query_points, dist, dist_args):
     for i in numba.prange(query_points.shape[0]):
@@ -218,5 +185,3 @@ def initialized_nnd_search(data, indptr, indices, initialization, query_points, 
                 tried.add(candidates[j])
 
     return initialization
-
-    # return initialized_nnd_search
