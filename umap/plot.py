@@ -176,7 +176,7 @@ def points(
     if points.shape[1] != 2:
         raise ValueError('Plotting is currently only implemented for 2D embeddings')
 
-    if points.shape[0] <= 10000:
+    if points.shape[0] <= width * height // 10:
         return _matplotlib_points(points, labels, values, cmap, color_key,
                                   color_key_cmap, background, width, height)
     else:
