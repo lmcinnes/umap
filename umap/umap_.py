@@ -1119,10 +1119,7 @@ class UMAP(BaseEstimator):
 
         self.n_neighbors = n_neighbors
         self.metric = metric
-        if metric_kwds is not None:
-            self._metric_kwds = metric_kwds
-        else:
-            self._metric_kwds = {}
+        self.metric_kwds = metric_kwds
         self.output_metric = output_metric
         if output_metric_kwds is not None:
             self._output_metric_kwds = output_metric_kwds

@@ -248,12 +248,12 @@ def unchecked_heap_push(heap, row, weight, index, flag):
     -------
     success: The number of new elements successfully pushed into the heap.
     """
+    if weight >= heap[1, row, 0]:
+        return 0
+
     indices = heap[0, row]
     weights = heap[1, row]
     is_new = heap[2, row]
-
-    if weight >= weights[0]:
-        return 0
 
     # insert val at position zero
     weights[0] = weight

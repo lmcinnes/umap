@@ -264,9 +264,9 @@ def spectral_layout(data, graph, dim, random_state, metric="euclidean", metric_k
         # )
         eigenvalues, eigenvectors = scipy.sparse.linalg.lobpcg(
             L,
-            random_state.normal(size=(L.shape[0], k)),
+            random_state.normal(size=(L.shape[0], k)) + 1,
             largest=False,
-            tol=1e-4
+            tol=1e-8
         )
         order = np.argsort(eigenvalues)[1:k]
         return eigenvectors[:, order]
