@@ -253,14 +253,20 @@ def spectral_layout(data, graph, dim, random_state, metric="euclidean", metric_k
     k = dim + 1
     num_lanczos_vectors = max(2 * k + 1, int(np.sqrt(graph.shape[0])))
     try:
-        eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
+        # eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
+        #     L,
+        #     k,
+        #     which="SM",
+        #     ncv=num_lanczos_vectors,
+        #     tol=1e-4,
+        #     v0=np.ones(L.shape[0]),
+        #     maxiter=graph.shape[0] * 5,
+        # )
+        eigenvalues, eigenvectors = scipy.sparse.linalg.lobpcg(
             L,
-            k,
-            which="SM",
-            ncv=num_lanczos_vectors,
-            tol=1e-4,
-            v0=np.ones(L.shape[0]),
-            maxiter=graph.shape[0] * 5,
+            random_state.normal(size=(L.shape[0], k)),
+            largest=False,
+            tol=1e-4
         )
         order = np.argsort(eigenvalues)[1:k]
         return eigenvectors[:, order]

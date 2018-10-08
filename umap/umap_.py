@@ -55,22 +55,22 @@ def breadth_first_search(adjmat, start, min_vertices):
     levels[start] = 0
     max_level = np.inf
     visited = [start]
- 
+
     while queue:
         node = queue.pop(0)
         explored.append(node)
         if max_level == np.inf and len(explored) > min_vertices:
             max_level = max(levels.values())
- 
+
         if levels[node] + 1 < max_level:
             neighbors = adjmat[node].indices
             for neighbour in neighbors:
                 if neighbour not in visited:
                     queue.append(neighbour)
                     visited.append(neighbour)
- 
+
                     levels[neighbour] = levels[node] + 1
- 
+
     return np.array(explored)
 
 @numba.njit(parallel=True, fastmath=True)
@@ -1160,13 +1160,9 @@ class UMAP(BaseEstimator):
                 )
 
         self.n_epochs = n_epochs
-        if isinstance(init, np.ndarray):
-            self.init = check_array(init, dtype=np.float32, accept_sparse=False)
-        else:
-            self.init = init
+        self.init = init
         self.n_components = n_components
         self.repulsion_strength = repulsion_strength
-        self.initial_alpha = learning_rate
         self.learning_rate = learning_rate
 
         self.spread = spread
@@ -1179,29 +1175,14 @@ class UMAP(BaseEstimator):
         self.transform_queue_size = transform_queue_size
         self.target_n_neighbors = target_n_neighbors
         self.target_metric = target_metric
-        if target_metric_kwds is not None:
-            self._target_metric_kwds = target_metric_kwds
-        else:
-            self._target_metric_kwds = {}
+        self.target_metric_kwds = target_metric_kwds
         self.target_weight = target_weight
         self.transform_seed = transform_seed
         self.verbose = verbose
 
-        self._transform_available = False
+        self.a = a
+        self.b = b
 
-        self._validate_parameters()
-
-        if a is None or b is None:
-            self._a, self._b = find_ab_params(self.spread, self.min_dist)
-        else:
-            self._a = a
-            self._b = b
-
-        self._sigmas = None
-        self._rhos = None
-
-        if self.verbose:
-            print(str(self))
 
     def _validate_parameters(self):
         if self.set_op_mix_ratio < 0.0 or self.set_op_mix_ratio > 1.0:
@@ -1225,7 +1206,7 @@ class UMAP(BaseEstimator):
             raise ValueError("metric must be string or callable")
         if self.negative_sample_rate < 0:
             raise ValueError("negative sample rate must be positive")
-        if self.initial_alpha < 0.0:
+        if self._initial_alpha < 0.0:
             raise ValueError("learning_rate must be positive")
         if self.n_neighbors < 2:
             raise ValueError("n_neighbors must be greater than 2")
@@ -1264,6 +1245,36 @@ class UMAP(BaseEstimator):
         X = check_array(X, dtype=np.float32, accept_sparse="csr")
         self._raw_data = X
 
+        # Handle all the optional arguments, setting default
+        if self.a is None or self.b is None:
+            self._a, self._b = find_ab_params(self.spread, self.min_dist)
+        else:
+            self._a = self.a
+            self._b = self.b
+
+        if self.metric_kwds is not None:
+            self._metric_kwds = self.metric_kwds
+        else:
+            self._metric_kwds = {}
+
+        if self.target_metric_kwds is not None:
+            self._target_metric_kwds = self.target_metric_kwds
+        else:
+            self._target_metric_kwds = {}
+
+        if isinstance(self.init, np.ndarray):
+            init = check_array(self.init, dtype=np.float32, accept_sparse=False)
+        else:
+            init = self.init
+
+        self._initial_alpha = self.learning_rate
+
+        self._validate_parameters()
+
+        if self.verbose:
+            print(str(self))
+
+        # Error check n_neighbors based on data size
         if X.shape[0] <= self.n_neighbors:
             if X.shape[0] == 1:
                 self.embedding_ = np.zeros((1, self.n_components))  # needed to sklearn comparability
@@ -1333,7 +1344,6 @@ class UMAP(BaseEstimator):
                 self.verbose,
             )
 
-            self._transform_available = True
             self._search_graph = scipy.sparse.lil_matrix(
                 (X.shape[0], X.shape[0]), dtype=np.int8
             )
@@ -1365,13 +1375,14 @@ class UMAP(BaseEstimator):
                 # )
 
         if y is not None:
+            y_ = check_array(y, ensure_2d=False)
             if self.target_metric == "categorical":
                 if self.target_weight < 1.0:
                     far_dist = 2.5 * (1.0 / (1.0 - self.target_weight))
                 else:
                     far_dist = 1.0e12
                 self.graph_ = categorical_simplicial_set_intersection(
-                    self.graph_, y, far_dist=far_dist
+                    self.graph_, y_, far_dist=far_dist
                 )
             else:
                 if self.target_n_neighbors == -1:
@@ -1381,10 +1392,10 @@ class UMAP(BaseEstimator):
 
                 # Handle the small case as precomputed as before
                 if y.shape[0] < 4096:
-                    ydmat = pairwise_distances(y[np.newaxis, :].T,
+                    ydmat = pairwise_distances(y_[np.newaxis, :].T,
                                                metric=self.target_metric,
                                                **self._target_metric_kwds)
-                    
+
                     target_graph, target_sigmas, target_rhos = fuzzy_simplicial_set(
                         ydmat,
                         target_n_neighbors,
@@ -1401,7 +1412,7 @@ class UMAP(BaseEstimator):
                 else:
                     # Standard case
                     target_graph, target_sigmas, target_rhos = fuzzy_simplicial_set(
-                        y[np.newaxis, :].T,
+                        y_[np.newaxis, :].T,
                         target_n_neighbors,
                         random_state,
                         self.target_metric,
@@ -1435,13 +1446,13 @@ class UMAP(BaseEstimator):
             self._raw_data,
             self.graph_,
             self.n_components,
-            self.initial_alpha,
+            self._initial_alpha,
             self._a,
             self._b,
             self.repulsion_strength,
             self.negative_sample_rate,
             n_epochs,
-            self.init,
+            init,
             random_state,
             self.metric,
             self._metric_kwds,
@@ -1605,7 +1616,7 @@ class UMAP(BaseEstimator):
                 self._b,
                 rng_state,
                 self.repulsion_strength,
-                self.initial_alpha,
+                self._initial_alpha,
                 self.negative_sample_rate,
                 verbose=self.verbose,
             )
@@ -1622,7 +1633,7 @@ class UMAP(BaseEstimator):
                 self._b,
                 rng_state,
                 self.repulsion_strength,
-                self.initial_alpha,
+                self._initial_alpha,
                 self.negative_sample_rate,
                 self._output_distance_func,
                 tuple(self._output_metric_kwds.values()),
