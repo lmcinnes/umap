@@ -13,7 +13,7 @@ import sklearn.cluster
 import sklearn.neighbors
 
 from umap.nndescent import initialise_search, initialized_nnd_search
-from umap.utils import deheap_sort
+from umap.utils import deheap_sort, submatrix
 
 fire_cmap = matplotlib.colors.LinearSegmentedColormap.from_list('fire', colorcet.fire)
 darkblue_cmap = matplotlib.colors.LinearSegmentedColormap.from_list('darkblue', colorcet.kbc)
@@ -49,31 +49,39 @@ _diagnostic_types = np.array(
 
 
 def _nhood_search(umap_object, nhood_size):
-    rng_state = np.empty(3, dtype=np.int64)
+    if umap_object._small_data:
+        dmat = sklearn.metrics.pairwise_distances(umap_object._raw_data)
+        indices = np.argpartition(dmat, nhood_size)[:, :nhood_size]
+        dmat_shortened = submatrix(dmat, indices, nhood_size)
+        indices_sorted = np.argsort(dmat_shortened)
+        indices = submatrix(indices, indices_sorted, nhood_size)
+        dists = submatrix(dmat_shortened, indices_sorted, nhood_size)
+    else:
+        rng_state = np.empty(3, dtype=np.int64)
 
-    init = initialise_search(
-        umap_object._rp_forest,
-        umap_object._raw_data,
-        umap_object._raw_data,
-        int(nhood_size * umap_object.transform_queue_size),
-        rng_state,
-        umap_object._distance_func,
-        umap_object._dist_args
-    )
+        init = initialise_search(
+            umap_object._rp_forest,
+            umap_object._raw_data,
+            umap_object._raw_data,
+            int(nhood_size * umap_object.transform_queue_size),
+            rng_state,
+            umap_object._distance_func,
+            umap_object._dist_args
+        )
 
-    result = initialized_nnd_search(
-        umap_object._raw_data,
-        umap_object._search_graph.indptr,
-        umap_object._search_graph.indices,
-        init,
-        umap_object._raw_data,
-        umap_object._distance_func,
-        umap_object._dist_args
-    )
+        result = initialized_nnd_search(
+            umap_object._raw_data,
+            umap_object._search_graph.indptr,
+            umap_object._search_graph.indices,
+            init,
+            umap_object._raw_data,
+            umap_object._distance_func,
+            umap_object._dist_args
+        )
 
-    indices, dists = deheap_sort(result)
-    indices = indices[:, : nhood_size]
-    dists = dists[:, : nhood_size]
+        indices, dists = deheap_sort(result)
+        indices = indices[:, : nhood_size]
+        dists = dists[:, : nhood_size]
 
     return indices, dists
 
@@ -258,6 +266,8 @@ def diagnostic(umap_object, diagnostic_type='pca', nhood_size=15, ax=None, cmap=
         color_proj /= np.max(color_proj, axis=0)
 
         ax.scatter(points[:, 0], points[:, 1], s=point_size, c=color_proj, alpha=0.66)
+        ax.set_title('Colored by RGB coords of PCA embedding')
+        ax.set(xticks=[], yticks=[])
 
     elif diagnostic_type == 'ica':
         color_proj = sklearn.decomposition.FastICA(n_components=3).fit_transform(umap_object._raw_data)
@@ -265,6 +275,8 @@ def diagnostic(umap_object, diagnostic_type='pca', nhood_size=15, ax=None, cmap=
         color_proj /= np.max(color_proj, axis=0)
 
         ax.scatter(points[:, 0], points[:, 1], s=point_size, c=color_proj, alpha=0.66)
+        ax.set_title('Colored by RGB coords of FastICA embedding')
+        ax.set(xticks=[], yticks=[])
 
     elif diagnostic_type == 'vq':
         color_projector = sklearn.cluster.KMeans(n_clusters=3).fit(umap_object._raw_data)
@@ -274,6 +286,8 @@ def diagnostic(umap_object, diagnostic_type='pca', nhood_size=15, ax=None, cmap=
         color_proj /= np.max(color_proj, axis=0)
 
         ax.scatter(points[:, 0], points[:, 1], s=point_size, c=color_proj, alpha=0.66)
+        ax.set_title('Colored by RGB coords of Vector Quantization')
+        ax.set(xticks=[], yticks=[])
 
     elif diagnostic_type == 'neighborhood':
         highd_indices, highd_dists = _nhood_search(umap_object, nhood_size)
@@ -284,6 +298,8 @@ def diagnostic(umap_object, diagnostic_type='pca', nhood_size=15, ax=None, cmap=
 
         ax.scatter(points[:, 0], points[:, 1], s=point_size, c=accuracy,
                    cmap=cmap, vmin=0.0, vmax=1.0)
+        ax.set_title('Colored by neighborhood Jaccard index')
+        ax.set(xticks=[], yticks=[])
 
     elif diagnostic_type == 'all':
 
@@ -291,6 +307,8 @@ def diagnostic(umap_object, diagnostic_type='pca', nhood_size=15, ax=None, cmap=
         for i in range(2):
             for j in range(2):
                 diagnostic(umap_object, diagnostic_type=_diagnostic_types[i, j], ax=axs[i, j])
+
+        plt.tight_layout()
 
     else:
         raise ValueError('Unknown diagnostic; should be one of '
