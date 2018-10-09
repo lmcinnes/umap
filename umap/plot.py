@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import numba
 
 import datashader as ds
 import datashader.transfer_functions as tf
@@ -9,6 +10,10 @@ import matplotlib.colors
 
 import sklearn.decomposition
 import sklearn.cluster
+import sklearn.neighbors
+
+from umap.nndescent import initialise_search, initialized_nnd_search
+from umap.utils import deheap_sort
 
 fire_cmap = matplotlib.colors.LinearSegmentedColormap.from_list('fire', colorcet.fire)
 darkblue_cmap = matplotlib.colors.LinearSegmentedColormap.from_list('darkblue', colorcet.kbc)
@@ -38,6 +43,51 @@ _themes = {
     'darkgreen': {'cmap': 'darkgreen', 'color_key_cmap': 'rainbow', 'background': 'black'},
 }
 
+_diagnostic_types = np.array(
+    [['pca', 'ica'], ['vq', 'neighborhood']]
+)
+
+
+def _nhood_search(umap_object, nhood_size):
+    rng_state = np.empty(3, dtype=np.int64)
+
+    init = initialise_search(
+        umap_object._rp_forest,
+        umap_object._raw_data,
+        umap_object._raw_data,
+        int(nhood_size * umap_object.transform_queue_size),
+        rng_state,
+        umap_object._distance_func,
+        umap_object._dist_args
+    )
+
+    result = initialized_nnd_search(
+        umap_object._raw_data,
+        umap_object._search_graph.indptr,
+        umap_object._search_graph.indices,
+        init,
+        umap_object._raw_data,
+        umap_object._distance_func,
+        umap_object._dist_args
+    )
+
+    indices, dists = deheap_sort(result)
+    indices = indices[:, : nhood_size]
+    dists = dists[:, : nhood_size]
+
+    return indices, dists
+
+
+@numba.jit()
+def _nhood_compare(indices_left, indices_right):
+    result = np.empty(indices_left.shape[0])
+
+    for i in range(indices_left.shape[0]):
+        intersection_size = np.intersect1d(indices_left[i], indices_right[i]).shape[0]
+        union_size = np.unique(np.hstack([indices_left[i], indices_right[i]])).shape[0]
+        result[i] = float(intersection_size) / float(union_size)
+
+    return result
 
 def _datashade_points(
         points,
@@ -83,7 +133,7 @@ def _datashade_points(
         bin_size = (max_val - min_val) / 256.0
         data['val_cat'] = pd.Categorical(np.round((values - min_val) / bin_size).astype(np.int16))
         aggregation = canvas.points(data, 'x', 'y', agg=ds.count_cat('val_cat'))
-        color_key = to_hex(plt.get_cmap(cmap)(np.linspace(0, 1, 256)))
+        color_key = _to_hex(plt.get_cmap(cmap)(np.linspace(0, 1, 256)))
         result = tf.shade(aggregation, color_key=color_key, how='eq_hist')
 
     else:
@@ -190,8 +240,63 @@ def connectivity(umap_object):
     pass
 
 
-def diagnostic(umap_object):
-    pass
+def diagnostic(umap_object, diagnostic_type='pca', nhood_size=15, ax=None, cmap='viridis'):
+    points = umap_object.embedding_
+
+    if points.shape[1] != 2:
+        raise ValueError('Plotting is currently only implemented for 2D embeddings')
+
+    point_size = 20.0 / np.log2(points.shape[0])
+
+    if ax is None and diagnostic_type != 'all':
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+
+    if diagnostic_type == 'pca':
+        color_proj = sklearn.decomposition.PCA(n_components=3).fit_transform(umap_object._raw_data)
+        color_proj -= np.min(color_proj)
+        color_proj /= np.max(color_proj, axis=0)
+
+        ax.scatter(points[:, 0], points[:, 1], s=point_size, c=color_proj, alpha=0.66)
+
+    elif diagnostic_type == 'ica':
+        color_proj = sklearn.decomposition.FastICA(n_components=3).fit_transform(umap_object._raw_data)
+        color_proj -= np.min(color_proj)
+        color_proj /= np.max(color_proj, axis=0)
+
+        ax.scatter(points[:, 0], points[:, 1], s=point_size, c=color_proj, alpha=0.66)
+
+    elif diagnostic_type == 'vq':
+        color_projector = sklearn.cluster.KMeans(n_clusters=3).fit(umap_object._raw_data)
+        color_proj = sklearn.metrics.pairwise_distances(umap_object._raw_data,
+                                                        color_projector.cluster_centers_)
+        color_proj -= np.min(color_proj)
+        color_proj /= np.max(color_proj, axis=0)
+
+        ax.scatter(points[:, 0], points[:, 1], s=point_size, c=color_proj, alpha=0.66)
+
+    elif diagnostic_type == 'neighborhood':
+        highd_indices, highd_dists = _nhood_search(umap_object, nhood_size)
+        tree = sklearn.neighbors.KDTree(points)
+        lowd_dists, lowd_indices = tree.query(points, k=nhood_size)
+        accuracy = _nhood_compare(highd_indices.astype(np.int32),
+                                  lowd_indices.astype(np.int32))
+
+        ax.scatter(points[:, 0], points[:, 1], s=point_size, c=accuracy,
+                   cmap=cmap, vmin=0.0, vmax=1.0)
+
+    elif diagnostic_type == 'all':
+
+        fig, axs = plt.subplots(2, 2)
+        for i in range(2):
+            for j in range(2):
+                diagnostic(umap_object, diagnostic_type=_diagnostic_types[i, j], ax=axs[i, j])
+
+    else:
+        raise ValueError('Unknown diagnostic; should be one of '
+                         '"pca", "ica", "vq", "neighborhood", or "all"')
+
+    return ax
 
 
 def interactive(umap_object):
