@@ -4,6 +4,7 @@ import numba
 
 import datashader as ds
 import datashader.transfer_functions as tf
+import datashader.bundling as bd
 import matplotlib.pyplot as plt
 import colorcet
 import matplotlib.colors
@@ -15,16 +16,22 @@ import sklearn.neighbors
 from umap.nndescent import initialise_search, initialized_nnd_search
 from umap.utils import deheap_sort, submatrix
 
+from warnings import warn
+
 fire_cmap = matplotlib.colors.LinearSegmentedColormap.from_list('fire', colorcet.fire)
 darkblue_cmap = matplotlib.colors.LinearSegmentedColormap.from_list('darkblue', colorcet.kbc)
 darkgreen_cmap = matplotlib.colors.LinearSegmentedColormap.from_list('darkgreen', colorcet.kgy)
 darkred_cmap = matplotlib.colors.LinearSegmentedColormap.from_list('darkred',
                                                                    colors=colorcet.linear_kry_5_95_c72[:192],
                                                                    N=256)
+darkpurple_cmap = matplotlib.colors.LinearSegmentedColormap.from_list('darkpurple',
+                                                                      colorcet.linear_bmw_5_95_c89)
+
 plt.register_cmap('fire', fire_cmap)
 plt.register_cmap('darkblue', darkblue_cmap)
 plt.register_cmap('darkgreen', darkgreen_cmap)
-plt.register_cmap('darkred', darkgreen_cmap)
+plt.register_cmap('darkred', darkred_cmap)
+plt.register_cmap('darkpurple', darkpurple_cmap)
 
 
 def _to_hex(arr):
@@ -32,15 +39,60 @@ def _to_hex(arr):
 
 
 _themes = {
-    'fire': {'cmap': 'fire', 'color_key_cmap': 'rainbow', 'background': 'black'},
-    'viridis': {'cmap': 'viridis', 'color_key_cmap': 'Spectral', 'background': 'black'},
-    'inferno': {'cmap': 'inferno', 'color_key_cmap': 'Spectral', 'background': 'black'},
-    'blue': {'cmap': 'Blues', 'color_key_cmap': 'tab20', 'background': 'white'},
-    'red': {'cmap': 'Reds', 'color_key_cmap': 'tab20b', 'background': 'white'},
-    'green': {'cmap': 'Greens', 'color_key_cmap': 'tab20c', 'background': 'white'},
-    'darkblue': {'cmap': 'darkblue', 'color_key_cmap': 'rainbow', 'background': 'black'},
-    'darkred': {'cmap': 'darkred', 'color_key_cmap': 'rainbow', 'background': 'black'},
-    'darkgreen': {'cmap': 'darkgreen', 'color_key_cmap': 'rainbow', 'background': 'black'},
+    'fire': {
+        'cmap': 'fire',
+        'color_key_cmap': 'rainbow',
+        'background': 'black',
+        'edge_cmap': 'Blues_r',
+    },
+    'viridis': {
+        'cmap': 'viridis',
+        'color_key_cmap': 'Spectral',
+        'background': 'black',
+        'edge_cmap': 'gray',
+    },
+    'inferno': {
+        'cmap': 'inferno',
+        'color_key_cmap': 'Spectral',
+        'background': 'black',
+        'edge_cmap': 'gray',
+    },
+    'blue': {
+        'cmap': 'Blues',
+        'color_key_cmap': 'tab20',
+        'background': 'white',
+        'edge_cmap': 'gray_r',
+    },
+    'red': {
+        'cmap': 'Reds',
+        'color_key_cmap': 'tab20b',
+        'background': 'white',
+        'edge_cmap': 'gray_r',
+    },
+    'green': {
+        'cmap': 'Greens',
+        'color_key_cmap': 'tab20c',
+        'background': 'white',
+        'edge_cmap': 'gray_r',
+    },
+    'darkblue': {
+        'cmap': 'darkblue',
+        'color_key_cmap': 'rainbow',
+        'background': 'black',
+        'edge_cmap': 'darkred',
+    },
+    'darkred': {
+        'cmap': 'darkred',
+        'color_key_cmap': 'rainbow',
+        'background': 'black',
+        'edge_cmap': 'darkblue',
+    },
+    'darkgreen': {
+        'cmap': 'darkgreen',
+        'color_key_cmap': 'rainbow',
+        'background': 'black',
+        'edge_cmap': 'darkpurple',
+    },
 }
 
 _diagnostic_types = np.array(
@@ -97,6 +149,22 @@ def _nhood_compare(indices_left, indices_right):
 
     return result
 
+
+def _get_extent(points):
+    min_x = np.min(points[:, 0])
+    max_x = np.max(points[:, 0])
+    min_y = np.min(points[:, 1])
+    max_y = np.max(points[:, 1])
+
+    extent = (
+        np.round(min_x - 0.05 * (max_x - min_x)),
+        np.round(max_x + 0.05 * (max_x - min_x)),
+        np.round(min_y - 0.05 * (max_y - min_y)),
+        np.round(max_y + 0.05 * (max_y - min_y)),
+    )
+
+    return extent
+
 def _datashade_points(
         points,
         labels=None,
@@ -108,11 +176,11 @@ def _datashade_points(
         width=800,
         height=800,
 ):
-    extent = np.round(np.max(np.abs(points)) * 1.1)
+    extent = _get_extent(points)
     canvas = ds.Canvas(plot_width=width,
                        plot_height=height,
-                       x_range=(-extent, extent),
-                       y_range=(-extent, extent))
+                       x_range=(extent[0], extent[1]),
+                       y_range=(extent[2], extent[3]))
     data = pd.DataFrame(points, columns=('x', 'y'))
     if labels is not None:
         if labels.shape[0] != points.shape[0]:
@@ -137,18 +205,27 @@ def _datashade_points(
             raise ValueError('Values must have a value for '
                              'each sample (size mismatch: {} {})'.format(values.shape[0],
                                                                          points.shape[0]))
-        min_val, max_val = np.min(values), np.max(values)
-        bin_size = (max_val - min_val) / 256.0
-        data['val_cat'] = pd.Categorical(np.round((values - min_val) / bin_size).astype(np.int16))
-        aggregation = canvas.points(data, 'x', 'y', agg=ds.count_cat('val_cat'))
-        color_key = _to_hex(plt.get_cmap(cmap)(np.linspace(0, 1, 256)))
-        result = tf.shade(aggregation, color_key=color_key, how='eq_hist')
+        unique_values = np.unique(values)
+        if unique_values.shape[0] >= 256:
+            min_val, max_val = np.min(values), np.max(values)
+            bin_size = (max_val - min_val) / 256.0
+            data['val_cat'] = pd.Categorical(np.round((values - min_val) / bin_size).astype(np.int16))
+            aggregation = canvas.points(data, 'x', 'y', agg=ds.count_cat('val_cat'))
+            color_key = _to_hex(plt.get_cmap(cmap)(np.linspace(0, 1, 256)))
+            result = tf.shade(aggregation, color_key=color_key, how='eq_hist')
+        else:
+            data['val_cat'] = pd.Categorical(values)
+            aggregation = canvas.points(data, 'x', 'y', agg=ds.count_cat('val_cat'))
+            color_key_cols = _to_hex(plt.get_cmap(cmap)(np.linspace(0, 1, unique_values.shape[0])))
+            color_key = dict(zip(unique_values, color_key_cols))
+            result = tf.shade(aggregation, color_key=color_key, how='eq_hist')
 
     else:
         aggregation = canvas.points(data, 'x', 'y', agg=ds.count())
         result = tf.shade(aggregation, cmap=plt.get_cmap(cmap))
 
-    result = tf.set_background(result, background)
+    if background is not None:
+        result = tf.set_background(result, background)
 
     return result
 
@@ -164,7 +241,7 @@ def _matplotlib_points(
         width=800,
         height=800,
 ):
-    point_size = 20.0 / np.log10(points.shape[0])
+    point_size = 100.0 / np.sqrt(points.shape[0])
     dpi = plt.rcParams['figure.dpi']
     fig = plt.figure(figsize=(width / dpi, height / dpi))
     ax = fig.add_subplot(111)
@@ -242,19 +319,83 @@ def points(
                                  color_key_cmap, background, width, height)
 
 
+def connectivity(
+        umap_object,
+        edge_bundling=None,
+        edge_cmap='gray_r',
+        show_points=True,
+        labels=None,
+        values=None,
+        theme=None,
+        cmap='Blues',
+        color_key=None,
+        color_key_cmap='Spectral',
+        background='white',
+        width=800,
+        height=800,
+):
+    if theme is not None:
+        cmap = _themes[theme]['cmap']
+        color_key_cmap = _themes[theme]['color_key_cmap']
+        edge_cmap = _themes[theme]['edge_cmap']
+        background = _themes[theme]['background']
+
+    points = umap_object.embedding_
+    point_df = pd.DataFrame(points, columns=('x', 'y'))
+
+    coo_graph = umap_object.graph_.tocoo()
+    edge_df = pd.DataFrame(np.vstack([coo_graph.row,
+                                      coo_graph.col,
+                                      coo_graph.data]).T,
+                           columns=('source',
+                                    'target',
+                                    'weight'))
+    edge_df['source'] = edge_df.source.astype(np.int32)
+    edge_df['target'] = edge_df.target.astype(np.int32)
+
+    extent = _get_extent(points)
+    canvas = ds.Canvas(plot_width=width,
+                       plot_height=height,
+                       x_range=(extent[0], extent[1]),
+                       y_range=(extent[2], extent[3]))
+
+    if edge_bundling is None:
+        edges = bd.directly_connect_edges(point_df, edge_df, weight='weight')
+    elif edge_bundling == 'hammer':
+        warn('Hammer edge bundling is expensive for large graphs!\n'
+             'This may take a long time to compute!')
+        edges = bd.hammer_bundle(point_df, edge_df, weight='weight')
+    else:
+        raise ValueError('{} is not a recognised bundling method'.format(edge_bundling))
+
+    edge_img = tf.shade(canvas.line(edges, 'x', 'y', agg=ds.sum('weight')),
+                        cmap=plt.get_cmap(edge_cmap))
+    edge_img = tf.set_background(edge_img, background)
+
+    if show_points:
+        point_img = _datashade_points(points, labels, values, cmap, color_key,
+                                      color_key_cmap, None, width, height)
+        tf.dynspread(point_img, threshold=0.95)
+        return tf.stack(edge_img, point_img, how="over")
+    else:
+        return edge_img
 
 
-def connectivity(umap_object):
-    pass
+def diagnostic(
+        umap_object,
+        diagnostic_type='pca',
+        nhood_size=15, ax=None,
+        cmap='viridis',
+        point_size=None
+):
 
-
-def diagnostic(umap_object, diagnostic_type='pca', nhood_size=15, ax=None, cmap='viridis'):
     points = umap_object.embedding_
 
     if points.shape[1] != 2:
         raise ValueError('Plotting is currently only implemented for 2D embeddings')
 
-    point_size = 20.0 / np.log2(points.shape[0])
+    if point_size is None:
+        point_size = 100.0 / np.sqrt(points.shape[0])
 
     if ax is None and diagnostic_type != 'all':
         fig = plt.figure()
@@ -306,7 +447,10 @@ def diagnostic(umap_object, diagnostic_type='pca', nhood_size=15, ax=None, cmap=
         fig, axs = plt.subplots(2, 2)
         for i in range(2):
             for j in range(2):
-                diagnostic(umap_object, diagnostic_type=_diagnostic_types[i, j], ax=axs[i, j])
+                diagnostic(umap_object,
+                           diagnostic_type=_diagnostic_types[i, j],
+                           ax=axs[i, j],
+                           point_size=point_size / 4.0)
 
         plt.tight_layout()
 
