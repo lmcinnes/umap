@@ -387,7 +387,7 @@ def connectivity(
         point_img = _datashade_points(points, labels, values, cmap, color_key,
                                       color_key_cmap, None, width, height)
         if px_size > 1:
-            point_img = tf.dynspread(point_img, threshold=0.25, max_px=px_size)
+            point_img = tf.dynspread(point_img, threshold=0.5, max_px=px_size)
         return tf.stack(edge_img, point_img, how="over")
     else:
         return edge_img
