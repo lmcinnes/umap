@@ -566,6 +566,7 @@ def hellinger(x, y):
         l1_norm_y += y[i]
 
     if l1_norm_x == 0 and l1_norm_y == 0:
+        return 0.0
     elif l1_norm_x == 0 or l1_norm_y == 0:
         return 1.0
     else:
