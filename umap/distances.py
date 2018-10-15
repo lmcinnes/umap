@@ -552,6 +552,58 @@ def correlation(x, y):
     else:
         return 1.0 - (dot_product / np.sqrt(norm_x * norm_y))
 
+
+@numba.njit()
+def hellinger(x, y):
+
+    result = 0.0
+    l1_norm_x = 0.0
+    l1_norm_y = 0.0
+
+    for i in range(x.shape[0]):
+        result += np.sqrt(x[i] * y[i])
+        l1_norm_x += x[i]
+        l1_norm_y += y[i]
+
+    if l1_norm_x == 0 and l1_norm_y == 0:
+    elif l1_norm_x == 0 or l1_norm_y == 0:
+        return 1.0
+    else:
+        return np.sqrt(1 - result / np.sqrt(l1_norm_x * l1_norm_x))
+
+
+@numba.njit()
+def hellinger_grad(x, y):
+    result = 0.0
+    l1_norm_x = 0.0
+    l1_norm_y = 0.0
+
+    grad_term = np.empty(x.shape[0])
+
+    for i in range(x.shape[0]):
+        grad_term[i] = np.sqrt(x[i] * y[i])
+        result += grad_term[i]
+        l1_norm_x += x[i]
+        l1_norm_y += y[i]
+
+    if l1_norm_x == 0 and l1_norm_y == 0:
+        dist = 0.0
+        grad = np.zeros(x.shape)
+    elif l1_norm_x == 0 or l1_norm_y == 0:
+        dist = 1.0
+        grad = np.zeros(x.shape)
+    else:
+        dist_denom = np.sqrt(l1_norm_x * l1_norm_x)
+        dist = np.sqrt(1 - result / dist_denom)
+        grad_denom = 2 * dist
+        grad_numer_const = (l1_norm_y * result) / \
+                            (2 * dist_denom ** 3)
+
+        grad = (grad_numer_const - (y / grad_term * dist_denom)) / grad_denom
+
+    return dist, grad
+
+
 @numba.njit()
 def approx_log_Gamma(x):
     if x == 1:
@@ -831,6 +883,7 @@ named_distances = {
     "canberra": canberra,
     "cosine": cosine,
     "correlation": correlation,
+    "hellinger": hellinger,
     "haversine": haversine,
     "braycurtis": bray_curtis,
     "ll_dirichlet": ll_dirichlet,
@@ -869,6 +922,7 @@ named_distances_with_gradients = {
     "canberra": canberra_grad,
     "cosine": cosine_grad,
     "correlation": correlation_grad,
+    "hellinger": hellinger_grad,
     "haversine": haversine_grad,
     "braycurtis": bray_curtis_grad,
 }
