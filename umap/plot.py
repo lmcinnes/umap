@@ -9,6 +9,9 @@ import matplotlib.pyplot as plt
 import colorcet
 import matplotlib.colors
 
+import bokeh.plotting as bpl
+import bokeh.transform as btr
+
 import sklearn.decomposition
 import sklearn.cluster
 import sklearn.neighbors
@@ -43,7 +46,7 @@ _themes = {
         'cmap': 'fire',
         'color_key_cmap': 'rainbow',
         'background': 'black',
-        'edge_cmap': 'Blues_r',
+        'edge_cmap': 'fire',
     },
     'viridis': {
         'cmap': 'viridis',
@@ -96,7 +99,7 @@ _themes = {
 }
 
 _diagnostic_types = np.array(
-    [['pca', 'ica'], ['vq', 'neighborhood']]
+    [['pca', 'ica'], ['vq', 'local_dim']]
 )
 
 
@@ -280,6 +283,8 @@ def _matplotlib_points(
         color = plt.get_cmap(cmap)(0.5)
         ax.scatter(points[:, 0], points[:, 1], s=point_size, c=color)
 
+    ax.set(xticks=[], yticks=[])
+
     return ax
 
 
@@ -323,7 +328,7 @@ def connectivity(
         umap_object,
         edge_bundling=None,
         edge_cmap='gray_r',
-        show_points=True,
+        show_points=False,
         labels=None,
         values=None,
         theme=None,
@@ -342,6 +347,17 @@ def connectivity(
 
     points = umap_object.embedding_
     point_df = pd.DataFrame(points, columns=('x', 'y'))
+
+    point_size = 100.0 / np.sqrt(points.shape[0])
+    if point_size > 1:
+        px_size = int(np.round(point_size))
+    else:
+        px_size = 1
+
+    if show_points:
+        edge_how = 'log'
+    else:
+        edge_how = 'eq_hist'
 
     coo_graph = umap_object.graph_.tocoo()
     edge_df = pd.DataFrame(np.vstack([coo_graph.row,
@@ -369,13 +385,14 @@ def connectivity(
         raise ValueError('{} is not a recognised bundling method'.format(edge_bundling))
 
     edge_img = tf.shade(canvas.line(edges, 'x', 'y', agg=ds.sum('weight')),
-                        cmap=plt.get_cmap(edge_cmap))
+                        cmap=plt.get_cmap(edge_cmap), how=edge_how)
     edge_img = tf.set_background(edge_img, background)
 
     if show_points:
         point_img = _datashade_points(points, labels, values, cmap, color_key,
                                       color_key_cmap, None, width, height)
-        tf.dynspread(point_img, threshold=0.95)
+        if px_size > 1:
+            point_img = tf.dynspread(point_img, threshold=0.5, max_px=px_size)
         return tf.stack(edge_img, point_img, how="over")
     else:
         return edge_img
@@ -384,7 +401,9 @@ def connectivity(
 def diagnostic(
         umap_object,
         diagnostic_type='pca',
-        nhood_size=15, ax=None,
+        nhood_size=15,
+        local_variance_threshold=0.8,
+        ax=None,
         cmap='viridis',
         point_size=None
 ):
@@ -442,9 +461,23 @@ def diagnostic(
         ax.set_title('Colored by neighborhood Jaccard index')
         ax.set(xticks=[], yticks=[])
 
+    elif diagnostic_type == 'local_dim':
+        highd_indices, highd_dists = _nhood_search(umap_object, umap_object.n_neighbors)
+        data = umap_object._raw_data
+        local_dim = np.empty(data.shape[0], dtype=np.int64)
+        for i in range(data.shape[0]):
+            pca = sklearn.decomposition.PCA().fit(data[highd_indices[i]])
+            local_dim[i] = np.where(np.cumsum(pca.explained_variance_ratio_)
+                                    > local_variance_threshold)[0][0]
+        ax.scatter(points[:, 0], points[:, 1], s=point_size, c=local_dim,
+                   cmap=cmap, vmin=0.0, vmax=1.0)
+        ax.set_title('Colored by approx local dimension')
+        ax.set(xticks=[], yticks=[])
+
+
     elif diagnostic_type == 'all':
 
-        fig, axs = plt.subplots(2, 2)
+        fig, axs = plt.subplots(2, 2, figsize=(10, 10))
         for i in range(2):
             for j in range(2):
                 diagnostic(umap_object,
@@ -461,5 +494,87 @@ def diagnostic(
     return ax
 
 
-def interactive(umap_object):
-    pass
+def interactive(
+        umap_object,
+        labels=None,
+        values=None,
+        hover_data=None,
+        theme=None,
+        cmap='Blues',
+        color_key=None,
+        color_key_cmap='Spectral',
+        background='white',
+        width=800,
+        height=800,
+):
+    if theme is not None:
+        cmap = _themes[theme]['cmap']
+        color_key_cmap = _themes[theme]['color_key_cmap']
+        background = _themes[theme]['background']
+
+    if labels is not None and values is not None:
+        raise ValueError('Conflicting options; only one of labels or values should be set')
+
+    points = umap_object.embedding_
+
+    if points.shape[1] != 2:
+        raise ValueError('Plotting is currently only implemented for 2D embeddings')
+
+    if points.shape[0] <= width * height // 10:
+
+        bpl.output_notebook(hide_banner=True)
+
+        point_size = 100.0 / np.sqrt(points.shape[0])
+        data = pd.DataFrame(umap_object.embedding_, columns=('x', 'y'))
+
+        if labels is not None:
+            data['label'] = labels
+
+            if color_key is None:
+                unique_labels = np.unique(labels)
+                num_labels = unique_labels.shape[0]
+                color_key = _to_hex(plt.get_cmap(color_key_cmap)(np.linspace(0, 1, num_labels)))
+
+            if isinstance(color_key, dict):
+                data['color'] = pd.Series(labels).map(color_key)
+            else:
+                unique_labels = np.unique(labels)
+                if len(color_key) < unique_labels.shape[0]:
+                    raise ValueError('Color key must have enough colors for the number of labels')
+
+                new_color_key = {k: color_key[i] for i, k in enumerate(unique_labels)}
+                data['color'] = pd.Series(labels).map(new_color_key)
+
+            colors = 'color'
+
+        elif values is not None:
+            data['value'] = values
+            palette = _to_hex(plt.get_cmap(cmap)(np.linspace(0, 1, 256)))
+            colors = btr.linear_cmap('value', palette, low=np.min(values), high=np.max(values))
+
+        else:
+            colors = matplotlib.colors.rgb2hex(plt.get_cmap(cmap)(0.5))
+
+        if hover_data is not None:
+            tooltip_dict = {}
+            for col_name in hover_data:
+                data[col_name] = hover_data[col_name]
+                tooltip_dict[col_name] = '@' + col_name
+            tooltips = list(tooltip_dict.items())
+        else:
+            tooltips = None
+
+        data_source = bpl.ColumnDataSource(data)
+
+        plot = bpl.figure(width=width,
+                          height=height,
+                          tooltips=tooltips,
+                          background_fill_color=background)
+        plot.circle(x='x', y='y', source=data_source, color=colors, size=point_size)
+
+        plot.grid.visible = False
+        plot.axis.visible = False
+
+        bpl.show(plot)
+    else:
+        raise ValueError('Too many points for interactive plotting')
