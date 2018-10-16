@@ -579,6 +579,9 @@ def interactive(
 
         bpl.show(plot)
     else:
+        if hover_data is not None:
+            warn('Too many points for hover data -- tooltips will not'
+                 'be displayed. Sorry; try subssampling your data.')
         hv.extension('bokeh')
         hv.output(size=300)
         hv.opts('RGB [bgcolor="{}", xaxis=None, yaxis=None]'.format(background))
