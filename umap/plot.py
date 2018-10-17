@@ -143,6 +143,7 @@ def _nhood_search(umap_object, nhood_size):
 
 @numba.jit()
 def _nhood_compare(indices_left, indices_right):
+    """Compute Jaccard index of two neighborhoods"""
     result = np.empty(indices_left.shape[0])
 
     for i in range(indices_left.shape[0]):
@@ -154,6 +155,7 @@ def _nhood_compare(indices_left, indices_right):
 
 
 def _get_extent(points):
+    """Compute bounds on a space with appropriate padding"""
     min_x = np.min(points[:, 0])
     max_x = np.max(points[:, 0])
     min_y = np.min(points[:, 1])
@@ -179,12 +181,15 @@ def _datashade_points(
         width=800,
         height=800,
 ):
+    """Use datashader to plot points"""
     extent = _get_extent(points)
     canvas = ds.Canvas(plot_width=width,
                        plot_height=height,
                        x_range=(extent[0], extent[1]),
                        y_range=(extent[2], extent[3]))
     data = pd.DataFrame(points, columns=('x', 'y'))
+
+    # Color by labels
     if labels is not None:
         if labels.shape[0] != points.shape[0]:
             raise ValueError('Labels must have a label for '
@@ -203,6 +208,7 @@ def _datashade_points(
         else:
             result = tf.shade(aggregation, color_key=color_key, how='eq_hist')
 
+    # Color by values
     elif values is not None:
         if values.shape[0] != points.shape[0]:
             raise ValueError('Values must have a value for '
@@ -223,6 +229,7 @@ def _datashade_points(
             color_key = dict(zip(unique_values, color_key_cols))
             result = tf.shade(aggregation, color_key=color_key, how='eq_hist')
 
+    # Color by density (default datashader option)
     else:
         aggregation = canvas.points(data, 'x', 'y', agg=ds.count())
         result = tf.shade(aggregation, cmap=plt.get_cmap(cmap))
@@ -244,12 +251,14 @@ def _matplotlib_points(
         width=800,
         height=800,
 ):
+    """Use matplotlib to plot points"""
     point_size = 100.0 / np.sqrt(points.shape[0])
     dpi = plt.rcParams['figure.dpi']
     fig = plt.figure(figsize=(width / dpi, height / dpi))
     ax = fig.add_subplot(111)
     ax.set_facecolor(background)
 
+    # Color by labels
     if labels is not None:
         if labels.shape[0] != points.shape[0]:
             raise ValueError('Labels must have a label for '
@@ -271,6 +280,8 @@ def _matplotlib_points(
             colors = pd.Series(labels).map(new_color_key)
 
         ax.scatter(points[:, 0], points[:, 1], s=point_size, c=colors)
+
+    # Color by values
     elif values is not None:
         if values.shape[0] != points.shape[0]:
             raise ValueError('Values must have a value for '
@@ -278,6 +289,7 @@ def _matplotlib_points(
                                                                          points.shape[0]))
         ax.scatter(points[:, 0], points[:, 1], s=point_size, c=values, cmap=cmap)
 
+    # No color (just pick the midpoint of the cmap)
     else:
 
         color = plt.get_cmap(cmap)(0.5)
@@ -300,6 +312,105 @@ def points(
         width=800,
         height=800,
 ):
+    """Plot an embedding as points. Currently this only works
+    for 2D embeddings. While there are many optional parameters
+    to further control and tailor the plotting, you need only
+    pass in the trained/fit umap model to get results. This plot
+    utility will attempt to do the hard work of avoiding
+    overplotting issues, and make it easy to automatically
+    colour points by a categorical labelling or numeric values.
+
+    This method is intended to be used within a Jupyter
+    notebook with ``%matplotlib inline``.
+
+    Parameters
+    ----------
+    umap_object: trained UMAP object
+        A trained UMAP object that has a 2D embedding.
+
+    labels: array, shape (n_samples,) (optional, default None)
+        An array of labels (assumed integer or categorical),
+        one for each data sample.
+        This will be used for coloring the points in
+        the plot according to their label. Note that
+        this option is mutually exclusive to the ``values``
+        option.
+
+    values: array, shape (n_samples,) (optional, default None)
+        An array of values (assumed float or continuous),
+        one for each sample.
+        This will be used for coloring the points in
+        the plot according to a colorscale associated
+        to the total range of values. Note that this
+        option is mutually exclusive to the ``labels``
+        option.
+
+    theme: string (optional, default None)
+        A color theme to use for plotting. A small set of
+        predefined themes are provided which have relatively
+        good aesthetics. Available themes are:
+           * 'blue'
+           * 'red'
+           * 'green'
+           * 'inferno'
+           * 'fire'
+           * 'viridis'
+           * 'darkblue'
+           * 'darkred'
+           * 'darkgreen'
+
+    cmap: string (optional, default 'Blues')
+        The name of a matplotlib colormap to use for coloring
+        or shading points. If no labels or values are passed
+        this will be used for shading points according to
+        density (largely only of relevance for very large
+        datasets). If values are passed this will be used for
+        shading according the value. Note that if theme
+        is passed then this value will be overridden by the
+        corresponding option of the theme.
+
+    color_key: dict or array, shape (n_categories) (optional, default None)
+        A way to assign colors to categoricals. This can either be
+        an explicit dict mapping labels to colors (as strings of form
+        '#RRGGBB'), or an array like object providing one color for
+        each distinct category being provided in ``labels``. Either
+        way this mapping will be used to color points according to
+        the label. Note that if theme
+        is passed then this value will be overridden by the
+        corresponding option of the theme.
+
+    color_key_cmap: string (optional, default 'Spectral')
+        The name of a matplotlib colormap to use for categorical coloring.
+        If an explicit ``color_key`` is not given a color mapping for
+        categories can be generated from the label list and selecting
+        a matching list of colors from the given colormap. Note
+        that if theme
+        is passed then this value will be overridden by the
+        corresponding option of the theme.
+
+    background: string (optional, default 'white)
+        The color of the background. Usually this will be either
+        'white' or 'black', but any color name will work. Ideally
+        one wants to match this appropriately to the colors being
+        used for points etc. This is one of the things that themes
+        handle for you. Note that if theme
+        is passed then this value will be overridden by the
+        corresponding option of the theme.
+
+    width: int (optional, default 800)
+        The desired width of the plot in pixels.
+
+    height: int (optional, default 800)
+        The desired height of the plot in pixels
+
+    Returns
+    -------
+    result: matplotlib axis or datashader image
+        The result should display in a Jupyter notebook. Depending
+        on what was deemed the best approach for plotting the result
+        will either be a matplotlib axis object, or, if there were
+        potential overplotting issues, a datashader Image object.
+    """
     if not hasattr(umap_object, 'embedding_'):
         raise ValueError('UMAP object must perform fit on data before it can be visualized')
 
@@ -339,6 +450,38 @@ def connectivity(
         width=800,
         height=800,
 ):
+    """Plot connectivity relationships of the underlying UMAP
+    simplicial set data structure. Internally UMAP will make
+    use of what can be viewed as a weighted graph. This graph
+    can be plotted using the layout provided by UMAP as a
+    potential diagnostic view of the embedding. Currently this only works
+    for 2D embeddings. While there are many optional parameters
+    to further control and tailor the plotting, you need only
+    pass in the trained/fit umap model to get results. This plot
+    utility will attempt to do the hard work of avoiding
+    overplotting issues and provide options for plotting the
+    points as well as using edge bundling for graph visualization.
+
+    Parameters
+    ----------
+    umap_object
+    edge_bundling
+    edge_cmap
+    show_points
+    labels
+    values
+    theme
+    cmap
+    color_key
+    color_key_cmap
+    background
+    width
+    height
+
+    Returns
+    -------
+
+    """
     if theme is not None:
         cmap = _themes[theme]['cmap']
         color_key_cmap = _themes[theme]['color_key_cmap']
