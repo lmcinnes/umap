@@ -269,7 +269,7 @@ would cite the paper from the Journal of Open Source Software:
 
     @article{mcinnes2018umap-software,
       title={UMAP: Uniform Manifold Approximation and Projection},
-      author={McInnes, Leland and Healy, John and Saul, Nathaniel and Großberger, Lukas},
+      author={McInnes, Leland and Healy, John and Saul, Nathaniel and Grossberger, Lukas},
       journal={The Journal of Open Source Software},
       volume={3},
       number={29},
