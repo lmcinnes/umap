@@ -441,11 +441,10 @@ def points(
 
     Returns
     -------
-    result: matplotlib axis or datashader image
-        The result should display in a Jupyter notebook. Depending
-        on what was deemed the best approach for plotting the result
-        will either be a matplotlib axis object, or, if there were
-        potential overplotting issues, a datashader Image object.
+    result: matplotlib axis
+        The result is a matplotlib axis with the relevant plot displayed.
+        If you are using a notbooks and have ``%matplotlib inline`` set
+        then this will simply display inline.
     """
     if not hasattr(umap_object, 'embedding_'):
         raise ValueError('UMAP object must perform fit on data before it can be visualized')
@@ -609,7 +608,10 @@ def connectivity(
 
     Returns
     -------
-
+    result: matplotlib axis
+        The result is a matplotlib axis with the relevant plot displayed.
+        If you are using a notbooks and have ``%matplotlib inline`` set
+        then this will simply display inline.
     """
     if theme is not None:
         cmap = _themes[theme]['cmap']
