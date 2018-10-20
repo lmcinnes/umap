@@ -11,6 +11,8 @@ import matplotlib.colors
 
 import bokeh.plotting as bpl
 import bokeh.transform as btr
+import holoviews as hv
+import holoviews.operation.datashader as hd
 
 import sklearn.decomposition
 import sklearn.cluster
@@ -830,40 +832,39 @@ def interactive(
     if points.shape[1] != 2:
         raise ValueError('Plotting is currently only implemented for 2D embeddings')
 
-    if points.shape[0] <= width * height // 10:
 
-        bpl.output_notebook(hide_banner=True)
+    point_size = 100.0 / np.sqrt(points.shape[0])
+    data = pd.DataFrame(umap_object.embedding_, columns=('x', 'y'))
 
-        point_size = 100.0 / np.sqrt(points.shape[0])
-        data = pd.DataFrame(umap_object.embedding_, columns=('x', 'y'))
+    if labels is not None:
+        data['label'] = labels
 
-        if labels is not None:
-            data['label'] = labels
+        if color_key is None:
+            unique_labels = np.unique(labels)
+            num_labels = unique_labels.shape[0]
+            color_key = _to_hex(plt.get_cmap(color_key_cmap)(np.linspace(0, 1, num_labels)))
 
-            if color_key is None:
-                unique_labels = np.unique(labels)
-                num_labels = unique_labels.shape[0]
-                color_key = _to_hex(plt.get_cmap(color_key_cmap)(np.linspace(0, 1, num_labels)))
-
-            if isinstance(color_key, dict):
-                data['color'] = pd.Series(labels).map(color_key)
-            else:
-                unique_labels = np.unique(labels)
-                if len(color_key) < unique_labels.shape[0]:
-                    raise ValueError('Color key must have enough colors for the number of labels')
-
-                new_color_key = {k: color_key[i] for i, k in enumerate(unique_labels)}
-                data['color'] = pd.Series(labels).map(new_color_key)
-
-            colors = 'color'
-
-        elif values is not None:
-            data['value'] = values
-            palette = _to_hex(plt.get_cmap(cmap)(np.linspace(0, 1, 256)))
-            colors = btr.linear_cmap('value', palette, low=np.min(values), high=np.max(values))
-
+        if isinstance(color_key, dict):
+            data['color'] = pd.Series(labels).map(color_key)
         else:
-            colors = matplotlib.colors.rgb2hex(plt.get_cmap(cmap)(0.5))
+            unique_labels = np.unique(labels)
+            if len(color_key) < unique_labels.shape[0]:
+                raise ValueError('Color key must have enough colors for the number of labels')
+
+            new_color_key = {k: color_key[i] for i, k in enumerate(unique_labels)}
+            data['color'] = pd.Series(labels).map(new_color_key)
+
+        colors = 'color'
+
+    elif values is not None:
+        data['value'] = values
+        palette = _to_hex(plt.get_cmap(cmap)(np.linspace(0, 1, 256)))
+        colors = btr.linear_cmap('value', palette, low=np.min(values), high=np.max(values))
+
+    else:
+        colors = matplotlib.colors.rgb2hex(plt.get_cmap(cmap)(0.5))
+
+    if points.shape[0] <= width * height // 10:
 
         if hover_data is not None:
             tooltip_dict = {}
@@ -874,6 +875,7 @@ def interactive(
         else:
             tooltips = None
 
+        bpl.output_notebook(hide_banner=True)
         data_source = bpl.ColumnDataSource(data)
 
         plot = bpl.figure(width=width,
@@ -887,4 +889,38 @@ def interactive(
 
         bpl.show(plot)
     else:
-        raise ValueError('Too many points for interactive plotting')
+        if hover_data is not None:
+            warn('Too many points for hover data -- tooltips will not'
+                 'be displayed. Sorry; try subssampling your data.')
+        hv.extension('bokeh')
+        hv.output(size=300)
+        hv.opts('RGB [bgcolor="{}", xaxis=None, yaxis=None]'.format(background))
+        if labels is not None:
+            point_plot = hv.Points(data, kdims=['x', 'y'], vdims=['color'])
+            plot = hd.datashade(point_plot,
+                                aggregator=ds.count_cat('color'),
+                                cmap=plt.get_cmap(cmap),
+                                width=width,
+                                height=height)
+        elif values is not None:
+            min_val = data.values.min()
+            val_range = data.values.max() - min_val
+            data['val_cat'] = pd.Categorical((data.values - min_val) //
+                                             (val_range // 256))
+            point_plot = hv.Points(data, kdims=['x', 'y'], vdims=['val_cat'])
+            plot = hd.datashade(point_plot,
+                                aggregator=ds.count_cat('val_cat'),
+                                cmap=plt.get_cmap(cmap),
+                                width=width,
+                                height=height)
+        else:
+            point_plot = hv.Points(data, kdims=['x', 'y'])
+            plot = hd.datashade(point_plot,
+                                aggregator=ds.count(),
+                                cmap=plt.get_cmap(cmap),
+                                width=width,
+                                height=height)
+
+    return plot
+
+

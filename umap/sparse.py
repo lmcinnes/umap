@@ -509,6 +509,26 @@ def sparse_cosine(ind1, data1, ind2, data2):
         return 1.0 - (result / (norm1 * norm2))
 
 
+
+@numba.njit()
+def sparse_hellinger(ind1, data1, ind2, data2):
+    aux_inds, aux_data = sparse_mul(ind1, data1, ind2, data2)
+    result = 0.0
+    norm1 = np.sum(data1)
+    norm2 = np.sum(data2)
+
+    for i in range(aux_data.shape[0]):
+        result += np.sqrt(aux_data[i])
+
+    if norm1 == 0.0 and norm2 == 0.0:
+        return 0.0
+    elif norm1 == 0.0 or norm2 == 0.0:
+        return 1.0
+    else:
+        return np.sqrt(1.0 - (result / np.sqrt((norm1 * norm2))))
+
+
+
 @numba.njit()
 def sparse_correlation(ind1, data1, ind2, data2, n_features):
 
@@ -659,6 +679,7 @@ sparse_named_distances = {
     "sokalsneath": sparse_sokal_sneath,
     "cosine": sparse_cosine,
     "correlation": sparse_correlation,
+    "hellinger": sparse_hellinger,
 }
 
 sparse_need_n_features = (
