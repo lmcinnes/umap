@@ -208,10 +208,6 @@ def _datashade_points(
         width=800,
         height=800,
 ):
-    if ax is None:
-        dpi = plt.rcParams['figure.dpi']
-        fig = plt.figure(figsize=(width / dpi, height / dpi))
-        ax = fig.add_subplot(111)
 
     """Use datashader to plot points"""
     extent = _get_extent(points)
@@ -269,9 +265,11 @@ def _datashade_points(
     if background is not None:
         result = tf.set_background(result, background)
 
-    _embed_datashader_in_an_axis(result, ax)
-
-    return ax
+    if ax is not None:
+        _embed_datashader_in_an_axis(result, ax)
+        return ax
+    else:
+        return result
 
 
 def _matplotlib_points(
@@ -663,7 +661,7 @@ def connectivity(
     edge_img = tf.set_background(edge_img, background)
 
     if show_points:
-        point_img = _datashade_points(points, labels, values, cmap, color_key,
+        point_img = _datashade_points(points, None, labels, values, cmap, color_key,
                                       color_key_cmap, None, width, height)
         if px_size > 1:
             point_img = tf.dynspread(point_img, threshold=0.5, max_px=px_size)
