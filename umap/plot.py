@@ -41,6 +41,21 @@ def _to_hex(arr):
     return [matplotlib.colors.to_hex(c) for c in arr]
 
 
+@numba.vectorize(['uint8(uint32)', 'uint8(uint32)'], cache=True)
+def _red(x):
+    return (x & 0xff0000) >> 16
+
+
+@numba.vectorize(['uint8(uint32)', 'uint8(uint32)'], cache=True)
+def _green(x):
+    return (x & 0x00ff00) >> 8
+
+
+@numba.vectorize(['uint8(uint32)', 'uint8(uint32)'], cache=True)
+def _blue(x):
+    return (x & 0x0000ff)
+
+
 _themes = {
     'fire': {
         'cmap': 'fire',
@@ -101,6 +116,15 @@ _themes = {
 _diagnostic_types = np.array(
     [['pca', 'ica'], ['vq', 'local_dim']]
 )
+
+
+def _embed_datashader_in_an_axis(datashader_image, ax):
+    img_rev = datashader_image.data[::-1]
+    mpl_img = np.dstack([_blue(img_rev),
+                         _green(img_rev),
+                         _red(img_rev)])
+    ax.imshow(mpl_img)
+    return ax
 
 
 def _nhood_search(umap_object, nhood_size):
@@ -172,6 +196,7 @@ def _get_extent(points):
 
 def _datashade_points(
         points,
+        ax=None,
         labels=None,
         values=None,
         cmap='Blues',
@@ -181,6 +206,11 @@ def _datashade_points(
         width=800,
         height=800,
 ):
+    if ax is None:
+        dpi = plt.rcParams['figure.dpi']
+        fig = plt.figure(figsize=(width / dpi, height / dpi))
+        ax = fig.add_subplot(111)
+
     """Use datashader to plot points"""
     extent = _get_extent(points)
     canvas = ds.Canvas(plot_width=width,
@@ -237,11 +267,14 @@ def _datashade_points(
     if background is not None:
         result = tf.set_background(result, background)
 
-    return result
+    _embed_datashader_in_an_axis(result, ax)
+
+    return ax
 
 
 def _matplotlib_points(
         points,
+        ax=None,
         labels=None,
         values=None,
         cmap='Blues',
@@ -253,9 +286,12 @@ def _matplotlib_points(
 ):
     """Use matplotlib to plot points"""
     point_size = 100.0 / np.sqrt(points.shape[0])
-    dpi = plt.rcParams['figure.dpi']
-    fig = plt.figure(figsize=(width / dpi, height / dpi))
-    ax = fig.add_subplot(111)
+
+    if ax is None:
+        dpi = plt.rcParams['figure.dpi']
+        fig = plt.figure(figsize=(width / dpi, height / dpi))
+        ax = fig.add_subplot(111)
+
     ax.set_facecolor(background)
 
     # Color by labels
@@ -294,8 +330,6 @@ def _matplotlib_points(
 
         color = plt.get_cmap(cmap)(0.5)
         ax.scatter(points[:, 0], points[:, 1], s=point_size, c=color)
-
-    ax.set(xticks=[], yticks=[])
 
     return ax
 
@@ -427,12 +461,26 @@ def points(
     if points.shape[1] != 2:
         raise ValueError('Plotting is currently only implemented for 2D embeddings')
 
+    dpi = plt.rcParams['figure.dpi']
+    fig = plt.figure(figsize=(width / dpi, height / dpi))
+    ax = fig.add_subplot(111)
+
     if points.shape[0] <= width * height // 10:
-        return _matplotlib_points(points, labels, values, cmap, color_key,
-                                  color_key_cmap, background, width, height)
+        ax = _matplotlib_points(points, ax, labels, values, cmap, color_key,
+                                color_key_cmap, background, width, height)
     else:
-        return _datashade_points(points, labels, values, cmap, color_key,
-                                 color_key_cmap, background, width, height)
+        ax = _datashade_points(points, ax, labels, values, cmap, color_key,
+                               color_key_cmap, background, width, height)
+
+    ax.set(xticks=[], yticks=[])
+    ax.text(0.99,
+            0.01,
+            'UMAP: n_neighbors={}, min_dist={}'.format(umap_object.n_neighbors,
+                                                       umap_object.min_dist),
+            transform=ax.transAxes,
+            horizontalalignment='right')
+
+    return ax
 
 
 def connectivity(
@@ -464,19 +512,98 @@ def connectivity(
 
     Parameters
     ----------
-    umap_object
-    edge_bundling
-    edge_cmap
-    show_points
-    labels
-    values
-    theme
-    cmap
-    color_key
-    color_key_cmap
-    background
-    width
-    height
+    umap_object: trained UMAP object
+        A trained UMAP object that has a 2D embedding.
+
+    edge_bundling: string or None (optional, default None)
+        The edge bundling method to use. Currently supported
+        are None or 'hammer'. See the datashader docs
+        on graph visualization for more details.
+
+    edge_cmap: string (default 'gray_r')
+        The name of a matplotlib colormap to use for shading/
+        coloring the edges of the connectivity graph. Note that
+        the ``theme``, if specified, will override this.
+
+    show_points: bool (optional False)
+        Whether to display the points over top of the edge
+        connectivity. Further options allow for coloring/
+        shading the points accordingly.
+
+    labels: array, shape (n_samples,) (optional, default None)
+        An array of labels (assumed integer or categorical),
+        one for each data sample.
+        This will be used for coloring the points in
+        the plot according to their label. Note that
+        this option is mutually exclusive to the ``values``
+        option.
+
+    values: array, shape (n_samples,) (optional, default None)
+        An array of values (assumed float or continuous),
+        one for each sample.
+        This will be used for coloring the points in
+        the plot according to a colorscale associated
+        to the total range of values. Note that this
+        option is mutually exclusive to the ``labels``
+        option.
+
+    theme: string (optional, default None)
+        A color theme to use for plotting. A small set of
+        predefined themes are provided which have relatively
+        good aesthetics. Available themes are:
+           * 'blue'
+           * 'red'
+           * 'green'
+           * 'inferno'
+           * 'fire'
+           * 'viridis'
+           * 'darkblue'
+           * 'darkred'
+           * 'darkgreen'
+
+    cmap: string (optional, default 'Blues')
+        The name of a matplotlib colormap to use for coloring
+        or shading points. If no labels or values are passed
+        this will be used for shading points according to
+        density (largely only of relevance for very large
+        datasets). If values are passed this will be used for
+        shading according the value. Note that if theme
+        is passed then this value will be overridden by the
+        corresponding option of the theme.
+
+    color_key: dict or array, shape (n_categories) (optional, default None)
+        A way to assign colors to categoricals. This can either be
+        an explicit dict mapping labels to colors (as strings of form
+        '#RRGGBB'), or an array like object providing one color for
+        each distinct category being provided in ``labels``. Either
+        way this mapping will be used to color points according to
+        the label. Note that if theme
+        is passed then this value will be overridden by the
+        corresponding option of the theme.
+
+    color_key_cmap: string (optional, default 'Spectral')
+        The name of a matplotlib colormap to use for categorical coloring.
+        If an explicit ``color_key`` is not given a color mapping for
+        categories can be generated from the label list and selecting
+        a matching list of colors from the given colormap. Note
+        that if theme
+        is passed then this value will be overridden by the
+        corresponding option of the theme.
+
+    background: string (optional, default 'white)
+        The color of the background. Usually this will be either
+        'white' or 'black', but any color name will work. Ideally
+        one wants to match this appropriately to the colors being
+        used for points etc. This is one of the things that themes
+        handle for you. Note that if theme
+        is passed then this value will be overridden by the
+        corresponding option of the theme.
+
+    width: int (optional, default 800)
+        The desired width of the plot in pixels.
+
+    height: int (optional, default 800)
+        The desired height of the plot in pixels
 
     Returns
     -------
@@ -536,9 +663,25 @@ def connectivity(
                                       color_key_cmap, None, width, height)
         if px_size > 1:
             point_img = tf.dynspread(point_img, threshold=0.5, max_px=px_size)
-        return tf.stack(edge_img, point_img, how="over")
+        result = tf.stack(edge_img, point_img, how="over")
     else:
-        return edge_img
+        result = edge_img
+
+    dpi = plt.rcParams['figure.dpi']
+    fig = plt.figure(figsize=(width / dpi, height / dpi))
+    ax = fig.add_subplot(111)
+
+    _embed_datashader_in_an_axis(result, ax)
+
+    ax.set(xticks=[], yticks=[])
+    ax.text(0.99,
+            0.01,
+            'UMAP: n_neighbors={}, min_dist={}'.format(umap_object.n_neighbors,
+                                                       umap_object.min_dist),
+            transform=ax.transAxes,
+            horizontalalignment='right')
+
+    return ax
 
 
 def diagnostic(
@@ -579,6 +722,12 @@ def diagnostic(
 
         ax.scatter(points[:, 0], points[:, 1], s=point_size, c=color_proj, alpha=0.66)
         ax.set_title('Colored by RGB coords of FastICA embedding')
+        ax.text(0.99,
+                0.01,
+                'UMAP: n_neighbors={}, min_dist={}'.format(umap_object.n_neighbors,
+                                                           umap_object.min_dist),
+                transform=ax.transAxes,
+                horizontalalignment='right')
         ax.set(xticks=[], yticks=[])
 
     elif diagnostic_type == 'vq':
@@ -590,6 +739,12 @@ def diagnostic(
 
         ax.scatter(points[:, 0], points[:, 1], s=point_size, c=color_proj, alpha=0.66)
         ax.set_title('Colored by RGB coords of Vector Quantization')
+        ax.text(0.99,
+                0.01,
+                'UMAP: n_neighbors={}, min_dist={}'.format(umap_object.n_neighbors,
+                                                           umap_object.min_dist),
+                transform=ax.transAxes,
+                horizontalalignment='right')
         ax.set(xticks=[], yticks=[])
 
     elif diagnostic_type == 'neighborhood':
@@ -602,6 +757,12 @@ def diagnostic(
         ax.scatter(points[:, 0], points[:, 1], s=point_size, c=accuracy,
                    cmap=cmap, vmin=0.0, vmax=1.0)
         ax.set_title('Colored by neighborhood Jaccard index')
+        ax.text(0.99,
+                0.01,
+                'UMAP: n_neighbors={}, min_dist={}'.format(umap_object.n_neighbors,
+                                                           umap_object.min_dist),
+                transform=ax.transAxes,
+                horizontalalignment='right')
         ax.set(xticks=[], yticks=[])
 
     elif diagnostic_type == 'local_dim':
@@ -615,6 +776,12 @@ def diagnostic(
         ax.scatter(points[:, 0], points[:, 1], s=point_size, c=local_dim,
                    cmap=cmap, vmin=0.0, vmax=1.0)
         ax.set_title('Colored by approx local dimension')
+        ax.text(0.99,
+                0.01,
+                'UMAP: n_neighbors={}, min_dist={}'.format(umap_object.n_neighbors,
+                                                           umap_object.min_dist),
+                transform=ax.transAxes,
+                horizontalalignment='right')
         ax.set(xticks=[], yticks=[])
 
 
