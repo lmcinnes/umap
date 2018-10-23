@@ -1298,7 +1298,7 @@ class UMAP(BaseEstimator):
             print("Construct fuzzy simplicial set")
 
         # Handle small cases efficiently by computing all distances
-        if X.shape[0] < 4096 and not self.metric == "ll_dirichlet":
+        if X.shape[0] < 4096 and not self.metric in ("ll_dirichlet", "hellinger"):
             self._small_data = True
             dmat = pairwise_distances(X, metric=self.metric, **self._metric_kwds)
             self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
