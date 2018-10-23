@@ -695,6 +695,76 @@ def diagnostic(
         cmap='viridis',
         point_size=None
 ):
+    """Provide a diagnostic plot or plots for a UMAP embedding.
+    There are a number of plots that can be helpful for diagnostic
+    purposes in understanding your embedding. Currently these are
+    restricted to methods of coloring a scatterplot of the
+    embedding to show more about how the embedding is representing
+    the data. The first class of such plots uses a linear method
+    that preserves global structure well to embed the data into
+    three dimensions, and then interprets such coordinates as a
+    color space -- coloring the points by their location in the
+    linear global structure preserving embedding. In such plots
+    one should look for discontinuities of colour, and consider
+    overall global gradients of color. The diagnostic types here
+    are ``'pca'``, ``'ica'``, and ``'vq'`` (vector quantization).
+
+    The second class consider the local neighbor structure. One
+    can either look at how well the neighbor structure is
+    preserved, or how the estimated local dimension of the data
+    varies. Both of these are available, although the local
+    dimension estimation is the preferred option. You can
+    access these are diagnostic types ``'local_dim'`` and
+    ``'neighborhood'``.
+
+    Finally the diagnostic type ``'all'`` will provide a
+    grid of diagnostic plots.
+
+    Parameters
+    ----------
+    umap_object: trained UMAP object
+        A trained UMAP object that has a 2D embedding.
+
+    diagnostic_type: str (optional, default 'pca')
+        The type of diagnostic plot to show. The options are
+           * 'pca'
+           * 'ica'
+           * 'vq'
+           * 'local_dim'
+           * 'neighborhood'
+           * 'all'
+
+    nhood_size: int (optional, default 15)
+        The size of neighborhood to compare for local
+        neighborhood preservation estimates.
+
+    local_variance_threshold: float (optional, default 0.8)
+        To estimate the local dimension we consider a PCA of
+        the local neighborhood and estimate the dimension
+        as that which provides ``local_variance_threshold``
+        or more of the ``variance_explained_ratio``.
+
+    ax: matlotlib axis (optional, default None)
+        A matplotlib axis to plot to, or, if None, a new
+        axis will be created and returned.
+
+    cmap: str (optional, default 'viridis')
+        The name of a matplotlib colormap to use for coloring
+        points if the ``'local_dim'`` or ``'neighborhood'``
+        option are selected.
+
+    point_size: int (optional, None)
+        If provided this will fix the point size for the
+        plot(s). If None then a suitable point size will
+        be estimated from the data.
+
+    Returns
+    -------
+    result: matplotlib axis
+        The result is a matplotlib axis with the relevant plot displayed.
+        If you are using a notbooks and have ``%matplotlib inline`` set
+        then this will simply display inline.
+    """
 
     points = umap_object.embedding_
 
@@ -819,6 +889,108 @@ def interactive(
         width=800,
         height=800,
 ):
+    """Create an interactive bokeh plot of a UMAP embedding.
+    While static plots are useful, sometimes a plot that
+    supports interactive zooming, and hover tooltips for
+    individual points is much more desireable. This function
+    provides a simple interface for creating such plots. The
+    result is a bokeh plot that will be displayed in a notebook.
+
+    Note that more complex tooltips etc. will require custom
+    code -- this is merely meant to provide fast and easy
+    access to interactive plotting.
+
+    Parameters
+    ----------
+    umap_object: trained UMAP object
+        A trained UMAP object that has a 2D embedding.
+
+    labels: array, shape (n_samples,) (optional, default None)
+        An array of labels (assumed integer or categorical),
+        one for each data sample.
+        This will be used for coloring the points in
+        the plot according to their label. Note that
+        this option is mutually exclusive to the ``values``
+        option.
+
+    values: array, shape (n_samples,) (optional, default None)
+        An array of values (assumed float or continuous),
+        one for each sample.
+        This will be used for coloring the points in
+        the plot according to a colorscale associated
+        to the total range of values. Note that this
+        option is mutually exclusive to the ``labels``
+        option.
+
+    hover_data: DataFrame, shape (n_samples, n_tooltip_features)
+    (optional, default None)
+        A dataframe of tooltip data. Each column of the dataframe
+        should be a Series of length ``n_samples`` providing a value
+        for each data point. Column names will be used for
+        identifying information within the tooltip.
+
+    theme: string (optional, default None)
+        A color theme to use for plotting. A small set of
+        predefined themes are provided which have relatively
+        good aesthetics. Available themes are:
+           * 'blue'
+           * 'red'
+           * 'green'
+           * 'inferno'
+           * 'fire'
+           * 'viridis'
+           * 'darkblue'
+           * 'darkred'
+           * 'darkgreen'
+
+    cmap: string (optional, default 'Blues')
+        The name of a matplotlib colormap to use for coloring
+        or shading points. If no labels or values are passed
+        this will be used for shading points according to
+        density (largely only of relevance for very large
+        datasets). If values are passed this will be used for
+        shading according the value. Note that if theme
+        is passed then this value will be overridden by the
+        corresponding option of the theme.
+
+    color_key: dict or array, shape (n_categories) (optional, default None)
+        A way to assign colors to categoricals. This can either be
+        an explicit dict mapping labels to colors (as strings of form
+        '#RRGGBB'), or an array like object providing one color for
+        each distinct category being provided in ``labels``. Either
+        way this mapping will be used to color points according to
+        the label. Note that if theme
+        is passed then this value will be overridden by the
+        corresponding option of the theme.
+
+    color_key_cmap: string (optional, default 'Spectral')
+        The name of a matplotlib colormap to use for categorical coloring.
+        If an explicit ``color_key`` is not given a color mapping for
+        categories can be generated from the label list and selecting
+        a matching list of colors from the given colormap. Note
+        that if theme
+        is passed then this value will be overridden by the
+        corresponding option of the theme.
+
+    background: string (optional, default 'white)
+        The color of the background. Usually this will be either
+        'white' or 'black', but any color name will work. Ideally
+        one wants to match this appropriately to the colors being
+        used for points etc. This is one of the things that themes
+        handle for you. Note that if theme
+        is passed then this value will be overridden by the
+        corresponding option of the theme.
+
+    width: int (optional, default 800)
+        The desired width of the plot in pixels.
+
+    height: int (optional, default 800)
+        The desired height of the plot in pixels
+
+    Returns
+    -------
+
+    """
     if theme is not None:
         cmap = _themes[theme]['cmap']
         color_key_cmap = _themes[theme]['color_key_cmap']
