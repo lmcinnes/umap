@@ -551,6 +551,47 @@ def fast_intersection(rows, cols, values, target, unknown_dist=1.0, far_dist=5.0
     return
 
 
+@numba.njit()
+def fast_metric_intersection(rows, cols, values, discrete_space, metric, scale):
+    """Under the assumption of categorical distance for the intersecting
+    simplicial set perform a fast intersection.
+
+    Parameters
+    ----------
+    rows: array
+        An array of the row of each non-zero in the sparse matrix
+        representation.
+
+    cols: array
+        An array of the column of each non-zero in the sparse matrix
+        representation.
+
+    values: array of shape
+        An array of the values of each non-zero in the sparse matrix
+        representation.
+
+    discrete_space: array of shape (n_samples, n_features)
+        The vectors of categorical labels to use in the intersection.
+
+    metric: numba function
+        The function used to calculate distance over the target array.
+
+    scale: float
+        A scaling to apply to the metric.
+
+    Returns
+    -------
+    None
+    """
+    for nz in range(rows.shape[0]):
+        i = rows[nz]
+        j = cols[nz]
+        dist = metric(discrete_space[i], discrete_space[j])
+        values[nz] *= np.exp(-(scale * dist))
+
+    return
+
+
 @numba.jit()
 def reset_local_connectivity(simplicial_set):
     """Reset the local connectivity requirement -- each data sample should
@@ -580,11 +621,12 @@ def reset_local_connectivity(simplicial_set):
 
 
 @numba.jit()
-def categorical_simplicial_set_intersection(
-    simplicial_set, target, unknown_dist=1.0, far_dist=5.0
+def discrete_metric_simplicial_set_intersection(
+        simplicial_set, discrete_space, unknown_dist=1.0, far_dist=5.0,
+        metric=None, metric_scale=1.0
 ):
     """Combine a fuzzy simplicial set with another fuzzy simplicial set
-    generated from categorical data using categorical distances. The target
+    generated from discrete metric data using discrete distances. The target
     data is assumed to be categorical label data (a vector of labels),
     and this will update the fuzzy simplicial set to respect that label data.
 
@@ -595,14 +637,23 @@ def categorical_simplicial_set_intersection(
     simplicial_set: sparse matrix
         The input fuzzy simplicial set.
 
-    target: array of shape (n_samples)
+    discrete_space: array of shape (n_samples)
         The categorical labels to use in the intersection.
 
     unknown_dist: float (optional, default 1.0)
         The distance an unknown label (-1) is assumed to be from any point.
 
-    far_dist float (optional, default 5.0)
+    far_dist: float (optional, default 5.0)
         The distance between unmatched labels.
+
+    metric: str (optional, default None)
+        If not None, then use this metric to determine the
+        distance between values.
+
+    metric_scale: float (optional, default 1.0)
+        If using a custom metric scale the distance values by
+        this value -- this controls the weighting of the
+        intersection. Larger values weight more toward target.
 
     Returns
     -------
@@ -611,14 +662,32 @@ def categorical_simplicial_set_intersection(
     """
     simplicial_set = simplicial_set.tocoo()
 
-    fast_intersection(
-        simplicial_set.row,
-        simplicial_set.col,
-        simplicial_set.data,
-        target,
-        unknown_dist,
-        far_dist,
-    )
+    if metric is not None:
+        # We presume target is now a 2d array, with each row being a
+        # vector of target info
+        if metric in dist.named_distances:
+            metric_func = dist.named_distances[metric]
+        else:
+            raise ValueError('Categorical intersection metric {}'
+                             ' is not recognized'.format(metric))
+
+        fast_metric_intersection(
+            simplicial_set.row,
+            simplicial_set.col,
+            simplicial_set.data,
+            discrete_space,
+            metric_func,
+            metric_scale
+        )
+    else:
+        fast_intersection(
+            simplicial_set.row,
+            simplicial_set.col,
+            simplicial_set.data,
+            discrete_space,
+            unknown_dist,
+            far_dist,
+        )
 
     simplicial_set.eliminate_zeros()
 
@@ -1378,7 +1447,7 @@ class UMAP(BaseEstimator):
                     far_dist = 2.5 * (1.0 / (1.0 - self.target_weight))
                 else:
                     far_dist = 1.0e12
-                self.graph_ = categorical_simplicial_set_intersection(
+                self.graph_ = discrete_metric_simplicial_set_intersection(
                     self.graph_, y_, far_dist=far_dist
                 )
             else:
@@ -1771,3 +1840,101 @@ class UMAP(BaseEstimator):
         )
 
         return inv_transformed_points
+
+
+class DataFrameUMAP(BaseEstimator):
+
+    def __init__(
+            self,
+            metrics,
+            n_neighbors=15,
+            n_components=2,
+            metric_mapping=None,
+            output_metric="euclidean",
+            output_metric_kwds=None,
+            n_epochs=None,
+            learning_rate=1.0,
+            init="spectral",
+            min_dist=0.1,
+            spread=1.0,
+            set_op_mix_ratio=1.0,
+            local_connectivity=1.0,
+            repulsion_strength=1.0,
+            negative_sample_rate=5,
+            transform_queue_size=4.0,
+            a=None,
+            b=None,
+            random_state=None,
+            angular_rp_forest=False,
+            target_n_neighbors=-1,
+            target_metric="categorical",
+            target_metric_kwds=None,
+            target_weight=0.5,
+            transform_seed=42,
+            verbose=False,
+    ):
+        self.metrics = metrics
+        self.n_neighbors = n_neighbors
+        self.output_metric = output_metric
+        if output_metric_kwds is not None:
+            self._output_metric_kwds = output_metric_kwds
+        else:
+            self._output_metric_kwds = {}
+
+        if callable(self.output_metric):
+            self._output_distance_func = self.output_metric
+        elif self.output_metric in dist.named_distances and \
+                self.output_metric in dist.named_distances_with_gradients:
+            self._output_distance_func = dist.named_distances_with_gradients[self.output_metric]
+        elif self.output_metric == 'precomputed':
+            raise ValueError(
+                "output_metric cannnot be 'precomputed'"
+            )
+        else:
+            if self.output_metric in dist.named_distances:
+                raise ValueError(
+                    "gradient function is not yet implemented for " + repr(self.output_metric) + "."
+                )
+            else:
+                raise ValueError(
+                    "output_metric is neither callable, " + "nor a recognised string"
+                )
+
+        self.n_epochs = n_epochs
+        self.init = init
+        self.n_components = n_components
+        self.repulsion_strength = repulsion_strength
+        self.learning_rate = learning_rate
+
+        self.spread = spread
+        self.min_dist = min_dist
+        self.set_op_mix_ratio = set_op_mix_ratio
+        self.local_connectivity = local_connectivity
+        self.negative_sample_rate = negative_sample_rate
+        self.random_state = random_state
+        self.angular_rp_forest = angular_rp_forest
+        self.transform_queue_size = transform_queue_size
+        self.target_n_neighbors = target_n_neighbors
+        self.target_metric = target_metric
+        self.target_metric_kwds = target_metric_kwds
+        self.target_weight = target_weight
+        self.transform_seed = transform_seed
+        self.verbose = verbose
+
+        self.a = a
+        self.b = b
+
+    def _validate_parameters(self):
+        UMAP._validate_parameters(self)
+
+        # validate metrics argument
+        assert (isinstance(self.metrics, list) or self.metrics == 'infer')
+        if self.metrics != 'infer':
+            for item in self.metrics:
+                assert (isinstance(item, tuple) and len(item) == 3)
+                assert (isinstance(item[0], str))
+                assert (item[1] in dist.named_distances)
+                assert (isinstance(item[2], list) and len(item[2]) >= 1)
+
+                for col in item[2]:
+                    assert (isinstance(col, str) or isinstance(col, int))
