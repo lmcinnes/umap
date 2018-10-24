@@ -196,6 +196,25 @@ def _get_extent(points):
 
     return extent
 
+
+def _select_font_color(background):
+    if background == 'black':
+        font_color = 'white'
+    elif background.startswith('#'):
+        mean_val = np.mean([int('0x' + c)
+                            for c in
+                            (background[1:3], background[3:5], background[5:7])])
+        if mean_val > 126:
+            font_color = 'black'
+        else:
+            font_color = 'white'
+
+    else:
+        font_color = 'black'
+
+    return font_color
+
+
 def _datashade_points(
         points,
         ax=None,
@@ -460,6 +479,8 @@ def points(
     if points.shape[1] != 2:
         raise ValueError('Plotting is currently only implemented for 2D embeddings')
 
+    font_color = _select_font_color(background)
+
     dpi = plt.rcParams['figure.dpi']
     fig = plt.figure(figsize=(width / dpi, height / dpi))
     ax = fig.add_subplot(111)
@@ -477,7 +498,8 @@ def points(
             'UMAP: n_neighbors={}, min_dist={}'.format(umap_object.n_neighbors,
                                                        umap_object.min_dist),
             transform=ax.transAxes,
-            horizontalalignment='right')
+            horizontalalignment='right',
+            color=font_color)
 
     return ax
 
@@ -669,6 +691,8 @@ def connectivity(
     else:
         result = edge_img
 
+    font_color = _select_font_color(background)
+
     dpi = plt.rcParams['figure.dpi']
     fig = plt.figure(figsize=(width / dpi, height / dpi))
     ax = fig.add_subplot(111)
@@ -681,7 +705,8 @@ def connectivity(
             'UMAP: n_neighbors={}, min_dist={}'.format(umap_object.n_neighbors,
                                                        umap_object.min_dist),
             transform=ax.transAxes,
-            horizontalalignment='right')
+            horizontalalignment='right',
+            color=font_color)
 
     return ax
 
@@ -774,6 +799,8 @@ def diagnostic(
     if point_size is None:
         point_size = 100.0 / np.sqrt(points.shape[0])
 
+    font_color = _select_font_color(background)
+
     if ax is None and diagnostic_type != 'all':
         fig = plt.figure()
         ax = fig.add_subplot(111)
@@ -785,6 +812,13 @@ def diagnostic(
 
         ax.scatter(points[:, 0], points[:, 1], s=point_size, c=color_proj, alpha=0.66)
         ax.set_title('Colored by RGB coords of PCA embedding')
+        ax.text(0.99,
+                0.01,
+                'UMAP: n_neighbors={}, min_dist={}'.format(umap_object.n_neighbors,
+                                                           umap_object.min_dist),
+                transform=ax.transAxes,
+                horizontalalignment='right',
+                color=font_color)
         ax.set(xticks=[], yticks=[])
 
     elif diagnostic_type == 'ica':
@@ -799,7 +833,8 @@ def diagnostic(
                 'UMAP: n_neighbors={}, min_dist={}'.format(umap_object.n_neighbors,
                                                            umap_object.min_dist),
                 transform=ax.transAxes,
-                horizontalalignment='right')
+                horizontalalignment='right',
+                color=font_color)
         ax.set(xticks=[], yticks=[])
 
     elif diagnostic_type == 'vq':
@@ -816,7 +851,8 @@ def diagnostic(
                 'UMAP: n_neighbors={}, min_dist={}'.format(umap_object.n_neighbors,
                                                            umap_object.min_dist),
                 transform=ax.transAxes,
-                horizontalalignment='right')
+                horizontalalignment='right',
+                color=font_color)
         ax.set(xticks=[], yticks=[])
 
     elif diagnostic_type == 'neighborhood':
@@ -834,7 +870,8 @@ def diagnostic(
                 'UMAP: n_neighbors={}, min_dist={}'.format(umap_object.n_neighbors,
                                                            umap_object.min_dist),
                 transform=ax.transAxes,
-                horizontalalignment='right')
+                horizontalalignment='right',
+                color=font_color)
         ax.set(xticks=[], yticks=[])
 
     elif diagnostic_type == 'local_dim':
@@ -853,7 +890,8 @@ def diagnostic(
                 'UMAP: n_neighbors={}, min_dist={}'.format(umap_object.n_neighbors,
                                                            umap_object.min_dist),
                 transform=ax.transAxes,
-                horizontalalignment='right')
+                horizontalalignment='right',
+                color=font_color)
         ax.set(xticks=[], yticks=[])
 
 
