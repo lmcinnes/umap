@@ -888,6 +888,7 @@ def interactive(
         background='white',
         width=800,
         height=800,
+        point_size=None,
 ):
     """Create an interactive bokeh plot of a UMAP embedding.
     While static plots are useful, sometimes a plot that
@@ -1004,8 +1005,9 @@ def interactive(
     if points.shape[1] != 2:
         raise ValueError('Plotting is currently only implemented for 2D embeddings')
 
+    if point_size is None:
+        point_size = 100.0 / np.sqrt(points.shape[0])
 
-    point_size = 100.0 / np.sqrt(points.shape[0])
     data = pd.DataFrame(umap_object.embedding_, columns=('x', 'y'))
 
     if labels is not None:
