@@ -1849,7 +1849,6 @@ class DataFrameUMAP(BaseEstimator):
             metrics,
             n_neighbors=15,
             n_components=2,
-            metric_mapping=None,
             output_metric="euclidean",
             output_metric_kwds=None,
             n_epochs=None,
@@ -1938,3 +1937,152 @@ class DataFrameUMAP(BaseEstimator):
 
                 for col in item[2]:
                     assert (isinstance(col, str) or isinstance(col, int))
+
+    def fit(self, X, y=None):
+        # X should be a pandas dataframe, or np.array; check
+        # how column transformer handles this.
+        self._raw_data = X
+
+        # Handle all the optional arguments, setting default
+        if self.a is None or self.b is None:
+            self._a, self._b = find_ab_params(self.spread, self.min_dist)
+        else:
+            self._a = self.a
+            self._b = self.b
+
+        if self.target_metric_kwds is not None:
+            self._target_metric_kwds = self.target_metric_kwds
+        else:
+            self._target_metric_kwds = {}
+
+        if isinstance(self.init, np.ndarray):
+            init = check_array(self.init, dtype=np.float32, accept_sparse=False)
+        else:
+            init = self.init
+
+        self._initial_alpha = self.learning_rate
+
+        # Error check n_neighbors based on data size
+        if X.shape[0] <= self.n_neighbors:
+            if X.shape[0] == 1:
+                self.embedding_ = np.zeros((1, self.n_components))  # needed to sklearn comparability
+                return self
+
+            warn(
+                "n_neighbors is larger than the dataset size; truncating to "
+                "X.shape[0] - 1"
+            )
+            self._n_neighbors = X.shape[0] - 1
+        else:
+            self._n_neighbors = self.n_neighbors
+
+        if self.metrics == 'infer':
+            raise NotImplementedError('Metric inference not implemented yet')
+
+        random_state = check_random_state(self.random_state)
+
+        self.graphs_ = {}
+        self._sigmas = {}
+        self._rhos = {}
+        self._knn_indices = {}
+        self._knn_dists = {}
+        self._rp_forest = {}
+
+        for metric_data in self.metrics:
+            name, metric, columns = metric_data
+
+            # Sparse not supported yet
+            sub_data = check_array(X[columns], dtype=np.float32, accept_sparse=False)
+
+            if X.shape[0] < 4096 and not metric in ("ll_dirichlet", "hellinger"):
+                # small case
+                self._small_data = True
+                # TODO: metric keywords not supported yet!
+                dmat = pairwise_distances(sub_data, metric=metric)
+                (self.graphs_[name],
+                 self._sigmas[name],
+                 self._rhos[name]) = fuzzy_simplicial_set(
+                    dmat,
+                    self._n_neighbors,
+                    random_state,
+                    "precomputed",
+                    {},
+                    None,
+                    None,
+                    self.angular_rp_forest,
+                    self.set_op_mix_ratio,
+                    self.local_connectivity,
+                    self.verbose,
+                )
+            else:
+                self._small_data = False
+                # Standard case
+                # TODO: metric keywords not supported yet!
+                (self._knn_indices[name],
+                 self._knn_dists[name],
+                 self._rp_forest[name]) = nearest_neighbors(
+                    sub_data,
+                    self._n_neighbors,
+                    metric,
+                    {},
+                    self.angular_rp_forest,
+                    random_state,
+                    self.verbose,
+                )
+
+                (self.graph_[name],
+                 self._sigmas[name],
+                 self._rhos[name]) = fuzzy_simplicial_set(
+                    sub_data,
+                    self.n_neighbors,
+                    random_state,
+                    metric,
+                    {},
+                    self._knn_indices,
+                    self._knn_dists,
+                    self.angular_rp_forest,
+                    self.set_op_mix_ratio,
+                    self.local_connectivity,
+                    self.verbose,
+                )
+                # TODO: set up transform data
+
+        self.graph_ = self.graphs_[list(self.graphs_.keys())[0]]
+
+        for name in list(self.graphs_.keys())[1:]:
+            self.graph_ = general_simplicial_set_intersection(self.graph_, self.graphs_[name])
+            self.graph_ = reset_local_connectivity(self.graph_)
+
+        if self.n_epochs is None:
+            n_epochs = 0
+        else:
+            n_epochs = self.n_epochs
+
+        if self.verbose:
+            print("Construct embedding")
+
+        # TODO: Handle connected component issues properly
+        # For now we just use manhattan and hope.
+        self.embedding_ = simplicial_set_embedding(
+            self._raw_data,
+            self.graph_,
+            self.n_components,
+            self._initial_alpha,
+            self._a,
+            self._b,
+            self.repulsion_strength,
+            self.negative_sample_rate,
+            n_epochs,
+            init,
+            random_state,
+            'manhattan',
+            {},
+            self._output_distance_func,
+            self._output_metric_kwds,
+            self.output_metric in ('euclidean', 'l2'),
+            self.verbose,
+        )
+
+        self._input_hash = joblib.hash(self._raw_data)
+
+        return self
