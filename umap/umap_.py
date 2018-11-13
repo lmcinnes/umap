@@ -2050,7 +2050,7 @@ class DataFrameUMAP(BaseEstimator):
         self.graph_ = self.graphs_[list(self.graphs_.keys())[0]]
 
         for name in list(self.graphs_.keys())[1:]:
-            self.graph_ = general_simplicial_set_intersection(self.graph_, self.graphs_[name])
+            self.graph_ = general_simplicial_set_intersection(self.graph_, self.graphs_[name], 0.5)
             self.graph_ = reset_local_connectivity(self.graph_)
 
         if self.n_epochs is None:
