@@ -927,3 +927,25 @@ named_distances_with_gradients = {
     "haversine": haversine_grad,
     "braycurtis": bray_curtis_grad,
 }
+
+@numba.jit(parallel=True)
+def pairwise_special_metric(X, Y=None, metric="hellinger"):
+
+    special_metric_func = named_distances[metric]
+
+    if Y is None:
+        result = np.zeros((X.shape[0], X.shape[0]))
+
+        for i in range(X.shape[0]):
+            for j in range(i + 1, X.shape[0]):
+                result[i, j] = special_metric_func(X[i], X[j])
+                result[j, i] = result[i, j]
+    else:
+        result = np.zeros((X.shape[0], Y.shape[0]))
+
+        for i in range(X.shape[0]):
+            for j in range(Y.shape[0]):
+                result[i, j] = special_metric_func(X[i], Y[j])
+
+    return result
+

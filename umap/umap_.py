@@ -1299,9 +1299,18 @@ class UMAP(BaseEstimator):
             print("Construct fuzzy simplicial set")
 
         # Handle small cases efficiently by computing all distances
-        if X.shape[0] < 4096 and not self.metric in ("ll_dirichlet", "hellinger"):
+        if X.shape[0] < 4096:
             self._small_data = True
-            dmat = pairwise_distances(X, metric=self.metric, **self._metric_kwds)
+
+            if self.metric in ("ll_dirichlet", "hellinger"):
+                dmat = dist.pairwise_special_metric(
+                  X, metric=self.metric
+                )
+            else:
+                dmat = pairwise_distances(
+                    X, metric=self.metric, **self._metric_kwds
+                )
+
             self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
                 dmat,
                 self._n_neighbors,
@@ -1523,9 +1532,14 @@ class UMAP(BaseEstimator):
         rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
         if self._small_data:
-            dmat = pairwise_distances(
-                X, self._raw_data, metric=self.metric, **self._metric_kwds
-            )
+            if self.metric in ("ll_dirichlet", "hellinger"):
+                dmat = dist.pairwise_special_metric(
+                  X, self._raw_data, dmetric=self.metric
+                )
+            else:
+                dmat = pairwise_distances(
+                    X, self._raw_data, metric=self.metric, **self._metric_kwds
+                )
             indices = np.argpartition(dmat,
                                       self._n_neighbors)[:, :self._n_neighbors]
             dmat_shortened = submatrix(dmat, indices, self._n_neighbors)

@@ -6,6 +6,8 @@ import scipy.sparse.csgraph
 from sklearn.manifold import SpectralEmbedding
 from sklearn.metrics import pairwise_distances
 
+from umap.distances import pairwise_special_metric, named_distances
+
 
 def component_layout(
     data, n_components, component_labels, dim, metric="euclidean", metric_kwds={}
@@ -48,9 +50,15 @@ def component_layout(
     for label in range(n_components):
         component_centroids[label] = data[component_labels == label].mean(axis=0)
 
-    distance_matrix = pairwise_distances(
-        component_centroids, metric=metric, **metric_kwds
-    )
+    if metric in ("hellinger", "ll_dirichlet"):
+        distance_matrix = pairwise_special_metric(
+            component_centroids, metric=metric
+        )
+    else:
+        distance_matrix = pairwise_distances(
+            component_centroids, metric=metric, **metric_kwds
+        )
+
     affinity_matrix = np.exp(-distance_matrix ** 2)
 
     component_embedding = SpectralEmbedding(
