@@ -963,6 +963,7 @@ class UMAP(BaseEstimator):
             * russelrao
             * kulsinski
             * ll_dirichlet
+            * hellinger
             * rogerstanimoto
             * sokalmichener
             * sokalsneath
