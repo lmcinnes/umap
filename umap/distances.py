@@ -862,6 +862,21 @@ def ll_dirichlet(data1, data2):
     )
 
 
+# Special discrete distances -- where x and y are objects, not vectors
+
+@numba.njit()
+def categorical(x, y):
+    if x == y:
+        return 0.0
+    else:
+        return 1.0
+
+
+@numba.njit()
+def ordinal(x, y):
+    return abs(x - y)
+
+
 named_distances = {
     # general minkowski distances
     "euclidean": euclidean,
@@ -899,6 +914,9 @@ named_distances = {
     "sokalsneath": sokal_sneath,
     "sokalmichener": sokal_michener,
     "yule": yule,
+    # Special discrete distances
+    "categorical": categorical,
+    "ordinal": ordinal
 }
 
 named_distances_with_gradients = {
