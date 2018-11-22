@@ -928,6 +928,12 @@ named_distances_with_gradients = {
     "braycurtis": bray_curtis_grad,
 }
 
+DISCRETE_METRICS = (
+    'categorical',
+    'ordinal',
+    'count'
+)
+
 @numba.jit(parallel=True)
 def pairwise_special_metric(X, Y=None, metric="hellinger"):
 

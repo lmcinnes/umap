@@ -1996,77 +1996,91 @@ class DataFrameUMAP(BaseEstimator):
 
         random_state = check_random_state(self.random_state)
 
-        self.graphs_ = {}
+        self.metric_graphs_ = {}
         self._sigmas = {}
         self._rhos = {}
         self._knn_indices = {}
         self._knn_dists = {}
         self._rp_forest = {}
+        self.graph_ = None
 
-        for metric_data in self.metrics:
+        def is_discrete_metric(metric_data):
+            return metric_data[1] in dist.DISCRETE_METRICS
+
+        for metric_data in sorted(self.metrics, key=is_discrete_metric):
             name, metric, columns = metric_data
 
-            # Sparse not supported yet
-            sub_data = check_array(X[columns], dtype=np.float32, accept_sparse=False)
-
-            if X.shape[0] < 4096 and not metric in ("ll_dirichlet", "hellinger"):
-                # small case
-                self._small_data = True
-                # TODO: metric keywords not supported yet!
-                dmat = pairwise_distances(sub_data, metric=metric)
-                (self.graphs_[name],
-                 self._sigmas[name],
-                 self._rhos[name]) = fuzzy_simplicial_set(
-                    dmat,
-                    self._n_neighbors,
-                    random_state,
-                    "precomputed",
-                    {},
-                    None,
-                    None,
-                    self.angular_rp_forest,
-                    self.set_op_mix_ratio,
-                    self.local_connectivity,
-                    self.verbose,
+            if metric in dist.DISCRETE_METRICS:
+                self.metric_graphs_[name] = None
+                self.graph_ = discrete_metric_simplicial_set_intersection(
+                    self.graph_, X[columns], metric=metric
                 )
             else:
-                self._small_data = False
-                # Standard case
-                # TODO: metric keywords not supported yet!
-                (self._knn_indices[name],
-                 self._knn_dists[name],
-                 self._rp_forest[name]) = nearest_neighbors(
-                    sub_data,
-                    self._n_neighbors,
-                    metric,
-                    {},
-                    self.angular_rp_forest,
-                    random_state,
-                    self.verbose,
-                )
+                # Sparse not supported yet
+                sub_data = check_array(X[columns], dtype=np.float32, accept_sparse=False)
 
-                (self.graph_[name],
-                 self._sigmas[name],
-                 self._rhos[name]) = fuzzy_simplicial_set(
-                    sub_data,
-                    self.n_neighbors,
-                    random_state,
-                    metric,
-                    {},
-                    self._knn_indices,
-                    self._knn_dists,
-                    self.angular_rp_forest,
-                    self.set_op_mix_ratio,
-                    self.local_connectivity,
-                    self.verbose,
-                )
-                # TODO: set up transform data
+                if X.shape[0] < 4096 and not metric in ("ll_dirichlet", "hellinger"):
+                    # small case
+                    self._small_data = True
+                    # TODO: metric keywords not supported yet!
+                    dmat = pairwise_distances(sub_data, metric=metric)
+                    (self.metric_graphs_[name],
+                     self._sigmas[name],
+                     self._rhos[name]) = fuzzy_simplicial_set(
+                        dmat,
+                        self._n_neighbors,
+                        random_state,
+                        "precomputed",
+                        {},
+                        None,
+                        None,
+                        self.angular_rp_forest,
+                        self.set_op_mix_ratio,
+                        self.local_connectivity,
+                        self.verbose,
+                    )
+                else:
+                    self._small_data = False
+                    # Standard case
+                    # TODO: metric keywords not supported yet!
+                    (self._knn_indices[name],
+                     self._knn_dists[name],
+                     self._rp_forest[name]) = nearest_neighbors(
+                        sub_data,
+                        self._n_neighbors,
+                        metric,
+                        {},
+                        self.angular_rp_forest,
+                        random_state,
+                        self.verbose,
+                    )
 
-        self.graph_ = self.graphs_[list(self.graphs_.keys())[0]]
+                    (self.metric_graphs_[name],
+                     self._sigmas[name],
+                     self._rhos[name]) = fuzzy_simplicial_set(
+                        sub_data,
+                        self.n_neighbors,
+                        random_state,
+                        metric,
+                        {},
+                        self._knn_indices,
+                        self._knn_dists,
+                        self.angular_rp_forest,
+                        self.set_op_mix_ratio,
+                        self.local_connectivity,
+                        self.verbose,
+                    )
+                    # TODO: set up transform data
 
-        for name in list(self.graphs_.keys())[1:]:
-            self.graph_ = general_simplicial_set_intersection(self.graph_, self.graphs_[name], 0.5)
+                if self.graph_ is None:
+                    self._graph = self.metric_graphs_[name]
+                else:
+                    self.graph_ = general_simplicial_set_intersection(
+                        self.graph_, self.metric_graphs_[name], 0.5
+                    )
+
             self.graph_ = reset_local_connectivity(self.graph_)
+
 
         if self.n_epochs is None:
             n_epochs = 0
