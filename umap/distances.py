@@ -864,7 +864,7 @@ def ll_dirichlet(data1, data2):
 
 # Special discrete distances -- where x and y are objects, not vectors
 
-@numba.njit()
+@numba.jit()
 def categorical(x, y):
     if x == y:
         return 0.0
@@ -926,7 +926,8 @@ named_distances = {
     "yule": yule,
     # Special discrete distances
     "categorical": categorical,
-    "ordinal": ordinal
+    "ordinal": ordinal,
+    "hierarchical_categorical": hierarchical_categorical,
 }
 
 named_distances_with_gradients = {
@@ -958,6 +959,7 @@ named_distances_with_gradients = {
 
 DISCRETE_METRICS = (
     'categorical',
+    'hierarchical_categorical',
     'ordinal',
     'count'
 )
