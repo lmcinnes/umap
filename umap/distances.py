@@ -872,6 +872,16 @@ def categorical(x, y):
         return 1.0
 
 
+@numba.jit()
+def hierarchical_categorical(x, y, cat_hierarchy=[{}]):
+    n_levels = float(len(cat_hierarchy))
+    for level, cats in enumerate(cat_hierarchy):
+        if cats[x] == cats[y]:
+            return float(level) / n_levels
+    else:
+        return 1.0
+
+
 @numba.njit()
 def ordinal(x, y):
     return abs(x - y)
