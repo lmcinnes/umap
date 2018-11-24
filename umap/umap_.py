@@ -2019,11 +2019,18 @@ class DataFrameUMAP(BaseEstimator):
                 # Sparse not supported yet
                 sub_data = check_array(X[columns], dtype=np.float32, accept_sparse=False)
 
-                if X.shape[0] < 4096 and not metric in ("ll_dirichlet", "hellinger"):
+                if X.shape[0] < 4096:
                     # small case
                     self._small_data = True
                     # TODO: metric keywords not supported yet!
-                    dmat = pairwise_distances(sub_data, metric=metric)
+                    if self.metric in ("ll_dirichlet", "hellinger"):
+                        dmat = dist.pairwise_special_metric(
+                            X, sub_data, metric=metric
+                        )
+                    else:
+                        dmat = pairwise_distances(
+                            X, sub_data, metric=metric
+                        )
                     (self.metric_graphs_[name],
                      self._sigmas[name],
                      self._rhos[name]) = fuzzy_simplicial_set(
