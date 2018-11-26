@@ -2087,7 +2087,7 @@ class DataFrameUMAP(BaseEstimator):
                     # small case
                     self._small_data = True
                     # TODO: metric keywords not supported yet!
-                    if self.metric in ("ll_dirichlet", "hellinger"):
+                    if metric in ("ll_dirichlet", "hellinger"):
                         dmat = dist.pairwise_special_metric(X, sub_data, metric=metric)
                     else:
                         dmat = pairwise_distances(X, sub_data, metric=metric)
