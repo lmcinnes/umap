@@ -43,17 +43,17 @@ def _to_hex(arr):
     return [matplotlib.colors.to_hex(c) for c in arr]
 
 
-@numba.vectorize(['uint8(uint32)', 'uint8(uint32)'], cache=True)
+@numba.vectorize(['uint8(uint32)', 'uint8(uint32)'])
 def _red(x):
     return (x & 0xff0000) >> 16
 
 
-@numba.vectorize(['uint8(uint32)', 'uint8(uint32)'], cache=True)
+@numba.vectorize(['uint8(uint32)', 'uint8(uint32)'])
 def _green(x):
     return (x & 0x00ff00) >> 8
 
 
-@numba.vectorize(['uint8(uint32)', 'uint8(uint32)'], cache=True)
+@numba.vectorize(['uint8(uint32)', 'uint8(uint32)'])
 def _blue(x):
     return (x & 0x0000ff)
 

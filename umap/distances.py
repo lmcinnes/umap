@@ -879,7 +879,7 @@ def ll_dirichlet(data1, data2):
 
 def get_discrete_params(data, metric):
     if metric == 'ordinal':
-        return {'support_size': data.max() - data.min()}
+        return {'support_size': float(data.max() - data.min())}
     else:
         return {}
 
@@ -902,7 +902,7 @@ def hierarchical_categorical(x, y, cat_hierarchy=[{}]):
 
 
 @numba.njit()
-def ordinal(x, y, support_size=1):
+def ordinal(x, y, support_size=1.0):
     return abs(x - y) / support_size
 
 

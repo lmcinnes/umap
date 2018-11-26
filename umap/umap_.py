@@ -594,10 +594,12 @@ def fast_metric_intersection(
     -------
     None
     """
+    metric_args = tuple(metric_kws.values())
+
     for nz in range(rows.shape[0]):
         i = rows[nz]
         j = cols[nz]
-        dist = metric(discrete_space[i], discrete_space[j], **metric_kws)
+        dist = metric(discrete_space[i], discrete_space[j], *metric_args)
         values[nz] *= np.exp(-(scale * dist))
 
     return
