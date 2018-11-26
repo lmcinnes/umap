@@ -877,6 +877,12 @@ def ll_dirichlet(data1, data2):
 
 # Special discrete distances -- where x and y are objects, not vectors
 
+def get_discrete_params(data, metric):
+    if metric == 'ordinal':
+        return {'support_size': data.max() - data.min()}
+    else:
+        return {}
+
 @numba.jit()
 def categorical(x, y):
     if x == y:
@@ -896,8 +902,8 @@ def hierarchical_categorical(x, y, cat_hierarchy=[{}]):
 
 
 @numba.njit()
-def ordinal(x, y):
-    return abs(x - y)
+def ordinal(x, y, support_size=1):
+    return abs(x - y) / support_size
 
 
 named_distances = {
