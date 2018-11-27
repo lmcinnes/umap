@@ -2065,11 +2065,6 @@ class DataFrameUMAP(BaseEstimator):
                 self.metric_graphs_[name] = None
                 for col in columns:
 
-                    # if metric in ('categorical',):
-                    #     discrete_space = np.array([hash(x) for x in X[col].values])
-                    # else:
-                    #     discrete_space = X[col].values
-
                     discrete_space = X[col].values
                     metric_kws = dist.get_discrete_params(discrete_space, metric)
 

@@ -3,6 +3,7 @@
 # License: BSD 3 clause
 import numba
 import numpy as np
+import scipy.stats
 
 _mock_identity = np.eye(2, dtype=np.float64)
 _mock_ones = np.ones(2, dtype=np.float64)
@@ -880,11 +881,22 @@ def ll_dirichlet(data1, data2):
 def get_discrete_params(data, metric):
     if metric == 'ordinal':
         return {'support_size': float(data.max() - data.min())}
+    elif metric == 'count':
+        min_count = scipy.stats.tmin(data)
+        max_count = scipy.stats.tmax(data)
+        lambda_ = scipy.stats.tmean(data)
+        normalisation = count_distance(
+            min_count, max_count, poisson_lambda=lambda_
+        )
+        return {
+            'poisson_lambda': lambda_,
+            'normalisation': normalisation,
+        }
     else:
         return {}
 
 @numba.jit()
-def categorical(x, y):
+def categorical_distance(x, y):
     if x == y:
         return 0.0
     else:
@@ -892,7 +904,7 @@ def categorical(x, y):
 
 
 @numba.jit()
-def hierarchical_categorical(x, y, cat_hierarchy=[{}]):
+def hierarchical_categorical_distance(x, y, cat_hierarchy=[{}]):
     n_levels = float(len(cat_hierarchy))
     for level, cats in enumerate(cat_hierarchy):
         if cats[x] == cats[y]:
@@ -902,8 +914,33 @@ def hierarchical_categorical(x, y, cat_hierarchy=[{}]):
 
 
 @numba.njit()
-def ordinal(x, y, support_size=1.0):
+def ordinal_distance(x, y, support_size=1.0):
     return abs(x - y) / support_size
+
+
+@numba.jit()
+def count_distance(x, y, poisson_lambda=1.0, normalisation=1.0):
+    lo = int(min(x, y))
+    hi = int(max(x, y))
+
+    log_lambda = np.log(poisson_lambda)
+
+    if lo < 2:
+        log_k_factorial = 0.0
+    elif lo < 10:
+        log_k_factorial = 0.0
+        for k in range(2, lo):
+            log_k_factorial += np.log(k)
+    else:
+        log_k_factorial = approx_log_Gamma(k + 1)
+
+    result = 0.0
+
+    for k in range(lo, hi):
+        result += k * log_lambda - poisson_lambda - log_k_factorial
+        log_k_factorial += np.log(k)
+
+    return result / normalisation
 
 
 named_distances = {
@@ -944,9 +981,10 @@ named_distances = {
     "sokalmichener": sokal_michener,
     "yule": yule,
     # Special discrete distances
-    "categorical": categorical,
-    "ordinal": ordinal,
-    "hierarchical_categorical": hierarchical_categorical,
+    "categorical": categorical_distance,
+    "ordinal": ordinal_distance,
+    "hierarchical_categorical": hierarchical_categorical_distance,
+    "count": count_distance,
 }
 
 named_distances_with_gradients = {
