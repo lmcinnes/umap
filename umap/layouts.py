@@ -158,6 +158,8 @@ def optimize_layout_euclidean(
                         grad_coeff /= (0.001 + dist_squared) * (
                                 a * pow(dist_squared, b) + 1
                         )
+                    elif j == k:
+                        continue
                     else:
                         grad_coeff = 0.0
 
