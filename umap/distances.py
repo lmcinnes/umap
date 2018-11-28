@@ -880,7 +880,7 @@ def ll_dirichlet(data1, data2):
 
 def get_discrete_params(data, metric):
     if metric == 'ordinal':
-        return {'support_size': float(data.max() - data.min())}
+        return {'support_size': float(data.max() - data.min()) / 2.0}
     elif metric == 'count':
         min_count = scipy.stats.tmin(data)
         max_count = scipy.stats.tmax(data)
@@ -890,8 +890,18 @@ def get_discrete_params(data, metric):
         )
         return {
             'poisson_lambda': lambda_,
-            'normalisation': normalisation,
+            'normalisation': normalisation / 2.0, # heuristic
         }
+    elif metric == 'string':
+        lengths = np.array([len(x) for x in data])
+        max_length = scipy.stats.tmax(lengths)
+        max_dist = max_length / 1.5 # heuristic
+        normalisation = max_dist / 2.0 # heuristic
+        return {
+            'normalisation': normalisation,
+            'max_dist': max_dist / 2.0, # heuristic
+        }
+
     else:
         return {}
 
@@ -943,6 +953,41 @@ def count_distance(x, y, poisson_lambda=1.0, normalisation=1.0):
     return result / normalisation
 
 
+@numba.jit()
+def levenshtein(x, y, normalisation=1.0, max_distance=20):
+
+    x_len, y_len = len(x), len(y)
+
+    # Opt out of some comparisons
+    if abs(x_len - y_len) > max_distance:
+        return abs(x_len - y_len) / normalisation
+
+    v0 = np.arange(y_len + 1)
+    v1 = np.zeros(y_len + 1)
+
+    for i in range(x_len):
+
+        v1[i] = i + 1
+
+        for j in range(y_len):
+            deletion_cost = v0[j + 1] + 1
+            insertion_cost = v1[j] + 1
+            substitution_cost = int(x[i] == y[j])
+
+            v1[j + 1] = min(deletion_cost, insertion_cost, substitution_cost)
+
+        v0 = v1
+
+        # Abort early if we've already exceeded max_dist
+        if np.min(v0) > max_distance:
+            return max_distance / normalisation
+
+    return v0[y_len] / normalisation
+
+
+
+
+
 named_distances = {
     # general minkowski distances
     "euclidean": euclidean,
@@ -985,6 +1030,7 @@ named_distances = {
     "ordinal": ordinal_distance,
     "hierarchical_categorical": hierarchical_categorical_distance,
     "count": count_distance,
+    "string": levenshtein,
 }
 
 named_distances_with_gradients = {
@@ -1019,6 +1065,7 @@ DISCRETE_METRICS = (
     'hierarchical_categorical',
     'ordinal',
     'count'
+    'string'
 )
 
 @numba.jit(parallel=True)
