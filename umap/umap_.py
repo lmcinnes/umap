@@ -20,6 +20,7 @@ from sklearn.utils import check_random_state, check_array
 
 import umap.distances as dist
 import umap.sparse as sparse
+import umap.sparse_nndescent as sparse_nn
 
 from umap.nndescent import (
     # make_nn_descent,
@@ -262,7 +263,7 @@ def nearest_neighbors(
 
             rp_forest = make_forest(X, n_neighbors, n_trees, rng_state, angular)
             leaf_array = rptree_leaf_array(rp_forest)
-            knn_indices, knn_dists = sparse.sparse_nn_descent(
+            knn_indices, knn_dists = sparse_nn.sparse_nn_descent(
                 X.indices,
                 X.indptr,
                 X.data,
@@ -1628,14 +1629,12 @@ class UMAP(BaseEstimator):
         if x_hash == self._input_hash:
             return self.embedding_
 
-        if self._sparse_data:
-            raise ValueError("Transform not available for sparse input.")
-        elif self.metric == "precomputed":
+        if self.metric == "precomputed":
             raise ValueError(
                 "Transform  of new data not available for " "precomputed metric."
             )
 
-        X = check_array(X, dtype=np.float32, order="C")
+        X = check_array(X, dtype=np.float32, order="C", accept_sparse='csr')
         random_state = check_random_state(self.transform_seed)
         rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
@@ -1653,14 +1652,46 @@ class UMAP(BaseEstimator):
             indices_sorted = np.argsort(dmat_shortened)
             indices = submatrix(indices, indices_sorted, self._n_neighbors)
             dists = submatrix(dmat_shortened, indices_sorted, self._n_neighbors)
+        elif self._sparse_data:
+            if not scipy.sparse.issparse(X):
+                X = scipy.sparse.csr_matrix(X)
+
+            init = sparse_nn.sparse_initialise_search(
+                self._rp_forest,
+                self._raw_data.indices,
+                self._raw_data.indptr,
+                self._raw_data.data,
+                X.indices,
+                X.indptr,
+                X.data,
+                int(self._n_neighbors * self.transform_queue_size),
+                rng_state,
+                self._distance_func,
+                self._dist_args
+            )
+            result = sparse_nn.sparse_initialized_nnd_search(
+                self._raw_data.indices,
+                self._raw_data.indptr,
+                self._raw_data.data,
+                self._search_graph.indptr,
+                self._search_graph.indices,
+                init,
+                X.indices,
+                X.indptr,
+                X.data,
+                self._distance_func,
+                self._dist_args,
+            )
+
+            indices, dists = deheap_sort(result)
+            indices = indices[:, : self._n_neighbors]
+            dists = dists[:, : self._n_neighbors]
         else:
             init = initialise_search(
                 self._rp_forest,
                 self._raw_data,
                 X,
                 int(self._n_neighbors * self.transform_queue_size),
-                # self._random_init,
-                # self._tree_init,
                 rng_state,
                 self._distance_func,
                 self._dist_args,
