@@ -1482,6 +1482,18 @@ class UMAP(BaseEstimator):
                 self.graph_ = discrete_metric_simplicial_set_intersection(
                     self.graph_, y_, far_dist=far_dist
                 )
+            elif self.target_metric in dist.DISCRETE_METRICS:
+                if self.target_weight < 1.0:
+                    scale = 2.5 * (1.0 / (1.0 - self.target_weight))
+                else:
+                    scale = 1.0e12
+                self.graph_ = discrete_metric_simplicial_set_intersection(
+                    self.graph_,
+                    y_,
+                    metric=self.target_metric,
+                    metric_kws=self._target_metric_kwds,
+                    metric_scale=scale
+                )
             else:
                 if self.target_n_neighbors == -1:
                     target_n_neighbors = self._n_neighbors
