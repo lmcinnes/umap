@@ -11,6 +11,7 @@ What's new in 0.4
 * New metrics, including Hellinger distance for sparse count data.
 * New discrete/label metrics, including hierarchical categories, counts, ordinal data, and string edit distance.
 * Initial support for dataframe embedding -- still experimental, but worth trying.
+* Support for transform methods with sparse data.
 
 
 What's new in 0.3
