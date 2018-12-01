@@ -214,6 +214,9 @@ def nearest_neighbors(
 
     knn_dists: array of shape (n_samples, n_neighbors)
         The distances to the ``n_neighbors`` closest points in the dataset.
+
+    rp_forest: list of trees
+        The random projection forest used for searching (if used, None otherwise)
     """
     if metric == "precomputed":
         # Note that this does not support sparse distance matrices yet ...
@@ -1219,38 +1222,6 @@ class UMAP(BaseEstimator):
         else:
             self._output_metric_kwds = {}
 
-        if callable(self.metric):
-            self._input_distance_func = self.metric
-        elif self.metric in dist.named_distances:
-            self._input_distance_func = dist.named_distances[self.metric]
-        elif self.metric == "precomputed":
-            warn("Using precomputed metric; transform will be unavailable for new data")
-        else:
-            raise ValueError("metric is neither callable, " + "nor a recognised string")
-
-        if callable(self.output_metric):
-            self._output_distance_func = self.output_metric
-        elif (
-            self.output_metric in dist.named_distances
-            and self.output_metric in dist.named_distances_with_gradients
-        ):
-            self._output_distance_func = dist.named_distances_with_gradients[
-                self.output_metric
-            ]
-        elif self.output_metric == "precomputed":
-            raise ValueError("output_metric cannnot be 'precomputed'")
-        else:
-            if self.output_metric in dist.named_distances:
-                raise ValueError(
-                    "gradient function is not yet implemented for "
-                    + repr(self.output_metric)
-                    + "."
-                )
-            else:
-                raise ValueError(
-                    "output_metric is neither callable, " + "nor a recognised string"
-                )
-
         self.n_epochs = n_epochs
         self.init = init
         self.n_components = n_components
@@ -1311,6 +1282,38 @@ class UMAP(BaseEstimator):
             self.n_epochs <= 10 or not isinstance(self.n_epochs, int)
         ):
             raise ValueError("n_epochs must be a positive integer " "larger than 10")
+
+        if callable(self.metric):
+            self._input_distance_func = self.metric
+        elif self.metric in dist.named_distances:
+            self._input_distance_func = dist.named_distances[self.metric]
+        elif self.metric == "precomputed":
+            warn("Using precomputed metric; transform will be unavailable for new data")
+        else:
+            raise ValueError("metric is neither callable, " + "nor a recognised string")
+
+        if callable(self.output_metric):
+            self._output_distance_func = self.output_metric
+        elif (
+                self.output_metric in dist.named_distances
+                and self.output_metric in dist.named_distances_with_gradients
+        ):
+            self._output_distance_func = dist.named_distances_with_gradients[
+                self.output_metric
+            ]
+        elif self.output_metric == "precomputed":
+            raise ValueError("output_metric cannnot be 'precomputed'")
+        else:
+            if self.output_metric in dist.named_distances:
+                raise ValueError(
+                    "gradient function is not yet implemented for "
+                    + repr(self.output_metric)
+                    + "."
+                )
+            else:
+                raise ValueError(
+                    "output_metric is neither callable, " + "nor a recognised string"
+                )
 
     def fit(self, X, y=None):
         """Fit X into an embedded space.

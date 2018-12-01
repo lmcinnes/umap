@@ -38,8 +38,7 @@ import umap.distances as dist
 import umap.sparse as spdist
 import umap.validation as valid
 from umap.nndescent import (
-    make_initialisations,
-    make_initialized_nnd_search,
+    initialized_nnd_search,
     initialise_search,
 )
 from umap.utils import deheap_sort
@@ -287,14 +286,13 @@ def test_nn_search():
     search_graph.data = (knn_dists != 0).astype(np.int8)
     search_graph = search_graph.maximum(search_graph.transpose()).tocsr()
 
-    random_init, tree_init = make_initialisations(dist.euclidean, ())
-    search = make_initialized_nnd_search(dist.euclidean, ())
-
     rng_state = np.random.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
     init = initialise_search(
-        rp_forest, train, test, int(10 * 3), random_init, tree_init, rng_state
+        rp_forest, train, test, int(10 * 3), rng_state, dist.euclidean, ()
     )
-    result = search(train, search_graph.indptr, search_graph.indices, init, test)
+    result = initialized_nnd_search(
+        train, search_graph.indptr, search_graph.indices, init, test, dist.euclidean, ()
+    )
 
     indices, dists = deheap_sort(result)
     indices = indices[:, :10]
