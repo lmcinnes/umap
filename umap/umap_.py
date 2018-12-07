@@ -1667,7 +1667,9 @@ class UMAP(BaseEstimator):
                 X.indices,
                 X.indptr,
                 X.data,
-                int(self._n_neighbors * self.transform_queue_size),
+                int(self._n_neighbors *
+                    self.transform_queue_size *
+                    (1 + int(self._sparse_data))),
                 rng_state,
                 self._distance_func,
                 self._dist_args

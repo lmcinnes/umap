@@ -143,7 +143,7 @@ def sparse_init_from_random(
     dist_args,
 ):
     for i in range(query_indptr.shape[0] - 1):
-        indices = rejection_sample(n_neighbors, data.shape[0], rng_state)
+        indices = rejection_sample(n_neighbors, indptr.shape[0] - 1, rng_state)
 
         to_inds = query_inds[query_indptr[i] : query_indptr[i + 1]]
         to_data = query_data[query_indptr[i] : query_indptr[i + 1]]
