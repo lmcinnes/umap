@@ -75,7 +75,7 @@ def breadth_first_search(adjmat, start, min_vertices):
     return np.array(explored)
 
 
-@numba.njit(parallel=True, fastmath=True)
+#@numba.njit(parallel=True, fastmath=True)
 def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0):
     """Compute a continuous version of the distance to the kth nearest
     neighbor. That is, this is similar to knn-distance but allows continuous
@@ -115,6 +115,7 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
     nn_dist: array of shape (n_samples,)
         The distance to the 1st nearest neighbor for each point.
     """
+    print(distances)
     target = np.log2(k) * bandwidth
     rho = np.zeros(distances.shape[0])
     result = np.zeros(distances.shape[0])
@@ -2182,8 +2183,8 @@ class DataFrameUMAP(BaseEstimator):
                         random_state,
                         metric,
                         {},
-                        self._knn_indices,
-                        self._knn_dists,
+                        self._knn_indices[name],
+                        self._knn_dists[name],
                         self.angular_rp_forest,
                         self.set_op_mix_ratio,
                         self.local_connectivity,
