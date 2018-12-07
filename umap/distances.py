@@ -1064,8 +1064,8 @@ DISCRETE_METRICS = (
     'categorical',
     'hierarchical_categorical',
     'ordinal',
-    'count'
-    'string'
+    'count',
+    'string',
 )
 
 @numba.jit(parallel=True)
