@@ -3,6 +3,7 @@
 # License: BSD 3 clause
 import numba
 import numpy as np
+import scipy.stats
 
 _mock_identity = np.eye(2, dtype=np.float64)
 _mock_ones = np.ones(2, dtype=np.float64)
@@ -275,7 +276,8 @@ def canberra_grad(x, y):
         denominator = np.abs(x[i]) + np.abs(y[i])
         if denominator > 0:
             result += np.abs(x[i] - y[i]) / denominator
-            grad[i] = np.sign(x[i] - y[i]) / denominator - np.abs(x[i] - y[i]) * np.sign(x[i]) / denominator**2
+            grad[i] = np.sign(x[i] - y[i]) / denominator - \
+                      np.abs(x[i] - y[i]) * np.sign(x[i]) / denominator ** 2
 
     return result, grad
 
@@ -610,7 +612,11 @@ def approx_log_Gamma(x):
     if x == 1:
         return 0
     #x2= 1/(x*x);
-    return x*np.log(x) - x + 0.5*np.log(2.0*np.pi/x) + 1.0/(x*12.0) #+ x2*(-1.0/360.0) + x2* (1.0/1260.0 + x2*(-1.0/(1680.0)  + x2*(1.0/1188.0 + x2*(-691.0/360360.0 + x2*(1.0/156.0 + x2*(-3617.0/122400.0 + x2*(43687.0/244188.0 + x2*(-174611.0/125400.0) + x2*(77683.0/5796.0 + x2*(-236364091.0/1506960.0 + x2*(657931.0/300.0))))))))))))
+    return x * np.log(x) - x + 0.5 * np.log(2.0 * np.pi / x) + 1.0 / (x * 12.0)
+    # + x2*(-1.0/360.0) + x2* (1.0/1260.0 + x2*(-1.0/(1680.0)  +\
+    #  x2*(1.0/1188.0 + x2*(-691.0/360360.0 + x2*(1.0/156.0 +\
+    #  x2*(-3617.0/122400.0 + x2*(43687.0/244188.0 + x2*(-174611.0/125400.0) +\
+    #  x2*(77683.0/5796.0 + x2*(-236364091.0/1506960.0 + x2*(657931.0/300.0))))))))))))
                 
 @numba.njit()
 def log_beta(x,y):
@@ -627,11 +633,19 @@ def log_beta(x,y):
 @numba.njit()
 def log_single_beta(x):
     return np.log(2.0)*(-2.0*x+0.5) + 0.5*np.log(2.0*np.pi/x) + 0.125/x
-# + x2*(-1.0/192.0 + x2* (1.0/640.0 + x2*(-17.0/(14336.0) + x2*(31.0/18432.0 + x2*(-691.0/180224.0 + x2*(5461.0/425984.0 + x2*(-929569.0/15728640.0 + x2*(3189151.0/8912896.0 + x2*(-221930581.0/79691776.0) + x2*(4722116521.0/176160768.0 + x2*(-968383680827.0/3087007744.0 + x2*(14717667114151.0/3355443200.0 ))))))))))))
+
+
+# + x2*(-1.0/192.0 + x2* (1.0/640.0 + x2*(-17.0/(14336.0) +\
+#  x2*(31.0/18432.0 + x2*(-691.0/180224.0 +\
+#  x2*(5461.0/425984.0 + x2*(-929569.0/15728640.0 +\
+#  x2*(3189151.0/8912896.0 + x2*(-221930581.0/79691776.0) +\
+#  x2*(4722116521.0/176160768.0 + x2*(-968383680827.0/3087007744.0 +\
+#  x2*(14717667114151.0/3355443200.0 ))))))))))))
 
 @numba.njit()
 def ll_dirichlet(data1, data2):
-    """ The symmetric relative log likelihood of rolling data2 vs data 1 in n trials on a die that rolled data1 in sum(data1) trials. 
+    """ The symmetric relative log likelihood of rolling data2 vs data1
+    in n trials on a die that rolled data1 in sum(data1) trials.
     
     ..math::
         D(data1, data2) = DirichletMultinomail(data2 | data1)  
@@ -656,11 +670,10 @@ def ll_dirichlet(data1, data2):
 
                 
             if data2[i] > 0.9:
-                self_denom2 += log_single_beta(data2[i]) 
+                self_denom2 += log_single_beta(data2[i])
 
-#    return np.sqrt(1.0/n2*(log_denom1 - np.log(n2) - log_beta(n1,n2) - (self_denom2 - np.log(n2) - log_beta(n2,n2))) + 1.0/n1*(log_denom2 -np.log(n1) - log_beta(n2,n1) - (self_denom1 - np.log(n1) - log_beta(n1,n1))))
-
-    return np.sqrt(1.0/n2*(log_b - log_beta(n1,n2) - (self_denom2 - log_single_beta(n2))) + 1.0/n1*(log_b - log_beta(n2,n1) - (self_denom1 - log_single_beta(n1))))
+    return np.sqrt(1.0 / n2 * (log_b - log_beta(n1, n2) - (self_denom2 - log_single_beta(n2))) + \
+                   1.0 / n1 * (log_b - log_beta(n2, n1) - (self_denom1 - log_single_beta(n1))))
 
 
 @numba.njit()
@@ -798,7 +811,8 @@ def log_single_beta(x):
 
 @numba.njit()
 def ll_dirichlet(data1, data2):
-    """ The symmetric relative log likelihood of rolling data2 vs data 1 in n trials on a die that rolled data1 in
+    """ The symmetric relative log likelihood of rolling data2 vs data1
+    in n trials on a die that rolled data1 in
     sum(data1) trials.
 
     ..math::
@@ -862,6 +876,118 @@ def ll_dirichlet(data1, data2):
     )
 
 
+# Special discrete distances -- where x and y are objects, not vectors
+
+def get_discrete_params(data, metric):
+    if metric == 'ordinal':
+        return {'support_size': float(data.max() - data.min()) / 2.0}
+    elif metric == 'count':
+        min_count = scipy.stats.tmin(data)
+        max_count = scipy.stats.tmax(data)
+        lambda_ = scipy.stats.tmean(data)
+        normalisation = count_distance(
+            min_count, max_count, poisson_lambda=lambda_
+        )
+        return {
+            'poisson_lambda': lambda_,
+            'normalisation': normalisation / 2.0, # heuristic
+        }
+    elif metric == 'string':
+        lengths = np.array([len(x) for x in data])
+        max_length = scipy.stats.tmax(lengths)
+        max_dist = max_length / 1.5 # heuristic
+        normalisation = max_dist / 2.0 # heuristic
+        return {
+            'normalisation': normalisation,
+            'max_dist': max_dist / 2.0, # heuristic
+        }
+
+    else:
+        return {}
+
+@numba.jit()
+def categorical_distance(x, y):
+    if x == y:
+        return 0.0
+    else:
+        return 1.0
+
+
+@numba.jit()
+def hierarchical_categorical_distance(x, y, cat_hierarchy=[{}]):
+    n_levels = float(len(cat_hierarchy))
+    for level, cats in enumerate(cat_hierarchy):
+        if cats[x] == cats[y]:
+            return float(level) / n_levels
+    else:
+        return 1.0
+
+
+@numba.njit()
+def ordinal_distance(x, y, support_size=1.0):
+    return abs(x - y) / support_size
+
+
+@numba.jit()
+def count_distance(x, y, poisson_lambda=1.0, normalisation=1.0):
+    lo = int(min(x, y))
+    hi = int(max(x, y))
+
+    log_lambda = np.log(poisson_lambda)
+
+    if lo < 2:
+        log_k_factorial = 0.0
+    elif lo < 10:
+        log_k_factorial = 0.0
+        for k in range(2, lo):
+            log_k_factorial += np.log(k)
+    else:
+        log_k_factorial = approx_log_Gamma(k + 1)
+
+    result = 0.0
+
+    for k in range(lo, hi):
+        result += k * log_lambda - poisson_lambda - log_k_factorial
+        log_k_factorial += np.log(k)
+
+    return result / normalisation
+
+
+@numba.jit()
+def levenshtein(x, y, normalisation=1.0, max_distance=20):
+
+    x_len, y_len = len(x), len(y)
+
+    # Opt out of some comparisons
+    if abs(x_len - y_len) > max_distance:
+        return abs(x_len - y_len) / normalisation
+
+    v0 = np.arange(y_len + 1)
+    v1 = np.zeros(y_len + 1)
+
+    for i in range(x_len):
+
+        v1[i] = i + 1
+
+        for j in range(y_len):
+            deletion_cost = v0[j + 1] + 1
+            insertion_cost = v1[j] + 1
+            substitution_cost = int(x[i] == y[j])
+
+            v1[j + 1] = min(deletion_cost, insertion_cost, substitution_cost)
+
+        v0 = v1
+
+        # Abort early if we've already exceeded max_dist
+        if np.min(v0) > max_distance:
+            return max_distance / normalisation
+
+    return v0[y_len] / normalisation
+
+
+
+
+
 named_distances = {
     # general minkowski distances
     "euclidean": euclidean,
@@ -899,6 +1025,12 @@ named_distances = {
     "sokalsneath": sokal_sneath,
     "sokalmichener": sokal_michener,
     "yule": yule,
+    # Special discrete distances
+    "categorical": categorical_distance,
+    "ordinal": ordinal_distance,
+    "hierarchical_categorical": hierarchical_categorical_distance,
+    "count": count_distance,
+    "string": levenshtein,
 }
 
 named_distances_with_gradients = {
@@ -927,3 +1059,33 @@ named_distances_with_gradients = {
     "haversine": haversine_grad,
     "braycurtis": bray_curtis_grad,
 }
+
+DISCRETE_METRICS = (
+    'categorical',
+    'hierarchical_categorical',
+    'ordinal',
+    'count',
+    'string',
+)
+
+@numba.jit(parallel=True)
+def pairwise_special_metric(X, Y=None, metric="hellinger"):
+
+    special_metric_func = named_distances[metric]
+
+    if Y is None:
+        result = np.zeros((X.shape[0], X.shape[0]))
+
+        for i in range(X.shape[0]):
+            for j in range(i + 1, X.shape[0]):
+                result[i, j] = special_metric_func(X[i], X[j])
+                result[j, i] = result[i, j]
+    else:
+        result = np.zeros((X.shape[0], Y.shape[0]))
+
+        for i in range(X.shape[0]):
+            for j in range(Y.shape[0]):
+                result[i, j] = special_metric_func(X[i], Y[j])
+
+    return result
+

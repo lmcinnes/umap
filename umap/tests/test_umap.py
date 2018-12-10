@@ -38,9 +38,12 @@ import umap.distances as dist
 import umap.sparse as spdist
 import umap.validation as valid
 from umap.nndescent import (
-    make_initialisations,
-    make_initialized_nnd_search,
+    initialized_nnd_search,
     initialise_search,
+)
+from umap.sparse_nndescent import (
+    sparse_initialized_nnd_search,
+    sparse_initialise_search,
 )
 from umap.utils import deheap_sort
 from umap.umap_ import (
@@ -287,14 +290,13 @@ def test_nn_search():
     search_graph.data = (knn_dists != 0).astype(np.int8)
     search_graph = search_graph.maximum(search_graph.transpose()).tocsr()
 
-    random_init, tree_init = make_initialisations(dist.euclidean, ())
-    search = make_initialized_nnd_search(dist.euclidean, ())
-
     rng_state = np.random.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
     init = initialise_search(
-        rp_forest, train, test, int(10 * 3), random_init, tree_init, rng_state
+        rp_forest, train, test, int(10 * 3), rng_state, dist.euclidean, ()
     )
-    result = search(train, search_graph.indptr, search_graph.indices, init, test)
+    result = initialized_nnd_search(
+        train, search_graph.indptr, search_graph.indices, init, test, dist.euclidean, ()
+    )
 
     indices, dists = deheap_sort(result)
     indices = indices[:, :10]
@@ -311,6 +313,62 @@ def test_nn_search():
         percent_correct,
         0.99,
         "Sparse NN-descent did not get " "99% accuracy on nearest " "neighbors",
+    )
+
+
+def test_sparse_nn_search():
+    train = sparse_nn_data[100:]
+    test = sparse_nn_data[:100]
+    (knn_indices, knn_dists, rp_forest) = nearest_neighbors(
+        train, 15, "euclidean", {}, False, np.random
+    )
+
+    graph = fuzzy_simplicial_set(
+        nn_data,
+        15,
+        np.random,
+        "euclidean",
+        {},
+        knn_indices,
+        knn_dists,
+        False,
+        1.0,
+        1.0,
+        False,
+    )
+
+    search_graph = sparse.lil_matrix((train.shape[0], train.shape[0]), dtype=np.int8)
+    search_graph.rows = knn_indices
+    search_graph.data = (knn_dists != 0).astype(np.int8)
+    search_graph = search_graph.maximum(search_graph.transpose()).tocsr()
+
+    rng_state = np.random.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
+    init = sparse_initialise_search(
+        rp_forest, train.indices, train.indptr, train.data, test.indices,
+        test.indptr, test.data,
+        int(10 * 6),
+        rng_state, spdist.sparse_euclidean, ()
+    )
+    result = sparse_initialized_nnd_search(
+        train.indices, train.indptr, train.data, search_graph.indptr, search_graph.indices, init,
+        test.indices, test.indptr, test.data, spdist.sparse_euclidean, ()
+    )
+
+    indices, dists = deheap_sort(result)
+    indices = indices[:, :10]
+
+    tree = KDTree(train.toarray())
+    true_indices = tree.query(test.toarray(), 10, return_distance=False)
+
+    num_correct = 0.0
+    for i in range(test.shape[0]):
+        num_correct += np.sum(np.in1d(true_indices[i], indices[i]))
+
+    percent_correct = num_correct / (test.shape[0] * 10)
+    assert_greater_equal(
+        percent_correct,
+        0.90,
+        "Sparse NN-descent did not get " "90% accuracy on nearest " "neighbors",
     )
 
 
