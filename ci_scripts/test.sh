@@ -8,7 +8,7 @@ cd $TEST_DIR
 
 if [[ "$COVERAGE" == "true" ]]; then
     export NUMBA_DISABLE_JIT=1
-    travis_wait 30 nosetests -s --with-coverage --cover-package=$MODULE $MODULE
+    nosetests -s --with-coverage --cover-package=$MODULE $MODULE
 else
     nosetests -s $MODULE
 fi
