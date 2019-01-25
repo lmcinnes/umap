@@ -718,7 +718,8 @@ def diagnostic(
         local_variance_threshold=0.8,
         ax=None,
         cmap='viridis',
-        point_size=None
+        point_size=None,
+        background='white'
 ):
     """Provide a diagnostic plot or plots for a UMAP embedding.
     There are a number of plots that can be helpful for diagnostic
