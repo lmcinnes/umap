@@ -367,8 +367,8 @@ def test_sparse_nn_search():
     percent_correct = num_correct / (test.shape[0] * 10)
     assert_greater_equal(
         percent_correct,
-        0.90,
-        "Sparse NN-descent did not get " "90% accuracy on nearest " "neighbors",
+        0.85,
+        "Sparse NN-descent did not get " "85% accuracy on nearest " "neighbors",
     )
 
 
