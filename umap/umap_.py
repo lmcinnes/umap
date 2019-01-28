@@ -1940,7 +1940,7 @@ class UMAP(BaseEstimator):
             self._b,
             rng_state,
             self.repulsion_strength,
-            self.initial_alpha,
+            self._initial_alpha,
             self.negative_sample_rate,
             _input_distance_func,
             tuple(self._metric_kwds.values()),
