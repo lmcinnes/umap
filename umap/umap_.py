@@ -359,7 +359,7 @@ def compute_membership_strengths(knn_indices, knn_dists, sigmas, rhos):
                 continue  # We didn't get the full knn for i
             if knn_indices[i, j] == i:
                 val = 0.0
-            elif knn_dists[i, j] - rhos[i] <= 0.0:
+            elif knn_dists[i, j] - rhos[i] <= 0.0 or sigmas[i] == 0.0:
                 val = 1.0
             else:
                 val = np.exp(-((knn_dists[i, j] - rhos[i]) / (sigmas[i])))
