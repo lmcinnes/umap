@@ -1455,6 +1455,12 @@ class UMAP(BaseEstimator):
                 )
 
         if y is not None:
+            if len(X) != len(y):
+                raise ValueError(
+                    "Length of x = {len_x}, length of y = {len_y}, while it must be equal.".format(
+                        len_x=len(X), len_y=len(y)
+                    )
+                )
             y_ = check_array(y, ensure_2d=False)
             if self.target_metric == "categorical":
                 if self.target_weight < 1.0:
