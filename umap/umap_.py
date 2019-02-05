@@ -38,6 +38,7 @@ from umap.layouts import (
     optimize_layout_generic,
     optimize_layout_inverse,
 )
+from umap.curvature import compute_curvatures, sectional_curvature
 
 locale.setlocale(locale.LC_NUMERIC, "C")
 
@@ -693,7 +694,6 @@ def discrete_metric_simplicial_set_intersection(
             raise ValueError(
                 "Discrete intersection metric {}" " is not recognized".format(metric)
             )
-        print(metric, metric_func)
 
         fast_metric_intersection(
             simplicial_set.row,
@@ -2107,7 +2107,6 @@ class DataFrameUMAP(BaseEstimator):
 
         for metric_data in sorted(self.metrics, key=is_discrete_metric):
             name, metric, columns = metric_data
-            print(name, metric, columns)
 
             if metric in dist.DISCRETE_METRICS:
                 self.metric_graphs_[name] = None
@@ -2198,7 +2197,6 @@ class DataFrameUMAP(BaseEstimator):
                         self.graph_, self.metric_graphs_[name], 0.5
                     )
 
-            print(self.graph_.data)
             self.graph_ = reset_local_connectivity(self.graph_)
 
         if self.n_epochs is None:
