@@ -20,7 +20,10 @@ from umap.utils import (
 from umap.rp_tree import search_flat_tree
 
 
-@numba.njit()
+################################################
+# Currently in debugging!
+################################################
+@numba.njit(debug=True)
 def nn_descent(
         data,
         n_neighbors,
@@ -56,20 +59,23 @@ def nn_descent(
                 for j in range(i + 1, leaf_array.shape[1]):
                     if leaf_array[n, j] < 0:
                         break
-                    if (leaf_array[n, i], leaf_array[n, j]) in tried:
-                        continue
+                    # Since we are not adding to tried, skip this for now
+                    # if (leaf_array[n, i], leaf_array[n, j]) in tried:
+                    #     continue
                     d = dist(
                         data[leaf_array[n, i]], data[leaf_array[n, j]], *dist_args
                     )
-                    unchecked_heap_push(
+                    heap_push(
                         current_graph, leaf_array[n, i], d, leaf_array[n, j], 1
                     )
-                    unchecked_heap_push(
+                    heap_push(
                         current_graph, leaf_array[n, j], d, leaf_array[n, i], 1
                     )
-                    tried.add((leaf_array[n, i], leaf_array[n, j]))
-                    tried.add((leaf_array[n, j], leaf_array[n, i]))
+                    # These fail; commenting them out for now to move the error
+                    # tried.add((leaf_array[n, i], leaf_array[n, j]))
+                    # tried.add((leaf_array[n, j], leaf_array[n, i]))
 
+    # numba.gdb() # This currently fails for kmnist dataset; not sure why
 
     for n in range(n_iters):
 
@@ -94,7 +100,7 @@ def nn_descent(
                     d = dist(data[p], data[q], *dist_args)
                     c += unchecked_heap_push(current_graph, p, d, q, 1)
                     c += unchecked_heap_push(current_graph, q, d, p, 1)
-                    tried.add((p, q))
+                    tried.add((p, q)) # Errors/segfault in these for some reason
                     tried.add((q, p))
 
                 for k in range(max_candidates):
