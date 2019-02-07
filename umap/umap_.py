@@ -1210,6 +1210,7 @@ class UMAP(BaseEstimator):
         target_metric_kwds=None,
         target_weight=0.5,
         transform_seed=42,
+        force_approximation_algorithm=False,
         verbose=False,
     ):
 
@@ -1241,6 +1242,7 @@ class UMAP(BaseEstimator):
         self.target_metric_kwds = target_metric_kwds
         self.target_weight = target_weight
         self.transform_seed = transform_seed
+        self.force_approximation_algorithm = force_approximation_algorithm
         self.verbose = verbose
 
         self.a = a
@@ -1396,7 +1398,7 @@ class UMAP(BaseEstimator):
             print("Construct fuzzy simplicial set")
 
         # Handle small cases efficiently by computing all distances
-        if X.shape[0] < 4096:
+        if X.shape[0] < 4096 and not self.force_approximation_algorithm:
             self._small_data = True
 
             if self.metric in ("ll_dirichlet", "hellinger"):
