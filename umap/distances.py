@@ -572,7 +572,7 @@ def hellinger(x, y):
     elif l1_norm_x == 0 or l1_norm_y == 0:
         return 1.0
     else:
-        return np.sqrt(1 - result / np.sqrt(l1_norm_x * l1_norm_x))
+        return np.sqrt(1 - result / np.sqrt(l1_norm_x * l1_norm_y))
 
 
 @numba.njit()
@@ -596,7 +596,7 @@ def hellinger_grad(x, y):
         dist = 1.0
         grad = np.zeros(x.shape)
     else:
-        dist_denom = np.sqrt(l1_norm_x * l1_norm_x)
+        dist_denom = np.sqrt(l1_norm_x * l1_norm_y)
         dist = np.sqrt(1 - result / dist_denom)
         grad_denom = 2 * dist
         grad_numer_const = (l1_norm_y * result) / \
