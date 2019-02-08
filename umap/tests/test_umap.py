@@ -624,6 +624,20 @@ def test_umap_trustworthiness_on_iris():
     )
 
 
+def test_umap_trustworthiness_on_iris_fast_approx():
+    data = iris.data
+    embedding = UMAP(n_neighbors=10,
+                     min_dist=0.01,
+                     random_state=42,
+                     force_approximation_algorithm=True).fit_transform(data)
+    trust = trustworthiness(iris.data, embedding, 10)
+    assert_greater_equal(
+        trust,
+        0.90,
+        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
+    )
+
+
 def test_umap_trustworthiness_on_iris_random_init():
     data = iris.data
     embedding = UMAP(
@@ -704,6 +718,11 @@ def test_umap_transform_on_iris():
 #                      target_metric='euclidean',
 #                      random_state=42).fit_transform(data, boston.target)
 
+
+# def test_umap_inverse_transform_on_iris():
+#     data = iris.data
+#     fitter = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit(data)
+#     pass
 
 def test_blobs_cluster():
     data, labels = datasets.make_blobs(n_samples=500, n_features=10, centers=5)
