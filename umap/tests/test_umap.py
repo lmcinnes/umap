@@ -766,6 +766,7 @@ def test_umap_clusterability_on_supervised_iris():
 #                      random_state=42).fit_transform(data, boston.target)
 
 
+@SkipTest
 def test_umap_inverse_transform_on_iris():
     data = iris.data
     highd_tree = KDTree(iris.data)
