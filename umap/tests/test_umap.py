@@ -664,6 +664,23 @@ def test_supervised_umap_trustworthiness_on_iris():
     )
 
 
+def test_metric_supervised_umap_trustworthiness_on_iris():
+    data = iris.data
+    embedding = UMAP(n_neighbors=10,
+                     min_dist=0.01,
+                     target_metric='l1',
+                     target_weight=0.8,
+                     random_state=42).fit_transform(
+        data, iris.target
+    )
+    trust = trustworthiness(iris.data, embedding, 10)
+    assert_greater_equal(
+        trust,
+        0.97,
+        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
+    )
+
+
 def test_semisupervised_umap_trustworthiness_on_iris():
     data = iris.data
     target = iris.target.copy()
@@ -723,9 +740,19 @@ def test_umap_trustworthiness_on_sphere_iris():
     trust = trustworthiness(iris.data, projected_embedding, 10, metric="cosine")
     assert_greater_equal(
         trust,
-        0.95,
+        0.85,
         "Insufficiently trustworthy spherical embedding for iris dataset: {}".format(trust),
     )
+
+
+def test_umap_clusterability_on_supervised_iris():
+    data = iris.data
+    embedding = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit_transform(
+        data, iris.target
+    )
+    clusters = KMeans(3).fit_predict(embedding)
+    assert_greater_equal(adjusted_rand_score(clusters, iris.target), 0.95)
+
 
 # # This test is currently to expensive to run when turning
 # # off numba JITting to detect coverage.
@@ -748,9 +775,9 @@ def test_umap_inverse_transform_on_iris():
         query_point = fitter.embedding_[i]
         near_points = lowd_tree.query([query_point], k=5, return_distance=False)
         centroid = np.mean(data[near_points], axis=0)
-        highd_centroid = fitter.inverse_transform([centroid])
-        highd_near_points = highd_tree.query([highd_centroid], k=10, return_distance=False)
-        assert_greater_equal(np.intersect1d(near_points, highd_near_points).shape[0], 4)
+        highd_centroid = fitter.inverse_transform(centroid)
+        highd_near_points = highd_tree.query(highd_centroid, k=10, return_distance=False)
+        assert_greater_equal(np.intersect1d(near_points, highd_near_points[0]).shape[0], 4)
 
 
 def test_blobs_cluster():
