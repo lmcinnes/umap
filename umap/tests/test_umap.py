@@ -707,6 +707,18 @@ def test_umap_transform_on_iris():
     )
 
 
+def test_umap_trustworthiness_on_sphere_iris():
+    data = iris.data
+    embedding = UMAP(
+        n_neighbors=10, min_dist=0.01, random_state=42, output_metric="haversine"
+    ).fit_transform(data)
+    trust = trustworthiness(iris.data, embedding, 10, metric="cosine")
+    assert_greater_equal(
+        trust,
+        0.95,
+        "Insufficiently trustworthy spherical embedding for iris dataset: {}".format(trust),
+    )
+
 # # This test is currently to expensive to run when turning
 # # off numba JITting to detect coverage.
 # @SkipTest
@@ -719,10 +731,19 @@ def test_umap_transform_on_iris():
 #                      random_state=42).fit_transform(data, boston.target)
 
 
-# def test_umap_inverse_transform_on_iris():
-#     data = iris.data
-#     fitter = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit(data)
-#     pass
+def test_umap_inverse_transform_on_iris():
+    data = iris.data
+    highd_tree = KDTree(iris.data)
+    fitter = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit(data)
+    lowd_tree = KDTree(fitter.embedding_)
+    for i in range(1, 150, 20):
+        query_point = data[i]
+        near_points = lowd_tree.query([query_point], k=5, return_distance=False)
+        centroid = np.mean(data[near_points], axis=0)
+        highd_centroid = fitter.inverse_transform([centroid])
+        highd_near_points = highd_tree.query([highd_centroid], k=10, return_distance=False)
+        assert_greater_equal(np.intersect1d(near_points, highd_near_points).shape[0], 4)
+
 
 def test_blobs_cluster():
     data, labels = datasets.make_blobs(n_samples=500, n_features=10, centers=5)
