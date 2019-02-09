@@ -774,8 +774,8 @@ def test_umap_inverse_transform_on_iris():
     for i in range(1, 150, 20):
         query_point = fitter.embedding_[i]
         near_points = lowd_tree.query([query_point], k=5, return_distance=False)
-        centroid = np.mean(data[near_points], axis=0)
-        highd_centroid = fitter.inverse_transform(centroid)
+        centroid = np.mean(np.squeeze(fitter.embedding_[near_points]), axis=0)
+        highd_centroid = fitter.inverse_transform([centroid])
         highd_near_points = highd_tree.query(highd_centroid, k=10, return_distance=False)
         assert_greater_equal(np.intersect1d(near_points, highd_near_points[0]).shape[0], 4)
 
