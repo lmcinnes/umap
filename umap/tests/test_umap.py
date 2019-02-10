@@ -676,7 +676,7 @@ def test_metric_supervised_umap_trustworthiness_on_iris():
     trust = trustworthiness(iris.data, embedding, 10)
     assert_greater_equal(
         trust,
-        0.97,
+        0.95,
         "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
     )
 
