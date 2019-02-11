@@ -46,7 +46,7 @@ def tau_rand(state):
     A (pseudo)-random float32 in the interval [0, 1]
     """
     integer = tau_rand_int(state)
-    return float(integer) / 0x7fffffff
+    return abs(float(integer) / 0x7fffffff)
 
 
 @numba.njit()
