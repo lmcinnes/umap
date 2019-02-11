@@ -283,7 +283,7 @@ current reference:
 .. code:: bibtex
 
    @article{2018arXivUMAP,
-        author = {{McInnes}, L. and {Healy}, J.},
+        author = {{McInnes}, L. and {Healy}, J. and {Melville}, J.},
         title = "{UMAP: Uniform Manifold Approximation
         and Projection for Dimension Reduction}",
         journal = {ArXiv e-prints},
