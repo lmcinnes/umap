@@ -92,7 +92,7 @@ the ``umap`` module loaded.
 
     import umap
 
-To make use of UMAP as a data transformer we first need to fir the model
+To make use of UMAP as a data transformer we first need to fit the model
 with the training data. This works exactly as in the :doc:`basic_usage`
 example using the fit method. In this case we simply hand it the
 training data and it will learn an appropriate (two dimensional by

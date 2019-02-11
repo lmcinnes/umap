@@ -8,7 +8,7 @@
     :target: https://anaconda.org/conda-forge/umap-learn
     :alt: Downloads from conda-forge
 .. image:: https://img.shields.io/pypi/l/umap-learn.svg
-    :target: https://github.com/lmcinnes/umap/blob/master/LICENSE
+    :target: https://github.com/lmcinnes/umap/blob/master/LICENSE.txt
     :alt: License
 .. image:: https://travis-ci.org/lmcinnes/umap.svg
     :target: https://travis-ci.org/lmcinnes/umap
