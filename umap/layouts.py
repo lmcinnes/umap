@@ -338,8 +338,6 @@ def optimize_layout_generic(
 
     return head_embedding
 
-# DEBUGGING
-# TODO: Remove debugging code
 
 @numba.njit(fastmath=True)
 def optimize_layout_inverse(
@@ -448,9 +446,7 @@ def optimize_layout_inverse(
                 )
 
                 w_l = weight[i]
-                # w_h = np.exp(-(dist_output - rhos[j]) / (sigmas[j] + 1e-6))
-                w_h = 1.0
-                grad_coeff = -w_h * (1 / (w_l * sigmas[j] + 1e-6))
+                grad_coeff = -(1 / (w_l * sigmas[j] + 1e-6))
 
                 for d in range(dim):
                     grad_d = clip(grad_coeff * grad_dist_output[d])
@@ -476,11 +472,10 @@ def optimize_layout_inverse(
                     )
 
                     # w_l = 0.0 # for negative samples, the edge does not exist
-                    w_h = np.exp(-max(dist_output - rhos[k], 1e-6) / (sigmas[k] + 1e-6)) #
-                    # changed j to k
+                    w_h = np.exp(-max(dist_output - rhos[k], 1e-6) / (sigmas[k] + 1e-6))
                     grad_coeff = -gamma * (
                             (0 - w_h) /
-                            ((1 - w_h) * sigmas[k] + 1e-6) # changed j to k
+                            ((1 - w_h) * sigmas[k] + 1e-6)
                     )
 
                     for d in range(dim):
