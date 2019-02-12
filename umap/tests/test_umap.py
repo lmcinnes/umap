@@ -622,7 +622,7 @@ def test_umap_trustworthiness_fast_approx():
     trust = trustworthiness(nn_data[:50], embedding, 10)
     assert_greater_equal(
         trust,
-        0.90,
+        0.80,
         "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust),
     )
 
