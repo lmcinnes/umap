@@ -619,7 +619,7 @@ def test_umap_trustworthiness_fast_approx():
                      min_dist=0.01,
                      random_state=42,
                      force_approximation_algorithm=True).fit_transform(data)
-    trust = trustworthiness(nn_data[:50], embedding, 10)
+    trust = trustworthiness(data, embedding, 10)
     assert_greater_equal(
         trust,
         0.80,
@@ -627,68 +627,68 @@ def test_umap_trustworthiness_fast_approx():
     )
 
 
-
-def test_umap_trustworthiness_on_iris():
-    data = iris.data
-    embedding = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit_transform(data)
-    trust = trustworthiness(iris.data, embedding, 10)
-    assert_greater_equal(
-        trust,
-        0.97,
-        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
-    )
-
-
-def test_umap_trustworthiness_on_iris_random_init():
-    data = iris.data
+def test_umap_trustworthiness_random_init():
+    data = nn_data[:50]
     embedding = UMAP(
         n_neighbors=10, min_dist=0.01, random_state=42, init="random"
     ).fit_transform(data)
-    trust = trustworthiness(iris.data, embedding, 10)
+    trust = trustworthiness(data, embedding, 10)
     assert_greater_equal(
         trust,
-        0.95,
-        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
+        0.75,
+        "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust),
     )
 
 
-def test_supervised_umap_trustworthiness_on_iris():
-    data = iris.data
+def test_supervised_umap_trustworthiness():
+    data, labels = datasets.make_blobs(50, cluster_std=0.5, random_state=42)
     embedding = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit_transform(
-        data, iris.target
+        data, labels
     )
-    trust = trustworthiness(iris.data, embedding, 10)
+    trust = trustworthiness(data, embedding, 10)
     assert_greater_equal(
         trust,
         0.97,
-        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
+        "Insufficiently trustworthy embedding for" "blobs dataset: {}".format(trust),
+    )
+
+
+def test_semisupervised_umap_trustworthiness():
+    data, labels = datasets.make_blobs(50, cluster_std=0.5, random_state=42)
+    labels = iris.target.copy()
+    labels[10:30] = -1
+    embedding = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit_transform(
+        data, labels
+    )
+    trust = trustworthiness(data, embedding, 10)
+    assert_greater_equal(
+        trust,
+        0.97,
+        "Insufficiently trustworthy embedding for" "blobs dataset: {}".format(trust),
     )
 
 
 def test_metric_supervised_umap_trustworthiness_on_iris():
-    data = iris.data
+    data, labels = datasets.make_blobs(50, cluster_std=0.5, random_state=42)
     embedding = UMAP(n_neighbors=10,
                      min_dist=0.01,
                      target_metric='l1',
                      target_weight=0.8,
+                     n_epochs=200,
                      random_state=42).fit_transform(
-        data, iris.target
+        data, labels
     )
-    trust = trustworthiness(iris.data, embedding, 10)
+    trust = trustworthiness(data, embedding, 10)
     assert_greater_equal(
         trust,
         0.95,
-        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
+        "Insufficiently trustworthy embedding for" "blobs dataset: {}".format(trust),
     )
 
 
-def test_semisupervised_umap_trustworthiness_on_iris():
+def test_umap_trustworthiness_on_iris():
     data = iris.data
-    target = iris.target.copy()
-    target[25:75] = -1
-    embedding = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit_transform(
-        data, target
-    )
+    embedding = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit_transform(data)
     trust = trustworthiness(iris.data, embedding, 10)
     assert_greater_equal(
         trust,
