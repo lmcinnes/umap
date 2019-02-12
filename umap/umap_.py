@@ -1772,7 +1772,7 @@ class UMAP(BaseEstimator):
                 self._b,
                 rng_state,
                 self.repulsion_strength,
-                self._initial_alpha,
+                self._initial_alpha / 4.0,
                 self.negative_sample_rate,
                 verbose=self.verbose,
             )
@@ -1789,7 +1789,7 @@ class UMAP(BaseEstimator):
                 self._b,
                 rng_state,
                 self.repulsion_strength,
-                self._initial_alpha,
+                self._initial_alpha / 4.0,
                 self.negative_sample_rate,
                 self._output_distance_func,
                 tuple(self._output_metric_kwds.values()),
@@ -1825,7 +1825,7 @@ class UMAP(BaseEstimator):
         random_state = check_random_state(self.transform_seed)
         rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
-        # build Delaunay complex
+        # build Delaunay complex (Does this not assume a roughly euclidean output metric)?
         deltri = scipy.spatial.Delaunay(
             self.embedding_, incremental=True, qhull_options="QJ"
         )
@@ -1850,9 +1850,11 @@ class UMAP(BaseEstimator):
             breadth_first_search(adjmat, v[0], min_vertices=min_vertices)
             for v in neighbors
         ]
+        dist_func = dist.named_distances[self.output_metric]
+        dist_args = tuple(self._output_metric_kwds.values())
         distances = [
             np.array(
-                [dist.euclidean(X[i], self.embedding_[nb]) for nb in neighborhood[i]]
+                [dist_func(X[i], self.embedding_[nb], *dist_args) for nb in neighborhood[i]]
             )
             for i in range(X.shape[0])
         ]
@@ -1884,8 +1886,8 @@ class UMAP(BaseEstimator):
         # and data. Doing so relies on the constant degree assumption!
         # csr_graph = graph.tocsr()
         csr_graph = normalize(graph.tocsr(), norm="l1")
-        inds = csr_graph.indices.reshape(X.shape[0], self._raw_data.shape[1])
-        weights = csr_graph.data.reshape(X.shape[0], self._raw_data.shape[1])
+        inds = csr_graph.indices.reshape(X.shape[0], min_vertices)
+        weights = csr_graph.data.reshape(X.shape[0], min_vertices)
         inv_transformed_points = init_transform(inds, weights, self._raw_data)
 
         if self.n_epochs is None:
@@ -1897,8 +1899,8 @@ class UMAP(BaseEstimator):
         else:
             n_epochs = self.n_epochs
 
-        graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
-        graph.eliminate_zeros()
+        # graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
+        # graph.eliminate_zeros()
 
         epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs)
 
@@ -1942,7 +1944,7 @@ class UMAP(BaseEstimator):
             self._b,
             rng_state,
             self.repulsion_strength,
-            self._initial_alpha,
+            self._initial_alpha / 4.0,
             self.negative_sample_rate,
             _input_distance_func,
             tuple(self._metric_kwds.values()),
