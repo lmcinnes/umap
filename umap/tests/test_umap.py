@@ -613,6 +613,21 @@ def test_umap_sparse_trustworthiness():
     )
 
 
+def test_umap_trustworthiness_fast_approx():
+    data = nn_data[:50]
+    embedding = UMAP(n_neighbors=10,
+                     min_dist=0.01,
+                     random_state=42,
+                     force_approximation_algorithm=True).fit_transform(data)
+    trust = trustworthiness(nn_data[:50], embedding, 10)
+    assert_greater_equal(
+        trust,
+        0.90,
+        "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust),
+    )
+
+
+
 def test_umap_trustworthiness_on_iris():
     data = iris.data
     embedding = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit_transform(data)
@@ -620,20 +635,6 @@ def test_umap_trustworthiness_on_iris():
     assert_greater_equal(
         trust,
         0.97,
-        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
-    )
-
-
-def test_umap_trustworthiness_on_iris_fast_approx():
-    data = iris.data
-    embedding = UMAP(n_neighbors=10,
-                     min_dist=0.01,
-                     random_state=42,
-                     force_approximation_algorithm=True).fit_transform(data)
-    trust = trustworthiness(iris.data, embedding, 10)
-    assert_greater_equal(
-        trust,
-        0.90,
         "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
     )
 
