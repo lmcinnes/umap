@@ -32,8 +32,6 @@ if [[ "$DISTRIB" == "conda" ]]; then
 
   source activate testenv
 
-  conda install holoviews datashader bokeh matplotlib pandas
-
 
   if [[ "$COVERAGE" == "true" ]]; then
       pip install coverage coveralls
@@ -47,4 +45,9 @@ if [[ "$DISTRIB" == "conda" ]]; then
   python setup.py develop
 else
   pip install -e .
+  pip install pandas
+  pip install bokeh
+  pip install datashader
+  pip install matplotlib
+  pip install holoviews
 fi
