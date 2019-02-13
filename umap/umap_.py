@@ -2039,7 +2039,64 @@ class DataFrameUMAP(BaseEstimator):
         self.b = b
 
     def _validate_parameters(self):
-        UMAP._validate_parameters(self)
+        if self.set_op_mix_ratio < 0.0 or self.set_op_mix_ratio > 1.0:
+            raise ValueError("set_op_mix_ratio must be between 0.0 and 1.0")
+        if self.repulsion_strength < 0.0:
+            raise ValueError("repulsion_strength cannot be negative")
+        if self.min_dist > self.spread:
+            raise ValueError("min_dist must be less than or equal to spread")
+        if self.min_dist < 0.0:
+            raise ValueError("min_dist must be greater than 0.0")
+        if not isinstance(self.init, str) and not isinstance(self.init, np.ndarray):
+            raise ValueError("init must be a string or ndarray")
+        if isinstance(self.init, str) and self.init not in ("spectral", "random"):
+            raise ValueError('string init values must be "spectral" or "random"')
+        if (
+                isinstance(self.init, np.ndarray)
+                and self.init.shape[1] != self.n_components
+        ):
+            raise ValueError("init ndarray must match n_components value")
+        if not isinstance(self.metric, str) and not callable(self.metric):
+            raise ValueError("metric must be string or callable")
+        if self.negative_sample_rate < 0:
+            raise ValueError("negative sample rate must be positive")
+        if self._initial_alpha < 0.0:
+            raise ValueError("learning_rate must be positive")
+        if self.n_neighbors < 2:
+            raise ValueError("n_neighbors must be greater than 2")
+        if self.target_n_neighbors < 2 and self.target_n_neighbors != -1:
+            raise ValueError("target_n_neighbors must be greater than 2")
+        if not isinstance(self.n_components, int):
+            raise ValueError("n_components must be an int")
+        if self.n_components < 1:
+            raise ValueError("n_components must be greater than 0")
+        if self.n_epochs is not None and (
+                self.n_epochs <= 10 or not isinstance(self.n_epochs, int)
+        ):
+            raise ValueError("n_epochs must be a positive integer " "larger than 10")
+
+        if callable(self.output_metric):
+            self._output_distance_func = self.output_metric
+        elif (
+                self.output_metric in dist.named_distances
+                and self.output_metric in dist.named_distances_with_gradients
+        ):
+            self._output_distance_func = dist.named_distances_with_gradients[
+                self.output_metric
+            ]
+        elif self.output_metric == "precomputed":
+            raise ValueError("output_metric cannnot be 'precomputed'")
+        else:
+            if self.output_metric in dist.named_distances:
+                raise ValueError(
+                    "gradient function is not yet implemented for "
+                    + repr(self.output_metric)
+                    + "."
+                )
+            else:
+                raise ValueError(
+                    "output_metric is neither callable, " + "nor a recognised string"
+                )
 
         # validate metrics argument
         assert isinstance(self.metrics, list) or self.metrics == "infer"
