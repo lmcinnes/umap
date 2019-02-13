@@ -2058,7 +2058,7 @@ class DataFrameUMAP(BaseEstimator):
             raise ValueError("init ndarray must match n_components value")
         if self.negative_sample_rate < 0:
             raise ValueError("negative sample rate must be positive")
-        if self._initial_alpha < 0.0:
+        if self.learning_rate < 0.0:
             raise ValueError("learning_rate must be positive")
         if self.n_neighbors < 2:
             raise ValueError("n_neighbors must be greater than 2")
