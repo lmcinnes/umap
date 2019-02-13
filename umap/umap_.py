@@ -2056,10 +2056,6 @@ class DataFrameUMAP(BaseEstimator):
                 and self.init.shape[1] != self.n_components
         ):
             raise ValueError("init ndarray must match n_components value")
-        if not isinstance(self.metric, str) and not callable(self.metric):
-            raise ValueError("metric must be string or callable")
-        if self.n_components < 1:
-            raise ValueError("n_components must be at least 1")
         if self.negative_sample_rate < 0:
             raise ValueError("negative sample rate must be positive")
         if self._initial_alpha < 0.0:
