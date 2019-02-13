@@ -92,6 +92,7 @@ def sparse_nn_descent(
         if verbose:
             print("\t", n, " / ", n_iters)
 
+        # TODO: Update to new_build_candidates
         candidate_neighbors = build_candidates(
             current_graph, n_vertices, n_neighbors, max_candidates, rng_state
         )

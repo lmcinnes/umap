@@ -55,6 +55,7 @@ from umap.umap_ import (
     smooth_knn_dist,
     fuzzy_simplicial_set,
     UMAP,
+    DataFrameUMAP
 )
 
 np.random.seed(42)
@@ -668,11 +669,29 @@ def test_semisupervised_umap_trustworthiness():
     )
 
 
-def test_metric_supervised_umap_trustworthiness_on_iris():
+def test_metric_supervised_umap_trustworthiness():
     data, labels = datasets.make_blobs(50, cluster_std=0.5, random_state=42)
     embedding = UMAP(n_neighbors=10,
                      min_dist=0.01,
                      target_metric='l1',
+                     target_weight=0.8,
+                     n_epochs=200,
+                     random_state=42).fit_transform(
+        data, labels
+    )
+    trust = trustworthiness(data, embedding, 10)
+    assert_greater_equal(
+        trust,
+        0.95,
+        "Insufficiently trustworthy embedding for" "blobs dataset: {}".format(trust),
+    )
+
+
+def test_discrete_metric_supervised_umap_trustworthiness():
+    data, labels = datasets.make_blobs(50, cluster_std=0.5, random_state=42)
+    embedding = UMAP(n_neighbors=10,
+                     min_dist=0.01,
+                     target_metric='ordinal',
                      target_weight=0.8,
                      n_epochs=200,
                      random_state=42).fit_transform(
@@ -848,6 +867,51 @@ def test_umap_bad_parameters():
     assert_raises(ValueError, u.fit, nn_data)
     u = UMAP(target_n_neighbors=1)
     assert_raises(ValueError, u.fit, nn_data)
+    u = UMAP(output_metric="foobar")
+    assert_raises(ValueError, u.fit, nn_data)
+    u = UMAP(output_metric="precomputed")
+    assert_raises(ValueError, u.fit, nn_data)
+    u = UMAP(output_metric="hamming")
+    assert_raises(ValueError, u.fit, nn_data)
+    u = UMAP().fit([[1, 1, 1, 1]])
+    assert_raises(ValueError, u.transform, [[0, 0, 0, 0]])
+
+    u = DataFrameUMAP(set_op_mix_ratio=-1.0)
+    assert_raises(ValueError, u.fit, nn_data)
+    u = DataFrameUMAP(set_op_mix_ratio=1.5)
+    assert_raises(ValueError, u.fit, nn_data)
+    u = DataFrameUMAP(min_dist=2.0)
+    assert_raises(ValueError, u.fit, nn_data)
+    u = DataFrameUMAP(min_dist=-1)
+    assert_raises(ValueError, u.fit, nn_data)
+    u = DataFrameUMAP(n_components=-1)
+    assert_raises(ValueError, u.fit, nn_data)
+    u = DataFrameUMAP(n_components=1.5)
+    assert_raises(ValueError, u.fit, nn_data)
+    u = DataFrameUMAP(n_neighbors=0.5)
+    assert_raises(ValueError, u.fit, nn_data)
+    u = DataFrameUMAP(n_neighbors=-1)
+    assert_raises(ValueError, u.fit, nn_data)
+    u = DataFrameUMAP(metric=45)
+    assert_raises(ValueError, u.fit, nn_data)
+    u = DataFrameUMAP(learning_rate=-1.5)
+    assert_raises(ValueError, u.fit, nn_data)
+    u = DataFrameUMAP(repulsion_strength=-0.5)
+    assert_raises(ValueError, u.fit, nn_data)
+    u = DataFrameUMAP(negative_sample_rate=-1)
+    assert_raises(ValueError, u.fit, nn_data)
+    u = DataFrameUMAP(init="foobar")
+    assert_raises(ValueError, u.fit, nn_data)
+    u = DataFrameUMAP(init=42)
+    assert_raises(ValueError, u.fit, nn_data)
+    u = DataFrameUMAP(init=np.array([[0, 0, 0], [0, 0, 0]]))
+    assert_raises(ValueError, u.fit, nn_data)
+    u = DataFrameUMAP(n_epochs=-2)
+    assert_raises(ValueError, u.fit, nn_data)
+    u = DataFrameUMAP(target_n_neighbors=1)
+    assert_raises(ValueError, u.fit, nn_data)
+
+
 
     u = UMAP(a=1.2, b=1.75, n_neighbors=2000)
     u.fit(nn_data)
