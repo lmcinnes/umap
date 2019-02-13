@@ -495,6 +495,27 @@ def test_metrics():
         dist_matrix,
         err_msg="Distances don't match " "for metric haversine",
     )
+    # Hellinger
+    hellinger_data = np.abs(spatial_data[:-2].copy())
+    hellinger_data = hellinger_data / hellinger_data.sum(axis=1)[:, np.newaxis]
+    hellinger_data = np.sqrt(hellinger_data)
+    dist_matrix = hellinger_data @ hellinger_data.T
+    dist_matrix = 1.0 - dist_matrix
+    dist_matrix = np.sqrt(dist_matrix)
+    # Correct for nan handling
+    dist_matrix[np.isnan(dist_matrix)] = 0.0
+
+    test_matrix = dist.pairwise_special_metric(np.abs(spatial_data[:-2]))
+
+    assert_array_almost_equal(
+        test_matrix,
+        dist_matrix,
+        err_msg="Distances don't match " "for metric hellinger",
+    )
+
+    # Ensure ll_dirichlet runs
+    test_matrix = dist.pairwise_special_metric(np.abs(spatial_data[:-2]), metric='ll_dirichlet')
+
 
 
 def test_grad_metrics_match_metrics():
@@ -525,6 +546,59 @@ def test_grad_metrics_match_metrics():
                 dist_matrix,
                 err_msg="Distances with grad don't match " "for metric {}".format(metric),
             )
+
+    # Handle the few special distances separately
+    # SEuclidean
+    v = np.abs(np.random.randn(spatial_data.shape[1]))
+    dist_matrix = pairwise_distances(spatial_data, metric="seuclidean", V=v)
+    test_matrix = np.array(
+        [
+            [
+                dist.standardised_euclidean_grad(spatial_data[i], spatial_data[j], v)[0]
+                for j in range(spatial_data.shape[0])
+            ]
+            for i in range(spatial_data.shape[0])
+        ]
+    )
+    assert_array_almost_equal(
+        test_matrix,
+        dist_matrix,
+        err_msg="Distances don't match " "for metric seuclidean",
+    )
+
+    # Weighted minkowski
+    dist_matrix = pairwise_distances(spatial_data, metric="wminkowski", w=v, p=3)
+    test_matrix = np.array(
+        [
+            [
+                dist.weighted_minkowski_grad(spatial_data[i], spatial_data[j], v, p=3)[0]
+                for j in range(spatial_data.shape[0])
+            ]
+            for i in range(spatial_data.shape[0])
+        ]
+    )
+    assert_array_almost_equal(
+        test_matrix,
+        dist_matrix,
+        err_msg="Distances don't match " "for metric weighted_minkowski",
+    )
+    # Mahalanobis
+    v = np.abs(np.random.randn(spatial_data.shape[1], spatial_data.shape[1]))
+    dist_matrix = pairwise_distances(spatial_data, metric="mahalanobis", VI=v)
+    test_matrix = np.array(
+        [
+            [
+                dist.mahalanobis_grad(spatial_data[i], spatial_data[j], v)[0]
+                for j in range(spatial_data.shape[0])
+            ]
+            for i in range(spatial_data.shape[0])
+        ]
+    )
+    assert_array_almost_equal(
+        test_matrix,
+        dist_matrix,
+        err_msg="Distances don't match " "for metric mahalanobis",
+    )
 
 def test_sparse_metrics():
     for metric in spatial_distances:
