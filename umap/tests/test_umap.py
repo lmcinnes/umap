@@ -783,7 +783,7 @@ def test_umap_sparse_transform_on_iris():
     trust = trustworthiness(new_data, embedding, 10)
     assert_greater_equal(
         trust,
-        0.89,
+        0.87,
         "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust),
     )
 
