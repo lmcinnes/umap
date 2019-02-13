@@ -28,7 +28,7 @@ if [[ "$DISTRIB" == "conda" ]]; then
   # provided versions
   conda create -n testenv --yes python=$PYTHON_VERSION pip nose \
         numpy=$NUMPY_VERSION scipy=$SCIPY_VERSION numba scikit-learn \
-        holoviews datashader bokeh
+        holoviews datashader bokeh matplotlib
 
   source activate testenv
 
