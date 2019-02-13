@@ -773,6 +773,21 @@ def test_umap_transform_on_iris():
     )
 
 
+def test_umap_sparse_transform_on_iris():
+    data = sparse.csr_matrix(iris.data[iris_selection])
+    fitter = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit(data)
+
+    new_data = sparse.csr_matrix(iris.data[~iris_selection])
+    embedding = fitter.transform(new_data)
+
+    trust = trustworthiness(new_data, embedding, 10)
+    assert_greater_equal(
+        trust,
+        0.89,
+        "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust),
+    )
+
+
 def test_umap_trustworthiness_on_sphere_iris():
     data = iris.data
     embedding = UMAP(
@@ -939,6 +954,10 @@ def test_umap_bad_parameters():
     assert_raises(ValueError, u.fit, nn_data)
     u = DataFrameUMAP(metrics=[('e', 'euclidean', [0, 1, 2, 3, 4])], target_n_neighbors=1)
     assert_raises(ValueError, u.fit, nn_data)
+    u = DataFrameUMAP(metrics=[('e', 'euclidean', "bad_columns")])
+    assert_raises(AssertionError, u.fit, nn_data)
+    u = DataFrameUMAP(metrics=[('e', 'euclidean', [0.1, 0.2, 0.75])])
+    assert_raises(AssertionError, u.fit, nn_data)
 
     u = UMAP(a=1.2, b=1.75, n_neighbors=2000)
     u.fit(nn_data)
