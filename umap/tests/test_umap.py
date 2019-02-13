@@ -893,7 +893,7 @@ def test_umap_bad_parameters():
     u = DataFrameUMAP(metrics=[('e', 'euclidean', [0, 1, 2, 3, 4])], n_neighbors=-1)
     assert_raises(ValueError, u.fit, nn_data)
     u = DataFrameUMAP(metrics=[('e', 'foobar', [0, 1, 2, 3, 4])])
-    assert_raises(ValueError, u.fit, nn_data)
+    assert_raises(AssertionError, u.fit, nn_data)
     u = DataFrameUMAP(metrics=[('e', 'euclidean', [0, 1, 2, 3, 4])], learning_rate=-1.5)
     assert_raises(ValueError, u.fit, nn_data)
     u = DataFrameUMAP(metrics=[('e', 'euclidean', [0, 1, 2, 3, 4])], repulsion_strength=-0.5)
