@@ -13,7 +13,7 @@ import umap.plot
 np.random.seed(42)
 iris = datasets.load_iris()
 
-mapper = umap.UMAP().fit(iris.data)
+mapper = umap.UMAP(n_epochs=100).fit(iris.data)
 
 
 def test_plot_runs_at_all():

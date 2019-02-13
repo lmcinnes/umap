@@ -722,6 +722,7 @@ def test_umap_trustworthiness_fast_approx():
     embedding = UMAP(n_neighbors=10,
                      min_dist=0.01,
                      random_state=42,
+                     n_epochs=200,
                      force_approximation_algorithm=True).fit_transform(data)
     trust = trustworthiness(data, embedding, 10)
     assert_greater_equal(
@@ -778,7 +779,7 @@ def test_metric_supervised_umap_trustworthiness():
                      min_dist=0.01,
                      target_metric='l1',
                      target_weight=0.8,
-                     n_epochs=200,
+                     n_epochs=100,
                      random_state=42).fit_transform(
         data, labels
     )
@@ -796,7 +797,7 @@ def test_metric_supervised_umap_trustworthiness():
                      min_dist=0.01,
                      target_metric='l1',
                      target_weight=0.8,
-                     n_epochs=200,
+                     n_epochs=100,
                      random_state=42).fit_transform(
         data, labels
     )
@@ -815,7 +816,7 @@ def test_string_metric_supervised_umap_trustworthiness():
                      min_dist=0.01,
                      target_metric='string',
                      target_weight=0.8,
-                     n_epochs=200,
+                     n_epochs=100,
                      random_state=42).fit_transform(
         data, labels
     )
@@ -833,7 +834,7 @@ def test_discrete_metric_supervised_umap_trustworthiness():
                      min_dist=0.01,
                      target_metric='ordinal',
                      target_weight=0.8,
-                     n_epochs=200,
+                     n_epochs=100,
                      random_state=42).fit_transform(
         data, labels
     )
@@ -852,7 +853,7 @@ def test_string_metric_supervised_umap_trustworthiness():
                      min_dist=0.01,
                      target_metric='count',
                      target_weight=0.8,
-                     n_epochs=200,
+                     n_epochs=100,
                      random_state=42).fit_transform(
         data, labels
     )
