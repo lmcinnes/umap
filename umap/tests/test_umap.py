@@ -908,10 +908,8 @@ def test_umap_bad_parameters():
     assert_raises(ValueError, u.fit, nn_data)
     u = DataFrameUMAP(metrics=[('e', 'euclidean', [0, 1, 2, 3, 4])], n_epochs=-2)
     assert_raises(ValueError, u.fit, nn_data)
-    u = DataFrameUMAP(target_n_neighbors=1)
+    u = DataFrameUMAP(metrics=[('e', 'euclidean', [0, 1, 2, 3, 4])], target_n_neighbors=1)
     assert_raises(ValueError, u.fit, nn_data)
-
-
 
     u = UMAP(a=1.2, b=1.75, n_neighbors=2000)
     u.fit(nn_data)
