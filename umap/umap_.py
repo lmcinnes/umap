@@ -2054,6 +2054,9 @@ class DataFrameUMAP(BaseEstimator):
                     assert isinstance(col, str) or isinstance(col, int)
 
     def fit(self, X, y=None):
+
+        self._validate_parameters()
+
         # X should be a pandas dataframe, or np.array; check
         # how column transformer handles this.
         self._raw_data = X
