@@ -15,7 +15,7 @@ if [[ "$DISTRIB" == "conda" ]]; then
   echo
   if [[ ! -f miniconda.sh ]]
      then
-     wget http://repo.continuum.io/miniconda/Miniconda-3.6.0-Linux-x86_64.sh \
+     wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh \
          -O miniconda.sh
      fi
   chmod +x miniconda.sh && ./miniconda.sh -b
@@ -27,7 +27,8 @@ if [[ "$DISTRIB" == "conda" ]]; then
   # Configure the conda environment and put it in the path using the
   # provided versions
   conda create -n testenv --yes python=$PYTHON_VERSION pip nose \
-        numpy=$NUMPY_VERSION scipy=$SCIPY_VERSION numba scikit-learn
+        numpy=$NUMPY_VERSION scipy=$SCIPY_VERSION numba scikit-learn \
+        holoviews datashader bokeh
 
   source activate testenv
 
@@ -39,6 +40,8 @@ if [[ "$DISTRIB" == "conda" ]]; then
   python --version
   python -c "import numpy; print('numpy %s' % numpy.__version__)"
   python -c "import scipy; print('scipy %s' % scipy.__version__)"
+  python -c "import numba; print('numba %s' % numba.__version__)"
+  python -c "import sklearn; print('scikit-learn %s' % sklearn.__version__)"
   python setup.py develop
 else
   pip install -e .
