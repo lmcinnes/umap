@@ -497,6 +497,35 @@ def test_metrics():
     )
 
 
+def test_grad_metrics_match_metrics():
+    for metric in dist.named_distances_with_gradients:
+        if metric in spatial_distances:
+            dist_matrix = pairwise_distances(spatial_data, metric=metric)
+            # scipy is bad sometimes
+            if metric == "braycurtis":
+                dist_matrix[np.where(~np.isfinite(dist_matrix))] = 0.0
+            if metric in ("cosine", "correlation"):
+                dist_matrix[np.where(~np.isfinite(dist_matrix))] = 1.0
+                # And because distance between all zero vectors should be zero
+                dist_matrix[10, 11] = 0.0
+                dist_matrix[11, 10] = 0.0
+
+            dist_function = dist.named_distances_with_gradients[metric]
+            test_matrix = np.array(
+                [
+                    [
+                        dist_function(spatial_data[i], spatial_data[j])[0]
+                        for j in range(spatial_data.shape[0])
+                    ]
+                    for i in range(spatial_data.shape[0])
+                ]
+            )
+            assert_array_almost_equal(
+                test_matrix,
+                dist_matrix,
+                err_msg="Distances with grad don't match " "for metric {}".format(metric),
+            )
+
 def test_sparse_metrics():
     for metric in spatial_distances:
         if metric in spdist.sparse_named_distances:

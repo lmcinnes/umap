@@ -9,6 +9,14 @@ _mock_identity = np.eye(2, dtype=np.float64)
 _mock_ones = np.ones(2, dtype=np.float64)
 
 
+@numba.njit()
+def sign(a):
+    if a < 0:
+        return -1
+    else:
+        return 1
+
+
 @numba.njit(fastmath=True)
 def euclidean(x, y):
     """Standard euclidean distance.
@@ -166,7 +174,10 @@ def minkowski_grad(x, y, p=2):
     result = 0.0
     for i in range(x.shape[0]):
         result += (np.abs(x[i] - y[i])) ** p
-    grad = np.abs(x - y) ** (p - 1) * np.sign(x - y) * result ** (1.0 / p - 1)
+
+    grad = np.empty(x.shape[0], dtype=np.float32)
+    for i in range(x.shape[0]):
+        grad[i] = pow(np.abs(x[i] - y[i]), (p - 1.0)) * sign(x[i] - y[i]) * pow(result, (1.0 / (p - 1)))
 
     return result ** (1.0 / p), grad
 
