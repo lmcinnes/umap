@@ -16,7 +16,7 @@ env:
 matrix:
   include:
     - python: 3.6
-    - env: DISTRIB="conda" PYTHON_VERSION="3.7" NUMPY_VERSION="1.13.3" SCIPY_VERSION="0.19.1" NUMBA_VERSION="0.42"
+    - env: DISTRIB="conda" PYTHON_VERSION="3.6" NUMPY_VERSION="1.13.3" SCIPY_VERSION="0.19.1" NUMBA_VERSION="0.42"
     - env: DISTRIB="conda" PYTHON_VERSION="3.6" COVERAGE="true" NUMPY_VERSION="1.13.3" SCIPY_VERSION="0.19.1" NUMBA_VERSION="0.42"
 
 install: source ci_scripts/install.sh
