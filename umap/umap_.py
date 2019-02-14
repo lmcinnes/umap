@@ -1500,7 +1500,8 @@ class UMAP(BaseEstimator):
                 #     metric_kws=self._target_metric_kwds,
                 #     metric_scale=scale
                 # )
-                # metric_kws = dist.get_discrete_params(y_, self.target_metric)
+
+                metric_kws = dist.get_discrete_params(y_, self.target_metric)
 
                 self.graph_ = discrete_metric_simplicial_set_intersection(
                     self.graph_,
