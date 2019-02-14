@@ -1458,7 +1458,11 @@ class UMAP(BaseEstimator):
             if callable(self.metric):
                 self._distance_func = self.metric
             elif self.metric in dist.named_distances:
-                self._distance_func = dist.named_distances[self.metric]
+                # Choose the right metric based on sparsity
+                if self._sparse_data:
+                    self._distance_func = sparse.sparse_named_distances[self.metric]
+                else:
+                    self._distance_func = dist.named_distances[self.metric]
             elif self.metric == "precomputed":
                 warn(
                     "Using precomputed metric; transform will be unavailable for new data"

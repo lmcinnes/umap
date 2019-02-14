@@ -606,10 +606,11 @@ def test_grad_metrics_match_metrics():
     test_matrix = np.array(
         [
             [
-                dist.hellinger_grad(spatial_data[i], spatial_data[j])[0]
-                for j in range(spatial_data.shape[0])
+                dist.hellinger_grad(np.abs(spatial_data[i]),
+                                    np.abs(spatial_data[j]))[0]
+                for j in range(spatial_data.shape[0] - 2)
             ]
-            for i in range(spatial_data.shape[0])
+            for i in range(spatial_data.shape[0] - 2)
         ]
     )
     assert_array_almost_equal(
