@@ -600,6 +600,25 @@ def test_grad_metrics_match_metrics():
         err_msg="Distances don't match " "for metric mahalanobis",
     )
 
+    # Hellinger
+    dist_matrix = dist.pairwise_special_metric(np.abs(spatial_data[:-2]),
+                                               np.abs(spatial_data[:-2]))
+    test_matrix = np.array(
+        [
+            [
+                dist.hellinger_grad(spatial_data[i], spatial_data[j], v)[0]
+                for j in range(spatial_data.shape[0])
+            ]
+            for i in range(spatial_data.shape[0])
+        ]
+    )
+    assert_array_almost_equal(
+        test_matrix,
+        dist_matrix,
+        err_msg="Distances don't match " "for metric hellinger",
+    )
+
+
 def test_sparse_metrics():
     for metric in spatial_distances:
         if metric in spdist.sparse_named_distances:
@@ -1047,6 +1066,10 @@ def test_umap_bad_parameters():
     u = UMAP(output_metric="precomputed")
     assert_raises(ValueError, u.fit, nn_data)
     u = UMAP(output_metric="hamming")
+    assert_raises(ValueError, u.fit, nn_data)
+    u = UMAP(metric="haversine")
+    assert_raises(ValueError, u.fit, nn_data)
+    u = UMAP(n_components=3, output_metric="haversine")
     assert_raises(ValueError, u.fit, nn_data)
     u = UMAP().fit([[1, 1, 1, 1]])
     assert_raises(ValueError, u.transform, [[0, 0, 0, 0]])

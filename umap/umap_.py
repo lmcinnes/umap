@@ -1493,11 +1493,20 @@ class UMAP(BaseEstimator):
                     scale = 2.5 * (1.0 / (1.0 - self.target_weight))
                 else:
                     scale = 1.0e12
+                # self.graph_ = discrete_metric_simplicial_set_intersection(
+                #     self.graph_,
+                #     y_,
+                #     metric=self.target_metric,
+                #     metric_kws=self._target_metric_kwds,
+                #     metric_scale=scale
+                # )
+                # metric_kws = dist.get_discrete_params(y_, self.target_metric)
+
                 self.graph_ = discrete_metric_simplicial_set_intersection(
                     self.graph_,
                     y_,
                     metric=self.target_metric,
-                    metric_kws=self._target_metric_kwds,
+                    metric_kws=metric_kws,
                     metric_scale=scale
                 )
             else:
