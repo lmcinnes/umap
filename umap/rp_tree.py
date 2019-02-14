@@ -98,7 +98,7 @@ def angular_random_projection_split(data, indices, rng_state):
             margin += hyperplane_vector[d] * data[indices[i], d]
 
         if margin == 0:
-            side[i] = tau_rand_int(rng_state) % 2
+            side[i] = abs(tau_rand_int(rng_state)) % 2
             if side[i] == 0:
                 n_left += 1
             else:
@@ -187,7 +187,7 @@ def euclidean_random_projection_split(data, indices, rng_state):
             margin += hyperplane_vector[d] * data[indices[i], d]
 
         if margin == 0:
-            side[i] = tau_rand_int(rng_state) % 2
+            side[i] = abs(tau_rand_int(rng_state)) % 2
             if side[i] == 0:
                 n_left += 1
             else:
@@ -295,7 +295,7 @@ def sparse_angular_random_projection_split(inds, indptr, data, indices, rng_stat
             margin += mul_data[d]
 
         if margin == 0:
-            side[i] = tau_rand_int(rng_state) % 2
+            side[i] = abs(tau_rand_int(rng_state)) % 2
             if side[i] == 0:
                 n_left += 1
             else:
@@ -404,7 +404,7 @@ def sparse_euclidean_random_projection_split(inds, indptr, data, indices, rng_st
             margin += mul_data[d]
 
         if margin == 0:
-            side[i] = tau_rand_int(rng_state) % 2
+            side[i] = abs(tau_rand_int(rng_state)) % 2
             if side[i] == 0:
                 n_left += 1
             else:
@@ -660,7 +660,7 @@ def select_side(hyperplane, offset, point, rng_state):
         margin += hyperplane[d] * point[d]
 
     if margin == 0:
-        side = tau_rand_int(rng_state) % 2
+        side = abs(tau_rand_int(rng_state)) % 2
         if side == 0:
             return 0
         else:
@@ -699,7 +699,7 @@ def sparse_select_side(hyperplane, offset, point_inds, point_data, rng_state):
         margin += aux_data[d]
 
     if margin == 0:
-        side = tau_rand_int(rng_state) % 2
+        side = abs(tau_rand_int(rng_state)) % 2
         if side == 0:
             return 0
         else:
