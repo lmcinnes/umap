@@ -606,7 +606,7 @@ def test_grad_metrics_match_metrics():
     test_matrix = np.array(
         [
             [
-                dist.hellinger_grad(spatial_data[i], spatial_data[j], v)[0]
+                dist.hellinger_grad(spatial_data[i], spatial_data[j])[0]
                 for j in range(spatial_data.shape[0])
             ]
             for i in range(spatial_data.shape[0])
@@ -723,6 +723,33 @@ def test_sparse_metrics():
                 dist_matrix,
                 err_msg="Sparse distances don't match " "for metric {}".format(metric),
             )
+
+    dist_matrix = dist.pairwise_special_metric(np.abs(sparse_spatial_data[:-2].toarray()))
+    test_matrix = np.array(
+        [
+            [
+                spdist.sparse_hellinger(np.abs(sparse_spatial_data[i]), np.abs(sparse_spatial_data[j]))
+                for j in range(sparse_spatial_data.shape[0] - 2)
+            ]
+            for i in range(sparse_spatial_data.shape[0] - 2)
+        ]
+    )
+    assert_array_almost_equal(
+        test_matrix,
+        dist_matrix,
+        err_msg="Sparse distances don't match " "for metric hellinger",
+    )
+
+    # Ensure ll_dirichlet runs
+    test_matrix = np.array(
+        [
+            [
+                spdist.sparse_ll_dirichlet(sparse_spatial_data[i], sparse_spatial_data[j])
+                for j in range(sparse_spatial_data.shape[0])
+            ]
+            for i in range(sparse_spatial_data.shape[0])
+        ]
+    )
 
 
 def test_umap_sparse_trustworthiness():
