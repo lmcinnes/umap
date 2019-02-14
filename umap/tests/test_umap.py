@@ -729,7 +729,10 @@ def test_sparse_metrics():
     test_matrix = np.array(
         [
             [
-                spdist.sparse_hellinger(np.abs(sparse_spatial_data[i]), np.abs(sparse_spatial_data[j]))
+                spdist.sparse_hellinger(np.abs(sparse_spatial_data[i]).indices,
+                                        np.abs(sparse_spatial_data[i]).data,
+                                        np.abs(sparse_spatial_data[j]).indices,
+                                        np.abs(sparse_spatial_data[j]).data)
                 for j in range(sparse_spatial_data.shape[0] - 2)
             ]
             for i in range(sparse_spatial_data.shape[0] - 2)
@@ -745,7 +748,10 @@ def test_sparse_metrics():
     test_matrix = np.array(
         [
             [
-                spdist.sparse_ll_dirichlet(sparse_spatial_data[i], sparse_spatial_data[j])
+                spdist.sparse_ll_dirichlet(sparse_spatial_data[i].indices,
+                                           sparse_spatial_data[i].data,
+                                           sparse_spatial_data[j].indices,
+                                           sparse_spatial_data[j].data)
                 for j in range(sparse_spatial_data.shape[0])
             ]
             for i in range(sparse_spatial_data.shape[0])
