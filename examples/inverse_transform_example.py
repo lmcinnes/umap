@@ -35,7 +35,7 @@ test_pts = np.array([
 inv_transformed_points = trans.inverse_transform(test_pts)
 
 plt.scatter(trans.embedding_[:, 0], trans.embedding_[:, 1],
-            c=mnist.target, cmap='Spectral', s=0.5)
+            c=mnist.target, cmap='Spectral', s=0.25)
 plt.colorbar(boundaries=np.arange(11)-0.5).set_ticks(np.arange(10))
 plt.scatter(test_pts[:, 0], test_pts[:, 1], marker='x', c='k')
 
