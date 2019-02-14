@@ -742,6 +742,7 @@ def test_sparse_metrics():
         test_matrix,
         dist_matrix,
         err_msg="Sparse distances don't match " "for metric hellinger",
+        decimal=3,
     )
 
     # Ensure ll_dirichlet runs
