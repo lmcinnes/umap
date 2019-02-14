@@ -382,6 +382,7 @@ def sparse_hellinger(ind1, data1, ind2, data2):
     result = 0.0
     norm1 = np.sum(data1)
     norm2 = np.sum(data2)
+    sqrt_norm_prod = np.sqrt(norm1 * norm2)
 
     for i in range(aux_data.shape[0]):
         result += np.sqrt(aux_data[i])
@@ -390,8 +391,10 @@ def sparse_hellinger(ind1, data1, ind2, data2):
         return 0.0
     elif norm1 == 0.0 or norm2 == 0.0:
         return 1.0
+    elif result > sqrt_norm_prod:
+        return 0.0
     else:
-        return np.sqrt(1.0 - (result / np.sqrt((norm1 * norm2))))
+        return np.sqrt(1.0 - (result / sqrt_norm_prod))
 
 
 
@@ -488,6 +491,11 @@ def sparse_ll_dirichlet(ind1, data1, ind2, data2):
     # The probability of rolling data2 in sum(data2) trials on a die that rolled data1 in sum(data1) trials
     n1 = np.sum(data1)
     n2 = np.sum(data2)
+
+    if n1 == 0 and n2 == 0:
+        return 0.0
+    elif n1 == 0 or n2 == 0:
+        return 1e8
 
     log_b = 0.0
     i1 = 0

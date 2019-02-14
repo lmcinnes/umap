@@ -738,11 +738,12 @@ def test_sparse_metrics():
             for i in range(sparse_spatial_data.shape[0] - 2)
         ]
     )
+
     assert_array_almost_equal(
         test_matrix,
         dist_matrix,
         err_msg="Sparse distances don't match " "for metric hellinger",
-        decimal=3,
+        decimal=4,
     )
 
     # Ensure ll_dirichlet runs
