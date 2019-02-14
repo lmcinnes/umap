@@ -474,7 +474,7 @@ def log_beta(x,y):
     b = max(x,y)
     if b < 5:
         value = -np.log(b)
-        for i in range(1,a):
+        for i in range(1, int(a)):
             value += np.log(i)-np.log(b+i)
         return value
     else:
