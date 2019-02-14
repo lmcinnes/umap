@@ -1088,7 +1088,7 @@ def interactive(
         else:
             tooltips = None
 
-        bpl.output_notebook(hide_banner=True)
+        # bpl.output_notebook(hide_banner=True) # this doesn't work for non-notebook use
         data_source = bpl.ColumnDataSource(data)
 
         plot = bpl.figure(width=width,
@@ -1100,7 +1100,7 @@ def interactive(
         plot.grid.visible = False
         plot.axis.visible = False
 
-        bpl.show(plot)
+        # bpl.show(plot)
     else:
         if hover_data is not None:
             warn('Too many points for hover data -- tooltips will not'
