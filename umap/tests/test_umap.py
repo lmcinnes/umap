@@ -83,6 +83,15 @@ sparse_nn_data = sparse.csr_matrix(nn_data * binary_nn_data)
 iris = datasets.load_iris()
 iris_selection = np.random.choice([True, False], 150, replace=True, p=[0.75, 0.25])
 
+iris_model = UMAP(n_neighbors=10,
+                  min_dist=0.01,
+                  random_state=42).fit(iris.data)
+
+supervised_iris_model = UMAP(n_neighbors=10, min_dist=0.01,
+                             n_epochs=200, random_state=42).fit(
+    iris.data, iris.target
+)
+
 spatial_distances = (
     "euclidean",
     "manhattan",
@@ -777,12 +786,12 @@ def test_umap_trustworthiness_fast_approx():
     embedding = UMAP(n_neighbors=10,
                      min_dist=0.01,
                      random_state=42,
-                     n_epochs=200,
+                     n_epochs=100,
                      force_approximation_algorithm=True).fit_transform(data)
     trust = trustworthiness(data, embedding, 10)
     assert_greater_equal(
         trust,
-        0.80,
+        0.75,
         "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust),
     )
 
@@ -846,24 +855,6 @@ def test_metric_supervised_umap_trustworthiness():
     )
 
 
-def test_metric_supervised_umap_trustworthiness():
-    data, labels = datasets.make_blobs(50, cluster_std=0.5, random_state=42)
-    embedding = UMAP(n_neighbors=10,
-                     min_dist=0.01,
-                     target_metric='l1',
-                     target_weight=0.8,
-                     n_epochs=100,
-                     random_state=42).fit_transform(
-        data, labels
-    )
-    trust = trustworthiness(data, embedding, 10)
-    assert_greater_equal(
-        trust,
-        0.95,
-        "Insufficiently trustworthy embedding for" "blobs dataset: {}".format(trust),
-    )
-
-
 def test_string_metric_supervised_umap_trustworthiness():
     data, labels = datasets.make_blobs(50, cluster_std=0.5, random_state=42)
     labels = np.array(["this", "that", "other"])[labels]
@@ -901,7 +892,7 @@ def test_discrete_metric_supervised_umap_trustworthiness():
     )
 
 
-def test_string_metric_supervised_umap_trustworthiness():
+def test_count_metric_supervised_umap_trustworthiness():
     data, labels = datasets.make_blobs(50, cluster_std=0.5, random_state=42)
     labels = (labels ** 2) + 2 * labels
     embedding = UMAP(n_neighbors=10,
@@ -921,8 +912,7 @@ def test_string_metric_supervised_umap_trustworthiness():
 
 
 def test_umap_trustworthiness_on_iris():
-    data = iris.data
-    embedding = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit_transform(data)
+    embedding = iris_model.embedding_
     trust = trustworthiness(iris.data, embedding, 10)
     assert_greater_equal(
         trust,
@@ -934,8 +924,9 @@ def test_umap_trustworthiness_on_iris():
 def test_initialized_umap_trustworthiness_on_iris():
     data = iris.data
     embedding = UMAP(
-        n_neighbors=10, min_dist=0.01, init=data[:, 2:], random_state=42
-    ).fit_transform(data, iris.target)
+        n_neighbors=10, min_dist=0.01, init=data[:, 2:],
+        n_epochs=200, random_state=42
+    ).fit_transform(data)
     trust = trustworthiness(iris.data, embedding, 10)
     assert_greater_equal(
         trust,
@@ -946,7 +937,8 @@ def test_initialized_umap_trustworthiness_on_iris():
 
 def test_umap_transform_on_iris():
     data = iris.data[iris_selection]
-    fitter = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit(data)
+    fitter = UMAP(n_neighbors=10, min_dist=0.01,
+                  n_epochs=200, random_state=42).fit(data)
 
     new_data = iris.data[~iris_selection]
     embedding = fitter.transform(new_data)
@@ -983,7 +975,8 @@ def test_umap_sparse_transform_on_iris():
 def test_umap_trustworthiness_on_sphere_iris():
     data = iris.data
     embedding = UMAP(
-        n_neighbors=10, min_dist=0.01, random_state=42, output_metric="haversine"
+        n_neighbors=10, min_dist=0.01, n_epochs=200,
+        random_state=42, output_metric="haversine"
     ).fit_transform(data)
     # Since trustworthiness doesn't support haversine, project onto
     # a 3D embedding of the sphere and use cosine distance
@@ -996,16 +989,13 @@ def test_umap_trustworthiness_on_sphere_iris():
     trust = trustworthiness(iris.data, projected_embedding, 10, metric="cosine")
     assert_greater_equal(
         trust,
-        0.85,
+        0.80,
         "Insufficiently trustworthy spherical embedding for iris dataset: {}".format(trust),
     )
 
 
 def test_umap_clusterability_on_supervised_iris():
-    data = iris.data
-    embedding = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit_transform(
-        data, iris.target
-    )
+    embedding = supervised_iris_model.embedding_
     clusters = KMeans(3).fit_predict(embedding)
     assert_greater_equal(adjusted_rand_score(clusters, iris.target), 0.95)
 
@@ -1023,9 +1013,8 @@ def test_umap_clusterability_on_supervised_iris():
 
 
 def test_umap_inverse_transform_on_iris():
-    data = iris.data
     highd_tree = KDTree(iris.data)
-    fitter = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit(data)
+    fitter = iris_model
     lowd_tree = KDTree(fitter.embedding_)
     for i in range(1, 150, 20):
         query_point = fitter.embedding_[i]
