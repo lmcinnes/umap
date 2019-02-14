@@ -952,9 +952,15 @@ def test_umap_transform_on_iris():
 
 def test_umap_sparse_transform_on_iris():
     data = sparse.csr_matrix(iris.data[iris_selection])
-    fitter = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit(data)
+    assert (sparse.issparse(data))
+    fitter = UMAP(n_neighbors=10,
+                  min_dist=0.01,
+                  random_state=42,
+                  n_epochs=100,
+                  force_approximation_algorithm=True).fit(data)
 
     new_data = sparse.csr_matrix(iris.data[~iris_selection])
+    assert (sparse.issparse(new_data))
     embedding = fitter.transform(new_data)
 
     trust = trustworthiness(new_data, embedding, 10)
