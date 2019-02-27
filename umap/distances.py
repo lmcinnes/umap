@@ -726,6 +726,30 @@ def correlation_grad(x, y):
     return dist, grad
 
 
+@numba.njit(fastmath=True)
+def sinkhorn_distance(x, y, M=l2_M_matrix, cost=cost, maxiter=64):
+    p = (x / x.sum()).astype(np.float32)
+    q = (y / y.sum()).astype(np.float32)
+
+    u = np.ones(p.shape, dtype=np.float32)
+    v = np.ones(q.shape, dtype=np.float32)
+
+    for n in range(maxiter):
+        t = M @ v
+        u[t > 0] = p[t > 0] / t[t > 0]
+        t = M.T @ u
+        v[t > 0] = q[t > 0] / t[t > 0]
+
+    pi = np.diag(v) @ M @ np.diag(u)
+    result = 0.0
+    for i in range(pi.shape[0]):
+        for j in range(pi.shape[1]):
+            if pi[i, j] > 0:
+                result += pi[i, j] * cost[i, j]
+
+    return result
+
+
 # Special discrete distances -- where x and y are objects, not vectors
 
 def get_discrete_params(data, metric):
