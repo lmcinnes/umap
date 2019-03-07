@@ -42,7 +42,7 @@ def euclidean_grad(x, y):
     for i in range(x.shape[0]):
         result += (x[i] - y[i]) ** 2
     d = np.sqrt(result)
-    grad = (x-y)/(1e-6 + d)
+    grad = (x - y) / (1e-6 + d)
     return d, grad
 
 
@@ -73,13 +73,13 @@ def standardised_euclidean_grad(x, y, sigma=_mock_ones):
     for i in range(x.shape[0]):
         result += (x[i] - y[i]) ** 2 / sigma[i]
     d = np.sqrt(result)
-    grad = (x-y)/(1e-6 + d * sigma)
+    grad = (x - y) / (1e-6 + d * sigma)
     return d, grad
 
 
 @numba.njit()
 def manhattan(x, y):
-    """Manhatten, taxicab, or l1 distance.
+    """Manhattan, taxicab, or l1 distance.
 
     ..math::
         D(x, y) = \sum_i |x_i - y_i|
@@ -93,7 +93,7 @@ def manhattan(x, y):
 
 @numba.njit()
 def manhattan_grad(x, y):
-    """Manhatten, taxicab, or l1 distance with gradient.
+    """Manhattan, taxicab, or l1 distance with gradient.
 
     ..math::
         D(x, y) = \sum_i |x_i - y_i|
@@ -180,6 +180,43 @@ def minkowski_grad(x, y, p=2):
         grad[i] = pow(np.abs(x[i] - y[i]), (p - 1.0)) * sign(x[i] - y[i]) * pow(result, (1.0 / (p - 1)))
 
     return result ** (1.0 / p), grad
+
+
+@numba.njit()
+def poincare(u, v):
+    """Poincare distance.
+
+    ..math::
+        \delta (u, v) = 2 \frac{ \lVert  u - v \rVert ^2 }{ ( 1 - \lVert  u \rVert ^2 ) ( 1 - \lVert  v \rVert ^2 ) }
+        D(x, y) = \operatorname{arcosh} (1+\delta (u,v))
+    """
+    sq_u_norm = np.sum(u * u)
+    sq_v_norm = np.sum(v * v)
+    sq_dist = np.sum(np.power(u - v, 2))
+    return np.arccosh(1 + 2 * (sq_dist / ((1 - sq_u_norm) * (1 - sq_v_norm))))
+
+
+@numba.njit()
+def poincare_grad(u, v):
+    """Poincare distance.
+
+    ..math::
+        \delta (u, v) = 2 \frac{ \lVert  u - v \rVert ^2 }{ ( 1 - \lVert  u \rVert ^2 ) ( 1 - \lVert  v \rVert ^2 ) }
+        D(x, y) = \operatorname{arcosh} (1+\delta (u,v))
+    """
+    eps = 1e-6
+    sq_u_norm = np.sum(u * u) - eps
+    sq_v_norm = np.sum(v * v) - eps
+    sq_dist = np.sum(np.power(u - v, 2))
+    result = np.arccosh(1 + 2 * (sq_dist / ((1 - sq_u_norm) * (1 - sq_v_norm))))
+
+    d = np.sqrt(result)
+    e_grad = (u - v) / (eps + d)
+
+    p_sq_norm = 1 - np.sum(np.power([u, v], 2))
+    r_grad = e_grad * (np.power(p_sq_norm, 2) / 4)
+
+    return result, r_grad
 
 
 @numba.njit()
@@ -386,7 +423,7 @@ def kulsinski(x, y):
         return 0.0
     else:
         return float(num_not_equal - num_true_true + x.shape[0]) / (
-            num_not_equal + x.shape[0]
+                num_not_equal + x.shape[0]
         )
 
 
@@ -465,14 +502,14 @@ def haversine_grad(x, y):
     sin_long = np.sin(0.5 * (x[1] - y[1]))
     cos_long = np.cos(0.5 * (x[1] - y[1]))
 
-    a_0 = np.cos(x[0]+np.pi/2) * np.cos(y[0]+np.pi/2) * sin_long ** 2
+    a_0 = np.cos(x[0] + np.pi / 2) * np.cos(y[0] + np.pi / 2) * sin_long ** 2
     a_1 = a_0 + sin_lat ** 2
 
     d = 2.0 * np.arcsin(np.sqrt(min(max(abs(a_1), 0), 1)))
     denom = (np.sqrt(abs(a_1 - 1)) * np.sqrt(abs(a_1)))
     grad = np.array([
-        (sin_lat * cos_lat - np.sin(x[0]+np.pi/2) * np.cos(y[0]+np.pi/2) * sin_long ** 2),
-        (np.cos(x[0]+np.pi/2) * np.cos(y[0]+np.pi/2) * sin_long * cos_long),
+        (sin_lat * cos_lat - np.sin(x[0] + np.pi / 2) * np.cos(y[0] + np.pi / 2) * sin_long ** 2),
+        (np.cos(x[0] + np.pi / 2) * np.cos(y[0] + np.pi / 2) * sin_long * cos_long),
     ]) / (denom + 1e-6)
     return d, grad
 
@@ -495,7 +532,7 @@ def yule(x, y):
         return 0.0
     else:
         return (2.0 * num_true_false * num_false_true) / (
-            num_true_true * num_false_false + num_true_false * num_false_true
+                num_true_true * num_false_false + num_true_false * num_false_true
         )
 
 
@@ -534,7 +571,7 @@ def cosine_grad(x, y):
         dist = 1.0
         grad = np.zeros(x.shape)
     else:
-        grad = -(x * result - y * norm_x) / np.sqrt(norm_x**3 * norm_y)
+        grad = -(x * result - y * norm_x) / np.sqrt(norm_x ** 3 * norm_y)
         dist = 1.0 - (result / np.sqrt(norm_x * norm_y))
 
     return dist, grad
@@ -572,7 +609,6 @@ def correlation(x, y):
 
 @numba.njit()
 def hellinger(x, y):
-
     result = 0.0
     l1_norm_x = 0.0
     l1_norm_y = 0.0
@@ -615,7 +651,7 @@ def hellinger_grad(x, y):
         dist = np.sqrt(1 - result / dist_denom)
         grad_denom = 2 * dist
         grad_numer_const = (l1_norm_y * result) / \
-                            (2 * dist_denom ** 3)
+                           (2 * dist_denom ** 3)
 
         grad = (grad_numer_const - (y / grad_term * dist_denom)) / grad_denom
 
@@ -626,28 +662,30 @@ def hellinger_grad(x, y):
 def approx_log_Gamma(x):
     if x == 1:
         return 0
-    #x2= 1/(x*x);
+    # x2= 1/(x*x);
     return x * np.log(x) - x + 0.5 * np.log(2.0 * np.pi / x) + 1.0 / (x * 12.0)
     # + x2*(-1.0/360.0) + x2* (1.0/1260.0 + x2*(-1.0/(1680.0)  +\
     #  x2*(1.0/1188.0 + x2*(-691.0/360360.0 + x2*(1.0/156.0 +\
     #  x2*(-3617.0/122400.0 + x2*(43687.0/244188.0 + x2*(-174611.0/125400.0) +\
     #  x2*(77683.0/5796.0 + x2*(-236364091.0/1506960.0 + x2*(657931.0/300.0))))))))))))
-                
+
+
 @numba.njit()
-def log_beta(x,y):
-    a = min(x,y)
-    b = max(x,y)
+def log_beta(x, y):
+    a = min(x, y)
+    b = max(x, y)
     if b < 5:
         value = -np.log(b)
         for i in range(1, int(a)):
-            value += np.log(i)-np.log(b+i)
+            value += np.log(i) - np.log(b + i)
         return value
     else:
         return approx_log_Gamma(x) + approx_log_Gamma(y) - approx_log_Gamma(x + y)
 
+
 @numba.njit()
 def log_single_beta(x):
-    return np.log(2.0)*(-2.0*x+0.5) + 0.5*np.log(2.0*np.pi/x) + 0.125/x
+    return np.log(2.0) * (-2.0 * x + 0.5) + 0.5 * np.log(2.0 * np.pi / x) + 0.125 / x
 
 
 # + x2*(-1.0/192.0 + x2* (1.0/640.0 + x2*(-17.0/(14336.0) +\
@@ -674,16 +712,15 @@ def ll_dirichlet(data1, data2):
     self_denom2 = 0.0
 
     for i in range(data1.shape[0]):
-        if data1[i]*data2[i] > 0.9 :
+        if data1[i] * data2[i] > 0.9:
             log_b += log_beta(data1[i], data2[i])
-            self_denom1 += log_single_beta(data1[i]) 
-            self_denom2 += log_single_beta(data2[i]) 
+            self_denom1 += log_single_beta(data1[i])
+            self_denom2 += log_single_beta(data2[i])
 
         else:
             if data1[i] > 0.9:
-                self_denom1 += log_single_beta(data1[i])    
+                self_denom1 += log_single_beta(data1[i])
 
-                
             if data2[i] > 0.9:
                 self_denom2 += log_single_beta(data2[i])
 
@@ -764,20 +801,21 @@ def get_discrete_params(data, metric):
         )
         return {
             'poisson_lambda': lambda_,
-            'normalisation': normalisation / 2.0, # heuristic
+            'normalisation': normalisation / 2.0,  # heuristic
         }
     elif metric == 'string':
         lengths = np.array([len(x) for x in data])
         max_length = scipy.stats.tmax(lengths)
-        max_dist = max_length / 1.5 # heuristic
-        normalisation = max_dist / 2.0 # heuristic
+        max_dist = max_length / 1.5  # heuristic
+        normalisation = max_dist / 2.0  # heuristic
         return {
             'normalisation': normalisation,
-            'max_dist': max_dist / 2.0, # heuristic
+            'max_dist': max_dist / 2.0,  # heuristic
         }
 
     else:
         return {}
+
 
 @numba.jit()
 def categorical_distance(x, y):
@@ -829,7 +867,6 @@ def count_distance(x, y, poisson_lambda=1.0, normalisation=1.0):
 
 @numba.jit()
 def levenshtein(x, y, normalisation=1.0, max_distance=20):
-
     x_len, y_len = len(x), len(y)
 
     # Opt out of some comparisons
@@ -859,9 +896,6 @@ def levenshtein(x, y, normalisation=1.0, max_distance=20):
     return v0[y_len] / normalisation
 
 
-
-
-
 named_distances = {
     # general minkowski distances
     "euclidean": euclidean,
@@ -874,6 +908,7 @@ named_distances = {
     "linfty": chebyshev,
     "linf": chebyshev,
     "minkowski": minkowski,
+    "poincare": poincare,
     # Standardised/weighted distances
     "seuclidean": standardised_euclidean,
     "standardised_euclidean": standardised_euclidean,
@@ -919,6 +954,7 @@ named_distances_with_gradients = {
     "linfty": chebyshev_grad,
     "linf": chebyshev_grad,
     "minkowski": minkowski_grad,
+    "poincare": poincare_grad,
     # Standardised/weighted distances
     "seuclidean": standardised_euclidean_grad,
     "standardised_euclidean": standardised_euclidean_grad,
@@ -942,9 +978,9 @@ DISCRETE_METRICS = (
     'string',
 )
 
+
 @numba.jit(parallel=True)
 def pairwise_special_metric(X, Y=None, metric="hellinger"):
-
     special_metric_func = named_distances[metric]
 
     if Y is None:
@@ -962,4 +998,3 @@ def pairwise_special_metric(X, Y=None, metric="hellinger"):
                 result[i, j] = special_metric_func(X[i], Y[j])
 
     return result
-
