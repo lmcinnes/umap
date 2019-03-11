@@ -6,6 +6,7 @@ import numpy as np
 import scipy.stats
 
 _mock_identity = np.eye(2, dtype=np.float64)
+_mock_cost = 1.0 - _mock_identity
 _mock_ones = np.ones(2, dtype=np.float64)
 
 
@@ -727,7 +728,7 @@ def correlation_grad(x, y):
 
 
 @numba.njit(fastmath=True)
-def sinkhorn_distance(x, y, M=l2_M_matrix, cost=cost, maxiter=64):
+def sinkhorn_distance(x, y, M=_mock_identity, cost=_mock_cost, maxiter=64):
     p = (x / x.sum()).astype(np.float32)
     q = (y / y.sum()).astype(np.float32)
 
