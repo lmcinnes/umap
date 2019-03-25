@@ -942,7 +942,7 @@ def simplicial_set_embedding(
             metric=metric,
             metric_kwds=metric_kwds,
         )
-        expansion = 10.0 / initialisation.max()
+        expansion = 10.0 / np.abs(initialisation).max()
         embedding = (initialisation * expansion).astype(
             np.float32
         ) + random_state.normal(
