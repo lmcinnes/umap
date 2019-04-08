@@ -183,7 +183,7 @@ def nearest_neighbors(
 
     knn_dists: array of shape (n_samples, n_neighbors)
         The distances to the ``n_neighbors`` closest points in the dataset.
-    """                    
+    """
     if verbose:
         print(time.ctime(time.time()) + " Finding Nearest Neighbors")
 
