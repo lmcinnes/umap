@@ -3,6 +3,7 @@
 # License: BSD 3 clause
 from __future__ import print_function
 from warnings import warn
+import time
 
 from scipy.optimize import curve_fit
 from sklearn.base import BaseEstimator
@@ -182,7 +183,10 @@ def nearest_neighbors(
 
     knn_dists: array of shape (n_samples, n_neighbors)
         The distances to the ``n_neighbors`` closest points in the dataset.
-    """
+    """                    
+    if verbose:
+        print(time.ctime(time.time()) + " Finding Nearest Neighbors")
+
     if metric == "precomputed":
         # Note that this does not support sparse distance matrices yet ...
         # Compute indices of n nearest neighbors
@@ -264,7 +268,8 @@ def nearest_neighbors(
                 "Results may be less than ideal. Try re-running with"
                 "different parameters."
             )
-
+    if verbose:
+        print(time.ctime(time.time()) + " Finished Nearest Neighbor Search")
     return knn_indices, knn_dists, rp_forest
 
 
@@ -1525,7 +1530,7 @@ class UMAP(BaseEstimator):
             n_epochs = self.n_epochs
 
         if self.verbose:
-            print("Construct embedding")
+            print(time.ctime(time.time()) + " Construct embedding")
 
         self.embedding_ = simplicial_set_embedding(
             self._raw_data,
@@ -1543,6 +1548,9 @@ class UMAP(BaseEstimator):
             self._metric_kwds,
             self.verbose,
         )
+
+        if self.verbose:
+            print(time.ctime(time.time()) + " Finished embedding")
 
         self._input_hash = joblib.hash(self._raw_data)
 
