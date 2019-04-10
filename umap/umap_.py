@@ -355,17 +355,21 @@ def compute_membership_strengths(knn_indices, knn_dists, sigmas, rhos):
 
     for i in range(n_samples):
         for j in range(n_neighbors):
-            if knn_indices[i, j] == -1:
+            k = knn_indices[i, j]
+            if k == -1:
                 continue  # We didn't get the full knn for i
-            if knn_indices[i, j] == i:
+            if k == i:
                 val = 0.0
-            elif knn_dists[i, j] - rhos[i] <= 0.0 or sigmas[i] == 0.0:
+            elif knn_dists[i, j] - (rhos[i] + rhos[k]) <= 0.0\
+                    or sigmas[i] + sigmas[k] == 0.0:
                 val = 1.0
             else:
-                val = np.exp(-((knn_dists[i, j] - rhos[i]) / (sigmas[i])))
+                subdist = knn_dists[i, j] - (rhos[i] + rhos[k])
+                bandwidth = sigmas[i] + sigmas[k]
+                val = np.exp(-(subdist / bandwidth))
 
             rows[i * n_neighbors + j] = i
-            cols[i * n_neighbors + j] = knn_indices[i, j]
+            cols[i * n_neighbors + j] = k
             vals[i * n_neighbors + j] = val
 
     return rows, cols, vals
@@ -507,16 +511,16 @@ def fuzzy_simplicial_set(
     )
     result.eliminate_zeros()
 
-    transpose = result.transpose()
-
-    prod_matrix = result.multiply(transpose)
-
-    result = (
-        set_op_mix_ratio * (result + transpose - prod_matrix)
-        + (1.0 - set_op_mix_ratio) * prod_matrix
-    )
-
-    result.eliminate_zeros()
+    # transpose = result.transpose()
+    #
+    # prod_matrix = result.multiply(transpose)
+    #
+    # result = (
+    #     set_op_mix_ratio * (result + transpose - prod_matrix)
+    #     + (1.0 - set_op_mix_ratio) * prod_matrix
+    # )
+    #
+    # result.eliminate_zeros()
 
     return result, sigmas, rhos
 
