@@ -252,6 +252,8 @@ def nearest_neighbors(
                 distance_func = sparse.sparse_named_distances[metric]
                 if metric in sparse.sparse_need_n_features:
                     metric_kwds["n_features"] = X.shape[1]
+            elif callable(metric):
+                distance_func = metric
             else:
                 raise ValueError(
                     "Metric {} not supported for sparse " + "data".format(metric)
