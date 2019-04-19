@@ -37,6 +37,7 @@ from umap.layouts import (
     optimize_layout_euclidean,
     optimize_layout_generic,
     optimize_layout_inverse,
+    optimize_layout_true,
 )
 
 locale.setlocale(locale.LC_NUMERIC, "C")
@@ -360,12 +361,14 @@ def compute_membership_strengths(knn_indices, knn_dists, sigmas, rhos):
                 continue  # We didn't get the full knn for i
             if k == i:
                 val = 0.0
-            elif knn_dists[i, j] - (rhos[i] + rhos[k]) <= 0.0\
+            elif (knn_dists[i, j] - rhos[i]) <= 0.0 or \
+                    (knn_dists[i, j] - rhos[k]) <= 0.0 \
                     or sigmas[i] + sigmas[k] == 0.0:
                 val = 1.0
             else:
-                subdist = knn_dists[i, j] - (rhos[i] + rhos[k])
-                bandwidth = sigmas[i] + sigmas[k]
+                subdist = max(0, knn_dists[i, j] - (rhos[i] + rhos[k]))
+                # subdist = np.sqrt((knn_dists[i, j] - rhos[i]) * (knn_dists[i, j] - rhos[k]))
+                bandwidth = (sigmas[i] + sigmas[k]) / 2.0
                 val = np.exp(-(subdist / bandwidth))
 
             rows[i * n_neighbors + j] = i
@@ -877,8 +880,8 @@ def simplicial_set_embedding(
         else:
             n_epochs = 200
 
-    graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
-    graph.eliminate_zeros()
+    # graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
+    # graph.eliminate_zeros()
 
     if isinstance(init, str) and init == "random":
         embedding = random_state.uniform(
@@ -927,21 +930,32 @@ def simplicial_set_embedding(
         np.max(embedding, 0) - np.min(embedding, 0)
     )
     if euclidean_output:
-        embedding = optimize_layout_euclidean(
+        # embedding = optimize_layout_euclidean(
+        #     embedding,
+        #     embedding,
+        #     head,
+        #     tail,
+        #     n_epochs,
+        #     n_vertices,
+        #     epochs_per_sample,
+        #     a,
+        #     b,
+        #     rng_state,
+        #     gamma,
+        #     initial_alpha,
+        #     negative_sample_rate,
+        #     verbose=verbose,
+        # )
+        csr_matrix = graph.tocsr()
+        embedding = optimize_layout_true(
             embedding,
-            embedding,
-            head,
-            tail,
+            csr_matrix.indptr,
+            csr_matrix.indices,
+            csr_matrix.data,
             n_epochs,
-            n_vertices,
-            epochs_per_sample,
-            a,
-            b,
+            0.1,
             rng_state,
-            gamma,
-            initial_alpha,
-            negative_sample_rate,
-            verbose=verbose,
+            negative_sample_rate
         )
     else:
         embedding = optimize_layout_generic(

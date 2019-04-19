@@ -183,6 +183,99 @@ def optimize_layout_euclidean(
 
 
 @numba.njit(fastmath=True)
+def optimize_layout_true(
+        embedding,
+        indptr,
+        indices,
+        data,
+        n_epochs,
+        min_dist,
+        rng_state,
+        negative_sample_rate=10,
+        alpha=10.0,
+        eta=0.5
+):
+    n_vertices = embedding.shape[0]
+    dim = embedding.shape[1]
+
+    exp_min_dist = np.exp(min_dist)
+
+    momentum = np.zeros_like(embedding)
+    grad_vector = np.zeros(dim)
+    initial_alpha = alpha
+
+    a = 1.0
+    b = 1.0
+
+    for n in range(n_epochs):
+        for i in range(n_vertices):
+
+            # i = abs(tau_rand_int(rng_state)) % n_vertices
+
+            current = embedding[i]
+            # grad_vector *= 0
+
+            for idx in range(indptr[i], indptr[i + 1]):
+                j = indices[idx]
+                weight = data[idx]
+                # current = embedding[i]
+                other = embedding[j]
+
+                dist = np.sqrt(rdist(current, other))
+                if dist > min_dist:
+                    grad_coeff = -1.0 / dist
+                else:
+                    # continue
+                    grad_coeff = 0.01
+
+                # dist_squared = rdist(current, other)
+                # grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
+                # grad_coeff /= a * pow(dist_squared, b) + 1.0
+
+                for d in range(dim):
+                    grad_d = grad_coeff * (current[d] - other[d])
+                    # grad_vector[d] += weight * grad_coeff * (current[d] - other[d])
+                    embedding[i, d] += weight * alpha * clip(grad_d)
+                    embedding[j, d] += -weight * alpha * clip(grad_d)
+
+                # n_neg_samples = negative_sample_rate * (indptr[i + 1] - indptr[i])
+                # for idx in range(n_neg_samples):
+                for idx in range(negative_sample_rate):
+                    k = abs(tau_rand_int(rng_state)) % n_vertices
+                    other = embedding[k]
+
+                    dist = np.sqrt(rdist(current, other))
+                    if dist > min_dist:
+                        grad_coeff = -exp_min_dist / (dist * (exp_min_dist - np.exp(dist)))
+                    else:
+                        # continue
+                        grad_coeff = 4.0
+
+                    # dist_squared = rdist(current, other)
+                    #
+                    # grad_coeff = 2.0  * b
+                    # grad_coeff /= (0.001 + dist_squared) * (
+                    #         a * pow(dist_squared, b) + 1
+                    # )
+
+                    for d in range(dim):
+                        grad_d = grad_coeff * (current[d] - other[d])
+                        # grad_vector[d] += grad_coeff * (current[d] - other[d])
+                        embedding[i, d] += alpha * clip(grad_d)
+                        embedding[k, d] += -alpha * clip(grad_d)
+
+            # for d in range(dim):
+            #     momentum[i, d] = eta * momentum[i, d] + (1.0 - eta) * alpha * clip(grad_vector[d])
+            #     embedding[i, d] = embedding[i, d] + momentum[i, d]
+            #     # embedding[i, d] += alpha * clip(grad_vector[d])
+
+        # alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
+        alpha = initial_alpha * np.exp(- 10 * (float(n) / float(n_epochs)))
+
+    return embedding
+
+
+@numba.njit(fastmath=True)
 def optimize_layout_generic(
         head_embedding,
         tail_embedding,
