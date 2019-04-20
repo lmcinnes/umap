@@ -1,6 +1,9 @@
 """
 Tests for UMAP to ensure things are working as expected.
 """
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning)
+
 from nose.tools import assert_less
 from nose.tools import assert_greater_equal
 import os.path
