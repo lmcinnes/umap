@@ -682,49 +682,89 @@ def test_multi_component_layout():
     assert_less(error, 15.0, msg="Multi component embedding to far astray")
 
 
-def test_umap_bad_parameters():
+def test_negative_op():
     u = UMAP(set_op_mix_ratio=-1.0)
-    assert_raises(ValueError, u.fit, nn_data)
+    assert_raises(ValueError, u.fit, nn_data)    
+
+def test_too_large_op():
     u = UMAP(set_op_mix_ratio=1.5)
     assert_raises(ValueError, u.fit, nn_data)
+
+def test_bad_too_large_min_dist():
     u = UMAP(min_dist=2.0)
-    assert_raises(ValueError, u.fit, nn_data)
+    # a RuntimeWarning about division by zero in a,b curve fitting is expected
+    # caught and ignored for this test
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=RuntimeWarning)
+        assert_raises(ValueError, u.fit, nn_data)
+
+def test_negative_min_dist():
     u = UMAP(min_dist=-1)
     assert_raises(ValueError, u.fit, nn_data)
+
+def test_negative_ncomponents():
     u = UMAP(n_components=-1)
     assert_raises(ValueError, u.fit, nn_data)
+
+def test_non_integer_ncomponents():
     u = UMAP(n_components=1.5)
     assert_raises(ValueError, u.fit, nn_data)
-    u = UMAP(n_neighbors=0.5)
-    assert_raises(ValueError, u.fit, nn_data)
+
+def test_too_small_nneighbors():
+     u = UMAP(n_neighbors=0.5)
+     assert_raises(ValueError, u.fit, nn_data)
+
+def test_negative_nneighbors():
     u = UMAP(n_neighbors=-1)
     assert_raises(ValueError, u.fit, nn_data)
+
+def test_bad_metric():
     u = UMAP(metric=45)
     assert_raises(ValueError, u.fit, nn_data)
+
+def test_negative_learning_rate():
     u = UMAP(learning_rate=-1.5)
     assert_raises(ValueError, u.fit, nn_data)
+
+def test_negative_repulsion():
     u = UMAP(repulsion_strength=-0.5)
     assert_raises(ValueError, u.fit, nn_data)
+
+def test_negative_sample_rate():
     u = UMAP(negative_sample_rate=-1)
     assert_raises(ValueError, u.fit, nn_data)
+
+def test_bad_init():
     u = UMAP(init="foobar")
     assert_raises(ValueError, u.fit, nn_data)
+
+def test_bad_numeric_init():
     u = UMAP(init=42)
     assert_raises(ValueError, u.fit, nn_data)
+
+def test_bad_matrix_init():
     u = UMAP(init=np.array([[0, 0, 0], [0, 0, 0]]))
     assert_raises(ValueError, u.fit, nn_data)
+
+def test_negative_nepochs():
     u = UMAP(n_epochs=-2)
     assert_raises(ValueError, u.fit, nn_data)
+
+def test_negative_target_nneighbors():
     u = UMAP(target_n_neighbors=1)
     assert_raises(ValueError, u.fit, nn_data)
 
-    u = UMAP(a=1.2, b=1.75, n_neighbors=2000)
-    u.fit(nn_data)
-    assert_equal(u._a, 1.2)
-    assert_equal(u._b, 1.75)
-    # assert_raises(ValueError, u.fit, nn_data) we simply warn now
+def test_umap_bad_nn():
+    assert_raises(ValueError, 
+        nearest_neighbors, 
+        nn_data, 
+        10, 
+        42, 
+        {}, 
+        False, 
+        np.random)
 
-    assert_raises(ValueError, nearest_neighbors, nn_data, 10, 42, {}, False, np.random)
+def test_umap_bad_nn_sparse():
     assert_raises(
         ValueError,
         nearest_neighbors,
@@ -735,6 +775,12 @@ def test_umap_bad_parameters():
         False,
         np.random,
     )
+
+def test_too_many_neighbors_warns():
+    u = UMAP(a=1.2, b=1.75, n_neighbors=2000, n_epochs=11, init="random")
+    u.fit(nn_data[:100, ])
+    assert_equal(u._a, 1.2)
+    assert_equal(u._b, 1.75)
 
 
 def test_umap_fit_params():
