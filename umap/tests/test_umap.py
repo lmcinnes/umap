@@ -1,17 +1,33 @@
-"""
-Tests for UMAP to ensure things are working as expected.
-"""
-import warnings
-warnings.filterwarnings('ignore', category=UserWarning)
-
-from nose.tools import assert_less
-from nose.tools import assert_greater_equal
-import os.path
-import numpy as np
-from scipy.spatial import distance
-from scipy import sparse
-from scipy import stats
-from sklearn.utils.estimator_checks import check_estimator
+from umap.umap_ import (
+    INT32_MAX,
+    INT32_MIN,
+    make_forest,
+    rptree_leaf_array,
+    nearest_neighbors,
+    smooth_knn_dist,
+    fuzzy_simplicial_set,
+    UMAP,
+)
+from umap.utils import deheap_sort
+from umap.nndescent import (
+    make_initialisations,
+    make_initialized_nnd_search,
+    initialise_search,
+)
+import umap.validation as valid
+import umap.sparse as spdist
+import umap.distances as dist
+from sklearn import datasets
+from nose import SkipTest
+from functools import wraps
+from tempfile import mkdtemp
+from scipy.stats import mode
+from sklearn.cluster import KMeans
+from sklearn.manifold.t_sne import trustworthiness
+from sklearn.preprocessing import StandardScaler, normalize
+from sklearn.utils import shuffle
+from sklearn.neighbors import KDTree, BallTree
+from sklearn.metrics import pairwise_distances, adjusted_rand_score
 from sklearn.utils.testing import (
     assert_equal,
     assert_array_equal,
@@ -23,46 +39,28 @@ from sklearn.utils.testing import (
     assert_no_warnings,
     if_matplotlib,
 )
-from sklearn.metrics import pairwise_distances, adjusted_rand_score
-from sklearn.neighbors import KDTree, BallTree
-from sklearn.utils import shuffle
-from sklearn.preprocessing import StandardScaler, normalize
-from sklearn.manifold.t_sne import trustworthiness
-from sklearn.cluster import KMeans
-from scipy.stats import mode
+from sklearn.utils.estimator_checks import check_estimator
+from scipy import stats
+from scipy import sparse
+from scipy.spatial import distance
+import numpy as np
+import os.path
+from nose.tools import assert_greater_equal
+from nose.tools import assert_less
+"""
+Tests for UMAP to ensure things are working as expected.
+"""
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning)
 
-from tempfile import mkdtemp
-from functools import wraps
-from nose import SkipTest
-
-from sklearn import datasets
-
-import umap.distances as dist
-import umap.sparse as spdist
-import umap.validation as valid
-from umap.nndescent import (
-    make_initialisations,
-    make_initialized_nnd_search,
-    initialise_search,
-)
-from umap.utils import deheap_sort
-from umap.umap_ import (
-    INT32_MAX,
-    INT32_MIN,
-    make_forest,
-    rptree_leaf_array,
-    nearest_neighbors,
-    smooth_knn_dist,
-    fuzzy_simplicial_set,
-    UMAP,
-)
 
 np.random.seed(42)
 spatial_data = np.random.randn(10, 20)
 spatial_data = np.vstack(
     [spatial_data, np.zeros((2, 20))]
 )  # Add some all zero data for corner case test
-binary_data = np.random.choice(a=[False, True], size=(10, 20), p=[0.66, 1 - 0.66])
+binary_data = np.random.choice(
+    a=[False, True], size=(10, 20), p=[0.66, 1 - 0.66])
 binary_data = np.vstack(
     [binary_data, np.zeros((2, 20), dtype='bool')]
 )  # Add some all zero data for corner case test
@@ -73,14 +71,16 @@ nn_data = np.random.uniform(0, 1, size=(1000, 5))
 nn_data = np.vstack(
     [nn_data, np.zeros((2, 5))]
 )  # Add some all zero data for corner case test
-binary_nn_data = np.random.choice(a=[False, True], size=(1000, 5), p=[0.66, 1 - 0.66])
+binary_nn_data = np.random.choice(
+    a=[False, True], size=(1000, 5), p=[0.66, 1 - 0.66])
 binary_nn_data = np.vstack(
     [binary_nn_data, np.zeros((2, 5), dtype='bool')]
 )  # Add some all zero data for corner case test
 sparse_nn_data = sparse.csr_matrix(nn_data * binary_nn_data)
 
 iris = datasets.load_iris()
-iris_selection = np.random.choice([True, False], 150, replace=True, p=[0.75, 0.25])
+iris_selection = np.random.choice(
+    [True, False], 150, replace=True, p=[0.75, 0.25])
 
 
 def spatial_check(metric):
@@ -138,8 +138,9 @@ def binary_check(metric):
 
 def sparse_spatial_check(metric):
     if metric in spdist.sparse_named_distances:
-        dist_matrix = pairwise_distances(sparse_spatial_data.todense(), 
-        metric=metric)
+        dist_matrix = pairwise_distances(
+            sparse_spatial_data.todense(), metric=metric
+        )
     if metric in ("braycurtis", "dice", "sokalsneath", "yule"):
         dist_matrix[np.where(~np.isfinite(dist_matrix))] = 0.0
     if metric in ("cosine", "correlation", "kulsinski", "russellrao"):
@@ -294,7 +295,8 @@ def test_sparse_nn_descent_neighbor_accuracy():
     )
 
     tree = KDTree(sparse_nn_data.todense())
-    true_indices = tree.query(sparse_nn_data.todense(), 10, return_distance=False)
+    true_indices = tree.query(sparse_nn_data.todense(),
+                              10, return_distance=False)
 
     num_correct = 0.0
     for i in range(nn_data.shape[0]):
@@ -419,7 +421,8 @@ def test_nn_search():
         False,
     )
 
-    search_graph = sparse.lil_matrix((train.shape[0], train.shape[0]), dtype=np.int8)
+    search_graph = sparse.lil_matrix(
+        (train.shape[0], train.shape[0]), dtype=np.int8)
     search_graph.rows = knn_indices
     search_graph.data = (knn_dists != 0).astype(np.int8)
     search_graph = search_graph.maximum(search_graph.transpose()).tocsr()
@@ -431,7 +434,8 @@ def test_nn_search():
     init = initialise_search(
         rp_forest, train, test, int(10 * 3), random_init, tree_init, rng_state
     )
-    result = search(train, search_graph.indptr, search_graph.indices, init, test)
+    result = search(train, search_graph.indptr,
+                    search_graph.indices, init, test)
 
     indices, dists = deheap_sort(result)
     indices = indices[:, :10]
@@ -449,6 +453,7 @@ def test_nn_search():
         0.99,
         "Sparse NN-descent did not get " "99% accuracy on nearest " "neighbors",
     )
+
 
 def test_euclidean():
     spatial_check("euclidean")
@@ -537,6 +542,7 @@ def test_sparse_chebyshev():
 def test_sparse_minkowski():
     sparse_spatial_check("minkowski")
 
+
 def test_sparse_hamming():
     sparse_spatial_check("hamming")
 
@@ -551,6 +557,7 @@ def test_sparse_cosine():
 
 def test_sparse_correlation():
     sparse_spatial_check("correlation")
+
 
 def test_sparse_jaccard():
     sparse_binary_check("jaccard")
@@ -590,7 +597,8 @@ def test_seuclidean():
     test_matrix = np.array(
         [
             [
-                dist.standardised_euclidean(spatial_data[i], spatial_data[j], v)
+                dist.standardised_euclidean(
+                    spatial_data[i], spatial_data[j], v)
                 for j in range(spatial_data.shape[0])
             ]
             for i in range(spatial_data.shape[0])
@@ -605,11 +613,13 @@ def test_seuclidean():
 
 def test_weighted_minkowski():
     v = np.abs(np.random.randn(spatial_data.shape[1]))
-    dist_matrix = pairwise_distances(spatial_data, metric="wminkowski", w=v, p=3)
+    dist_matrix = pairwise_distances(
+        spatial_data, metric="wminkowski", w=v, p=3)
     test_matrix = np.array(
         [
             [
-                dist.weighted_minkowski(spatial_data[i], spatial_data[j], v, p=3)
+                dist.weighted_minkowski(
+                    spatial_data[i], spatial_data[j], v, p=3)
                 for j in range(spatial_data.shape[0])
             ]
             for i in range(spatial_data.shape[0])
@@ -674,12 +684,14 @@ def test_umap_sparse_trustworthiness():
 
 def test_umap_trustworthiness_on_iris():
     data = iris.data
-    embedding = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit_transform(data)
+    embedding = UMAP(n_neighbors=10, min_dist=0.01,
+                     random_state=42).fit_transform(data)
     trust = trustworthiness(iris.data, embedding, 10)
     assert_greater_equal(
         trust,
         0.97,
-        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
+        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(
+            trust),
     )
 
 
@@ -692,7 +704,8 @@ def test_umap_trustworthiness_on_iris_random_init():
     assert_greater_equal(
         trust,
         0.95,
-        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
+        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(
+            trust),
     )
 
 
@@ -705,7 +718,8 @@ def test_supervised_umap_trustworthiness_on_iris():
     assert_greater_equal(
         trust,
         0.97,
-        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
+        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(
+            trust),
     )
 
 
@@ -720,7 +734,8 @@ def test_semisupervised_umap_trustworthiness_on_iris():
     assert_greater_equal(
         trust,
         0.97,
-        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
+        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(
+            trust),
     )
 
 
@@ -733,7 +748,8 @@ def test_initialized_umap_trustworthiness_on_iris():
     assert_greater_equal(
         trust,
         0.97,
-        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
+        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(
+            trust),
     )
 
 
@@ -748,7 +764,8 @@ def test_umap_transform_on_iris():
     assert_greater_equal(
         trust,
         0.89,
-        "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust),
+        "Insufficiently trustworthy transform for" "iris dataset: {}".format(
+            trust),
     )
 
 
@@ -767,7 +784,8 @@ def test_umap_transform_on_iris():
 def test_blobs_cluster():
     data, labels = datasets.make_blobs(n_samples=500, n_features=10, centers=5)
     embedding = UMAP().fit_transform(data)
-    assert_equal(adjusted_rand_score(labels, KMeans(5).fit_predict(embedding)), 1.0)
+    assert_equal(adjusted_rand_score(
+        labels, KMeans(5).fit_predict(embedding)), 1.0)
 
 
 def test_multi_component_layout():
@@ -775,7 +793,8 @@ def test_multi_component_layout():
         100, 2, centers=5, cluster_std=0.5, center_box=[-20, 20], random_state=42
     )
 
-    true_centroids = np.empty((labels.max() + 1, data.shape[1]), dtype=np.float64)
+    true_centroids = np.empty(
+        (labels.max() + 1, data.shape[1]), dtype=np.float64)
 
     for label in range(labels.max() + 1):
         true_centroids[label] = data[labels == label].mean(axis=0)
@@ -783,7 +802,8 @@ def test_multi_component_layout():
     true_centroids = normalize(true_centroids, norm="l2")
 
     embedding = UMAP(n_neighbors=4).fit_transform(data)
-    embed_centroids = np.empty((labels.max() + 1, data.shape[1]), dtype=np.float64)
+    embed_centroids = np.empty(
+        (labels.max() + 1, data.shape[1]), dtype=np.float64)
     embed_labels = KMeans(n_clusters=5).fit_predict(embedding)
 
     for label in range(embed_labels.max() + 1):
@@ -798,7 +818,7 @@ def test_multi_component_layout():
 
 def test_negative_op():
     u = UMAP(set_op_mix_ratio=-1.0)
-    assert_raises(ValueError, u.fit, nn_data)    
+    assert_raises(ValueError, u.fit, nn_data)
 
 
 def test_too_large_op():
@@ -831,8 +851,8 @@ def test_non_integer_ncomponents():
 
 
 def test_too_small_nneighbors():
-     u = UMAP(n_neighbors=0.5)
-     assert_raises(ValueError, u.fit, nn_data)
+    u = UMAP(n_neighbors=0.5)
+    assert_raises(ValueError, u.fit, nn_data)
 
 
 def test_negative_nneighbors():
@@ -886,14 +906,14 @@ def test_negative_target_nneighbors():
 
 
 def test_umap_bad_nn():
-    assert_raises(ValueError, 
-        nearest_neighbors, 
-        nn_data, 
-        10, 
-        42, 
-        {}, 
-        False, 
-        np.random)
+    assert_raises(ValueError,
+                  nearest_neighbors,
+                  nn_data,
+                  10,
+                  42,
+                  {},
+                  False,
+                  np.random)
 
 
 def test_umap_bad_nn_sparse():
