@@ -532,4 +532,5 @@ def submatrix(dmat, indices_col, n_neighbors):
 
 # Generates a timestamp for use in logging messages when verbose=True
 def ts():
-    return time.ctime(time.time()) + " "
+    return time.ctime(time.time())
+

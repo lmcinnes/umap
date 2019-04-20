@@ -185,7 +185,7 @@ def nearest_neighbors(
         The distances to the ``n_neighbors`` closest points in the dataset.
     """
     if verbose:
-        print(ts() + "Finding Nearest Neighbors")
+        print(ts(), "Finding Nearest Neighbors")
 
     if metric == "precomputed":
         # Note that this does not support sparse distance matrices yet ...
@@ -226,13 +226,13 @@ def nearest_neighbors(
             n_trees = 5 + int(round((X.shape[0]) ** 0.5 / 20.0))
             n_iters = max(5, int(round(np.log2(X.shape[0]))))
             if verbose:
-                print(ts() + "Building RP forest with " + str(n_trees) + " trees")
+                print(ts(), "Building RP forest with",  str(n_trees), "trees")
 
             rp_forest = make_forest(X, n_neighbors, n_trees, rng_state, angular)
             leaf_array = rptree_leaf_array(rp_forest)
 
             if verbose:
-                print(ts() + "Commencing NN descent for " + str(n_iters) + " iterations")
+                print(ts(), "NN descent for", str(n_iters), "iterations")
             knn_indices, knn_dists = metric_nn_descent(
                 X.indices,
                 X.indptr,
@@ -255,11 +255,11 @@ def nearest_neighbors(
             n_iters = max(5, int(round(np.log2(X.shape[0]))))
 
             if verbose:
-                print(ts() + "Building RP forest with " + str(n_trees) + " trees")
+                print(ts(), "Building RP forest with", str(n_trees), "trees")
             rp_forest = make_forest(X, n_neighbors, n_trees, rng_state, angular)
             leaf_array = rptree_leaf_array(rp_forest)
             if verbose:
-                print(ts() + "Commencing NN descent for " + str(n_iters) + " iterations")
+                print(ts(), "NN descent for", str(n_iters), "iterations")
             knn_indices, knn_dists = metric_nn_descent(
                 X,
                 n_neighbors,
@@ -278,7 +278,7 @@ def nearest_neighbors(
                 "different parameters."
             )
     if verbose:
-        print(ts() + "Finished Nearest Neighbor Search")
+        print(ts(), "Finished Nearest Neighbor Search")
     return knn_indices, knn_dists, rp_forest
 
 
@@ -1539,7 +1539,7 @@ class UMAP(BaseEstimator):
             n_epochs = self.n_epochs
 
         if self.verbose:
-            print(ts() + "Construct embedding")
+            print(ts(), "Construct embedding")
 
         self.embedding_ = simplicial_set_embedding(
             self._raw_data,
