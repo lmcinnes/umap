@@ -82,6 +82,7 @@ sparse_nn_data = sparse.csr_matrix(nn_data * binary_nn_data)
 iris = datasets.load_iris()
 iris_selection = np.random.choice([True, False], 150, replace=True, p=[0.75, 0.25])
 
+
 def spatial_check(metric):
     dist_matrix = pairwise_distances(spatial_data, metric=metric)
     # scipy is bad sometimes
@@ -108,6 +109,7 @@ def spatial_check(metric):
         err_msg="Distances don't match " "for metric {}".format(metric),
     )
 
+
 def binary_check(metric):
     dist_matrix = pairwise_distances(binary_data, metric=metric)
     if metric in ("jaccard", "dice", "sokalsneath", "yule"):
@@ -132,6 +134,7 @@ def binary_check(metric):
         dist_matrix,
         err_msg="Distances don't match " "for metric {}".format(metric),
     )
+
 
 def sparse_spatial_check(metric):
     if metric in spdist.sparse_named_distances:
@@ -184,6 +187,7 @@ def sparse_spatial_check(metric):
         err_msg="Sparse distances don't match " "for metric {}".format(metric),
     )
 
+
 def sparse_binary_check(metric):
     if metric in spdist.sparse_named_distances:
         dist_matrix = pairwise_distances(
@@ -235,6 +239,7 @@ def sparse_binary_check(metric):
         dist_matrix,
         err_msg="Sparse distances don't match " "for metric {}".format(metric),
     )
+
 
 # Transform isn't stable under batching; hard to opt out of this.
 @SkipTest
@@ -448,65 +453,86 @@ def test_nn_search():
 def test_euclidean():
     spatial_check("euclidean")
 
+
 def test_manhattan():
     spatial_check("manhattan")
+
 
 def test_chebyshev():
     spatial_check("chebyshev")
 
+
 def test_minkowski():
     spatial_check("minkowski")
+
 
 def test_hamming():
     spatial_check("hamming")
 
+
 def test_canberra():
     spatial_check("canberra")
+
 
 def test_braycurtis():
     spatial_check("braycurtis")
 
+
 def test_cosine():
     spatial_check("cosine")
+
 
 def test_correlation():
     spatial_check("correlation")
 
+
 def test_jaccard():
     binary_check("jaccard")
+
 
 def test_matching():
     binary_check("matching")
 
+
 def test_dice():
     binary_check("dice")
+
 
 def test_kulsinski():
     binary_check("kulsinski")
 
+
 def test_rogerstanimoto():
     binary_check("rogerstanimoto")
+
 
 def test_russellrao():
     binary_check("russellrao")
 
+
 def test_sokalmichener():
     binary_check("sokalmichener")
+
 
 def test_sokalsneath():
     binary_check("sokalsneath")
 
+
 def test_yule():
     binary_check("yule")
+
 
 def test_sparse_euclidean():
     sparse_spatial_check("euclidean")
 
+
 def test_sparse_manhattan():
     sparse_spatial_check("manhattan")
 
+
 def test_sparse_chebyshev():
     sparse_spatial_check("chebyshev")
+
 
 def test_sparse_minkowski():
     sparse_spatial_check("minkowski")
@@ -514,11 +540,14 @@ def test_sparse_minkowski():
 def test_sparse_hamming():
     sparse_spatial_check("hamming")
 
+
 def test_sparse_canberra():
     sparse_spatial_check("canberra")
 
+
 def test_sparse_cosine():
     sparse_spatial_check("cosine")
+
 
 def test_sparse_correlation():
     sparse_spatial_check("correlation")
@@ -526,26 +555,34 @@ def test_sparse_correlation():
 def test_sparse_jaccard():
     sparse_binary_check("jaccard")
 
+
 def test_sparse_matching():
     sparse_binary_check("matching")
+
 
 def test_sparse_dice():
     sparse_binary_check("dice")
 
+
 def test_sparse_kulsinski():
     sparse_binary_check("kulsinski")
+
 
 def test_sparse_rogerstanimoto():
     sparse_binary_check("rogerstanimoto")
 
+
 def test_sparse_russellrao():
     sparse_binary_check("russellrao")
+
 
 def test_sparse_sokalmichener():
     sparse_binary_check("sokalmichener")
 
+
 def test_sparse_sokalsneath():
     sparse_binary_check("sokalsneath")
+
 
 def test_seuclidean():
     v = np.abs(np.random.randn(spatial_data.shape[1]))
@@ -565,6 +602,7 @@ def test_seuclidean():
         err_msg="Distances don't match " "for metric seuclidean",
     )
 
+
 def test_weighted_minkowski():
     v = np.abs(np.random.randn(spatial_data.shape[1]))
     dist_matrix = pairwise_distances(spatial_data, metric="wminkowski", w=v, p=3)
@@ -582,6 +620,7 @@ def test_weighted_minkowski():
         dist_matrix,
         err_msg="Distances don't match " "for metric weighted_minkowski",
     )
+
 
 def test_mahalanobis():
     v = np.cov(np.transpose(spatial_data))
@@ -601,6 +640,7 @@ def test_mahalanobis():
         err_msg="Distances don't match " "for metric mahalanobis",
     )
 
+
 def test_haversine():
     tree = BallTree(spatial_data[:, :2], metric="haversine")
     dist_matrix, _ = tree.query(spatial_data[:, :2], k=spatial_data.shape[0])
@@ -619,6 +659,7 @@ def test_haversine():
         dist_matrix,
         err_msg="Distances don't match " "for metric haversine",
     )
+
 
 def test_umap_sparse_trustworthiness():
     embedding = UMAP(n_neighbors=10).fit_transform(sparse_nn_data[:100])
@@ -759,9 +800,11 @@ def test_negative_op():
     u = UMAP(set_op_mix_ratio=-1.0)
     assert_raises(ValueError, u.fit, nn_data)    
 
+
 def test_too_large_op():
     u = UMAP(set_op_mix_ratio=1.5)
     assert_raises(ValueError, u.fit, nn_data)
+
 
 def test_bad_too_large_min_dist():
     u = UMAP(min_dist=2.0)
@@ -771,61 +814,76 @@ def test_bad_too_large_min_dist():
         warnings.filterwarnings('ignore', category=RuntimeWarning)
         assert_raises(ValueError, u.fit, nn_data)
 
+
 def test_negative_min_dist():
     u = UMAP(min_dist=-1)
     assert_raises(ValueError, u.fit, nn_data)
+
 
 def test_negative_ncomponents():
     u = UMAP(n_components=-1)
     assert_raises(ValueError, u.fit, nn_data)
 
+
 def test_non_integer_ncomponents():
     u = UMAP(n_components=1.5)
     assert_raises(ValueError, u.fit, nn_data)
+
 
 def test_too_small_nneighbors():
      u = UMAP(n_neighbors=0.5)
      assert_raises(ValueError, u.fit, nn_data)
 
+
 def test_negative_nneighbors():
     u = UMAP(n_neighbors=-1)
     assert_raises(ValueError, u.fit, nn_data)
+
 
 def test_bad_metric():
     u = UMAP(metric=45)
     assert_raises(ValueError, u.fit, nn_data)
 
+
 def test_negative_learning_rate():
     u = UMAP(learning_rate=-1.5)
     assert_raises(ValueError, u.fit, nn_data)
+
 
 def test_negative_repulsion():
     u = UMAP(repulsion_strength=-0.5)
     assert_raises(ValueError, u.fit, nn_data)
 
+
 def test_negative_sample_rate():
     u = UMAP(negative_sample_rate=-1)
     assert_raises(ValueError, u.fit, nn_data)
+
 
 def test_bad_init():
     u = UMAP(init="foobar")
     assert_raises(ValueError, u.fit, nn_data)
 
+
 def test_bad_numeric_init():
     u = UMAP(init=42)
     assert_raises(ValueError, u.fit, nn_data)
+
 
 def test_bad_matrix_init():
     u = UMAP(init=np.array([[0, 0, 0], [0, 0, 0]]))
     assert_raises(ValueError, u.fit, nn_data)
 
+
 def test_negative_nepochs():
     u = UMAP(n_epochs=-2)
     assert_raises(ValueError, u.fit, nn_data)
 
+
 def test_negative_target_nneighbors():
     u = UMAP(target_n_neighbors=1)
     assert_raises(ValueError, u.fit, nn_data)
+
 
 def test_umap_bad_nn():
     assert_raises(ValueError, 
@@ -836,6 +894,7 @@ def test_umap_bad_nn():
         {}, 
         False, 
         np.random)
+
 
 def test_umap_bad_nn_sparse():
     assert_raises(
@@ -848,6 +907,7 @@ def test_umap_bad_nn_sparse():
         False,
         np.random,
     )
+
 
 def test_too_many_neighbors_warns():
     u = UMAP(a=1.2, b=1.75, n_neighbors=2000, n_epochs=11, init="random")
