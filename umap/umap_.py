@@ -45,7 +45,7 @@ MIN_K_DIST_SCALE = 1e-3
 NPY_INFINITY = np.inf
 
 
-@numba.njit(parallel=True, fastmath=True)
+@numba.njit(fastmath=True) # benchmarking `parallel=True` shows it to *decrease* performance
 def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0):
     """Compute a continuous version of the distance to the kth nearest
     neighbor. That is, this is similar to knn-distance but allows continuous
@@ -88,6 +88,8 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
     target = np.log2(k) * bandwidth
     rho = np.zeros(distances.shape[0])
     result = np.zeros(distances.shape[0])
+
+    mean_distances = np.mean(distances)
 
     for i in range(distances.shape[0]):
         lo = 0.0
@@ -137,11 +139,12 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
 
         # TODO: This is very inefficient, but will do for now. FIXME
         if rho[i] > 0.0:
-            if result[i] < MIN_K_DIST_SCALE * np.mean(ith_distances):
-                result[i] = MIN_K_DIST_SCALE * np.mean(ith_distances)
+            mean_ith_distances = np.mean(ith_distances)
+            if result[i] < MIN_K_DIST_SCALE * mean_ith_distances:
+                result[i] = MIN_K_DIST_SCALE * mean_ith_distances
         else:
-            if result[i] < MIN_K_DIST_SCALE * np.mean(distances):
-                result[i] = MIN_K_DIST_SCALE * np.mean(distances)
+            if result[i] < MIN_K_DIST_SCALE * mean_distances:
+                result[i] = MIN_K_DIST_SCALE * mean_distances
 
     return result, rho
 
