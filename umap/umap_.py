@@ -89,6 +89,8 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
     rho = np.zeros(distances.shape[0])
     result = np.zeros(distances.shape[0])
 
+    mean_distances = np.mean(distances)
+
     for i in range(distances.shape[0]):
         lo = 0.0
         hi = NPY_INFINITY
@@ -137,11 +139,12 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
 
         # TODO: This is very inefficient, but will do for now. FIXME
         if rho[i] > 0.0:
-            if result[i] < MIN_K_DIST_SCALE * np.mean(ith_distances):
-                result[i] = MIN_K_DIST_SCALE * np.mean(ith_distances)
+            mean_ith_distances = np.mean(ith_distances)
+            if result[i] < MIN_K_DIST_SCALE * mean_ith_distances:
+                result[i] = MIN_K_DIST_SCALE * mean_ith_distances
         else:
-            if result[i] < MIN_K_DIST_SCALE * np.mean(distances):
-                result[i] = MIN_K_DIST_SCALE * np.mean(distances)
+            if result[i] < MIN_K_DIST_SCALE * mean_distances:
+                result[i] = MIN_K_DIST_SCALE * mean_distances
 
     return result, rho
 
