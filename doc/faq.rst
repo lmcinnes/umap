@@ -113,7 +113,7 @@ a library for t-SNE, LargeVis, UMAP, and related algorithms.
 Smallvis only works for small datasets, but provides
 much greater flexibility and control.
 
-Is the support for the R language?
+Is there support for the R language?
 ----------------------------------
 
 Yes! A number of people have worked hard to make UMAP
