@@ -121,14 +121,20 @@ available to R users.
 
 If you want to use the reference
 implementation under the hood but want a nice R interface
-the we recommend `umapr <https://github.com/ropenscilabs/umapr>`_
-which wraps the python code with reticulate.
+then we recommend `umap <https://github.com/tkonopka/umap>`_,
+which wraps the python code with 
+`reticulate <https://rstudio.github.io/reticulate/>`_.
+Another reticulate interface is 
+`umapr <https://github.com/ropenscilabs/umapr>`_, but it
+may not be under active development.
 
-If you want a pure R version then there are a couple
-of options: `UMAP <https://github.com/tkonopka/umap>`_
-and `UWOT <https://github.com/jlmelville/uwot>`_. Both are good
-reimplementations of UMAP in R. If performance is
-a major factor we recommend UWOT at this time.
+If you want a pure R version then we recommend
+`uwot <https://github.com/jlmelville/uwot>`_ at this time. 
+`umap <https://github.com/tkonopka/umap>`_ also provides
+a pure R implementation in addition to its reticulate
+wrapper.
+
+Both umap and uwot are available on CRAN.
 
 Is there a C/C++ implementation?
 --------------------------------
