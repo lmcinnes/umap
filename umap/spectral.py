@@ -1,12 +1,12 @@
 from warnings import warn
 
 import numpy as np
+
 import scipy.sparse
 import scipy.sparse.csgraph
+
 from sklearn.manifold import SpectralEmbedding
 from sklearn.metrics import pairwise_distances
-
-from umap.distances import pairwise_special_metric, named_distances
 
 
 def component_layout(
@@ -274,7 +274,7 @@ def spectral_layout(data, graph, dim, random_state, metric="euclidean", metric_k
         else:
             eigenvalues, eigenvectors = scipy.sparse.linalg.lobpcg(
                 L,
-                random_state.normal(size=(L.shape[0], k)) + 1,
+                random_state.normal(size=(L.shape[0], k)),
                 largest=False,
                 tol=1e-8
             )

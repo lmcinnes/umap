@@ -8,7 +8,7 @@
     :target: https://anaconda.org/conda-forge/umap-learn
     :alt: Downloads from conda-forge
 .. image:: https://img.shields.io/pypi/l/umap-learn.svg
-    :target: https://github.com/lmcinnes/umap/blob/master/LICENSE
+    :target: https://github.com/lmcinnes/umap/blob/master/LICENSE.txt
     :alt: License
 .. image:: https://travis-ci.org/lmcinnes/umap.svg
     :target: https://travis-ci.org/lmcinnes/umap
@@ -269,7 +269,7 @@ would cite the paper from the Journal of Open Source Software:
 
     @article{mcinnes2018umap-software,
       title={UMAP: Uniform Manifold Approximation and Projection},
-      author={McInnes, Leland and Healy, John and Saul, Nathaniel and Großberger, Lukas},
+      author={McInnes, Leland and Healy, John and Saul, Nathaniel and Grossberger, Lukas},
       journal={The Journal of Open Source Software},
       volume={3},
       number={29},
@@ -283,7 +283,7 @@ current reference:
 .. code:: bibtex
 
    @article{2018arXivUMAP,
-        author = {{McInnes}, L. and {Healy}, J.},
+        author = {{McInnes}, L. and {Healy}, J. and {Melville}, J.},
         title = "{UMAP: Uniform Manifold Approximation
         and Projection for Dimension Reduction}",
         journal = {ArXiv e-prints},

@@ -5,6 +5,7 @@ from __future__ import print_function
 
 import locale
 from warnings import warn
+import time
 
 import numba
 import numpy as np
@@ -218,6 +219,9 @@ def nearest_neighbors(
     rp_forest: list of trees
         The random projection forest used for searching (if used, None otherwise)
     """
+    if verbose:
+        print(time.ctime(time.time()) + " Finding Nearest Neighbors")
+
     if metric == "precomputed":
         # Note that this does not support sparse distance matrices yet ...
         # Compute indices of n nearest neighbors
@@ -312,7 +316,8 @@ def nearest_neighbors(
                 "Results may be less than ideal. Try re-running with"
                 "different parameters."
             )
-
+    if verbose:
+        print(time.ctime(time.time()) + " Finished Nearest Neighbor Search")
     return knn_indices, knn_dists, rp_forest
 
 
@@ -892,7 +897,7 @@ def simplicial_set_embedding(
             metric=metric,
             metric_kwds=metric_kwds,
         )
-        expansion = 10.0 / initialisation.max()
+        expansion = 10.0 / np.abs(initialisation).max()
         embedding = (initialisation * expansion).astype(
             np.float32
         ) + random_state.normal(
@@ -1488,6 +1493,12 @@ class UMAP(BaseEstimator):
                 # )
 
         if y is not None:
+            if len(X) != len(y):
+                raise ValueError(
+                    "Length of x = {len_x}, length of y = {len_y}, while it must be equal.".format(
+                        len_x=len(X), len_y=len(y)
+                    )
+                )
             y_ = check_array(y, ensure_2d=False)
             if self.target_metric == "categorical":
                 if self.target_weight < 1.0:
@@ -1577,7 +1588,7 @@ class UMAP(BaseEstimator):
             n_epochs = self.n_epochs
 
         if self.verbose:
-            print("Construct embedding")
+            print(time.ctime(time.time()) + " Construct embedding")
 
         self.embedding_ = simplicial_set_embedding(
             self._raw_data,
@@ -1598,6 +1609,9 @@ class UMAP(BaseEstimator):
             self.output_metric in ("euclidean", "l2"),
             self.verbose,
         )
+
+        if self.verbose:
+            print(time.ctime(time.time()) + " Finished embedding")
 
         self._input_hash = joblib.hash(self._raw_data)
 
