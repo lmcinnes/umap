@@ -1404,7 +1404,10 @@ class UMAP(BaseEstimator):
             self._small_data = True
 
             if self.metric in ("ll_dirichlet", "hellinger"):
-                dmat = dist.pairwise_special_metric(X, metric=self.metric)
+                if self._sparse_data:
+                    dmat = dist.pairwise_special_metric(X.toarray(), metric=self.metric)
+                else:
+                    dmat = dist.pairwise_special_metric(X, metric=self.metric)
             else:
                 dmat = pairwise_distances(X, metric=self.metric, **self._metric_kwds)
 
