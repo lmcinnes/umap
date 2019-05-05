@@ -21,6 +21,7 @@ import sklearn.neighbors
 from umap.nndescent import initialise_search, initialized_nnd_search
 from umap.utils import deheap_sort, submatrix
 
+from bokeh.plotting import output_notebook, output_file, show
 from warnings import warn
 
 fire_cmap = matplotlib.colors.LinearSegmentedColormap.from_list('fire', colorcet.fire)
@@ -493,13 +494,24 @@ def points(
                                color_key_cmap, background, width, height)
 
     ax.set(xticks=[], yticks=[])
-    ax.text(0.99,
-            0.01,
-            'UMAP: n_neighbors={}, min_dist={}'.format(umap_object.n_neighbors,
-                                                       umap_object.min_dist),
-            transform=ax.transAxes,
-            horizontalalignment='right',
-            color=font_color)
+    if umap_object.metric != 'euclidean':
+        ax.text(0.99,
+                0.01,
+                'UMAP: metric={}, n_neighbors={}, min_dist={}'.format(
+                    umap_object.metric,
+                    umap_object.n_neighbors,
+                    umap_object.min_dist),
+                transform=ax.transAxes,
+                horizontalalignment='right',
+                color=font_color)
+    else:
+        ax.text(0.99,
+                0.01,
+                'UMAP: n_neighbors={}, min_dist={}'.format(umap_object.n_neighbors,
+                                                           umap_object.min_dist),
+                transform=ax.transAxes,
+                horizontalalignment='right',
+                color=font_color)
 
     return ax
 
