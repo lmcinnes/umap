@@ -204,86 +204,107 @@ def nearest_neighbors(
 
         rp_forest = []
     else:
-        if callable(metric):
-            distance_func = metric
-        elif metric in dist.named_distances:
-            distance_func = dist.named_distances[metric]
-        else:
-            raise ValueError("Metric is neither callable, " + "nor a recognised string")
+        try:
+            # Use pynndescent, if installed (python 3 only)
+            from pynndescent import NNDescent
 
-        if metric in ("cosine", "correlation", "dice", "jaccard"):
-            angular = True
-
-        rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
-
-        if scipy.sparse.isspmatrix_csr(X):
-            if metric in sparse.sparse_named_distances:
-                distance_func = sparse.sparse_named_distances[metric]
-                if metric in sparse.sparse_need_n_features:
-                    metric_kwds["n_features"] = X.shape[1]
-            else:
-                raise ValueError(
-                    "Metric {} not supported for sparse " + "data".format(metric)
-                )
-            metric_nn_descent = sparse.make_sparse_nn_descent(
-                distance_func, tuple(metric_kwds.values())
-            )
-
-            # TODO: Hacked values for now
             n_trees = 5 + int(round((X.shape[0]) ** 0.5 / 20.0))
             n_iters = max(5, int(round(np.log2(X.shape[0]))))
-            if verbose:
-                print(ts(), "Building RP forest with",  str(n_trees), "trees")
-
-            rp_forest = make_forest(X, n_neighbors, n_trees, rng_state, angular)
-            leaf_array = rptree_leaf_array(rp_forest)
-
-            if verbose:
-                print(ts(), "NN descent for", str(n_iters), "iterations")
-            knn_indices, knn_dists = metric_nn_descent(
-                X.indices,
-                X.indptr,
-                X.data,
-                X.shape[0],
-                n_neighbors,
-                rng_state,
-                max_candidates=60,
-                rp_tree_init=True,
-                leaf_array=leaf_array,
-                n_iters=n_iters,
-                verbose=verbose,
-            )
-        else:
-            metric_nn_descent = make_nn_descent(
-                distance_func, tuple(metric_kwds.values())
-            )
-            # TODO: Hacked values for now
-            n_trees = 5 + int(round((X.shape[0]) ** 0.5 / 20.0))
-            n_iters = max(5, int(round(np.log2(X.shape[0]))))
-
-            if verbose:
-                print(ts(), "Building RP forest with", str(n_trees), "trees")
-            rp_forest = make_forest(X, n_neighbors, n_trees, rng_state, angular)
-            leaf_array = rptree_leaf_array(rp_forest)
-            if verbose:
-                print(ts(), "NN descent for", str(n_iters), "iterations")
-            knn_indices, knn_dists = metric_nn_descent(
+            nn_descent = NNDescent(
                 X,
-                n_neighbors,
-                rng_state,
-                max_candidates=60,
-                rp_tree_init=True,
-                leaf_array=leaf_array,
+                n_neighbors=n_neighbors,
+                metric=metric,
+                metric_kwds=metric_kwds,
+                random_state=random_state,
+                n_trees=n_trees,
                 n_iters=n_iters,
+                max_candidates=60,
                 verbose=verbose,
             )
+            knn_indices, knn_dists = nn_descent._neighbor_graph
+            rp_forest = nn_descent._rp_forest
+        except ImportError:
+            # Otherwise fall back to nn descent in umap
+            if callable(metric):
+                distance_func = metric
+            elif metric in dist.named_distances:
+                distance_func = dist.named_distances[metric]
+            else:
+                raise ValueError("Metric is neither callable, " + "nor a recognised string")
 
-        if np.any(knn_indices < 0):
-            warn(
-                "Failed to correctly find n_neighbors for some samples."
-                "Results may be less than ideal. Try re-running with"
-                "different parameters."
-            )
+            if metric in ("cosine", "correlation", "dice", "jaccard"):
+                angular = True
+
+            rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
+
+            if scipy.sparse.isspmatrix_csr(X):
+                if metric in sparse.sparse_named_distances:
+                    distance_func = sparse.sparse_named_distances[metric]
+                    if metric in sparse.sparse_need_n_features:
+                        metric_kwds["n_features"] = X.shape[1]
+                else:
+                    raise ValueError(
+                        "Metric {} not supported for sparse " + "data".format(metric)
+                    )
+                metric_nn_descent = sparse.make_sparse_nn_descent(
+                    distance_func, tuple(metric_kwds.values())
+                )
+
+                # TODO: Hacked values for now
+                n_trees = 5 + int(round((X.shape[0]) ** 0.5 / 20.0))
+                n_iters = max(5, int(round(np.log2(X.shape[0]))))
+                if verbose:
+                    print(ts(), "Building RP forest with",  str(n_trees), "trees")
+
+                rp_forest = make_forest(X, n_neighbors, n_trees, rng_state, angular)
+                leaf_array = rptree_leaf_array(rp_forest)
+
+                if verbose:
+                    print(ts(), "NN descent for", str(n_iters), "iterations")
+                knn_indices, knn_dists = metric_nn_descent(
+                    X.indices,
+                    X.indptr,
+                    X.data,
+                    X.shape[0],
+                    n_neighbors,
+                    rng_state,
+                    max_candidates=60,
+                    rp_tree_init=True,
+                    leaf_array=leaf_array,
+                    n_iters=n_iters,
+                    verbose=verbose,
+                )
+            else:
+                metric_nn_descent = make_nn_descent(
+                    distance_func, tuple(metric_kwds.values())
+                )
+                # TODO: Hacked values for now
+                n_trees = 5 + int(round((X.shape[0]) ** 0.5 / 20.0))
+                n_iters = max(5, int(round(np.log2(X.shape[0]))))
+
+                if verbose:
+                    print(ts(), "Building RP forest with", str(n_trees), "trees")
+                rp_forest = make_forest(X, n_neighbors, n_trees, rng_state, angular)
+                leaf_array = rptree_leaf_array(rp_forest)
+                if verbose:
+                    print(ts(), "NN descent for", str(n_iters), "iterations")
+                knn_indices, knn_dists = metric_nn_descent(
+                    X,
+                    n_neighbors,
+                    rng_state,
+                    max_candidates=60,
+                    rp_tree_init=True,
+                    leaf_array=leaf_array,
+                    n_iters=n_iters,
+                    verbose=verbose,
+                )
+
+            if np.any(knn_indices < 0):
+                warn(
+                    "Failed to correctly find n_neighbors for some samples."
+                    "Results may be less than ideal. Try re-running with"
+                    "different parameters."
+                )
     if verbose:
         print(ts(), "Finished Nearest Neighbor Search")
     return knn_indices, knn_dists, rp_forest
