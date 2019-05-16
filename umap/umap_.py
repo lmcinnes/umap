@@ -13,9 +13,9 @@ from sklearn.preprocessing import normalize
 from sklearn.neighbors import KDTree
 
 try:
-    from joblib
+    import joblib
 except ImportError:
-    # sklearn.externals.joblib is deprecated in 0.21 and will be removed in 0.23
+    # sklearn.externals.joblib is deprecated in 0.21, will be removed in 0.23
     from sklearn.externals import joblib
 
 import numpy as np
