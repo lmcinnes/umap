@@ -12,7 +12,11 @@ from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import normalize
 from sklearn.neighbors import KDTree
 
-from sklearn.externals import joblib
+try:
+    from joblib
+except ImportError:
+    # sklearn.externals.joblib is deprecated in 0.21 and will be removed in 0.23
+    from sklearn.externals import joblib
 
 import numpy as np
 import scipy.sparse
