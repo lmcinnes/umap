@@ -912,7 +912,7 @@ def simplicial_set_embedding(
                 tree = KDTree(init_data)
                 dist, ind = tree.query(init_data, k=2)
                 nndist = np.mean(dist[:, 1])
-                embedding = init_data + np.random.normal(
+                embedding = init_data + random_state.normal(
                     scale=0.001 * nndist, size=init_data.shape
                 ).astype(np.float32)
             else:
