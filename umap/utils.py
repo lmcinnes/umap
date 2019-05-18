@@ -447,7 +447,7 @@ def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates, rng
     return candidate_neighbors
 
 
-@numba.njit(parallel=True)
+@numba.njit()
 def new_build_candidates(
     current_graph, n_vertices, n_neighbors, max_candidates, rng_state, rho=0.5
 ):  # pragma: no cover
@@ -480,7 +480,7 @@ def new_build_candidates(
     new_candidate_neighbors = make_heap(n_vertices, max_candidates)
     old_candidate_neighbors = make_heap(n_vertices, max_candidates)
 
-    for i in numba.prange(n_vertices):
+    for i in range(n_vertices):
         for j in range(n_neighbors):
             if current_graph[0, i, j] < 0:
                 continue
