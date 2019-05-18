@@ -18,7 +18,6 @@ from sklearn.utils.testing import (
     assert_in,
     assert_not_in,
     assert_no_warnings,
-    if_matplotlib,
 )
 from sklearn.utils.estimator_checks import check_estimator
 from scipy import stats
