@@ -1,23 +1,4 @@
-from umap.umap_ import (
-    INT32_MAX,
-    INT32_MIN,
-    make_forest,
-    rptree_leaf_array,
-    nearest_neighbors,
-    smooth_knn_dist,
-    fuzzy_simplicial_set,
-    UMAP,
-)
-from umap.utils import deheap_sort
-from umap.nndescent import (
-    make_initialisations,
-    make_initialized_nnd_search,
-    initialise_search,
-)
-import umap.validation as valid
-import umap.sparse as spdist
-import umap.distances as dist
-from sklearn import datasets
+
 from nose import SkipTest
 from functools import wraps
 from tempfile import mkdtemp
