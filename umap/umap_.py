@@ -7,22 +7,31 @@ import locale
 from warnings import warn
 import time
 
-import numba
+from scipy.optimize import curve_fit
+from sklearn.base import BaseEstimator
+from sklearn.utils import check_random_state, check_array
+from sklearn.metrics import pairwise_distances
+from sklearn.preprocessing import normalize
+from sklearn.neighbors import KDTree
+
+try:
+    import joblib
+except ImportError:
+    # sklearn.externals.joblib is deprecated in 0.21, will be removed in 0.23
+    from sklearn.externals import joblib
+
 import numpy as np
 import scipy.sparse
 import scipy.sparse.csgraph
-from scipy.optimize import curve_fit
-from sklearn.base import BaseEstimator
-from sklearn.externals import joblib
-from sklearn.metrics import pairwise_distances
-from sklearn.neighbors import KDTree
-from sklearn.preprocessing import normalize
-from sklearn.utils import check_random_state, check_array
+import numba
 
 import umap.distances as dist
+
 import umap.sparse as sparse
 import umap.sparse_nndescent as sparse_nn
 
+from umap.utils import tau_rand_int, deheap_sort, submatrix, ts
+from umap.rp_tree import rptree_leaf_array, make_forest
 from umap.nndescent import (
     # make_nn_descent,
     # make_initialisations,
@@ -49,7 +58,6 @@ SMOOTH_K_TOLERANCE = 1e-5
 MIN_K_DIST_SCALE = 1e-3
 NPY_INFINITY = np.inf
 
-
 def breadth_first_search(adjmat, start, min_vertices):
     explored = []
     queue = [start]
@@ -75,8 +83,7 @@ def breadth_first_search(adjmat, start, min_vertices):
 
     return np.array(explored)
 
-
-@numba.njit(parallel=True, fastmath=True)
+@numba.njit(fastmath=True) # benchmarking `parallel=True` shows it to *decrease* performance
 def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0):
     """Compute a continuous version of the distance to the kth nearest
     neighbor. That is, this is similar to knn-distance but allows continuous
@@ -119,6 +126,8 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
     target = np.log2(k) * bandwidth
     rho = np.zeros(distances.shape[0])
     result = np.zeros(distances.shape[0])
+
+    mean_distances = np.mean(distances)
 
     for i in range(distances.shape[0]):
         lo = 0.0
@@ -169,11 +178,12 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
 
         # TODO: This is very inefficient, but will do for now. FIXME
         if rho[i] > 0.0:
-            if result[i] < MIN_K_DIST_SCALE * np.mean(ith_distances):
-                result[i] = MIN_K_DIST_SCALE * np.mean(ith_distances)
+            mean_ith_distances = np.mean(ith_distances)
+            if result[i] < MIN_K_DIST_SCALE * mean_ith_distances:
+                result[i] = MIN_K_DIST_SCALE * mean_ith_distances
         else:
-            if result[i] < MIN_K_DIST_SCALE * np.mean(distances):
-                result[i] = MIN_K_DIST_SCALE * np.mean(distances)
+            if result[i] < MIN_K_DIST_SCALE * mean_distances:
+                result[i] = MIN_K_DIST_SCALE * mean_distances
 
     return result, rho
 
@@ -220,7 +230,7 @@ def nearest_neighbors(
         The random projection forest used for searching (if used, None otherwise)
     """
     if verbose:
-        print(time.ctime(time.time()) + " Finding Nearest Neighbors")
+        print(ts(), "Finding Nearest Neighbors")
 
     if metric == "precomputed":
         # Note that this does not support sparse distance matrices yet ...
@@ -269,9 +279,14 @@ def nearest_neighbors(
             # TODO: Hacked values for now
             n_trees = 5 + int(round((X.shape[0]) ** 0.5 / 20.0))
             n_iters = max(5, int(round(np.log2(X.shape[0]))))
+            if verbose:
+                print(ts(), "Building RP forest with",  str(n_trees), "trees")
 
             rp_forest = make_forest(X, n_neighbors, n_trees, rng_state, angular)
             leaf_array = rptree_leaf_array(rp_forest)
+
+            if verbose:
+                print(ts(), "NN descent for", str(n_iters), "iterations")
             knn_indices, knn_dists = sparse_nn.sparse_nn_descent(
                 X.indices,
                 X.indptr,
@@ -295,8 +310,12 @@ def nearest_neighbors(
             n_trees = 5 + int(round((X.shape[0]) ** 0.5 / 20.0))
             n_iters = max(5, int(round(np.log2(X.shape[0]))))
 
+            if verbose:
+                print(ts(), "Building RP forest with", str(n_trees), "trees")
             rp_forest = make_forest(X, n_neighbors, n_trees, rng_state, angular)
             leaf_array = rptree_leaf_array(rp_forest)
+            if verbose:
+                print(ts(), "NN descent for", str(n_iters), "iterations")
             knn_indices, knn_dists = nn_descent(
                 X,
                 n_neighbors,
@@ -317,7 +336,7 @@ def nearest_neighbors(
                 "different parameters."
             )
     if verbose:
-        print(time.ctime(time.time()) + " Finished Nearest Neighbor Search")
+        print(ts(), "Finished Nearest Neighbor Search")
     return knn_indices, knn_dists, rp_forest
 
 
@@ -1588,7 +1607,7 @@ class UMAP(BaseEstimator):
             n_epochs = self.n_epochs
 
         if self.verbose:
-            print(time.ctime(time.time()) + " Construct embedding")
+            print(ts(), "Construct embedding")
 
         self.embedding_ = simplicial_set_embedding(
             self._raw_data,
@@ -1611,7 +1630,7 @@ class UMAP(BaseEstimator):
         )
 
         if self.verbose:
-            print(time.ctime(time.time()) + " Finished embedding")
+            print(ts() + " Finished embedding")
 
         self._input_hash = joblib.hash(self._raw_data)
 

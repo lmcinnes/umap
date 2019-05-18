@@ -2,8 +2,10 @@
 #
 # License: BSD 3 clause
 
-import numba
+import time
+
 import numpy as np
+import numba
 
 
 @numba.njit("i4(i8[:])")
@@ -528,3 +530,8 @@ def submatrix(dmat, indices_col, n_neighbors):
         for j in numba.prange(n_neighbors):
             submat[i, j] = dmat[i, indices_col[i, j]]
     return submat
+
+
+# Generates a timestamp for use in logging messages when verbose=True
+def ts():
+    return time.ctime(time.time())

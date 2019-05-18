@@ -17,6 +17,9 @@ import locale
 
 locale.setlocale(locale.LC_NUMERIC, "C")
 
+# Used for a floating point "nearly zero" comparison
+EPS = 1e-8
+
 RandomProjectionTreeNode = namedtuple(
     "RandomProjectionTreeNode",
     ["indices", "is_leaf", "hyperplane", "offset", "left_child", "right_child"],
@@ -64,10 +67,10 @@ def angular_random_projection_split(data, indices, rng_state):
     left_norm = norm(data[left])
     right_norm = norm(data[right])
 
-    if left_norm == 0.0:
+    if abs(left_norm) < EPS:
         left_norm = 1.0
 
-    if right_norm == 0.0:
+    if abs(right_norm) < EPS:
         right_norm = 1.0
 
     # Compute the normal vector to the hyperplane (the vector between
@@ -76,11 +79,11 @@ def angular_random_projection_split(data, indices, rng_state):
 
     for d in range(dim):
         hyperplane_vector[d] = (data[left, d] / left_norm) - (
-            data[right, d] / right_norm
+                data[right, d] / right_norm
         )
 
     hyperplane_norm = norm(hyperplane_vector)
-    if hyperplane_norm == 0.0:
+    if abs(hyperplane_norm) < EPS:
         hyperplane_norm = 1.0
 
     for d in range(dim):
@@ -97,7 +100,7 @@ def angular_random_projection_split(data, indices, rng_state):
         for d in range(dim):
             margin += hyperplane_vector[d] * data[indices[i], d]
 
-        if margin == 0:
+        if abs(margin) < EPS:
             side[i] = abs(tau_rand_int(rng_state)) % 2
             if side[i] == 0:
                 n_left += 1
@@ -128,7 +131,7 @@ def angular_random_projection_split(data, indices, rng_state):
     return indices_left, indices_right, hyperplane_vector, None
 
 
-@numba.njit(fastmath=True)
+@numba.njit(fastmath=True, nogil=True, parallel=True)
 def euclidean_random_projection_split(data, indices, rng_state):
     """Given a set of ``indices`` for data points from ``data``, create
     a random hyperplane to split the data, returning two arrays indices
@@ -172,7 +175,7 @@ def euclidean_random_projection_split(data, indices, rng_state):
     for d in range(dim):
         hyperplane_vector[d] = data[left, d] - data[right, d]
         hyperplane_offset -= (
-            hyperplane_vector[d] * (data[left, d] + data[right, d]) / 2.0
+                hyperplane_vector[d] * (data[left, d] + data[right, d]) / 2.0
         )
 
     # For each point compute the margin (project into normal vector, add offset)
@@ -186,7 +189,7 @@ def euclidean_random_projection_split(data, indices, rng_state):
         for d in range(dim):
             margin += hyperplane_vector[d] * data[indices[i], d]
 
-        if margin == 0:
+        if abs(margin) < EPS:
             side[i] = abs(tau_rand_int(rng_state)) % 2
             if side[i] == 0:
                 n_left += 1
@@ -264,6 +267,12 @@ def sparse_angular_random_projection_split(inds, indptr, data, indices, rng_stat
     left_norm = norm(left_data)
     right_norm = norm(right_data)
 
+    if abs(left_norm) < EPS:
+        left_norm = 1.0
+
+    if abs(right_norm) < EPS:
+        right_norm = 1.0
+
     # Compute the normal vector to the hyperplane (the vector between
     # the two points)
     normalized_left_data = left_data / left_norm
@@ -273,6 +282,8 @@ def sparse_angular_random_projection_split(inds, indptr, data, indices, rng_stat
     )
 
     hyperplane_norm = norm(hyperplane_data)
+    if abs(hyperplane_norm) < EPS:
+        hyperplane_norm = 1.0
     for d in range(hyperplane_data.shape[0]):
         hyperplane_data[d] = hyperplane_data[d] / hyperplane_norm
 
@@ -294,7 +305,7 @@ def sparse_angular_random_projection_split(inds, indptr, data, indices, rng_stat
         for d in range(mul_data.shape[0]):
             margin += mul_data[d]
 
-        if margin == 0:
+        if abs(margin) < EPS:
             side[i] = abs(tau_rand_int(rng_state)) % 2
             if side[i] == 0:
                 n_left += 1
@@ -403,7 +414,7 @@ def sparse_euclidean_random_projection_split(inds, indptr, data, indices, rng_st
         for d in range(mul_data.shape[0]):
             margin += mul_data[d]
 
-        if margin == 0:
+        if abs(margin) < EPS:
             side[i] = abs(tau_rand_int(rng_state)) % 2
             if side[i] == 0:
                 n_left += 1
@@ -595,7 +606,7 @@ def max_sparse_hyperplane_size(tree):
 
 
 def recursive_flatten(
-    tree, hyperplanes, offsets, children, indices, node_num, leaf_num
+        tree, hyperplanes, offsets, children, indices, node_num, leaf_num
 ):
     if tree.is_leaf:
         children[node_num, 0] = -leaf_num
@@ -619,7 +630,7 @@ def recursive_flatten(
             indices,
             node_num + 1,
             leaf_num,
-        )
+            )
         children[old_node_num, 1] = node_num + 1
         node_num, leaf_num = recursive_flatten(
             tree.right_child,
@@ -629,7 +640,7 @@ def recursive_flatten(
             indices,
             node_num + 1,
             leaf_num,
-        )
+            )
         return node_num, leaf_num
 
 
@@ -659,7 +670,7 @@ def select_side(hyperplane, offset, point, rng_state):
     for d in range(point.shape[0]):
         margin += hyperplane[d] * point[d]
 
-    if margin == 0:
+    if abs(margin) < EPS:
         side = abs(tau_rand_int(rng_state)) % 2
         if side == 0:
             return 0
@@ -750,7 +761,7 @@ def make_forest(data, n_neighbors, n_trees, rng_state, angular=False):
             flatten_tree(make_tree(data, rng_state, leaf_size, angular), leaf_size)
             for i in range(n_trees)
         ]
-    except (RuntimeError, RecursionError):
+    except (RuntimeError, RecursionError, SystemError):
         warn(
             "Random Projection forest initialisation failed due to recursion"
             "limit being reached. Something is a little strange with your "

@@ -13,6 +13,9 @@
 .. image:: https://travis-ci.org/lmcinnes/umap.svg
     :target: https://travis-ci.org/lmcinnes/umap
     :alt: Travis Build Status
+.. image:: https://ci.appveyor.com/api/projects/status/github/lmcinnes/umap?branch=master&svg=true
+    :target: https://ci.appveyor.com/project/lmcinnes/umap
+    :alt: AppVeyor Build Status
 .. image:: https://coveralls.io/repos/github/lmcinnes/umap/badge.svg
     :target: https://coveralls.io/github/lmcinnes/umap
     :alt: Test Coverage Status
@@ -117,9 +120,10 @@ packages can manage.
 Second, UMAP scales well in embedding dimension -- it isn't just for
 visualisation! You can use UMAP as a general purpose dimension reduction
 technique as a preliminary step to other machine learning tasks. With a
-little care (documentation on how to be careful is coming) it partners well
-with the `hdbscan <https://github.com/scikit-learn-contrib/hdbscan>`_
-clustering library.
+little care it partners well with the `hdbscan
+<https://github.com/scikit-learn-contrib/hdbscan>`_ clustering library (for
+more details please see `Using UMAP for Clustering
+<https://umap-learn.readthedocs.io/en/latest/clustering.html>`_).
 
 Third, UMAP often performs better at preserving aspects of global structure of
 the data than t-SNE. This means that it can often provide a better "big
