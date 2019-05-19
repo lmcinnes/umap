@@ -125,7 +125,7 @@ structure of the data. This means that low values of ``n_neighbors``
 will force UMAP to concentrate on very local structure (potentially to
 the detriment of the big picture), while large values will push UMAP to
 look at larger neighborhoods of each point when estimating the manifold
-structure of the data, loosing fine detail structure for the sake of
+structure of the data, losing fine detail structure for the sake of
 getting the broader of the data.
 
 We can see that in practice by fitting our dataset with UMAP using a

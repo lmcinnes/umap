@@ -2,6 +2,8 @@
 #
 # License: BSD 3 clause
 
+import time
+
 import numpy as np
 import numba
 
@@ -46,7 +48,7 @@ def tau_rand(state):
     A (pseudo)-random float32 in the interval [0, 1]
     """
     integer = tau_rand_int(state)
-    return float(integer) / 0x7fffffff
+    return abs(float(integer) / 0x7fffffff)
 
 
 @numba.njit()
@@ -527,3 +529,8 @@ def submatrix(dmat, indices_col, n_neighbors):
         for j in numba.prange(n_neighbors):
             submat[i, j] = dmat[i, indices_col[i, j]]
     return submat
+
+
+# Generates a timestamp for use in logging messages when verbose=True
+def ts():
+    return time.ctime(time.time())

@@ -15,7 +15,7 @@ First we'll need to import a bunch of useful tools. We will need numpy
 obviously, but we'll use some of the datasets available in sklearn, as
 well as the ``train_test_split`` function to divide up data. Finally
 we'll need some plotting tools (matplotlib and seaborn) to help us
-visualise the results of UMAP, and pandas to make that a littl easier.
+visualise the results of UMAP, and pandas to make that a little easier.
 
 .. code:: python3
 

@@ -3,6 +3,7 @@
 # License: BSD 3 clause
 from __future__ import print_function
 from warnings import warn
+import time
 
 from scipy.optimize import curve_fit
 from sklearn.base import BaseEstimator
@@ -11,7 +12,11 @@ from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import normalize
 from sklearn.neighbors import KDTree
 
-from sklearn.externals import joblib
+try:
+    import joblib
+except ImportError:
+    # sklearn.externals.joblib is deprecated in 0.21, will be removed in 0.23
+    from sklearn.externals import joblib
 
 import numpy as np
 import scipy.sparse
@@ -22,7 +27,7 @@ import umap.distances as dist
 
 import umap.sparse as sparse
 
-from umap.utils import tau_rand_int, deheap_sort, submatrix
+from umap.utils import tau_rand_int, deheap_sort, submatrix, ts
 from umap.rp_tree import rptree_leaf_array, make_forest
 from umap.nndescent import (
     make_nn_descent,
@@ -44,7 +49,7 @@ MIN_K_DIST_SCALE = 1e-3
 NPY_INFINITY = np.inf
 
 
-@numba.njit(parallel=True, fastmath=True)
+@numba.njit(fastmath=True) # benchmarking `parallel=True` shows it to *decrease* performance
 def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0):
     """Compute a continuous version of the distance to the kth nearest
     neighbor. That is, this is similar to knn-distance but allows continuous
@@ -87,6 +92,8 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
     target = np.log2(k) * bandwidth
     rho = np.zeros(distances.shape[0])
     result = np.zeros(distances.shape[0])
+
+    mean_distances = np.mean(distances)
 
     for i in range(distances.shape[0]):
         lo = 0.0
@@ -136,11 +143,12 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
 
         # TODO: This is very inefficient, but will do for now. FIXME
         if rho[i] > 0.0:
-            if result[i] < MIN_K_DIST_SCALE * np.mean(ith_distances):
-                result[i] = MIN_K_DIST_SCALE * np.mean(ith_distances)
+            mean_ith_distances = np.mean(ith_distances)
+            if result[i] < MIN_K_DIST_SCALE * mean_ith_distances:
+                result[i] = MIN_K_DIST_SCALE * mean_ith_distances
         else:
-            if result[i] < MIN_K_DIST_SCALE * np.mean(distances):
-                result[i] = MIN_K_DIST_SCALE * np.mean(distances)
+            if result[i] < MIN_K_DIST_SCALE * mean_distances:
+                result[i] = MIN_K_DIST_SCALE * mean_distances
 
     return result, rho
 
@@ -183,6 +191,9 @@ def nearest_neighbors(
     knn_dists: array of shape (n_samples, n_neighbors)
         The distances to the ``n_neighbors`` closest points in the dataset.
     """
+    if verbose:
+        print(ts(), "Finding Nearest Neighbors")
+
     if metric == "precomputed":
         # Note that this does not support sparse distance matrices yet ...
         # Compute indices of n nearest neighbors
@@ -221,9 +232,14 @@ def nearest_neighbors(
             # TODO: Hacked values for now
             n_trees = 5 + int(round((X.shape[0]) ** 0.5 / 20.0))
             n_iters = max(5, int(round(np.log2(X.shape[0]))))
+            if verbose:
+                print(ts(), "Building RP forest with",  str(n_trees), "trees")
 
             rp_forest = make_forest(X, n_neighbors, n_trees, rng_state, angular)
             leaf_array = rptree_leaf_array(rp_forest)
+
+            if verbose:
+                print(ts(), "NN descent for", str(n_iters), "iterations")
             knn_indices, knn_dists = metric_nn_descent(
                 X.indices,
                 X.indptr,
@@ -245,8 +261,12 @@ def nearest_neighbors(
             n_trees = 5 + int(round((X.shape[0]) ** 0.5 / 20.0))
             n_iters = max(5, int(round(np.log2(X.shape[0]))))
 
+            if verbose:
+                print(ts(), "Building RP forest with", str(n_trees), "trees")
             rp_forest = make_forest(X, n_neighbors, n_trees, rng_state, angular)
             leaf_array = rptree_leaf_array(rp_forest)
+            if verbose:
+                print(ts(), "NN descent for", str(n_iters), "iterations")
             knn_indices, knn_dists = metric_nn_descent(
                 X,
                 n_neighbors,
@@ -264,7 +284,8 @@ def nearest_neighbors(
                 "Results may be less than ideal. Try re-running with"
                 "different parameters."
             )
-
+    if verbose:
+        print(ts(), "Finished Nearest Neighbor Search")
     return knn_indices, knn_dists, rp_forest
 
 
@@ -806,6 +827,8 @@ def optimize_layout(
                         grad_coeff /= (0.001 + dist_squared) * (
                             a * pow(dist_squared, b) + 1
                         )
+                    elif j == k:
+                        continue
                     else:
                         grad_coeff = 0.0
 
@@ -940,7 +963,7 @@ def simplicial_set_embedding(
             metric=metric,
             metric_kwds=metric_kwds,
         )
-        expansion = 10.0 / initialisation.max()
+        expansion = 10.0 / np.abs(initialisation).max()
         embedding = (initialisation * expansion).astype(
             np.float32
         ) + random_state.normal(
@@ -1453,6 +1476,12 @@ class UMAP(BaseEstimator):
                 )
 
         if y is not None:
+            if len(X) != len(y):
+                raise ValueError(
+                    "Length of x = {len_x}, length of y = {len_y}, while it must be equal.".format(
+                        len_x=len(X), len_y=len(y)
+                    )
+                )
             y_ = check_array(y, ensure_2d=False)
             if self.target_metric == "categorical":
                 if self.target_weight < 1.0:
@@ -1517,7 +1546,7 @@ class UMAP(BaseEstimator):
             n_epochs = self.n_epochs
 
         if self.verbose:
-            print("Construct embedding")
+            print(ts(), "Construct embedding")
 
         self.embedding_ = simplicial_set_embedding(
             self._raw_data,
@@ -1535,6 +1564,9 @@ class UMAP(BaseEstimator):
             self._metric_kwds,
             self.verbose,
         )
+
+        if self.verbose:
+            print(ts() + " Finished embedding")
 
         self._input_hash = joblib.hash(self._raw_data)
 
