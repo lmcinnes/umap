@@ -978,7 +978,6 @@ def test_supervised_umap_trustworthiness():
 
 def test_semisupervised_umap_trustworthiness():
     data, labels = datasets.make_blobs(50, cluster_std=0.5, random_state=42)
-    labels = iris.target.copy()
     labels[10:30] = -1
     embedding = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit_transform(
         data, labels
