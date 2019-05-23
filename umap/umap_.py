@@ -49,7 +49,9 @@ MIN_K_DIST_SCALE = 1e-3
 NPY_INFINITY = np.inf
 
 
-@numba.njit(fastmath=True) # benchmarking `parallel=True` shows it to *decrease* performance
+@numba.njit(
+    fastmath=True
+)  # benchmarking `parallel=True` shows it to *decrease* performance
 def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0):
     """Compute a continuous version of the distance to the kth nearest
     neighbor. That is, this is similar to knn-distance but allows continuous
@@ -109,7 +111,9 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
             if index > 0:
                 rho[i] = non_zero_dists[index - 1]
                 if interpolation > SMOOTH_K_TOLERANCE:
-                    rho[i] += interpolation * (non_zero_dists[index] - non_zero_dists[index - 1])
+                    rho[i] += interpolation * (
+                        non_zero_dists[index] - non_zero_dists[index - 1]
+                    )
             else:
                 rho[i] = interpolation * non_zero_dists[0]
         elif non_zero_dists.shape[0] > 0:
@@ -124,7 +128,6 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
                     psum += np.exp(-(d / mid))
                 else:
                     psum += 1.0
-
 
             if np.fabs(psum - target) < SMOOTH_K_TOLERANCE:
                 break
@@ -233,7 +236,7 @@ def nearest_neighbors(
             n_trees = 5 + int(round((X.shape[0]) ** 0.5 / 20.0))
             n_iters = max(5, int(round(np.log2(X.shape[0]))))
             if verbose:
-                print(ts(), "Building RP forest with",  str(n_trees), "trees")
+                print(ts(), "Building RP forest with", str(n_trees), "trees")
 
             rp_forest = make_forest(X, n_neighbors, n_trees, rng_state, angular)
             leaf_array = rptree_leaf_array(rp_forest)
@@ -1284,7 +1287,6 @@ class UMAP(BaseEstimator):
         self.a = a
         self.b = b
 
-
     def _validate_parameters(self):
         if self.set_op_mix_ratio < 0.0 or self.set_op_mix_ratio > 1.0:
             raise ValueError("set_op_mix_ratio must be between 0.0 and 1.0")
@@ -1320,8 +1322,7 @@ class UMAP(BaseEstimator):
         if self.n_epochs is not None and (
             self.n_epochs <= 10 or not isinstance(self.n_epochs, int)
         ):
-            raise ValueError("n_epochs must be a positive integer "
-                             "larger than 10")
+            raise ValueError("n_epochs must be a positive integer " "larger than 10")
 
     def fit(self, X, y=None):
         """Fit X into an embedded space.
@@ -1378,7 +1379,9 @@ class UMAP(BaseEstimator):
         # Error check n_neighbors based on data size
         if X.shape[0] <= self.n_neighbors:
             if X.shape[0] == 1:
-                self.embedding_ = np.zeros((1, self.n_components))  # needed to sklearn comparability
+                self.embedding_ = np.zeros(
+                    (1, self.n_components)
+                )  # needed to sklearn comparability
                 return self
 
             warn(
@@ -1458,14 +1461,16 @@ class UMAP(BaseEstimator):
                 self._distance_func = self.metric
             elif self.metric in dist.named_distances:
                 self._distance_func = dist.named_distances[self.metric]
-            elif self.metric == 'precomputed':
-                warn('Using precomputed metric; transform will be unavailable for new data')
+            elif self.metric == "precomputed":
+                warn(
+                    "Using precomputed metric; transform will be unavailable for new data"
+                )
             else:
                 raise ValueError(
                     "Metric is neither callable, " + "nor a recognised string"
                 )
 
-            if self.metric != 'precomputed':
+            if self.metric != "precomputed":
                 self._dist_args = tuple(self._metric_kwds.values())
 
                 self._random_init, self._tree_init = make_initialisations(
@@ -1499,9 +1504,11 @@ class UMAP(BaseEstimator):
 
                 # Handle the small case as precomputed as before
                 if y.shape[0] < 4096:
-                    ydmat = pairwise_distances(y_[np.newaxis, :].T,
-                                               metric=self.target_metric,
-                                               **self._target_metric_kwds)
+                    ydmat = pairwise_distances(
+                        y_[np.newaxis, :].T,
+                        metric=self.target_metric,
+                        **self._target_metric_kwds
+                    )
                     target_graph = fuzzy_simplicial_set(
                         ydmat,
                         target_n_neighbors,
@@ -1513,7 +1520,7 @@ class UMAP(BaseEstimator):
                         False,
                         1.0,
                         1.0,
-                        False
+                        False,
                     )
                 else:
                     # Standard case
@@ -1612,8 +1619,10 @@ class UMAP(BaseEstimator):
         """
         # If we fit just a single instance then error
         if self.embedding_.shape[0] == 1:
-            raise ValueError('Transform unavailable when model was fit with'
-                             'only a single data sample.')
+            raise ValueError(
+                "Transform unavailable when model was fit with"
+                "only a single data sample."
+            )
         # If we just have the original input then short circuit things
         X = check_array(X, dtype=np.float32, accept_sparse="csr")
         x_hash = joblib.hash(X)
@@ -1622,9 +1631,10 @@ class UMAP(BaseEstimator):
 
         if self._sparse_data:
             raise ValueError("Transform not available for sparse input.")
-        elif self.metric == 'precomputed':
-            raise ValueError("Transform  of new data not available for "
-                             "precomputed metric.")
+        elif self.metric == "precomputed":
+            raise ValueError(
+                "Transform  of new data not available for " "precomputed metric."
+            )
 
         X = check_array(X, dtype=np.float32, order="C")
         random_state = check_random_state(self.transform_seed)
@@ -1634,13 +1644,11 @@ class UMAP(BaseEstimator):
             dmat = pairwise_distances(
                 X, self._raw_data, metric=self.metric, **self._metric_kwds
             )
-            indices = np.argpartition(dmat,
-                                      self._n_neighbors)[:, :self._n_neighbors]
+            indices = np.argpartition(dmat, self._n_neighbors)[:, : self._n_neighbors]
             dmat_shortened = submatrix(dmat, indices, self._n_neighbors)
             indices_sorted = np.argsort(dmat_shortened)
             indices = submatrix(indices, indices_sorted, self._n_neighbors)
-            dists = submatrix(dmat_shortened, indices_sorted,
-                              self._n_neighbors)
+            dists = submatrix(dmat_shortened, indices_sorted, self._n_neighbors)
         else:
             init = initialise_search(
                 self._rp_forest,
