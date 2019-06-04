@@ -1,9 +1,5 @@
 language: python
 
-os:
-  - linux
-  - osx
-
 cache:
   apt: true
   # We use three different cache directory
@@ -20,8 +16,17 @@ env:
 matrix:
   include:
     - python: 3.6
+      os: linux
     - env: DISTRIB="conda" PYTHON_VERSION="2.7" NUMPY_VERSION="1.13.3" SCIPY_VERSION="0.19.1"
+      os: linux
     - env: DISTRIB="conda" PYTHON_VERSION="3.6" COVERAGE="true" NUMPY_VERSION="1.13.3" SCIPY_VERSION="0.19.1"
+      os: linux
+    - python: 3.6
+      os: osx
+    - env: DISTRIB="conda" PYTHON_VERSION="2.7" NUMPY_VERSION="1.13.3" SCIPY_VERSION="0.19.1"
+      os: osx
+    - env: DISTRIB="conda" PYTHON_VERSION="3.6" COVERAGE="true" NUMPY_VERSION="1.13.3" SCIPY_VERSION="0.19.1"
+      os: osx
 
 install: source ci_scripts/install.sh
 script: bash ci_scripts/test.sh
