@@ -21,12 +21,12 @@ matrix:
       os: linux
     - env: DISTRIB="conda" PYTHON_VERSION="3.6" COVERAGE="true" NUMPY_VERSION="1.13.3" SCIPY_VERSION="0.19.1"
       os: linux
-    - python: 3.6
-      os: osx
     - env: DISTRIB="conda" PYTHON_VERSION="2.7" NUMPY_VERSION="1.13.3" SCIPY_VERSION="0.19.1"
       os: osx
+      language: generic
     - env: DISTRIB="conda" PYTHON_VERSION="3.6" COVERAGE="true" NUMPY_VERSION="1.13.3" SCIPY_VERSION="0.19.1"
       os: osx
+      language: generic
 
 install: source ci_scripts/install.sh
 script: bash ci_scripts/test.sh
