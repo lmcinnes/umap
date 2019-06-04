@@ -1,5 +1,9 @@
 language: python
 
+os:
+  - linux
+  - osx
+
 cache:
   apt: true
   # We use three different cache directory
