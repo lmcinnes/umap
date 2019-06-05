@@ -2,7 +2,10 @@ if [[ "$DISTRIB" == "conda" ]]; then
 
   # Deactivate the travis-provided virtual environment and setup a
     # conda-based environment instead
-  deactivate
+  if [ $TRAVIS_OS_NAME = 'linux' ]; then
+    # Only Linux has a virtual environment activated; Mac does not.
+    deactivate
+  fi
 
   # Use the miniconda installer for faster download / install of conda
   # itself
