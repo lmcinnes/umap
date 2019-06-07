@@ -2,7 +2,10 @@ if [[ "$DISTRIB" == "conda" ]]; then
 
   # Deactivate the travis-provided virtual environment and setup a
     # conda-based environment instead
-  deactivate
+  if [ $TRAVIS_OS_NAME = 'linux' ]; then
+    # Only Linux has a virtual environment activated; Mac does not.
+    deactivate
+  fi
 
   # Use the miniconda installer for faster download / install of conda
   # itself
@@ -13,14 +16,23 @@ if [[ "$DISTRIB" == "conda" ]]; then
   echo "Cached in $HOME/download :"
   ls -l
   echo
-  if [[ ! -f miniconda.sh ]]
-     then
-     wget http://repo.continuum.io/miniconda/Miniconda-3.6.0-Linux-x86_64.sh \
+# For now, ignoring the cached file.
+#  if [[ ! -f miniconda.sh ]]
+#     then
+     if [ $TRAVIS_OS_NAME = 'osx' ]; then
+       # MacOS URL found here: https://docs.conda.io/en/latest/miniconda.html
+       wget \
+       https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-x86_64.sh \
+         -O miniconda.sh
+     else
+       wget \
+       http://repo.continuum.io/miniconda/Miniconda-3.6.0-Linux-x86_64.sh \
          -O miniconda.sh
      fi
-  chmod +x miniconda.sh && ./miniconda.sh -b
+#  fi
+  chmod +x miniconda.sh && ./miniconda.sh -b -p $HOME/miniconda
   cd ..
-  export PATH=/home/travis/miniconda/bin:$PATH
+  export PATH=$HOME/miniconda/bin:$PATH
   conda update --yes conda
   popd
 
