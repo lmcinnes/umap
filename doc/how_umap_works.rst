@@ -402,11 +402,10 @@ depending on the nature of the logic involved, but here we have
 relatively clear probabilistic semantics that make the choice
 straightforward. In graph terms what we get is the following: if we want
 to merge together two disagreeing edges with weight *a* and *b* then we
-should have a single edge with combined weight $ a + b -
-a:raw-latex:`\times `b. $ The way to think of this is that the weights
-are effectively the probabilities that an edge (1-simplex) exists. The
-combined weight is then the probability that at least one of the edges
-exists.
+should have a single edge with combined weight :math:`a + b - a \cdot b`. 
+The way to think of this is that the weights are effectively the 
+probabilities that an edge (1-simplex) exists. The combined weight is 
+then the probability that at least one of the edges exists.
 
 If we apply this process to union together all the fuzzy simplicial sets
 we end up with a single fuzzy simplicial complex, which we can again

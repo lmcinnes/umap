@@ -65,7 +65,7 @@ simple demo we will simply use default parameters for both classifiers.
 
 The next question is how well these classifiers perform on the test set.
 Conveniently sklearn provides a ``score`` method that can output the
-accuracy on the tets set.
+accuracy on the test set.
 
 .. code:: python3
 
