@@ -16,8 +16,17 @@ env:
 matrix:
   include:
     - python: 3.6
-    - env: DISTRIB="conda" PYTHON_VERSION="3.6" NUMPY_VERSION="1.13.3" SCIPY_VERSION="0.19.1" NUMBA_VERSION="0.42"
-    - env: DISTRIB="conda" PYTHON_VERSION="3.6" COVERAGE="true" NUMPY_VERSION="1.13.3" SCIPY_VERSION="0.19.1" NUMBA_VERSION="0.42"
+      os: linux
+    - env: DISTRIB="conda" PYTHON_VERSION="3.5" NUMPY_VERSION="1.13.3" SCIPY_VERSION="0.19.1"
+      os: linux
+    - env: DISTRIB="conda" PYTHON_VERSION="3.6" COVERAGE="true" NUMPY_VERSION="1.13.3" SCIPY_VERSION="0.19.1"
+      os: linux
+    - env: DISTRIB="conda" PYTHON_VERSION="3.6" NUMPY_VERSION="1.13.3" SCIPY_VERSION="0.19.1"
+      os: osx
+      language: generic
+    - env: DISTRIB="conda" PYTHON_VERSION="3.6" NUMPY_VERSION="1.13.3" SCIPY_VERSION="0.19.1"
+      os: osx
+      language: generic
 
 install: source ci_scripts/install.sh
 script: travis_wait 90 bash ci_scripts/test.sh
