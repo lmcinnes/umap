@@ -984,7 +984,6 @@ named_distances_with_gradients = {
     "linfty": chebyshev_grad,
     "linf": chebyshev_grad,
     "minkowski": minkowski_grad,
-    "poincare": poincare_grad,
     # Standardised/weighted distances
     "seuclidean": standardised_euclidean_grad,
     "standardised_euclidean": standardised_euclidean_grad,
@@ -1000,6 +999,8 @@ named_distances_with_gradients = {
     "braycurtis": bray_curtis_grad,
     # Special embeddings
     "uncertainty_embedding": uncertainty_embedding_grad,
+    "poincare": poincare_grad,
+
 }
 
 DISCRETE_METRICS = (
