@@ -788,6 +788,35 @@ def sinkhorn_distance(x, y, M=_mock_identity, cost=_mock_cost, maxiter=64):
     return result
 
 
+@numba.njit(fastmath=True)
+def uncertainty_embedding_grad(x, y):
+    mu_1 = x[0] - y[0]
+    mu_2 = x[1] - y[1]
+
+    sigma_11 = x[2] + y[2]
+    sigma_12 = x[3] + y[3]
+    sigma_21 = x[4] + y[4]
+    sigma_22 = x[5] + y[5]
+
+    det = sigma_11 * sigma_22 - sigma_12 * sigma_21
+    cross_term = sigma_12 + sigma_21
+    m_dist = sigma_22 * (mu_1 ** 2) - \
+             cross_term * mu_1 * mu_2 + \
+             sigma_11 * (mu_2 ** 2)
+
+    dist = m_dist / det + np.log(det)
+    grad = np.empty(6, dtype=np.float32)
+
+    grad[0] = (2 * sigma_22 * mu_1 - cross_term * mu_2) / det
+    grad[1] = (2 * sigma_11 * mu_2 - cross_term * mu_1) / det
+    grad[2] = (sigma_22 * (det - m_dist) + det * mu_2 ** 2) / (det ** 2)
+    grad[3] = (sigma_21 * (m_dist - det) - det * mu_1 * mu_2) / (det ** 2)
+    grad[4] = (sigma_12 * (m_dist - det) - det * mu_1 * mu_2) / (det ** 2)
+    grad[5] = (sigma_11 * (det - m_dist) + det * mu_1 ** 2) / (det ** 2)
+
+    return dist, grad
+
+
 # Special discrete distances -- where x and y are objects, not vectors
 
 def get_discrete_params(data, metric):
@@ -969,6 +998,8 @@ named_distances_with_gradients = {
     "hellinger": hellinger_grad,
     "haversine": haversine_grad,
     "braycurtis": bray_curtis_grad,
+    # Special embeddings
+    "uncertainty_embedding": uncertainty_embedding_grad,
 }
 
 DISCRETE_METRICS = (
