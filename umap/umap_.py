@@ -1322,10 +1322,7 @@ class UMAP(BaseEstimator):
 
         if callable(self.output_metric):
             self._output_distance_func = self.output_metric
-        elif (
-                self.output_metric in dist.named_distances
-                and self.output_metric in dist.named_distances_with_gradients
-        ):
+        elif self.output_metric in dist.named_distances_with_gradients:
             self._output_distance_func = dist.named_distances_with_gradients[
                 self.output_metric
             ]

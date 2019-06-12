@@ -799,12 +799,17 @@ def uncertainty_embedding_grad(x, y):
     sigma_22 = x[5] + y[5]
 
     det = sigma_11 * sigma_22 - sigma_12 * sigma_21
+
+    if det == 0.0:
+        # TODO: figure out the right thing to do here
+        return mu_1 + mu_2, np.array([0.0, 0.0, 1.0, 0.0, 0.0, 1.0], dtype=np.float32)
+
     cross_term = sigma_12 + sigma_21
     m_dist = sigma_22 * (mu_1 ** 2) - \
              cross_term * mu_1 * mu_2 + \
              sigma_11 * (mu_2 ** 2)
 
-    dist = m_dist / det + np.log(det)
+    dist = m_dist / det + np.log(np.abs(det))
     grad = np.empty(6, dtype=np.float32)
 
     grad[0] = (2 * sigma_22 * mu_1 - cross_term * mu_2) / det
