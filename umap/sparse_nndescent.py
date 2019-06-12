@@ -18,7 +18,7 @@ from umap.utils import (
     unchecked_heap_push,
     smallest_flagged,
     rejection_sample,
-    build_candidates,
+    new_build_candidates,
     deheap_sort,
 )
 
