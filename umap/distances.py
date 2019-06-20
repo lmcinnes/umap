@@ -788,38 +788,38 @@ def sinkhorn_distance(x, y, M=_mock_identity, cost=_mock_cost, maxiter=64):
     return result
 
 
-@numba.njit(fastmath=True)
-def uncertainty_embedding_grad(x, y):
-    mu_1 = x[0] - y[0]
-    mu_2 = x[1] - y[1]
-
-    sigma_11 = np.abs(x[2]) + np.abs(y[2])
-    sigma_12 = x[3] + y[3]
-    sigma_22 = np.abs(x[4]) + np.abs(y[4])
-
-    det = sigma_11 * sigma_22 - sigma_12 ** 2
-    sign_s1 = np.sign(x[2])
-    sign_s2 = np.sign(x[4])
-
-    if det == 0.0:
-        # TODO: figure out the right thing to do here
-        return mu_1**2 + mu_2**2, np.array([0.0, 0.0, 1.0, 0.0, 0.0, 1.0], dtype=np.float32)
-
-    cross_term = 2 * sigma_12
-    m_dist = np.abs(sigma_22) * (mu_1 ** 2) - \
-             cross_term * mu_1 * mu_2 + \
-             np.abs(sigma_11) * (mu_2 ** 2)
-
-    dist = (m_dist / det + np.log(np.abs(det))) / 2.0 + np.log(2*np.pi)
-    grad = np.empty(6, dtype=np.float32)
-
-    grad[0] = (2 * sigma_22 * mu_1 - cross_term * mu_2) / (2 * det)
-    grad[1] = (2 * sigma_11 * mu_2 - cross_term * mu_1) / (2 * det)
-    grad[2] = sign_s1 * (sigma_22 * (det - m_dist) + det * mu_2 ** 2) / (2 * det ** 2)
-    grad[3] = (sigma_12 * (m_dist - det) - det * mu_1 * mu_2) / (2 * det ** 2)
-    grad[4] = sign_s2 * (sigma_11 * (det - m_dist) + det * mu_1 ** 2) / (2 * det ** 2)
-
-    return dist, grad
+# @numba.njit(fastmath=True)
+# def uncertainty_embedding_grad(x, y):
+#     mu_1 = x[0] - y[0]
+#     mu_2 = x[1] - y[1]
+#
+#     sigma_11 = np.abs(x[2]) + np.abs(y[2])
+#     sigma_12 = x[3] + y[3]
+#     sigma_22 = np.abs(x[4]) + np.abs(y[4])
+#
+#     det = sigma_11 * sigma_22 - sigma_12 ** 2
+#     sign_s1 = np.sign(x[2])
+#     sign_s2 = np.sign(x[4])
+#
+#     if det == 0.0:
+#         # TODO: figure out the right thing to do here
+#         return mu_1**2 + mu_2**2, np.array([0.0, 0.0, 1.0, 0.0, 0.0, 1.0], dtype=np.float32)
+#
+#     cross_term = 2 * sigma_12
+#     m_dist = np.abs(sigma_22) * (mu_1 ** 2) - \
+#              cross_term * mu_1 * mu_2 + \
+#              np.abs(sigma_11) * (mu_2 ** 2)
+#
+#     dist = (m_dist / det + np.log(np.abs(det))) / 2.0 + np.log(2*np.pi)
+#     grad = np.empty(6, dtype=np.float32)
+#
+#     grad[0] = (2 * sigma_22 * mu_1 - cross_term * mu_2) / (2 * det)
+#     grad[1] = (2 * sigma_11 * mu_2 - cross_term * mu_1) / (2 * det)
+#     grad[2] = sign_s1 * (sigma_22 * (det - m_dist) + det * mu_2 ** 2) / (2 * det ** 2)
+#     grad[3] = (sigma_12 * (m_dist - det) - det * mu_1 * mu_2) / (2 * det ** 2)
+#     grad[4] = sign_s2 * (sigma_11 * (det - m_dist) + det * mu_1 ** 2) / (2 * det ** 2)
+#
+#     return dist, grad
 
 @numba.njit(fastmath=True)
 def spherical_gaussian_energy_grad(x, y):
@@ -837,6 +837,7 @@ def spherical_gaussian_energy_grad(x, y):
     grad[2] = sign_sigma * (1.0 / sigma - (mu_1 ** 2 + mu_2 **2) / (2 * sigma**2))
 
     return dist, grad
+
 
 @numba.njit(fastmath=True)
 def diagonal_gaussian_energy_grad(x, y):
@@ -870,62 +871,79 @@ def diagonal_gaussian_energy_grad(x, y):
 
     return dist, grad
 
-@numba.njit(fastmath=True)
-def spherical_gaussian_kl_grad(x, y):
-
-    x[2] = np.abs(x[2]) + 1e-12
-    y[2] = np.abs(y[2]) + 1e-12
-
-    det_x = x[2] ** 2
-    det_y = y[2] ** 2
-
-    mu_1 = x[0] - y[0]
-    mu_2 = x[1] - y[1]
-
-
-
-    dist_xy = (mu_1 ** 2 + mu_2 **2) / (x[2]) - 2 - np.log(det_x) + np.log(det_y) + x[2] / y[2]
-    dist_yx = (mu_1 ** 2 + mu_2 **2) / (y[2]) - 2 - np.log(det_y) + np.log(det_x) + y[2] / x[2]
-
-    dist = dist_xy + dist_yx
-
-    grad = np.empty(3, np.float32)
-
-    grad[0] = (mu_1) / x[2] + (mu_1) / y[2]
-    grad[1] = (mu_2) / x[2] + (mu_2) / y[2]
-    grad[2] = (y[2] / x[2]**2 + (mu_1) / x[2]**2 - 1.0/x[2]) + \
-              (x[2] / y[2]**2 + (mu_1) / y[2]**2 - 1.0/y[2])
-
-    return dist, grad
 
 @numba.njit(fastmath=True)
 def gaussian_energy_grad(x, y):
     mu_1 = x[0] - y[0]
     mu_2 = x[1] - y[1]
 
-    sigma_11 = np.abs(x[2]) + np.abs(y[2])
-    sigma_12 = x[3] + y[3]
-    sigma_22 = np.abs(x[4]) + np.abs(y[4])
+    # Ensure width are positive
+    x[2] = np.abs(x[2])
+    y[2] = np.abs(y[2])
 
-    det = sigma_11 * sigma_22 - sigma_12 ** 2
-    if det == 0.0:
-        # TODO: figure out the right thing to do here
-        return mu_1**2 + mu_2**2, np.array([0.0, 0.0, 1.0, 0.0, 0.0, 1.0], dtype=np.float32)
+    # Ensure heights are positive
+    x[3] = np.abs(x[3])
+    y[3] = np.abs(y[3])
 
-    cross_term = 2 * sigma_12
-    m_dist = np.abs(sigma_22) * (mu_1 ** 2) - \
-             cross_term * mu_1 * mu_2 + \
-             np.abs(sigma_11) * (mu_2 ** 2)
-    dist = (m_dist / det + np.log(np.abs(det))) / 2.0 + np.log(2*np.pi)
-    grad = np.empty(5, dtype=np.float32)
+    # Ensure angle is in range -pi,pi
+    x[4] = np.arcsin(np.sin(x[4]))
+    y[4] = np.arcsin(np.sin(y[4]))
 
-    grad[0] = (sigma_22 * mu_1 - sigma_12 * mu_2) / det
-    grad[1] = (sigma_11 * mu_2 - sigma_12 * mu_1) / det
-    grad[2] = grad[0]**2 - sigma_22 / det
-    grad[3] = grad[0]*grad[1] + sigma_12 / det
-    grad[4] = grad[1]**2 - sigma_11 / det
+    # Covariance entries for y
+    a = y[2] * np.cos(y[4])**2 + y[3] * np.sin(y[4]) **2
+    b = (y[2] - y[3]) * np.sin(y[4]) * np.cos(y[4])
+    c = y[3] * np.cos(y[4])**2 + y[2] * np.sin(y[4]) **2
+
+    # Sum of covariance matrices
+    sigma_11 = x[2] * np.cos(x[4]) ** 2 + x[3] * np.sin(x[4]) ** 2 + a
+    sigma_12 = (x[2] - x[3]) * np.sin(x[4]) * np.cos(x[4]) + b
+    sigma_22 = x[2] * np.sin(x[4]) ** 2 + x[3] * np.cos(x[4]) ** 2 + c
+
+    # Determinant of the sum of covariances
+    det_sigma = np.abs(sigma_11 * sigma_22 - sigma_12 ** 2)
+    x_inv_sigma_y_numerator = (sigma_22 * mu_1 ** 2
+            - 2 * sigma_12 * mu_1 * mu_2
+            + sigma_11 * mu_2 ** 2)
+
+    if det_sigma < 1e-32:
+        return mu_1**2 + mu_2**2, np.array([0.0, 0.0, 1.0, 1.0, 0.0], dtype=np.float32)
+
+    dist = x_inv_sigma_y_numerator / det_sigma \
+           + np.log(det_sigma) \
+           + np.log(2 * np.pi)
+
+    grad = np.zeros(5, np.float32)
+    grad[0] = (2 * sigma_22 * mu_1 - 2 * sigma_12 * mu_2) / det_sigma
+    grad[1] = (2 * sigma_11 * mu_2 - 2 * sigma_12 * mu_1) / det_sigma
+
+    grad[2] = mu_2 * (mu_2 * np.cos(x[4])**2 - mu_1 * np.cos(x[4]) * np.sin(x[4]))
+    grad[2] += mu_1 * (mu_1 * np.sin(x[4])**2 - mu_2 * np.cos(x[4]) * np.sin(x[4]))
+    grad[2] *= det_sigma
+    grad[2] -= x_inv_sigma_y_numerator * np.cos(x[4])**2 * sigma_22
+    grad[2] -= x_inv_sigma_y_numerator * np.sin(x[4])**2 * sigma_11
+    grad[2] += x_inv_sigma_y_numerator * 2 * sigma_12 * np.sin(x[4]) * np.cos(x[4])
+    grad[2] /= det_sigma ** 2 + 1e-8
+
+    grad[3] = mu_1 * (mu_1 * np.cos(x[4])**2 - mu_2 * np.cos(x[4]) * np.sin(x[4]))
+    grad[3] += mu_2 * (mu_2 * np.sin(x[4])**2 - mu_1 * np.cos(x[4]) * np.sin(x[4]))
+    grad[3] *= det_sigma
+    grad[3] -= x_inv_sigma_y_numerator * np.sin(x[4])**2 * sigma_22
+    grad[3] -= x_inv_sigma_y_numerator * np.cos(x[4])**2 * sigma_11
+    grad[3] -= x_inv_sigma_y_numerator * 2 * sigma_12 * np.sin(x[4]) * np.cos(x[4])
+    grad[3] /= det_sigma ** 2 + 1e-8
+
+    grad[4] = (x[3] - x[2]) * (2 * mu_1 * mu_2 * np.cos(2 * x[4]) - (mu_1**2 - mu_2**2) * np.sin(
+        2 * x[4]))
+    grad[4] *= det_sigma
+    grad[4] -= x_inv_sigma_y_numerator * (x[3] - x[2]) * np.sin(2 * x[4]) * sigma_22
+    grad[4] -= x_inv_sigma_y_numerator * (x[2] - x[3]) * np.sin(2 * x[4]) * sigma_11
+    grad[4] -= x_inv_sigma_y_numerator * 2 * sigma_12 * (x[2] - x[3]) * np.cos(2 * x[4])
+    grad[4] /= det_sigma ** 2 + 1e-8
 
     return dist, grad
+
+
+
 
 # Special discrete distances -- where x and y are objects, not vectors
 
@@ -994,7 +1012,7 @@ def count_distance(x, y, poisson_lambda=1.0, normalisation=1.0):
         for k in range(2, lo):
             log_k_factorial += np.log(k)
     else:
-        log_k_factorial = approx_log_Gamma(k + 1)
+        log_k_factorial = approx_log_Gamma(lo + 1)
 
     result = 0.0
 
@@ -1111,8 +1129,6 @@ named_distances_with_gradients = {
     "spherical_gaussian_energy": spherical_gaussian_energy_grad,
     "diagonal_gaussian_energy": diagonal_gaussian_energy_grad,
     "gaussian_energy": gaussian_energy_grad,
-    "spherical_gaussian_kl": spherical_gaussian_kl_grad,
-    "uncertainty_embedding": uncertainty_embedding_grad,
     "poincare": poincare_grad,
 
 }
