@@ -101,7 +101,6 @@ def sparse_nn_descent(
             max_candidates,
             rng_state,
             rho,
-            False,
         )
 
         c = 0
