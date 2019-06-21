@@ -1509,10 +1509,11 @@ class UMAP(BaseEstimator):
                 # )
 
         if y is not None:
-            if len(X) != len(y):
+            len_X = len(X) if not scipy.sparse.issparse(X) else X.shape[0]
+            if len_X != len(y):
                 raise ValueError(
                     "Length of x = {len_x}, length of y = {len_y}, while it must be equal.".format(
-                        len_x=len(X), len_y=len(y)
+                        len_x=len_X, len_y=len(y)
                     )
                 )
             y_ = check_array(y, ensure_2d=False)
