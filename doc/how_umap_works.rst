@@ -326,10 +326,10 @@ functors from algebraic topology and then adapting them to apply to
 metric spaces and fuzzy simplicial sets. The mathematics involved in
 this is outside the scope of this exposition, but for those interested
 you can look at the `original work on this by David
-Spivak <https://en.wikipedia.org/wiki/Riemannian_geometry>`__ and our
-`paper <https://arxiv.org/abs/1802.03426>`__. It will have to suffice to
-say that there is some mathematical machinery that lets us realize this
-intuition in a well defined way.
+Spivak <http://math.mit.edu/~dspivak/files/metric_realization.pdf>`__
+and our `paper <https://arxiv.org/abs/1802.03426>`__. It will have to
+suffice to say that there is some mathematical machinery that lets us
+realize this intuition in a well defined way.
 
 This resolves a number of issues, but a new problem presents itself when
 we apply this sort of process to real data, especially in higher

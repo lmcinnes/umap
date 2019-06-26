@@ -26,23 +26,23 @@ if [[ "$DISTRIB" == "conda" ]]; then
          -O miniconda.sh
      else
        wget \
-       http://repo.continuum.io/miniconda/Miniconda-3.6.0-Linux-x86_64.sh \
+       http://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh \
          -O miniconda.sh
      fi
 #  fi
   chmod +x miniconda.sh && ./miniconda.sh -b -p $HOME/miniconda
   cd ..
-  export PATH=$HOME/miniconda/bin:$PATH
+  export PATH=$HOME/miniconda3/bin:$PATH
   conda update --yes conda
   popd
 
   # Configure the conda environment and put it in the path using the
   # provided versions
   conda create -n testenv --yes python=$PYTHON_VERSION pip nose \
-        numpy=$NUMPY_VERSION scipy=$SCIPY_VERSION numba scikit-learn
+        numpy=$NUMPY_VERSION scipy=$SCIPY_VERSION numba=$NUMBA_VERSION scikit-learn \
+        holoviews datashader bokeh matplotlib pandas
 
   source activate testenv
-
 
   if [[ "$COVERAGE" == "true" ]]; then
       pip install coverage coveralls
@@ -51,8 +51,15 @@ if [[ "$DISTRIB" == "conda" ]]; then
   python --version
   python -c "import numpy; print('numpy %s' % numpy.__version__)"
   python -c "import scipy; print('scipy %s' % scipy.__version__)"
+  python -c "import numba; print('numba %s' % numba.__version__)"
+  python -c "import sklearn; print('scikit-learn %s' % sklearn.__version__)"
   python setup.py develop
 else
   pip install -e .
   pip install pynndescent # test with optional pynndescent dependency
+  pip install pandas
+  pip install bokeh
+  pip install datashader
+  pip install matplotlib
+  pip install holoviews
 fi

@@ -3,11 +3,13 @@
 #
 # License: BSD 3 clause
 from __future__ import print_function
-import numpy as np
+
+import locale
+
 import numba
+import numpy as np
 
 from umap.utils import (
-    tau_rand_int,
     tau_rand,
     norm,
     make_heap,
@@ -16,8 +18,6 @@ from umap.utils import (
     build_candidates,
     deheap_sort,
 )
-
-import locale
 
 locale.setlocale(locale.LC_NUMERIC, "C")
 
@@ -147,140 +147,6 @@ def sparse_mul(ind1, data1, ind2, data2):
     result_data = result_data[:nnz]
 
     return result_ind, result_data
-
-
-def make_sparse_nn_descent(sparse_dist, dist_args):
-    """Create a numba accelerated version of nearest neighbor descent
-    specialised for the given distance metric and metric arguments on sparse
-    matrix data provided in CSR ind, indptr and data format. Numba
-    doesn't support higher order functions directly, but we can instead JIT
-    compile the version of NN-descent for any given metric.
-
-    Parameters
-    ----------
-    sparse_dist: function
-        A numba JITd distance function which, given four arrays (two sets of
-        indices and data) computes a dissimilarity between them.
-
-    dist_args: tuple
-        Any extra arguments that need to be passed to the distance function
-        beyond the two arrays to be compared.
-
-    Returns
-    -------
-    A numba JITd function for nearest neighbor descent computation that is
-    specialised to the given metric.
-    """
-
-    @numba.njit(parallel=True)
-    def nn_descent(
-        inds,
-        indptr,
-        data,
-        n_vertices,
-        n_neighbors,
-        rng_state,
-        max_candidates=50,
-        n_iters=10,
-        delta=0.001,
-        rho=0.5,
-        rp_tree_init=True,
-        leaf_array=None,
-        verbose=False,
-    ):
-
-        current_graph = make_heap(n_vertices, n_neighbors)
-        for i in range(n_vertices):
-            indices = rejection_sample(n_neighbors, n_vertices, rng_state)
-            for j in range(indices.shape[0]):
-
-                from_inds = inds[indptr[i] : indptr[i + 1]]
-                from_data = data[indptr[i] : indptr[i + 1]]
-
-                to_inds = inds[indptr[indices[j]] : indptr[indices[j] + 1]]
-                to_data = data[indptr[indices[j]] : indptr[indices[j] + 1]]
-
-                d = sparse_dist(from_inds, from_data, to_inds, to_data, *dist_args)
-
-                heap_push(current_graph, i, d, indices[j], 1)
-                heap_push(current_graph, indices[j], d, i, 1)
-
-        if rp_tree_init:
-            for n in range(leaf_array.shape[0]):
-                for i in range(leaf_array.shape[1]):
-                    if leaf_array[n, i] < 0:
-                        break
-                    for j in range(i + 1, leaf_array.shape[1]):
-                        if leaf_array[n, j] < 0:
-                            break
-
-                        from_inds = inds[
-                            indptr[leaf_array[n, i]] : indptr[leaf_array[n, i] + 1]
-                        ]
-                        from_data = data[
-                            indptr[leaf_array[n, i]] : indptr[leaf_array[n, i] + 1]
-                        ]
-
-                        to_inds = inds[
-                            indptr[leaf_array[n, j]] : indptr[leaf_array[n, j] + 1]
-                        ]
-                        to_data = data[
-                            indptr[leaf_array[n, j]] : indptr[leaf_array[n, j] + 1]
-                        ]
-
-                        d = sparse_dist(
-                            from_inds, from_data, to_inds, to_data, *dist_args
-                        )
-
-                        heap_push(
-                            current_graph, leaf_array[n, i], d, leaf_array[n, j], 1
-                        )
-                        heap_push(
-                            current_graph, leaf_array[n, j], d, leaf_array[n, i], 1
-                        )
-
-        for n in range(n_iters):
-            if verbose:
-                print("\t", n, " / ", n_iters)
-
-            candidate_neighbors = build_candidates(
-                current_graph, n_vertices, n_neighbors, max_candidates, rng_state
-            )
-
-            c = 0
-            for i in range(n_vertices):
-                for j in range(max_candidates):
-                    p = int(candidate_neighbors[0, i, j])
-                    if p < 0 or tau_rand(rng_state) < rho:
-                        continue
-                    for k in range(max_candidates):
-                        q = int(candidate_neighbors[0, i, k])
-                        if (
-                            q < 0
-                            or not candidate_neighbors[2, i, j]
-                            and not candidate_neighbors[2, i, k]
-                        ):
-                            continue
-
-                        from_inds = inds[indptr[p] : indptr[p + 1]]
-                        from_data = data[indptr[p] : indptr[p + 1]]
-
-                        to_inds = inds[indptr[q] : indptr[q + 1]]
-                        to_data = data[indptr[q] : indptr[q + 1]]
-
-                        d = sparse_dist(
-                            from_inds, from_data, to_inds, to_data, *dist_args
-                        )
-
-                        c += heap_push(current_graph, p, d, q, 1)
-                        c += heap_push(current_graph, q, d, p, 1)
-
-            if c <= delta * n_neighbors * n_vertices:
-                break
-
-        return deheap_sort(current_graph)
-
-    return nn_descent
 
 
 @numba.njit()
@@ -509,6 +375,29 @@ def sparse_cosine(ind1, data1, ind2, data2):
         return 1.0 - (result / (norm1 * norm2))
 
 
+
+@numba.njit()
+def sparse_hellinger(ind1, data1, ind2, data2):
+    aux_inds, aux_data = sparse_mul(ind1, data1, ind2, data2)
+    result = 0.0
+    norm1 = np.sum(data1)
+    norm2 = np.sum(data2)
+    sqrt_norm_prod = np.sqrt(norm1 * norm2)
+
+    for i in range(aux_data.shape[0]):
+        result += np.sqrt(aux_data[i])
+
+    if norm1 == 0.0 and norm2 == 0.0:
+        return 0.0
+    elif norm1 == 0.0 or norm2 == 0.0:
+        return 1.0
+    elif result > sqrt_norm_prod:
+        return 0.0
+    else:
+        return np.sqrt(1.0 - (result / sqrt_norm_prod))
+
+
+
 @numba.njit()
 def sparse_correlation(ind1, data1, ind2, data2, n_features):
 
@@ -570,6 +459,73 @@ def sparse_correlation(ind1, data1, ind2, data2, n_features):
         return 1.0 - (dot_product / (norm1 * norm2))
 
 
+@numba.njit()
+def approx_log_Gamma(x):
+    if x == 1:
+        return 0
+#    x2= 1/(x*x);
+    return x*np.log(x) - x + 0.5*np.log(2.0*np.pi/x) + 1.0/(x*12.0)# + x2*(-1.0/360.0 + x2* (1.0/1260.0 + x2*(-1.0/(1680.0)
+#                + x2*(1.0/1188.0 + x2*(-691.0/360360.0 + x2*(1.0/156.0 + x2*(-3617.0/122400.0 + x2*(43687.0/244188.0 + x2*(-174611.0/125400.0)
+#                + x2*(77683.0/5796.0 + x2*(-236364091.0/1506960.0 + x2*(657931.0/300.0))))))))))))
+                
+@numba.njit()
+def log_beta(x,y):
+    a = min(x,y)
+    b = max(x,y)
+    if b < 5:
+        value = -np.log(b)
+        for i in range(1, int(a)):
+            value += np.log(i)-np.log(b+i)
+        return value
+    else:
+        return approx_log_Gamma(x) + approx_log_Gamma(y) - approx_log_Gamma(x + y)
+
+@numba.njit()
+def log_single_beta(x):
+    return np.log(2.0)*(-2.0*x+0.5) + 0.5*np.log(2.0*np.pi/x) + 0.125/x # + x2*(-1.0/192.0 + x2* (1.0/640.0 + x2*(-17.0/(14336.0)
+ #                + x2*(31.0/18432.0 + x2*(-691.0/180224.0 + x2*(5461.0/425984.0 + x2*(-929569.0/15728640.0 + x2*(3189151.0/8912896.0 + x2*(-221930581.0/79691776.0)
+ #                + x2*(4722116521.0/176160768.0 + x2*(-968383680827.0/3087007744.0 + x2*(14717667114151.0/3355443200.0 ))))))))))))
+
+@numba.njit()
+def sparse_ll_dirichlet(ind1, data1, ind2, data2):
+    # The probability of rolling data2 in sum(data2) trials on a die that rolled data1 in sum(data1) trials
+    n1 = np.sum(data1)
+    n2 = np.sum(data2)
+
+    if n1 == 0 and n2 == 0:
+        return 0.0
+    elif n1 == 0 or n2 == 0:
+        return 1e8
+
+    log_b = 0.0
+    i1 = 0
+    i2 = 0
+    while (i1 < ind1.shape[0] and i2 < ind2.shape[0]):
+        j1 = ind1[i1]
+        j2 = ind2[i2]
+
+        if j1 == j2:
+            if data1[i1] * data2[i2] != 0:
+                log_b += log_beta(data1[i1], data2[i2])
+            i1 += 1
+            i2 += 1
+        elif j1 < j2:
+            i1 += 1
+        else:
+            i2 += 1
+
+    self_denom1 = 0.0
+    for d1 in data1:
+
+        self_denom1 += log_single_beta(d1)
+
+    self_denom2 = 0.0
+    for d2 in data2:
+        self_denom2 += log_single_beta(d2)
+
+    return np.sqrt(1.0 / n2 * (log_b - log_beta(n1, n2) - (self_denom2 - log_single_beta(n2))) + 1.0 / n1 * (
+            log_b - log_beta(n2, n1) - (self_denom1 - log_single_beta(n1))))
+
 sparse_named_distances = {
     # general minkowski distances
     "euclidean": sparse_euclidean,
@@ -583,6 +539,7 @@ sparse_named_distances = {
     "minkowski": sparse_minkowski,
     # Other distances
     "canberra": sparse_canberra,
+    "ll_dirichlet": sparse_ll_dirichlet,
     # 'braycurtis': sparse_bray_curtis,
     # Binary distances
     "hamming": sparse_hamming,
@@ -596,6 +553,7 @@ sparse_named_distances = {
     "sokalsneath": sparse_sokal_sneath,
     "cosine": sparse_cosine,
     "correlation": sparse_correlation,
+    "hellinger": sparse_hellinger,
 }
 
 sparse_need_n_features = (

@@ -94,6 +94,7 @@ def rejection_sample(n_samples, pool_size, rng_state):
     result = np.empty(n_samples, dtype=np.int64)
     for i in range(n_samples):
         reject_sample = True
+        j = 0
         while reject_sample:
             j = tau_rand_int(rng_state) % pool_size
             for k in range(i):
@@ -249,12 +250,12 @@ def unchecked_heap_push(heap, row, weight, index, flag):
     -------
     success: The number of new elements successfully pushed into the heap.
     """
+    if weight >= heap[1, row, 0]:
+        return 0
+
     indices = heap[0, row]
     weights = heap[1, row]
     is_new = heap[2, row]
-
-    if weight >= weights[0]:
-        return 0
 
     # insert val at position zero
     weights[0] = weight
@@ -448,7 +449,7 @@ def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates, rng
     return candidate_neighbors
 
 
-@numba.njit(parallel=True)
+@numba.njit()
 def new_build_candidates(
     current_graph, n_vertices, n_neighbors, max_candidates, rng_state, rho=0.5
 ):  # pragma: no cover
@@ -481,7 +482,7 @@ def new_build_candidates(
     new_candidate_neighbors = make_heap(n_vertices, max_candidates)
     old_candidate_neighbors = make_heap(n_vertices, max_candidates)
 
-    for i in numba.prange(n_vertices):
+    for i in range(n_vertices):
         for j in range(n_neighbors):
             if current_graph[0, i, j] < 0:
                 continue
@@ -509,7 +510,7 @@ def submatrix(dmat, indices_col, n_neighbors):
 
     Parameters
     ----------
-    mat: array, shape (n_samples, n_samples)
+    dmat: array, shape (n_samples, n_samples)
         Original matrix.
 
     indices_col: array, shape (n_samples, n_neighbors)
