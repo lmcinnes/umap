@@ -731,7 +731,9 @@ def diagnostic(
         ax=None,
         cmap='viridis',
         point_size=None,
-        background='white'
+        background='white',
+        width=800,
+        height=800,
 ):
     """Provide a diagnostic plot or plots for a UMAP embedding.
     There are a number of plots that can be helpful for diagnostic
@@ -812,6 +814,11 @@ def diagnostic(
     if point_size is None:
         point_size = 100.0 / np.sqrt(points.shape[0])
 
+    if ax is None:
+        dpi = plt.rcParams['figure.dpi']
+        fig = plt.figure(figsize=(width / dpi, height / dpi))
+        ax = fig.add_subplot(111)
+
     font_color = _select_font_color(background)
 
     if ax is None and diagnostic_type != 'all':
@@ -875,8 +882,10 @@ def diagnostic(
         accuracy = _nhood_compare(highd_indices.astype(np.int32),
                                   lowd_indices.astype(np.int32))
 
+        vmin = np.percentile(accuracy, 5)
+        vmax = np.percentile(accuracy, 95)
         ax.scatter(points[:, 0], points[:, 1], s=point_size, c=accuracy,
-                   cmap=cmap, vmin=0.0, vmax=1.0)
+                   cmap=cmap, vmin=vmin, vmax=vmax)
         ax.set_title('Colored by neighborhood Jaccard index')
         ax.text(0.99,
                 0.01,
@@ -886,6 +895,7 @@ def diagnostic(
                 horizontalalignment='right',
                 color=font_color)
         ax.set(xticks=[], yticks=[])
+        plt.colorbar(ax=ax)
 
     elif diagnostic_type == 'local_dim':
         highd_indices, highd_dists = _nhood_search(umap_object, umap_object.n_neighbors)
@@ -895,8 +905,10 @@ def diagnostic(
             pca = sklearn.decomposition.PCA().fit(data[highd_indices[i]])
             local_dim[i] = np.where(np.cumsum(pca.explained_variance_ratio_)
                                     > local_variance_threshold)[0][0]
+        vmin = np.percentile(local_dim, 5)
+        vmax = np.percentile(local_dim, 95)
         ax.scatter(points[:, 0], points[:, 1], s=point_size, c=local_dim,
-                   cmap=cmap, vmin=0.0, vmax=1.0)
+                   cmap=cmap, vmin=vmin, vmax=vmax)
         ax.set_title('Colored by approx local dimension')
         ax.text(0.99,
                 0.01,
@@ -906,6 +918,7 @@ def diagnostic(
                 horizontalalignment='right',
                 color=font_color)
         ax.set(xticks=[], yticks=[])
+        plt.colorbar(ax=ax)
 
 
     elif diagnostic_type == 'all':
