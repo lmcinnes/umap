@@ -1423,15 +1423,13 @@ class UMAP(BaseEstimator):
         # Handle small cases efficiently by computing all distances
         if X.shape[0] < 4096 and not self.force_approximation_algorithm:
             self._small_data = True
-
-            if self.metric in ("ll_dirichlet", "hellinger"):
+            try:
+                dmat = pairwise_distances(X, metric=self.metric, **self._metric_kwds)
+            except ValueError: # metric is not supported by sklearn, fallback to pairwise special
                 if self._sparse_data:
                     dmat = dist.pairwise_special_metric(X.toarray(), metric=self.metric)
                 else:
                     dmat = dist.pairwise_special_metric(X, metric=self.metric)
-            else:
-                dmat = pairwise_distances(X, metric=self.metric, **self._metric_kwds)
-
             self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
                 dmat,
                 self._n_neighbors,
