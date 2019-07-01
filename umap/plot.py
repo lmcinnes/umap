@@ -8,6 +8,7 @@ import datashader.bundling as bd
 import matplotlib.pyplot as plt
 import colorcet
 import matplotlib.colors
+import matplotlib.cm
 
 import bokeh.plotting as bpl
 import bokeh.transform as btr
@@ -816,6 +817,8 @@ def diagnostic(
 
     if ax is None:
         dpi = plt.rcParams['figure.dpi']
+        if diagnostic_type in ('local_dim', 'neighborhood'):
+            width *= 1.1
         fig = plt.figure(figsize=(width / dpi, height / dpi))
         ax = fig.add_subplot(111)
 
@@ -895,7 +898,10 @@ def diagnostic(
                 horizontalalignment='right',
                 color=font_color)
         ax.set(xticks=[], yticks=[])
-        plt.colorbar(ax=ax)
+        norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
+        mappable = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap)
+        mappable.set_array(accuracy)
+        plt.colorbar(mappable, ax=ax)
 
     elif diagnostic_type == 'local_dim':
         highd_indices, highd_dists = _nhood_search(umap_object, umap_object.n_neighbors)
@@ -918,7 +924,10 @@ def diagnostic(
                 horizontalalignment='right',
                 color=font_color)
         ax.set(xticks=[], yticks=[])
-        plt.colorbar(ax=ax)
+        norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
+        mappable = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap)
+        mappable.set_array(local_dim)
+        plt.colorbar(mappable, ax=ax)
 
 
     elif diagnostic_type == 'all':
