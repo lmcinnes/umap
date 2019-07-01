@@ -409,6 +409,7 @@ def fuzzy_simplicial_set(
     angular=False,
     set_op_mix_ratio=1.0,
     local_connectivity=1.0,
+        apply_set_operations=True,
     verbose=False,
 ):
     """Given a set of data X, a neighborhood size, and a measure of distance
@@ -533,14 +534,15 @@ def fuzzy_simplicial_set(
     )
     result.eliminate_zeros()
 
-    transpose = result.transpose()
+    if apply_set_operations:
+        transpose = result.transpose()
 
-    prod_matrix = result.multiply(transpose)
+        prod_matrix = result.multiply(transpose)
 
-    result = (
-        set_op_mix_ratio * (result + transpose - prod_matrix)
-        + (1.0 - set_op_mix_ratio) * prod_matrix
-    )
+        result = (
+                set_op_mix_ratio * (result + transpose - prod_matrix)
+                + (1.0 - set_op_mix_ratio) * prod_matrix
+        )
 
     result.eliminate_zeros()
 
@@ -635,8 +637,47 @@ def fast_metric_intersection(
     return
 
 
+@numba.njit()
+def reprocess_row(probabilities):
+    target = np.log2(15)
+
+    lo = 0.0
+    hi = NPY_INFINITY
+    mid = 1.0
+
+    for n in range(128):
+
+        psum = 0.0
+        for j in range(probabilities.shape[0]):
+            psum += pow(probabilities[j], mid)
+
+        if np.fabs(psum - target) < SMOOTH_K_TOLERANCE:
+            break
+
+        if psum < target:
+            hi = mid
+            mid = (lo + hi) / 2.0
+        else:
+            lo = mid
+            if hi == NPY_INFINITY:
+                mid *= 2
+            else:
+                mid = (lo + hi) / 2.0
+
+    return np.power(probabilities, mid)
+
+
 @numba.jit()
-def reset_local_connectivity(simplicial_set):
+def reset_local_metrics(simplicial_set):
+    csr_mat = simplicial_set.tocsr()
+    for i in range(csr_mat.indptr.shape[0] - 1):
+        csr_mat.data[csr_mat.indptr[i]:csr_mat.indptr[i + 1]] = \
+            reprocess_row(csr_mat.data[csr_mat.indptr[i]:csr_mat.indptr[i + 1]])
+    return csr_mat.tocoo()
+
+
+@numba.jit()
+def reset_local_connectivity(simplicial_set, reset_local_metric=False):
     """Reset the local connectivity requirement -- each data sample should
     have complete confidence in at least one 1-simplex in the simplicial set.
     We can enforce this by locally rescaling confidences, and then remerging the
@@ -655,6 +696,8 @@ def reset_local_connectivity(simplicial_set):
         assumption restored.
     """
     simplicial_set = normalize(simplicial_set, norm="max")
+    if reset_local_metric:
+        simplicial_set = reset_local_metrics(simplicial_set)
     transpose = simplicial_set.transpose()
     prod_matrix = simplicial_set.multiply(transpose)
     simplicial_set = simplicial_set + transpose - prod_matrix
@@ -1441,6 +1484,7 @@ class UMAP(BaseEstimator):
                 self.angular_rp_forest,
                 self.set_op_mix_ratio,
                 self.local_connectivity,
+                True,
                 self.verbose,
             )
         else:
@@ -1467,6 +1511,7 @@ class UMAP(BaseEstimator):
                 self.angular_rp_forest,
                 self.set_op_mix_ratio,
                 self.local_connectivity,
+                True,
                 self.verbose,
             )
 
@@ -2262,6 +2307,7 @@ class DataFrameUMAP(BaseEstimator):
                         self.angular_rp_forest,
                         self.set_op_mix_ratio,
                         self.local_connectivity,
+                        False,
                         self.verbose,
                     )
                 else:
@@ -2297,6 +2343,7 @@ class DataFrameUMAP(BaseEstimator):
                         self.angular_rp_forest,
                         self.set_op_mix_ratio,
                         self.local_connectivity,
+                        False,
                         self.verbose,
                     )
                     # TODO: set up transform data
@@ -2309,7 +2356,10 @@ class DataFrameUMAP(BaseEstimator):
                     )
 
             print(self.graph_.data)
-            self.graph_ = reset_local_connectivity(self.graph_)
+            self.graph_ = reset_local_connectivity(
+                self.graph_,
+                reset_local_metrics=True,
+            )
 
         if self.n_epochs is None:
             n_epochs = 0
