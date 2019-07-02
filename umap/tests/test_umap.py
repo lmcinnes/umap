@@ -750,6 +750,22 @@ def test_umap_transform_on_iris():
     )
 
 
+def test_umap_transform_on_iris_modified_dtype():
+    data = iris.data[iris_selection]
+    fitter = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit(data)
+    fitter.embedding_ = fitter.embedding_.astype(np.float64)
+
+    new_data = iris.data[~iris_selection]
+    embedding = fitter.transform(new_data)
+
+    trust = trustworthiness(new_data, embedding, 10)
+    assert_greater_equal(
+        trust,
+        0.89,
+        "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust),
+    )
+
+
 # # This test is currently to expensive to run when turning
 # # off numba JITting to detect coverage.
 # @SkipTest
