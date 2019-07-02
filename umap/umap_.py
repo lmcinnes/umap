@@ -55,7 +55,7 @@ NPY_INFINITY = np.inf
 def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0):
     """Compute a continuous version of the distance to the kth nearest
     neighbor. That is, this is similar to knn-distance but allows continuous
-    k values rather than requiring an integral k. In esscence we are simply
+    k values rather than requiring an integral k. In essence we are simply
     computing the distance such that the cardinality of fuzzy set we generate
     is k.
 
