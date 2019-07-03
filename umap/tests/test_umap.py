@@ -6,6 +6,7 @@ from umap.umap_ import (
     nearest_neighbors,
     smooth_knn_dist,
     fuzzy_simplicial_set,
+    simplicial_set_embedding,
     UMAP,
 )
 from umap.utils import deheap_sort
@@ -25,7 +26,7 @@ from scipy.stats import mode
 from sklearn.cluster import KMeans
 from sklearn.manifold.t_sne import trustworthiness
 from sklearn.preprocessing import StandardScaler, normalize
-from sklearn.utils import shuffle
+from sklearn.utils import check_random_state, shuffle
 from sklearn.neighbors import KDTree, BallTree
 from sklearn.metrics import pairwise_distances, adjusted_rand_score
 from sklearn.utils.testing import (
@@ -733,6 +734,34 @@ def test_initialized_umap_trustworthiness_on_iris():
         0.97,
         "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
     )
+
+
+def test_initialized_umap_trustworthiness_on_iris_dtype():
+    data = iris.data
+    n_epochs = 200
+    init = np.random.uniform(low=-10.0, high=10.0, size=(data.shape[0], 2))
+    # init gets copied and converted to 32 bit float by .fit
+    trans = UMAP(
+        n_neighbors=10, min_dist=0.01, init=init, random_state=42, n_epochs=n_epochs
+    )
+    embedding1 = trans.fit_transform(data, iris.target)
+    embedding2 = simplicial_set_embedding(
+        trans._raw_data,
+        trans.graph_,
+        trans.n_components,
+        trans._initial_alpha,
+        trans._a,
+        trans._b,
+        trans.repulsion_strength,
+        trans.negative_sample_rate,
+        n_epochs,
+        init,
+        check_random_state(42),  # Won't be exactly the same as above
+        trans.metric,
+        trans._metric_kwds,
+        trans.verbose,
+    )
+    assert_array_almost_equal(embedding1, embedding2)
 
 
 def test_umap_transform_on_iris():
