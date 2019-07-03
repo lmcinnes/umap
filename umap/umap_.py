@@ -985,7 +985,9 @@ def simplicial_set_embedding(
                     scale=0.001 * nndist, size=init_data.shape
                 ).astype(np.float32)
             else:
-                embedding = init_data
+                embedding = check_array(
+                    init_data, dtype=np.float32, accept_sparse=False
+                )
 
     epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs)
 
