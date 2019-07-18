@@ -35,3 +35,18 @@ are fixing a new issue feel free to file an issue and then reference it in the P
 You can [browse open issues](https://github.com/lmcinnes/umap/issues), 
 or consult the [project roadmap](https://github.com/lmcinnes/umap/issues/15), for potential code
 contributions. Fixes for issues tagged with 'help wanted' are especially appreciated.
+
+### Code formatting
+
+If possible, install the [black code formatter](https://github.com/python/black) (e.g.
+`pip install black`) and run it before submitting a pull request. This helps maintain consistency
+across the code, but also there is a check in the Travis-CI continuous integration system which
+will show up as a failure in the pull request if `black` detects that it hasn't been run.
+
+Formatting is as simple as running:
+
+```bash
+black .
+```
+
+in the root of the project.
