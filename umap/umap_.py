@@ -349,7 +349,6 @@ def compute_membership_strengths(knn_indices, knn_dists, sigmas, rhos):
     return rows, cols, vals
 
 
-@numba.jit()
 def fuzzy_simplicial_set(
     X,
     n_neighbors,
@@ -498,7 +497,7 @@ def fuzzy_simplicial_set(
     return result
 
 
-@numba.jit()
+@numba.njit()
 def fast_intersection(rows, cols, values, target, unknown_dist=1.0, far_dist=5.0):
     """Under the assumption of categorical distance for the intersecting
     simplicial set perform a fast intersection.
@@ -533,7 +532,7 @@ def fast_intersection(rows, cols, values, target, unknown_dist=1.0, far_dist=5.0
     for nz in range(rows.shape[0]):
         i = rows[nz]
         j = cols[nz]
-        if target[i] == -1 or target[j] == -1:
+        if (target[i] == -1) or (target[j] == -1):
             values[nz] *= np.exp(-unknown_dist)
         elif target[i] != target[j]:
             values[nz] *= np.exp(-far_dist)
@@ -541,7 +540,6 @@ def fast_intersection(rows, cols, values, target, unknown_dist=1.0, far_dist=5.0
     return
 
 
-@numba.jit()
 def reset_local_connectivity(simplicial_set):
     """Reset the local connectivity requirement -- each data sample should
     have complete confidence in at least one 1-simplex in the simplicial set.
@@ -569,7 +567,6 @@ def reset_local_connectivity(simplicial_set):
     return simplicial_set
 
 
-@numba.jit()
 def categorical_simplicial_set_intersection(
     simplicial_set, target, unknown_dist=1.0, far_dist=5.0
 ):
@@ -615,7 +612,6 @@ def categorical_simplicial_set_intersection(
     return reset_local_connectivity(simplicial_set)
 
 
-@numba.jit()
 def general_simplicial_set_intersection(simplicial_set1, simplicial_set2, weight):
 
     result = (simplicial_set1 + simplicial_set2).tocoo()
@@ -638,7 +634,6 @@ def general_simplicial_set_intersection(simplicial_set1, simplicial_set2, weight
     return result
 
 
-@numba.jit()
 def make_epochs_per_sample(weights, n_epochs):
     """Given a set of weights and number of epochs generate the number of
     epochs per sample for each weight.

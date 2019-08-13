@@ -927,12 +927,12 @@ def test_umap_fit_params():
     # x and y are required to be the same length
     u = UMAP()
     x = np.random.uniform(0, 1, (256, 10))
-    y = np.random.randint(10, size=(257, 1))
+    y = np.random.randint(10, size=(257,))
     assert_raises(ValueError, u.fit, x, y)
 
     u = UMAP()
     x = np.random.uniform(0, 1, (256, 10))
-    y = np.random.randint(10, size=(255, 1))
+    y = np.random.randint(10, size=(255,))
     assert_raises(ValueError, u.fit, x, y)
 
     u = UMAP()
@@ -941,7 +941,7 @@ def test_umap_fit_params():
 
     u = UMAP()
     x = np.random.uniform(0, 1, (256, 10))
-    y = np.random.randint(10, size=(256, 1))
+    y = np.random.randint(10, size=(256,))
     res = u.fit(x, y)
     assert isinstance(res, UMAP)
 

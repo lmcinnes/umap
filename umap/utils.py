@@ -136,7 +136,7 @@ def make_heap(n_points, size):
     return result
 
 
-@numba.jit("i8(f8[:,:,:],i8,f8,i8,i8)")
+@numba.njit("i8(f8[:,:,:],i8,f8,i8,i8)")
 def heap_push(heap, row, weight, index, flag):
     """Push a new element onto the heap. The heap stores potential neighbors
     for each data point. The ``row`` parameter determines which data point we
@@ -220,7 +220,7 @@ def heap_push(heap, row, weight, index, flag):
     return 1
 
 
-@numba.jit("i8(f8[:,:,:],i8,f8,i8,i8)")
+@numba.njit("i8(f8[:,:,:],i8,f8,i8,i8)")
 def unchecked_heap_push(heap, row, weight, index, flag):
     """Push a new element onto the heap. The heap stores potential neighbors
     for each data point. The ``row`` parameter determines which data point we
