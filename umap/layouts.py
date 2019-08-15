@@ -284,6 +284,9 @@ def optimize_layout_generic(
                 dist_output, grad_dist_output = output_metric(
                     current, other, *output_metric_kwds
                 )
+                _, rev_grad_dist_output = output_metric(
+                    other, current, *output_metric_kwds
+                )
 
                 if dist_output > 0.0:
                     w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
@@ -296,7 +299,8 @@ def optimize_layout_generic(
 
                     current[d] += grad_d * alpha
                     if move_other:
-                        other[d] += -grad_d * alpha
+                        grad_d = clip(grad_coeff * rev_grad_dist_output[d])
+                        other[d] += grad_d * alpha
 
                 epoch_of_next_sample[i] += epochs_per_sample[i]
 
