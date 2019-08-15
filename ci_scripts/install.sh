@@ -56,6 +56,7 @@ if [[ "$DISTRIB" == "conda" ]]; then
   python setup.py develop
 else
   pip install -e .
+  pip install pynndescent # test with optional pynndescent dependency
   pip install pandas
   pip install bokeh
   pip install datashader
