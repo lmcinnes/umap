@@ -8,6 +8,31 @@ import numpy as np
 import numba
 
 
+@numba.njit(parallel=True)
+def fast_knn_indices(X, n_neighbors):
+    """A fast computation of knn indices.
+
+    Parameters
+    ----------
+    X: array of shape (n_samples, n_features)
+        The input data to compute the k-neighbor indices of.
+
+    n_neighbors: int
+        The number of nearest neighbors to compute for each sample in ``X``.
+
+    Returns
+    -------
+    knn_indices: array of shape (n_samples, n_neighbors)
+        The indices on the ``n_neighbors`` closest points in the dataset.
+    """
+    knn_indices = np.empty((X.shape[0], n_neighbors), dtype=np.int32)
+    for row in numba.prange(X.shape[0]):
+        v = X[row].argsort(kind='quicksort')
+        v = v[:n_neighbors]
+        knn_indices[row] = v
+    return knn_indices
+
+
 @numba.njit("i4(i8[:])")
 def tau_rand_int(state):
     """A fast (pseudo)-random number generator.

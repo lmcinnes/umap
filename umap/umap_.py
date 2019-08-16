@@ -27,7 +27,13 @@ import umap.distances as dist
 
 import umap.sparse as sparse
 
-from umap.utils import tau_rand_int, deheap_sort, submatrix, ts
+from umap.utils import (
+    tau_rand_int,
+    deheap_sort,
+    submatrix,
+    ts,
+    fast_knn_indices
+)
 from umap.rp_tree import rptree_leaf_array, make_forest
 from umap.nndescent import (
     make_nn_descent,
@@ -200,7 +206,7 @@ def nearest_neighbors(
     if metric == "precomputed":
         # Note that this does not support sparse distance matrices yet ...
         # Compute indices of n nearest neighbors
-        knn_indices = np.argsort(X)[:, :n_neighbors]
+        knn_indices = fast_knn_indices(X, n_neighbors)
         # Compute the nearest neighbor distances
         #   (equivalent to np.sort(X)[:,:n_neighbors])
         knn_dists = X[np.arange(X.shape[0])[:, None], knn_indices].copy()
