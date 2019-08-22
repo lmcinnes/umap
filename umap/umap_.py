@@ -242,99 +242,115 @@ def nearest_neighbors(
 
         rp_forest = []
     else:
-        if callable(metric):
-            distance_func = metric
-        elif metric in dist.named_distances:
-            distance_func = dist.named_distances[metric]
-        else:
-            raise ValueError("Metric is neither callable, " + "nor a recognised string")
+        # TODO: Hacked values for now
+        n_trees = 5 + int(round((X.shape[0]) ** 0.5 / 20.0))
+        n_iters = max(5, int(round(np.log2(X.shape[0]))))
 
-        if metric in (
-            "cosine",
-            "correlation",
-            "dice",
-            "jaccard",
-            "ll_dirichlet",
-            "hellinger",
-        ):
-            angular = True
-
-        rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
-
-        if scipy.sparse.isspmatrix_csr(X):
-            if metric in sparse.sparse_named_distances:
-                distance_func = sparse.sparse_named_distances[metric]
-                if metric in sparse.sparse_need_n_features:
-                    metric_kwds["n_features"] = X.shape[1]
-            elif callable(metric):
-                distance_func = metric
-            else:
-                raise ValueError(
-                    "Metric {} not supported for sparse " + "data".format(metric)
-                )
-            # metric_nn_descent = sparse.make_sparse_nn_descent(
-            #     distance_func, tuple(metric_kwds.values())
-            # )
-
-            # TODO: Hacked values for now
-            n_trees = 5 + int(round((X.shape[0]) ** 0.5 / 20.0))
-            n_iters = max(5, int(round(np.log2(X.shape[0]))))
-            if verbose:
-                print(ts(), "Building RP forest with",  str(n_trees), "trees")
-
-            rp_forest = make_forest(X, n_neighbors, n_trees, rng_state, angular)
-            leaf_array = rptree_leaf_array(rp_forest)
-
-            if verbose:
-                print(ts(), "NN descent for", str(n_iters), "iterations")
-            knn_indices, knn_dists = sparse_nn.sparse_nn_descent(
-                X.indices,
-                X.indptr,
-                X.data,
-                X.shape[0],
-                n_neighbors,
-                rng_state,
-                distance_func,
-                tuple(metric_kwds.values()),
-                max_candidates=60,
-                rp_tree_init=True,
-                leaf_array=leaf_array,
-                n_iters=n_iters,
-                verbose=verbose,
-            )
-        else:
-            # metric_nn_descent = make_nn_descent(
-            #     distance_func, tuple(metric_kwds.values())
-            # )
-            # TODO: Hacked values for now
-            n_trees = 5 + int(round((X.shape[0]) ** 0.5 / 20.0))
-            n_iters = max(5, int(round(np.log2(X.shape[0]))))
-
-            if verbose:
-                print(ts(), "Building RP forest with", str(n_trees), "trees")
-            rp_forest = make_forest(X, n_neighbors, n_trees, rng_state, angular)
-            leaf_array = rptree_leaf_array(rp_forest)
-            if verbose:
-                print(ts(), "NN descent for", str(n_iters), "iterations")
-            knn_indices, knn_dists = nn_descent(
+        try:
+            # Use pynndescent, if installed (python 3 only)
+            from pynndescent import NNDescent
+            nnd = NNDescent(
                 X,
-                n_neighbors,
-                rng_state,
-                distance_func,
-                tuple(metric_kwds.values()),
-                max_candidates=60,
-                rp_tree_init=True,
-                leaf_array=leaf_array,
+                n_neighbors=n_neighbors,
+                metric=metric,
+                metric_kwds=metric_kwds,
+                random_state=random_state,
+                n_trees=n_trees,
                 n_iters=n_iters,
+                max_candidates=60,
                 verbose=verbose,
             )
+            knn_indices, knn_dists = nnd._neighbor_graph
+            rp_forest = nnd._rp_forest
+        except ImportError:
+            # Otherwise fall back to nn descent in umap
+            if callable(metric):
+                distance_func = metric
+            elif metric in dist.named_distances:
+                distance_func = dist.named_distances[metric]
+            else:
+                raise ValueError("Metric is neither callable, " + "nor a recognised string")
 
-        if np.any(knn_indices < 0):
-            warn(
-                "Failed to correctly find n_neighbors for some samples."
-                "Results may be less than ideal. Try re-running with"
-                "different parameters."
-            )
+            if metric in (
+                "cosine",
+                "correlation",
+                "dice",
+                "jaccard",
+                "ll_dirichlet",
+                "hellinger",
+            ):
+                angular = True
+
+            rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
+
+            if scipy.sparse.isspmatrix_csr(X):
+                if metric in sparse.sparse_named_distances:
+                    distance_func = sparse.sparse_named_distances[metric]
+                    if metric in sparse.sparse_need_n_features:
+                        metric_kwds["n_features"] = X.shape[1]
+                elif callable(metric):
+                    distance_func = metric
+                else:
+                    raise ValueError(
+                        "Metric {} not supported for sparse " + "data".format(metric)
+                    )
+                # metric_nn_descent = sparse.make_sparse_nn_descent(
+                #     distance_func, tuple(metric_kwds.values())
+                # )
+
+                if verbose:
+                    print(ts(), "Building RP forest with",  str(n_trees), "trees")
+
+                rp_forest = make_forest(X, n_neighbors, n_trees, rng_state, angular)
+                leaf_array = rptree_leaf_array(rp_forest)
+
+                if verbose:
+                    print(ts(), "NN descent for", str(n_iters), "iterations")
+                knn_indices, knn_dists = sparse_nn.sparse_nn_descent(
+                    X.indices,
+                    X.indptr,
+                    X.data,
+                    X.shape[0],
+                    n_neighbors,
+                    rng_state,
+                    distance_func,
+                    tuple(metric_kwds.values()),
+                    max_candidates=60,
+                    rp_tree_init=True,
+                    leaf_array=leaf_array,
+                    n_iters=n_iters,
+                    verbose=verbose,
+                )
+            else:
+                # metric_nn_descent = make_nn_descent(
+                #     distance_func, tuple(metric_kwds.values())
+                # )
+
+                if verbose:
+                    print(ts(), "Building RP forest with", str(n_trees), "trees")
+                rp_forest = make_forest(X, n_neighbors, n_trees, rng_state, angular)
+                leaf_array = rptree_leaf_array(rp_forest)
+                if verbose:
+                    print(ts(), "NN descent for", str(n_iters), "iterations")
+                knn_indices, knn_dists = nn_descent(
+                    X,
+                    n_neighbors,
+                    rng_state,
+                    distance_func,
+                    tuple(metric_kwds.values()),
+                    max_candidates=60,
+                    rp_tree_init=True,
+                    leaf_array=leaf_array,
+                    n_iters=n_iters,
+                    verbose=verbose,
+                )
+
+            if np.any(knn_indices < 0):
+                warn(
+                    "Failed to correctly find n_neighbors for some samples."
+                    "Results may be less than ideal. Try re-running with"
+                    "different parameters."
+                )
     if verbose:
         print(ts(), "Finished Nearest Neighbor Search")
     return knn_indices, knn_dists, rp_forest
@@ -409,6 +425,7 @@ def fuzzy_simplicial_set(
     angular=False,
     set_op_mix_ratio=1.0,
     local_connectivity=1.0,
+        apply_set_operations=True,
     verbose=False,
 ):
     """Given a set of data X, a neighborhood size, and a measure of distance
@@ -533,14 +550,15 @@ def fuzzy_simplicial_set(
     )
     result.eliminate_zeros()
 
-    transpose = result.transpose()
+    if apply_set_operations:
+        transpose = result.transpose()
 
-    prod_matrix = result.multiply(transpose)
+        prod_matrix = result.multiply(transpose)
 
-    result = (
-        set_op_mix_ratio * (result + transpose - prod_matrix)
-        + (1.0 - set_op_mix_ratio) * prod_matrix
-    )
+        result = (
+                set_op_mix_ratio * (result + transpose - prod_matrix)
+                + (1.0 - set_op_mix_ratio) * prod_matrix
+        )
 
     result.eliminate_zeros()
 
@@ -635,8 +653,47 @@ def fast_metric_intersection(
     return
 
 
+@numba.njit()
+def reprocess_row(probabilities):
+    target = np.log2(15)
+
+    lo = 0.0
+    hi = NPY_INFINITY
+    mid = 1.0
+
+    for n in range(128):
+
+        psum = 0.0
+        for j in range(probabilities.shape[0]):
+            psum += pow(probabilities[j], mid)
+
+        if np.fabs(psum - target) < SMOOTH_K_TOLERANCE:
+            break
+
+        if psum < target:
+            hi = mid
+            mid = (lo + hi) / 2.0
+        else:
+            lo = mid
+            if hi == NPY_INFINITY:
+                mid *= 2
+            else:
+                mid = (lo + hi) / 2.0
+
+    return np.power(probabilities, mid)
+
+
 @numba.jit()
-def reset_local_connectivity(simplicial_set):
+def reset_local_metrics(simplicial_set):
+    csr_mat = simplicial_set.tocsr()
+    for i in range(csr_mat.indptr.shape[0] - 1):
+        csr_mat.data[csr_mat.indptr[i]:csr_mat.indptr[i + 1]] = \
+            reprocess_row(csr_mat.data[csr_mat.indptr[i]:csr_mat.indptr[i + 1]])
+    return csr_mat.tocoo()
+
+
+@numba.jit()
+def reset_local_connectivity(simplicial_set, reset_local_metric=False):
     """Reset the local connectivity requirement -- each data sample should
     have complete confidence in at least one 1-simplex in the simplicial set.
     We can enforce this by locally rescaling confidences, and then remerging the
@@ -655,6 +712,8 @@ def reset_local_connectivity(simplicial_set):
         assumption restored.
     """
     simplicial_set = normalize(simplicial_set, norm="max")
+    if reset_local_metric:
+        simplicial_set = reset_local_metrics(simplicial_set)
     transpose = simplicial_set.transpose()
     prod_matrix = simplicial_set.multiply(transpose)
     simplicial_set = simplicial_set + transpose - prod_matrix
@@ -1423,15 +1482,13 @@ class UMAP(BaseEstimator):
         # Handle small cases efficiently by computing all distances
         if X.shape[0] < 4096 and not self.force_approximation_algorithm:
             self._small_data = True
-
-            if self.metric in ("ll_dirichlet", "hellinger"):
+            try:
+                dmat = pairwise_distances(X, metric=self.metric, **self._metric_kwds)
+            except ValueError: # metric is not supported by sklearn, fallback to pairwise special
                 if self._sparse_data:
                     dmat = dist.pairwise_special_metric(X.toarray(), metric=self.metric)
                 else:
                     dmat = dist.pairwise_special_metric(X, metric=self.metric)
-            else:
-                dmat = pairwise_distances(X, metric=self.metric, **self._metric_kwds)
-
             self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
                 dmat,
                 self._n_neighbors,
@@ -1443,6 +1500,7 @@ class UMAP(BaseEstimator):
                 self.angular_rp_forest,
                 self.set_op_mix_ratio,
                 self.local_connectivity,
+                True,
                 self.verbose,
             )
         else:
@@ -1469,6 +1527,7 @@ class UMAP(BaseEstimator):
                 self.angular_rp_forest,
                 self.set_op_mix_ratio,
                 self.local_connectivity,
+                True,
                 self.verbose,
             )
 
@@ -2264,6 +2323,7 @@ class DataFrameUMAP(BaseEstimator):
                         self.angular_rp_forest,
                         self.set_op_mix_ratio,
                         self.local_connectivity,
+                        False,
                         self.verbose,
                     )
                 else:
@@ -2299,6 +2359,7 @@ class DataFrameUMAP(BaseEstimator):
                         self.angular_rp_forest,
                         self.set_op_mix_ratio,
                         self.local_connectivity,
+                        False,
                         self.verbose,
                     )
                     # TODO: set up transform data
@@ -2311,7 +2372,10 @@ class DataFrameUMAP(BaseEstimator):
                     )
 
             print(self.graph_.data)
-            self.graph_ = reset_local_connectivity(self.graph_)
+            self.graph_ = reset_local_connectivity(
+                self.graph_,
+                reset_local_metrics=True,
+            )
 
         if self.n_epochs is None:
             n_epochs = 0

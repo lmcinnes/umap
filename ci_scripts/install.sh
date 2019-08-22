@@ -32,7 +32,7 @@ if [[ "$DISTRIB" == "conda" ]]; then
 #  fi
   chmod +x miniconda.sh && ./miniconda.sh -b -p $HOME/miniconda
   cd ..
-  export PATH=$HOME/miniconda3/bin:$PATH
+  export PATH=$HOME/miniconda/bin:$HOME/miniconda3/bin:$PATH
   conda update --yes conda
   popd
 
@@ -56,6 +56,7 @@ if [[ "$DISTRIB" == "conda" ]]; then
   python setup.py develop
 else
   pip install -e .
+  pip install pynndescent # test with optional pynndescent dependency
   pip install pandas
   pip install bokeh
   pip install datashader

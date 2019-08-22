@@ -986,6 +986,28 @@ def gaussian_energy_grad(x, y):
     return dist, grad
 
 
+@numba.njit(fastmath=True)
+def spherical_gaussian_grad(x, y):
+    mu_1 = x[0] - y[0]
+    mu_2 = x[1] - y[1]
+
+    sigma = x[2] + y[2]
+    sigma_sign = np.sign(sigma)
+
+    if sigma == 0:
+        return 10.0, np.array([0.0, 0.0, -1.0], dtype=np.float32)
+
+    dist = (mu_1 ** 2 + mu_2 ** 2) / np.abs(sigma) + 2 * np.log(np.abs(sigma)) + np.log(
+        2 * np.pi)
+    grad = np.empty(3, dtype=np.float32)
+
+    grad[0] = (2 * mu_1) / np.abs(sigma)
+    grad[1] = (2 * mu_2) / np.abs(sigma)
+    grad[2] = sigma_sign * (
+                -(mu_1 ** 2 + mu_2 ** 2) / (sigma ** 2) + (2 / np.abs(sigma)))
+
+    return dist, grad
+
 
 
 # Special discrete distances -- where x and y are objects, not vectors
