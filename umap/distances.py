@@ -198,26 +198,69 @@ def poincare(u, v):
 
 
 @numba.njit()
-def poincare_grad(u, v):
+def poincare_disk_grad(u, v, r=1.0):
     """Poincare distance.
 
     ..math::
         \delta (u, v) = 2 \frac{ \lVert  u - v \rVert ^2 }{ ( 1 - \lVert  u \rVert ^2 ) ( 1 - \lVert  v \rVert ^2 ) }
         D(x, y) = \operatorname{arcosh} (1+\delta (u,v))
     """
-    eps = 1e-6
-    sq_u_norm = np.sum(u * u) - eps
-    sq_v_norm = np.sum(v * v) - eps
-    sq_dist = np.sum(np.power(u - v, 2))
-    result = np.arccosh(1 + 2 * (sq_dist / ((1 - sq_u_norm) * (1 - sq_v_norm))))
+    eps = 1e-4
+    sq_u_norm = np.sum(u * u)
+    # Ensure we stay in the disk
+    if sq_u_norm > r:
+        for i in range(u.shape[0]):
+            u[i] = (r * (u[i] / (np.sqrt(sq_u_norm) + eps)))
+        sq_u_norm = np.sum(u * u)
 
-    d = np.sqrt(result)
-    e_grad = (u - v) / (eps + d)
+    sq_v_norm = np.sum(v * v)
+    # Ensure we stay in the disk
+    if sq_v_norm > r:
+        for i in range(u.shape[0]):
+            v[i] = (r * (v[i] / (np.sqrt(sq_u_norm) + eps)))
+        sq_v_norm = np.sum(v * v)
 
-    p_sq_norm = 1 - np.sum(np.power([u, v], 2))
-    r_grad = e_grad * (np.power(p_sq_norm, 2) / 4)
+    diff = (u - v)
+    sq_dist = np.sum(diff * diff)
+    denom_u = np.abs(r - sq_u_norm) + eps
+    denom_v = np.abs(r - sq_v_norm) + eps
+    denom = denom_u * denom_v
+    inner_term = 2 * r * sq_dist / denom
+    result = np.arccosh(1 + inner_term)
 
-    return result, r_grad
+    grad_coeff = 1.0 / (np.abs(np.sqrt(inner_term * (inner_term + 2))) + eps)
+    grad = np.zeros(u.shape[0])
+    for i in range(u.shape[0]):
+        grad[i] = grad_coeff * (4 * diff[i] +
+                                4 * u[i] * denom_v * sq_dist) / denom**2
+        grad[i] *= (1.0 / (r - np.sqrt(sq_u_norm) + 1.0)) # Hack to move more near infinity line
+
+    return result, grad
+
+
+@numba.njit()
+def poincare_half_plane_grad(x, y):
+
+    # Ensure x, y are valid half plane points not at infinity
+    x[1] = np.abs(x[1])
+    y[1] = np.abs(y[1])
+    if x[1] < 0.0001:
+        x[1] = 0.0001
+    if y[1] < 0.0001:
+        y[1] = 0.0001
+
+    dx = (x[0] - y[0])**2
+    dy = (x[1] - y[1])**2
+    A = ((dx + dy) / (2 * x[1] * y[1]))
+
+    result = np.arccosh(1.0 + A)
+    grad = np.zeros(2, dtype=np.float32)
+    coeff = 1.0 / (np.sqrt(A * (A + 2)) + 0.0001)
+    grad[0] = coeff * (x[0] - y[0]) / (2 * x[1] * y[1])
+    grad[1] = -coeff * (dx + y[1]**2 - x[1]**2) / (2 * x[1] * y[1]**2)
+    grad = (1.0 / x[1]) * grad # Hack to move more near infinity line
+
+    return result, grad
 
 
 @numba.njit()
@@ -1129,7 +1172,8 @@ named_distances_with_gradients = {
     "spherical_gaussian_energy": spherical_gaussian_energy_grad,
     "diagonal_gaussian_energy": diagonal_gaussian_energy_grad,
     "gaussian_energy": gaussian_energy_grad,
-    "poincare": poincare_grad,
+    "poincare_half_plane": poincare_half_plane_grad,
+    "poincare_disk": poincare_disk_grad,
 
 }
 
