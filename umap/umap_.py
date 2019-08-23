@@ -32,7 +32,7 @@ from umap.utils import (
     deheap_sort,
     submatrix,
     ts,
-    fast_knn_indices
+    fast_knn_indices,
 )
 from umap.rp_tree import rptree_leaf_array, make_forest
 from umap.nndescent import (
