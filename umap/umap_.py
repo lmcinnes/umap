@@ -1704,7 +1704,7 @@ class UMAP(BaseEstimator):
 
         embedding = optimize_layout(
             embedding,
-            self.embedding_.astype(np.float32, copy=True),  # Fixes #179 and #217
+            self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217
             head,
             tail,
             n_epochs,

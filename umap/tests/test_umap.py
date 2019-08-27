@@ -950,15 +950,16 @@ def test_umap_fit_params():
     res = u.fit(x)
     assert isinstance(res, UMAP)
 
+
 def test_umap_transform_embedding_stability():
     """Test that transforming data does not alter the learned embeddings
-    
+
     Issue #217 describes how using transform to embed new data using a
     trained UMAP transformer causes the fitting embedding matrix to change
     in cases when the new data has the same number of rows as the original
     training data.
     """
-    
+
     data = iris.data[iris_selection]
     fitter = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit(data)
     original_embedding = fitter.embedding_.copy()
@@ -971,7 +972,7 @@ def test_umap_transform_embedding_stability():
     assert_array_equal(original_embedding,
                        fitter.embedding_,
                        "Transforming new data changed the original embeddings")
-    
+
     # Example from issue #217
     a = np.random.random((1000, 10))
     b = np.random.random((1000, 5))
@@ -980,6 +981,6 @@ def test_umap_transform_embedding_stability():
     u1 = umap.fit_transform(a[:, :5])
     u1_orig = u1.copy()
     assert_array_equal(u1_orig, umap.embedding_)
-    
+
     u2 = umap.transform(b)
     assert_array_equal(u1_orig, umap.embedding_)
