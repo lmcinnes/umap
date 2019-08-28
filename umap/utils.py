@@ -405,7 +405,7 @@ def smallest_flagged(heap, row):
         return -1
 
 
-@numba.njit(parallel=True)
+@numba.njit()
 def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates, rng_state):
     """Build a heap of candidate neighbors for nearest neighbor descent. For
     each vertex the candidate neighbors are any current neighbors, and any

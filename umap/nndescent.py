@@ -43,7 +43,7 @@ def make_nn_descent(dist, dist_args):
     specialised to the given metric.
     """
 
-    @numba.njit(parallel=True)
+    @numba.njit()
     def nn_descent(
         data,
         n_neighbors,
