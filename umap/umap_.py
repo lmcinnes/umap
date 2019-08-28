@@ -876,10 +876,10 @@ def simplicial_set_embedding(
     random_state,
     metric,
     metric_kwds,
-    output_metric,
-    output_metric_kwds,
-    euclidean_output,
-    verbose,
+    output_metric=dist.named_distances_with_gradients["euclidean"],
+    output_metric_kwds={},
+    euclidean_output=True,
+    verbose=False,
 ):
     """Perform a fuzzy simplicial set embedding, using a specified
     initialisation method and then minimizing the fuzzy set cross entropy
