@@ -327,9 +327,9 @@ def compute_membership_strengths(knn_indices, knn_dists, sigmas, rhos):
     n_samples = knn_indices.shape[0]
     n_neighbors = knn_indices.shape[1]
 
-    rows = np.zeros((n_samples * n_neighbors), dtype=np.int64)
-    cols = np.zeros((n_samples * n_neighbors), dtype=np.int64)
-    vals = np.zeros((n_samples * n_neighbors), dtype=np.float64)
+    rows = np.zeros(knn_indices.size, dtype=np.int64)
+    cols = np.zeros(knn_indices.size, dtype=np.int64)
+    vals = np.zeros(knn_indices.size, dtype=np.float64)
 
     for i in range(n_samples):
         for j in range(n_neighbors):
