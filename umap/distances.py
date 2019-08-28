@@ -198,70 +198,26 @@ def poincare(u, v):
 
 
 @numba.njit()
-def poincare_disk_grad(u, v, r=1.0):
-    """Poincare distance.
+def hyperboloid_grad(x, y):
+    s = np.sqrt(1 + np.sum(x ** 2))
+    t = np.sqrt(1 + np.sum(y ** 2))
 
-    ..math::
-        \delta (u, v) = 2 \frac{ \lVert  u - v \rVert ^2 }{ ( 1 - \lVert  u \rVert ^2 ) ( 1 - \lVert  v \rVert ^2 ) }
-        D(x, y) = \operatorname{arcosh} (1+\delta (u,v))
-    """
-    eps = 1e-4
-    sq_u_norm = np.sum(u * u)
-    # Ensure we stay in the disk
-    if sq_u_norm > r:
-        for i in range(u.shape[0]):
-            u[i] = (r * (u[i] / (np.sqrt(sq_u_norm) + eps)))
-        sq_u_norm = np.sum(u * u)
+    B = s * t
+    for i in range(x.shape[0]):
+        B -= x[i] * y[i]
 
-    sq_v_norm = np.sum(v * v)
-    # Ensure we stay in the disk
-    if sq_v_norm > r:
-        for i in range(u.shape[0]):
-            v[i] = (r * (v[i] / (np.sqrt(sq_u_norm) + eps)))
-        sq_v_norm = np.sum(v * v)
+    if B <= 1:
+        B = 1.0 + 1e-8
 
-    diff = (u - v)
-    sq_dist = np.sum(diff * diff)
-    denom_u = np.abs(r - sq_u_norm) + eps
-    denom_v = np.abs(r - sq_v_norm) + eps
-    denom = denom_u * denom_v
-    inner_term = 2 * r * sq_dist / denom
-    result = np.arccosh(1 + inner_term)
+    grad_coeff = 1.0 / (np.sqrt(B - 1) * np.sqrt(B + 1))
 
-    grad_coeff = 1.0 / (np.abs(np.sqrt(inner_term * (inner_term + 2))) + eps)
-    grad = np.zeros(u.shape[0])
-    for i in range(u.shape[0]):
-        grad[i] = grad_coeff * (4 * diff[i] +
-                                4 * u[i] * denom_v * sq_dist) / denom**2
-        grad[i] *= (1.0 / (r - np.sqrt(sq_u_norm) + 1.0)) # Hack to move more near infinity line
+    # return np.arccosh(B), np.zeros(x.shape[0])
 
-    return result, grad
+    grad = np.zeros(x.shape[0])
+    for i in range(x.shape[0]):
+        grad[i] = grad_coeff * (((x[i] * t) / s) - y[i])
 
-
-@numba.njit()
-def poincare_half_plane_grad(x, y):
-
-    # Ensure x, y are valid half plane points not at infinity
-    x[1] = np.abs(x[1])
-    y[1] = np.abs(y[1])
-    if x[1] < 0.0001:
-        x[1] = 0.0001
-    if y[1] < 0.0001:
-        y[1] = 0.0001
-
-    dx = (x[0] - y[0])**2
-    dy = (x[1] - y[1])**2
-    A = ((dx + dy) / (2 * x[1] * y[1]))
-
-    result = np.arccosh(1.0 + A)
-    grad = np.zeros(2, dtype=np.float32)
-    coeff = 1.0 / (np.sqrt(A * (A + 2)) + 0.0001)
-    grad[0] = coeff * (x[0] - y[0]) / (2 * x[1] * y[1])
-    grad[1] = -coeff * (dx + y[1]**2 - x[1]**2) / (2 * x[1] * y[1]**2)
-    grad = (1.0 / x[1]) * grad # Hack to move more near infinity line
-
-    return result, grad
-
+    return np.arccosh(B), grad
 
 @numba.njit()
 def weighted_minkowski(x, y, w=_mock_ones, p=2):
@@ -1194,8 +1150,7 @@ named_distances_with_gradients = {
     "spherical_gaussian_energy": spherical_gaussian_energy_grad,
     "diagonal_gaussian_energy": diagonal_gaussian_energy_grad,
     "gaussian_energy": gaussian_energy_grad,
-    "poincare_half_plane": poincare_half_plane_grad,
-    "poincare_disk": poincare_disk_grad,
+    "hyperboloid": hyperboloid_grad,
 
 }
 
