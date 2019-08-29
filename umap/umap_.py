@@ -413,7 +413,6 @@ def compute_membership_strengths(knn_indices, knn_dists, sigmas, rhos):
     return rows, cols, vals
 
 
-@numba.jit()
 def fuzzy_simplicial_set(
     X,
     n_neighbors,
