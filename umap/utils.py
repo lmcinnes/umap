@@ -34,6 +34,12 @@ def fast_knn_indices(X, n_neighbors):
     return knn_indices
 
 
+@numba.njit("void(i8[:], i8)")
+def seed(rng_state, seed):
+    """Seed the random number generator with a given seed."""
+    rng_state.fill(seed + 0xFFFF)
+
+
 @numba.njit("i4(i8[:])")
 def tau_rand_int(state):
     """A fast (pseudo)-random number generator.

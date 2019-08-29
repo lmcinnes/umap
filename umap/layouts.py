@@ -1,7 +1,9 @@
+import joblib
+import math
 import numpy as np
 import numba
 import umap.distances as dist
-from umap.utils import tau_rand_int
+from umap.utils import seed, tau_rand_int
 
 
 @numba.njit()
@@ -46,7 +48,6 @@ def rdist(x, y):
     return result
 
 
-@numba.njit(fastmath=True, parallel=True)
 def optimize_layout_euclidean(
     head_embedding,
     tail_embedding,
@@ -61,6 +62,7 @@ def optimize_layout_euclidean(
     gamma=1.0,
     initial_alpha=1.0,
     negative_sample_rate=5.0,
+    n_jobs=None,
     verbose=False,
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
@@ -100,6 +102,10 @@ def optimize_layout_euclidean(
         Initial learning rate for the SGD.
     negative_sample_rate: int (optional, default 5)
         Number of negative samples to use per positive sample.
+    n_jobs: int or None, optional (default=None)
+        The number of parallel jobs to run for the computation.
+        ``None`` means 1 unless in a :obj:`joblib.parallel_backend` context.
+        ``-1`` means using all processors.
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
     Returns
@@ -116,70 +122,185 @@ def optimize_layout_euclidean(
     epoch_of_next_negative_sample = epochs_per_negative_sample.copy()
     epoch_of_next_sample = epochs_per_sample.copy()
 
-    for n in range(n_epochs):
-        for i in range(epochs_per_sample.shape[0]):
-            if epoch_of_next_sample[i] <= n:
-                j = head[i]
-                k = tail[i]
+    N = epochs_per_sample.shape[0]
+    effective_n_jobs = effective_n_jobs_with_context(n_jobs)
+    chunk_size = int(math.ceil(N / effective_n_jobs))
 
-                current = head_embedding[j]
+    with joblib.Parallel(prefer="threads", n_jobs=n_jobs) as parallel:
+        for n in range(n_epochs):
+
+            _optimize_layout_euclidean_single_epoch_joblib(
+                head_embedding,
+                tail_embedding,
+                head,
+                tail,
+                n_vertices,
+                epochs_per_sample,
+                a,
+                b,
+                rng_state,
+                gamma,
+                dim,
+                move_other,
+                alpha,
+                epochs_per_negative_sample,
+                epoch_of_next_negative_sample,
+                epoch_of_next_sample,
+                n,
+                N,
+                effective_n_jobs,
+                chunk_size,
+                parallel,
+            )
+
+            alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
+
+            if verbose and n % int(n_epochs / 10) == 0:
+                print("\tcompleted ", n, " / ", n_epochs, "epochs")
+
+        return head_embedding
+
+
+def _optimize_layout_euclidean_single_epoch_joblib(
+    head_embedding,
+    tail_embedding,
+    head,
+    tail,
+    n_vertices,
+    epochs_per_sample,
+    a,
+    b,
+    rng_state,
+    gamma,
+    dim,
+    move_other,
+    alpha,
+    epochs_per_negative_sample,
+    epoch_of_next_negative_sample,
+    epoch_of_next_sample,
+    n,
+    N,
+    n_tasks,
+    chunk_size,
+    parallel,
+):
+    def inner_fn(index):
+        local_rng_state = rng_state.copy()
+        seed(local_rng_state, index)
+        _optimize_layout_euclidean_single_epoch_subrange(
+            head_embedding,
+            tail_embedding,
+            head,
+            tail,
+            n_vertices,
+            epochs_per_sample,
+            a,
+            b,
+            local_rng_state,
+            gamma,
+            dim,
+            move_other,
+            alpha,
+            epochs_per_negative_sample,
+            epoch_of_next_negative_sample,
+            epoch_of_next_sample,
+            n,
+            chunk_size * index,
+            min(chunk_size * (index + 1), N),
+        )
+
+    parallel(parallel_calls(inner_fn, n_tasks))
+
+
+@numba.njit(fastmath=True, nogil=True)
+def _optimize_layout_euclidean_single_epoch_subrange(
+    head_embedding,
+    tail_embedding,
+    head,
+    tail,
+    n_vertices,
+    epochs_per_sample,
+    a,
+    b,
+    rng_state,
+    gamma,
+    dim,
+    move_other,
+    alpha,
+    epochs_per_negative_sample,
+    epoch_of_next_negative_sample,
+    epoch_of_next_sample,
+    n,
+    start,
+    end,
+):
+    for i in range(start, end):
+        if epoch_of_next_sample[i] <= n:
+            j = head[i]
+            k = tail[i]
+
+            current = head_embedding[j]
+            other = tail_embedding[k]
+
+            dist_squared = rdist(current, other)
+
+            if dist_squared > 0.0:
+                grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
+                grad_coeff /= a * pow(dist_squared, b) + 1.0
+            else:
+                grad_coeff = 0.0
+
+            for d in range(dim):
+                grad_d = clip(grad_coeff * (current[d] - other[d]))
+                current[d] += grad_d * alpha
+                if move_other:
+                    other[d] += -grad_d * alpha
+
+            epoch_of_next_sample[i] += epochs_per_sample[i]
+
+            n_neg_samples = int(
+                (n - epoch_of_next_negative_sample[i]) / epochs_per_negative_sample[i]
+            )
+
+            for p in range(n_neg_samples):
+                k = tau_rand_int(rng_state) % n_vertices
+
                 other = tail_embedding[k]
 
                 dist_squared = rdist(current, other)
 
                 if dist_squared > 0.0:
-                    grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
-                    grad_coeff /= a * pow(dist_squared, b) + 1.0
+                    grad_coeff = 2.0 * gamma * b
+                    grad_coeff /= (0.001 + dist_squared) * (
+                        a * pow(dist_squared, b) + 1
+                    )
+                elif j == k:
+                    continue
                 else:
                     grad_coeff = 0.0
 
                 for d in range(dim):
-                    grad_d = clip(grad_coeff * (current[d] - other[d]))
-                    current[d] += grad_d * alpha
-                    if move_other:
-                        other[d] += -grad_d * alpha
-
-                epoch_of_next_sample[i] += epochs_per_sample[i]
-
-                n_neg_samples = int(
-                    (n - epoch_of_next_negative_sample[i])
-                    / epochs_per_negative_sample[i]
-                )
-
-                for p in range(n_neg_samples):
-                    k = tau_rand_int(rng_state) % n_vertices
-
-                    other = tail_embedding[k]
-
-                    dist_squared = rdist(current, other)
-
-                    if dist_squared > 0.0:
-                        grad_coeff = 2.0 * gamma * b
-                        grad_coeff /= (0.001 + dist_squared) * (
-                            a * pow(dist_squared, b) + 1
-                        )
-                    elif j == k:
-                        continue
+                    if grad_coeff > 0.0:
+                        grad_d = clip(grad_coeff * (current[d] - other[d]))
                     else:
-                        grad_coeff = 0.0
+                        grad_d = 4.0
+                    current[d] += grad_d * alpha
 
-                    for d in range(dim):
-                        if grad_coeff > 0.0:
-                            grad_d = clip(grad_coeff * (current[d] - other[d]))
-                        else:
-                            grad_d = 4.0
-                        current[d] += grad_d * alpha
+            epoch_of_next_negative_sample[i] += (
+                n_neg_samples * epochs_per_negative_sample[i]
+            )
 
-                epoch_of_next_negative_sample[i] += (
-                    n_neg_samples * epochs_per_negative_sample[i]
-                )
 
-        alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
+def parallel_calls(fn, n_tasks):
+    return [(fn, [i], {}) for i in range(n_tasks)]
 
-        if verbose and n % int(n_epochs / 10) == 0:
-            print("\tcompleted ", n, " / ", n_epochs, "epochs")
 
-    return head_embedding
+def effective_n_jobs_with_context(n_jobs=None):
+    """Find the effective number of jobs, either specified directly, or from the joblib.parallel_backend context."""
+    if n_jobs is None:
+        _, n_jobs_from_context = joblib.parallel.get_active_backend()
+        n_jobs = n_jobs_from_context
+    return joblib.effective_n_jobs(n_jobs)
 
 
 @numba.njit(fastmath=True)

@@ -874,6 +874,7 @@ def simplicial_set_embedding(
     output_metric=dist.named_distances_with_gradients["euclidean"],
     output_metric_kwds={},
     euclidean_output=True,
+    n_jobs=None,
     verbose=False,
 ):
     """Perform a fuzzy simplicial set embedding, using a specified
@@ -1029,6 +1030,7 @@ def simplicial_set_embedding(
             gamma,
             initial_alpha,
             negative_sample_rate,
+            n_jobs=n_jobs,
             verbose=verbose,
         )
     else:
@@ -1698,6 +1700,7 @@ class UMAP(BaseEstimator):
             self._output_distance_func,
             self._output_metric_kwds,
             self.output_metric in ("euclidean", "l2"),
+            None,
             self.verbose,
         )
 
@@ -1886,6 +1889,8 @@ class UMAP(BaseEstimator):
         # )
 
         if self.output_metric == "euclidean":
+            # use a single core for reproducibility if a seed has been set, otherwise use all cores
+            n_jobs = 1 if self.random_state is not None else -1
             embedding = optimize_layout_euclidean(
                 embedding,
                 self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217,
@@ -1900,6 +1905,7 @@ class UMAP(BaseEstimator):
                 self.repulsion_strength,
                 self._initial_alpha / 4.0,
                 self.negative_sample_rate,
+                n_jobs,
                 verbose=self.verbose,
             )
         else:
@@ -2423,6 +2429,7 @@ class DataFrameUMAP(BaseEstimator):
             self._output_distance_func,
             self._output_metric_kwds,
             self.output_metric in ("euclidean", "l2"),
+            None,
             self.verbose,
         )
 
