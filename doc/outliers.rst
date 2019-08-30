@@ -9,7 +9,7 @@ what to look out for, by finding anomalous digits in the MNIST
 handwritten digits dataset. To start with let's load the relevant
 libraries:
 
-.. code:: ipython3
+.. code:: python3
 
     import numpy as np
     import sklearn.datasets
@@ -22,7 +22,7 @@ libraries:
 With this in hand, let's grab the MNIST digits dataset from the
 internet, using the new ``fetch_ml`` loader in sklearn.
 
-.. code:: ipython3
+.. code:: python3
 
     data, labels = sklearn.datasets.fetch_openml('mnist_784', version=1, return_X_y=True)
 
@@ -42,7 +42,7 @@ data that the user expects to be noise. For this use case we will set it
 to 0.001428 since, given the 70,000 samples in MNIST, this will result
 in 100 outliers, which we can then look at in more detail.
 
-.. code:: ipython3
+.. code:: python3
 
     %%time
     outlier_scores = sklearn.neighbors.LocalOutlierFactor(contamination=0.001428).fit_predict(data)
@@ -65,7 +65,7 @@ Now that we have a set of outlier scores we can find the actual outlying
 digit images -- these are the ones with scores equal to -1. Let's
 extract out that data, and check that we got 100 different digit images.
 
-.. code:: ipython3
+.. code:: python3
 
     outlying_digits = data[outlier_scores == -1]
     outlying_digits.shape
@@ -85,7 +85,7 @@ convert the 784 dimensional vectors back into image and plot them,
 making it easier to look at. Since we extracted the 100 most outlying
 digit images we can just display a 10x10 grid of them.
 
-.. code:: ipython3
+.. code:: python3
 
     fig, axes = plt.subplots(7, 10, figsize=(10,10))
     for i, ax in enumerate(axes.flatten()):
@@ -105,13 +105,13 @@ Now let's try a naive approach using UMAP and see how far that gets us.
 First let's just apply UMAP directly with default parameters to the
 MNIST data.
 
-.. code:: ipython3
+.. code:: python3
 
     mapper = umap.UMAP().fit(data)
 
 Now we can see what we got using the new plotting tools in umap.plot.
 
-.. code:: ipython3
+.. code:: python3
 
     umap.plot.points(mapper, labels=labels)
 
@@ -133,7 +133,7 @@ lost that information and contracted the outliers into the individual
 digit clusters? We can simply apply LOF to the embedding and see what
 that returns.
 
-.. code:: ipython3
+.. code:: python3
 
     %%time
     outlier_scores = sklearn.neighbors.LocalOutlierFactor(contamination=0.001428).fit_predict(mapper.embedding_)
@@ -143,7 +143,7 @@ dimensional space that is more amenable to the spatial indexing methods
 that sklearn uses to find nearest neighbors. As before we extract the
 outlying digit images, and verify that we got 100 of them,
 
-.. code:: ipython3
+.. code:: python3
 
     outlying_digits = data[outlier_scores == -1]
     outlying_digits.shape
@@ -160,7 +160,7 @@ outlying digit images, and verify that we got 100 of them,
 Now we need to plot the outlying digit images to see what kinds of digit
 images this approach found to be particularly strange.
 
-.. code:: ipython3
+.. code:: python3
 
     fig, axes = plt.subplots(7, 10, figsize=(10,10))
     for i, ax in enumerate(axes.flatten()):
@@ -179,7 +179,7 @@ dimensional LOF found to be strange were indeed somewhat odd looking,
 many of these digit images are considerably stranger -- significantly
 odd line thickness, warped shapes, and images that are hard to even
 recognise as digits. This helps to demonstrate a certain amount of
-confirmation bias when examining outliers: since we expect tings tagged
+confirmation bias when examining outliers: since we expect things tagged
 as outliers to be strange we tend to find aspects of them that justify
 that classification, potentially unaware of how much stranger some of
 the data may in fact be. This should make us wary of even this outlier
@@ -187,7 +187,7 @@ set: what else might lurk in the dataset?
 
 We can, in fact, potentially improve on this result by tuning the UMAP
 embedding a little for the task of finding outliers. When UMAP combines
-together the different local simplicial sets (see `How UMAP Works <>`__
+together the different local simplicial sets (see :ref:`how_umap_works`
 for more details) the standard approach uses a union, but we could
 instead take an intersection. An intersection ensures that outliers
 remain disconnected, which is certainly beneficial when seeking to find
@@ -202,11 +202,11 @@ setting this to a lower value, say 0.25, we can encourage the embedding
 to do a better job of preserving outliers as outlying, while still
 retaining the benefits of a union operation.
 
-.. code:: ipython3
+.. code:: python3
 
     mapper = umap.UMAP(set_op_mix_ratio=0.25).fit(data)
 
-.. code:: ipython3
+.. code:: python3
 
     umap.plot.points(mapper, labels=labels)
 
@@ -228,12 +228,12 @@ hypothesis by running LOF on this embedding and looking at the resulting
 digit images we get out. Ideally we should expect to find some
 potentially even stranger results.
 
-.. code:: ipython3
+.. code:: python3
 
     %%time
     outlier_scores = sklearn.neighbors.LocalOutlierFactor(contamination=0.001428).fit_predict(mapper.embedding_)
 
-.. code:: ipython3
+.. code:: python3
 
     outlying_digits = data[outlier_scores == -1]
     outlying_digits.shape
@@ -250,7 +250,7 @@ potentially even stranger results.
 We have the expected 100 most outlying digit images, so let's visualise
 the results and see if they really are particularly strange.
 
-.. code:: ipython3
+.. code:: python3
 
     fig, axes = plt.subplots(10, 10, figsize=(10,10))
     for i, ax in enumerate(axes.flatten()):

@@ -11,14 +11,14 @@ the majority of plotting needs easy, and help provide sensible plotting
 choices wherever possible. To get started looking at the plotting
 options let's load a variety of data to work with.
 
-.. code:: ipython3
+.. code:: python3
 
     import sklearn.datasets
     import pandas as pd
     import numpy as np
     import umap
 
-.. code:: ipython3
+.. code:: python3
 
     pendigits = sklearn.datasets.load_digits()
     mnist = sklearn.datasets.fetch_openml('mnist_784')
@@ -27,7 +27,7 @@ options let's load a variety of data to work with.
 To start we will fit a UMAP model to the pendigits data. This is as
 simple as running the fit method and assigning the result to a variable.
 
-.. code:: ipython3
+.. code:: python3
 
     mapper = umap.UMAP().fit(pendigits.data)
 
@@ -46,7 +46,7 @@ particular you will need:
 All should be either pip or conda installable. With those in hand you
 can import the ``umap.plot`` package.
 
-.. code:: ipython3
+.. code:: python3
 
     import umap.plot
 
@@ -56,7 +56,7 @@ straightforward thing to do is plot the umap results as points. We can
 achieve this via the function ``umap.plot.points``. In its most basic
 form you can simply pass the trained UMAP model to ``umap.plot.points``:
 
-.. code:: ipython3
+.. code:: python3
 
     umap.plot.points(mapper)
 
@@ -80,7 +80,7 @@ passing the array of label information in with the ``labels`` keyword.
 The ``umap.plot.points`` function will the color the data with a
 categorical colormap according to the labels provided.
 
-.. code:: ipython3
+.. code:: python3
 
     umap.plot.points(mapper, labels=pendigits.target)
 
@@ -111,7 +111,7 @@ predefined color choices. Themes include:
 Here we will make use of the 'fire' theme to demonstrate how simple if
 is to chance the aesthetics.
 
-.. code:: ipython3
+.. code:: python3
 
     umap.plot.points(mapper, values=pendigits.data.mean(axis=1), theme='fire')
 
@@ -124,7 +124,7 @@ but use a black background and use the 'Paired' colormap for the
 categorical coloring (passed as ``color_key_cmap``; the ``cmap`` keyword
 defines the continuous colormap).
 
-.. code:: ipython3
+.. code:: python3
 
     umap.plot.points(mapper, labels=pendigits.target, color_key_cmap='Paired', background='black')
 
@@ -158,7 +158,7 @@ datashader for rendering once your dataset gets large enough. This help
 to ensure you don't get fooled by overplotting. We can see this in
 action by working with one of the larger datasets such as Fashion-MNIST.
 
-.. code:: ipython3
+.. code:: python3
 
     mapper = umap.UMAP().fit(fmnist.data)
 
@@ -167,7 +167,7 @@ as before, but this time, since the data is large enough to have
 potential overplotting, datashader will be used in the background for
 rendering.
 
-.. code:: ipython3
+.. code:: python3
 
     umap.plot.points(mapper)
 
@@ -184,7 +184,7 @@ plotting with datashader, or how to convert your plotting to its
 slightly different API -- you can just use the same API and trust the
 resuts you get.
 
-.. code:: ipython3
+.. code:: python3
 
     umap.plot.points(mapper, labels=fmnist.target, theme='fire')
 
@@ -210,7 +210,7 @@ up and running fast.
 To make a good example of this let's use a subset of the Fashion MNIST
 dataset. We can quickly train a new mapper object on that.
 
-.. code:: ipython3
+.. code:: python3
 
     mapper = umap.UMAP().fit(fmnist.data[:30000])
 
@@ -226,7 +226,7 @@ of the point, its target number, and the actual name of the type of
 fashion item tat target corresponds to. This is easy to quickly put
 together using pandas.
 
-.. code:: ipython3
+.. code:: python3
 
     hover_data = pd.DataFrame({'index':np.arange(30000),
                                'label':fmnist.target[:30000]})
@@ -252,7 +252,7 @@ inline in a notebook. We have to enable this using the
 or other similar options -- see the bokeh documentation for more
 details.
 
-.. code:: ipython3
+.. code:: python3
 
     umap.plot.output_notebook()
 
@@ -276,7 +276,7 @@ dataframe, will provide hover tooltips in the interactive plot. Since
 bokeh allows different outputs, to display it in the notebook we will
 have to take the extra stop of calling ``show`` on the result.
 
-.. code:: ipython3
+.. code:: python3
 
     p = umap.plot.interactive(mapper, labels=fmnist.target[:30000], hover_data=hover_data, point_size=2)
     umap.plot.show(p)
@@ -314,7 +314,7 @@ diagnostic purposes. To see the connectivity you can use the
 display the embedding point, or just the connectivity. To start let's do
 a simple plot showing the points:
 
-.. code:: ipython3
+.. code:: python3
 
     umap.plot.connectivity(mapper, show_points=True)
 
@@ -332,7 +332,7 @@ available in datashader. This can provide a less busy view of
 connectivity, but can be expensive to compute, particularly for larger
 datasets.
 
-.. code:: ipython3
+.. code:: python3
 
     umap.plot.connectivity(mapper, edge_bundling='hammer')
 
@@ -351,7 +351,7 @@ views on data are better, of course, so ``umap.plot`` includes a
 plots. We'll look at a few of them here. To do so we'll use the full
 MNIST digits data set.
 
-.. code:: ipython3
+.. code:: python3
 
     mapper = umap.UMAP().fit(mnist.data)
 
@@ -365,7 +365,7 @@ points in the UMAP embedding with the colors induced by the PCA it is
 possible to get a sense of how some of the more large scale global
 structure has been represented in the embedding.
 
-.. code:: ipython3
+.. code:: python3
 
     umap.plot.diagnostic(mapper, diagnostic_type='pca')
 
@@ -392,7 +392,7 @@ and then describes each data point in terms of its distance to these
 centers. Clearly this, again, captures a lot of the broad global
 structure of the data.
 
-.. code:: ipython3
+.. code:: python3
 
     umap.plot.diagnostic(mapper, diagnostic_type='vq')
 
@@ -416,7 +416,7 @@ areas of the space) that UMAP will have a harder time embedding as well.
 Thus one can trust the embedding to be more accurate in regions where
 the points have consistently lower local dimension.
 
-.. code:: ipython3
+.. code:: python3
 
     local_dims = umap.plot.diagnostic(mapper, diagnostic_type='local_dim')
 
@@ -445,7 +445,7 @@ neighborhoods have in common over the total number of unique neighbors
 across the two neighborhoods. Higher values mean that the local
 neighborhood has been more accurately preserved.
 
-.. code:: ipython3
+.. code:: python3
 
     umap.plot.diagnostic(mapper, diagnostic_type='neighborhood')
 

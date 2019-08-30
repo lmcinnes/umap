@@ -14,7 +14,7 @@ will not be using the ``umap.plot`` functionality, but working with
 matplotlib directly since we'll be generating some custom visualizations
 for some of the more unique embedding spaces.
 
-.. code:: ipython3
+.. code:: python3
 
     import numpy as np
     import numba
@@ -25,7 +25,7 @@ for some of the more unique embedding spaces.
     import umap
     %matplotlib inline
 
-.. code:: ipython3
+.. code:: python3
 
     sns.set(style='white', rc={'figure.figsize':(10,10)})
 
@@ -33,7 +33,7 @@ As a test dataset we'll use the PenDigits dataset from sklearn --
 embedding into exotic spaces can be considerably more computationally
 taxing, so a simple relatively small dataset is going to be useful.
 
-.. code:: ipython3
+.. code:: python3
 
     digits = sklearn.datasets.load_digits()
 
@@ -46,11 +46,11 @@ familiar with how this works, and what the result of a UMAP embedding of
 the PenDigits dataset looks like in the simple case of embedding in the
 plane.
 
-.. code:: ipython3
+.. code:: python3
 
     plane_mapper = umap.UMAP(random_state=42).fit(digits.data)
 
-.. code:: ipython3
+.. code:: python3
 
     plt.scatter(plane_mapper.embedding_.T[0], plane_mapper.embedding_.T[1], c=digits.target, cmap='Spectral')
 
@@ -73,7 +73,7 @@ sphere, given in latitude and longitude (in radians). If we set the
 ``output_metric`` to ``"haversine"`` then UMAP will use that to measure
 distance in the embedding space.
 
-.. code:: ipython3
+.. code:: python3
 
     sphere_mapper = umap.UMAP(output_metric='haversine', random_state=42).fit(digits.data) 
 
@@ -81,7 +81,7 @@ The result is the pendigits data embedded with respect to haversine
 distance on a sphere. The catch is that if we visualize this naively
 then we will get nonsense.
 
-.. code:: ipython3
+.. code:: python3
 
     plt.scatter(sphere_mapper.embedding_.T[0], sphere_mapper.embedding_.T[1], c=digits.target, cmap='Spectral')
 
@@ -97,7 +97,7 @@ ranges :math:`(-\pi, \pi)` and :math:`(0, 2\pi)`, so this isn't the
 right representation of the data. We can, however, use straightforward
 formulas to map this data onto a sphere embedded in 3-space.
 
-.. code:: ipython3
+.. code:: python3
 
     x = np.sin(sphere_mapper.embedding_[:, 0]) * np.cos(sphere_mapper.embedding_[:, 1])
     y = np.sin(sphere_mapper.embedding_[:, 0]) * np.sin(sphere_mapper.embedding_[:, 1])
@@ -109,7 +109,7 @@ matplotlib's 3d plotting capabilities, and see that we have in fact
 induced a quite reasonable embedding of the data onto the surface of a
 sphere.
 
-.. code:: ipython3
+.. code:: python3
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
@@ -123,12 +123,12 @@ If you prefer a 2d plot we can convert these into lat/long coordinates
 in the appropriate ranges and get the equivalent of a map projection of
 the sphere data.
 
-.. code:: ipython3
+.. code:: python3
 
     x = np.arctan2(x, y)
     y = -np.arccos(z)
 
-.. code:: ipython3
+.. code:: python3
 
     plt.scatter(x, y, c=digits.target.astype(np.int32), cmap='Spectral')
 
@@ -166,7 +166,7 @@ check for which is the shorter direction -- across or wrapping around --
 and ensure we account for the equivalence of wrapping around several
 times. We can write a simple function to calculate that.
 
-.. code:: ipython3
+.. code:: python3
 
     @numba.njit(fastmath=True)
     def torus_euclidean_grad(x, y, torus_dimensions=(2*np.pi,2*np.pi)):
@@ -194,7 +194,7 @@ wrapped around to compute the distance. We can now plug that function
 directly in to the ``output_metric`` parameter and end up embedding data
 on a torus.
 
-.. code:: ipython3
+.. code:: python3
 
     torus_mapper = umap.UMAP(output_metric=torus_euclidean_grad, random_state=42).fit(digits.data) 
 
@@ -204,7 +204,7 @@ also just like the torus, we can construct a suitable visualization by
 computing the 3d coordinates for the points using a little bit of
 straightforward geometry (yes, I still had to look it up to check).
 
-.. code:: ipython3
+.. code:: python3
 
     R = 3 # Size of the doughnut circle
     r = 1 # Size of the doughnut cross-section
@@ -216,7 +216,7 @@ straightforward geometry (yes, I still had to look it up to check).
 Now we can visualize the result using matplotlib and see that, indeed,
 the data has been suitably embedded onto a torus.
 
-.. code:: ipython3
+.. code:: python3
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
@@ -232,12 +232,12 @@ the data has been suitably embedded onto a torus.
 And as with the torus we can do a little geometry and unwrap the torus
 into a flat plane with the appropriate bounds.
 
-.. code:: ipython3
+.. code:: python3
 
     u = np.arctan2(x,y)
     v = np.arctan2(np.sqrt(x**2 + y**2) - R, z)
 
-.. code:: ipython3
+.. code:: python3
 
     plt.scatter(u, v, c=digits.target, cmap='Spectral')
 
@@ -276,7 +276,7 @@ defined already. Note that we have to specifically pass
 dimensional space to support all the covariance parameters associated to
 2d Gaussians.
 
-.. code:: ipython3
+.. code:: python3
 
     gaussian_mapper = umap.UMAP(output_metric='gaussian_energy', 
                                 n_components=5,
@@ -288,7 +288,7 @@ the results by looking at just the means, which are the 2d locations of
 the modes of the Gaussians. A traditional scatter plot will suffice for
 this.
 
-.. code:: ipython3
+.. code:: python3
 
     plt.scatter(gaussian_mapper.embedding_.T[0], gaussian_mapper.embedding_.T[1], c=digits.target, cmap='Spectral')
 
@@ -307,7 +307,7 @@ function to draw ellipses on a plot accoriding to a position, a with, a
 height, and and angle (since this is the format the embedding computed
 the data).
 
-.. code:: ipython3
+.. code:: python3
 
     from matplotlib.patches import Ellipse
     
@@ -329,7 +329,7 @@ associated Gaussians. The obvious catch is that this will induce a lot
 of over-plotting, but it will at least provide a way to start
 understanding the embedding we have produced.
 
-.. code:: ipython3
+.. code:: python3
 
     fig = plt.figure(figsize=(10,10))
     ax = fig.add_subplot(111)
@@ -365,7 +365,7 @@ this structure better by plotting only a single ellipse per point and
 using a lower alpha channel value for the ellipses, making them more
 translucent.
 
-.. code:: ipython3
+.. code:: python3
 
     fig = plt.figure(figsize=(10,10))
     ax = fig.add_subplot(111)
@@ -401,7 +401,7 @@ of several Gaussians; and a function to generate the density for each
 point in some grid (summing only over nearby Gaussians to make this
 naive approach more computable).
 
-.. code:: ipython3
+.. code:: python3
 
     from sklearn.neighbors import KDTree
     
@@ -443,20 +443,20 @@ bounds seen above, and a grid size selected for the sake of
 computability. The numpy ``meshgrid`` function can supply the actual
 grid.
 
-.. code:: ipython3
+.. code:: python3
 
     X, Y = np.meshgrid(np.linspace(-7, 9, 300), np.linspace(-8, 8, 300))
 
 Now we can use the function defined above to compute the density at each
 point in the grid, given the Gaussians produced by the embedding.
 
-.. code:: ipython3
+.. code:: python3
 
     Z = create_density_plot(X, Y, gaussian_mapper.embedding_)
 
 Now we can view the result as a density plot using ``imshow``.
 
-.. code:: ipython3
+.. code:: python3
 
     plt.imshow(Z, origin='lower', cmap='Reds', extent=(-7, 9, -8, 8), vmax=0.0005)
     plt.colorbar()
@@ -482,6 +482,8 @@ is shown below; you may note it is similar to famous images by M.C.
 Escher.
 
 .. image:: images/Hyperbolic_tiling.png
+   :height: 400 px
+   :width: 400 px
 
 
 Ideally we would be able to embed directly into this Poincare disk
@@ -503,7 +505,7 @@ corresponding z coordinate when we need to compute distances. This model
 has been implemented under the distance metric ``"hyperboloid"`` so we
 can simply use it out-of-the-box.
 
-.. code:: ipython3
+.. code:: python3
 
     hyperbolic_mapper = umap.UMAP(output_metric='hyperboloid', 
                                   random_state=42).fit(digits.data)
@@ -511,7 +513,7 @@ can simply use it out-of-the-box.
 A straightforward visualization option is to simply view the x and y
 coordinates we have arrived at:
 
-.. code:: ipython3
+.. code:: python3
 
     plt.scatter(hyperbolic_mapper.embedding_.T[0], 
                 hyperbolic_mapper.embedding_.T[1], 
@@ -524,13 +526,13 @@ coordinates we have arrived at:
 We can also solve for the z coordinate and view the data lying on a
 hyperboloid in 3d space.
 
-.. code:: ipython3
+.. code:: python3
 
     x = hyperbolic_mapper.embedding_[:, 0]
     y = hyperbolic_mapper.embedding_[:, 1]
     z = np.sqrt(1 + np.sum(hyperbolic_mapper.embedding_**2, axis=1))
 
-.. code:: ipython3
+.. code:: python3
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
@@ -546,7 +548,7 @@ But we can do more -- since we have embedded the data successfully in
 hyperbolic space we can map the data into the Poincare disk model. This
 is, in fact, a straightforward computation.
 
-.. code:: ipython3
+.. code:: python3
 
     disk_x = x / (1 + z)
     disk_y = y / (1 + z)
@@ -555,7 +557,7 @@ Now we can visualize the data in a Poincare disk model embedding as we
 first wanted. For this we simply generate a scatterplot of the data, and
 then draw in the bounding circle of the line at infinity.
 
-.. code:: ipython3
+.. code:: python3
 
     fig = plt.figure()
     ax = fig.add_subplot(111)
