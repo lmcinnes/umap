@@ -30,7 +30,7 @@ import umap.distances as dist
 import umap.sparse as sparse
 import umap.sparse_nndescent as sparse_nn
 
-from umap.utils import tau_rand_int, deheap_sort, submatrix, ts
+from umap.utils import tau_rand_int, deheap_sort, submatrix, ts, csr_unique
 from umap.rp_tree import rptree_leaf_array, make_forest
 from umap.nndescent import (
     # make_nn_descent,
@@ -1266,6 +1266,12 @@ class UMAP(BaseEstimator):
 
     verbose: bool (optional, default False)
         Controls verbosity of logging.
+        
+    unique: bool (optional, default False)
+        Controls if the rows of your data should be uniqued before being
+        embedded.  If you have more duplicates than you have n_neighbour
+        you can have the identical data points lying in different regions of 
+        your space.  It also violates the definition of a metric.
     """
 
     def __init__(
@@ -1297,6 +1303,7 @@ class UMAP(BaseEstimator):
         transform_seed=42,
         force_approximation_algorithm=False,
         verbose=False,
+        unique=False
     ):
 
         self.n_neighbors = n_neighbors
@@ -1329,6 +1336,7 @@ class UMAP(BaseEstimator):
         self.transform_seed = transform_seed
         self.force_approximation_algorithm = force_approximation_algorithm
         self.verbose = verbose
+        self.unique = unique
 
         self.a = a
         self.b = b
@@ -1398,6 +1406,12 @@ class UMAP(BaseEstimator):
                 raise ValueError(
                     "output_metric is neither callable, " + "nor a recognised string"
                 )
+        if((self.unique==True) and (self.metric == "precomputed")):
+            raise ValueError("unique is poorly defined on a precomputed metric")
+
+
+
+
 
     def fit(self, X, y=None):
         """Fit X into an embedded space.
@@ -1451,9 +1465,29 @@ class UMAP(BaseEstimator):
         if self.verbose:
             print(str(self))
 
+        #NEW CODE
+        #Check if we should unique the data
+        #We've already ensured that we aren't in the precomputed case
+        if self.unique:
+            #check if the matrix is dense
+            if scipy.sparse.isspmatrix_csr(X):
+                #Call a sparse unique function
+                index, inverse, counts = csr_unique(X)
+            else:
+                index, inverse, counts = np.unique(X, return_index=True, return_inverse=True, return_counts=True, axis=0)[1:4]
+            if self.verbose:
+                print('Unique=True -> Number of data points reduced from ',X.shape[0],' to ',X[index].shape[0])
+                most_common = np.argmax(counts)
+                print('Most common duplicate is', index[most_common], ' with a count of ', counts[most_common])
+        #If we aren't asking for unique use the full index.  
+        #This will save special cases later.
+        else:
+            index = list(range(X.shape[0]))
+            inverse = list(range(X.shape[0]))
+
         # Error check n_neighbors based on data size
-        if X.shape[0] <= self.n_neighbors:
-            if X.shape[0] == 1:
+        if X[index].shape[0] <= self.n_neighbors:
+            if X[index].shape[0] == 1:
                 self.embedding_ = np.zeros(
                     (1, self.n_components)
                 )  # needed to sklearn comparability
@@ -1463,10 +1497,12 @@ class UMAP(BaseEstimator):
                 "n_neighbors is larger than the dataset size; truncating to "
                 "X.shape[0] - 1"
             )
-            self._n_neighbors = X.shape[0] - 1
+            self._n_neighbors = X[index].shape[0] - 1
         else:
             self._n_neighbors = self.n_neighbors
 
+       #I could make the unique check a subcall of this... 
+       #probably less readable
         if scipy.sparse.isspmatrix_csr(X):
             if not X.has_sorted_indices:
                 X.sort_indices()
@@ -1480,15 +1516,15 @@ class UMAP(BaseEstimator):
             print("Construct fuzzy simplicial set")
 
         # Handle small cases efficiently by computing all distances
-        if X.shape[0] < 4096 and not self.force_approximation_algorithm:
+        if X[index].shape[0] < 4096 and not self.force_approximation_algorithm:
             self._small_data = True
             try:
-                dmat = pairwise_distances(X, metric=self.metric, **self._metric_kwds)
+                dmat = pairwise_distances(X[index], metric=self.metric, **self._metric_kwds)
             except ValueError: # metric is not supported by sklearn, fallback to pairwise special
                 if self._sparse_data:
-                    dmat = dist.pairwise_special_metric(X.toarray(), metric=self.metric)
+                    dmat = dist.pairwise_special_metric(X[index].toarray(), metric=self.metric)
                 else:
-                    dmat = dist.pairwise_special_metric(X, metric=self.metric)
+                    dmat = dist.pairwise_special_metric(X[index], metric=self.metric)
             self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
                 dmat,
                 self._n_neighbors,
@@ -1507,7 +1543,7 @@ class UMAP(BaseEstimator):
             self._small_data = False
             # Standard case
             (self._knn_indices, self._knn_dists, self._rp_forest) = nearest_neighbors(
-                X,
+                X[index],
                 self._n_neighbors,
                 self.metric,
                 self._metric_kwds,
@@ -1517,7 +1553,7 @@ class UMAP(BaseEstimator):
             )
 
             self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
-                X,
+                X[index],
                 self.n_neighbors,
                 random_state,
                 self.metric,
@@ -1532,7 +1568,7 @@ class UMAP(BaseEstimator):
             )
 
             self._search_graph = scipy.sparse.lil_matrix(
-                (X.shape[0], X.shape[0]), dtype=np.int8
+                (X[index].shape[0], X[index].shape[0]), dtype=np.int8
             )
             self._search_graph.rows = self._knn_indices
             self._search_graph.data = (self._knn_dists != 0).astype(np.int8)
@@ -1567,6 +1603,8 @@ class UMAP(BaseEstimator):
                 #     self._distance_func, self._dist_args
                 # )
 
+        #Currently not checking if any duplicate points have differing labels
+        #Might be worth throwing a warning...
         if y is not None:
             len_X = len(X) if not scipy.sparse.issparse(X) else X.shape[0]
             if len_X != len(y):
@@ -1575,7 +1613,7 @@ class UMAP(BaseEstimator):
                         len_x=len_X, len_y=len(y)
                     )
                 )
-            y_ = check_array(y, ensure_2d=False)
+            y_ = check_array(y, ensure_2d=False)[index]
             if self.target_metric == "categorical":
                 if self.target_weight < 1.0:
                     far_dist = 2.5 * (1.0 / (1.0 - self.target_weight))
@@ -1667,7 +1705,7 @@ class UMAP(BaseEstimator):
             print(ts(), "Construct embedding")
 
         self.embedding_ = simplicial_set_embedding(
-            self._raw_data,
+            self._raw_data[index],  #JH why raw data?
             self.graph_,
             self.n_components,
             self._initial_alpha,
@@ -1684,7 +1722,7 @@ class UMAP(BaseEstimator):
             self._output_metric_kwds,
             self.output_metric in ("euclidean", "l2"),
             self.verbose,
-        )
+        )[inverse]
 
         if self.verbose:
             print(ts() + " Finished embedding")

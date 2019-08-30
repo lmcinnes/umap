@@ -1,4 +1,3 @@
-
 from nose import SkipTest
 from functools import wraps
 from tempfile import mkdtemp
