@@ -277,7 +277,7 @@ def _datashade_points(
         unique_values = np.unique(values)
         if unique_values.shape[0] >= 256:
             min_val, max_val = np.min(values), np.max(values)
-            bin_size = (max_val - min_val) / 256.0
+            bin_size = (max_val - min_val) / 255.0
             data["val_cat"] = pd.Categorical(
                 np.round((values - min_val) / bin_size).astype(np.int16)
             )
