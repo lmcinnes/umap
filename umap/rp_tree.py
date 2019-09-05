@@ -79,7 +79,7 @@ def angular_random_projection_split(data, indices, rng_state):
 
     for d in range(dim):
         hyperplane_vector[d] = (data[left, d] / left_norm) - (
-                data[right, d] / right_norm
+            data[right, d] / right_norm
         )
 
     hyperplane_norm = norm(hyperplane_vector)
@@ -131,7 +131,7 @@ def angular_random_projection_split(data, indices, rng_state):
     return indices_left, indices_right, hyperplane_vector, None
 
 
-@numba.njit(fastmath=True, nogil=True, parallel=True)
+@numba.njit(fastmath=True, nogil=True)
 def euclidean_random_projection_split(data, indices, rng_state):
     """Given a set of ``indices`` for data points from ``data``, create
     a random hyperplane to split the data, returning two arrays indices
@@ -175,7 +175,7 @@ def euclidean_random_projection_split(data, indices, rng_state):
     for d in range(dim):
         hyperplane_vector[d] = data[left, d] - data[right, d]
         hyperplane_offset -= (
-                hyperplane_vector[d] * (data[left, d] + data[right, d]) / 2.0
+            hyperplane_vector[d] * (data[left, d] + data[right, d]) / 2.0
         )
 
     # For each point compute the margin (project into normal vector, add offset)
@@ -602,7 +602,7 @@ def max_sparse_hyperplane_size(tree):
 
 
 def recursive_flatten(
-        tree, hyperplanes, offsets, children, indices, node_num, leaf_num
+    tree, hyperplanes, offsets, children, indices, node_num, leaf_num
 ):
     if tree.is_leaf:
         children[node_num, 0] = -leaf_num
@@ -626,7 +626,7 @@ def recursive_flatten(
             indices,
             node_num + 1,
             leaf_num,
-            )
+        )
         children[old_node_num, 1] = node_num + 1
         node_num, leaf_num = recursive_flatten(
             tree.right_child,
@@ -636,7 +636,7 @@ def recursive_flatten(
             indices,
             node_num + 1,
             leaf_num,
-            )
+        )
         return node_num, leaf_num
 
 

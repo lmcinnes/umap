@@ -27,11 +27,13 @@ import numpy as np
 import os.path
 from nose.tools import assert_greater_equal
 from nose.tools import assert_less
+
 """
 Tests for UMAP to ensure things are working as expected.
 """
 import warnings
-warnings.filterwarnings('ignore', category=UserWarning)
+
+warnings.filterwarnings("ignore", category=UserWarning)
 
 from sklearn import datasets
 
@@ -1124,8 +1126,23 @@ def test_umap_sparse_transform_on_iris():
     assert_greater_equal(
         trust,
         0.85,
-        "Insufficiently trustworthy transform for" "iris dataset: {}".format(
-            trust),
+        "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust),
+    )
+
+
+def test_umap_transform_on_iris_modified_dtype():
+    data = iris.data[iris_selection]
+    fitter = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit(data)
+    fitter.embedding_ = fitter.embedding_.astype(np.float64)
+
+    new_data = iris.data[~iris_selection]
+    embedding = fitter.transform(new_data)
+
+    trust = trustworthiness(new_data, embedding, 10)
+    assert_greater_equal(
+        trust,
+        0.89,
+        "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust),
     )
 
 
@@ -1232,7 +1249,7 @@ def test_bad_too_large_min_dist():
     # a RuntimeWarning about division by zero in a,b curve fitting is expected
     # caught and ignored for this test
     with warnings.catch_warnings():
-        warnings.filterwarnings('ignore', category=RuntimeWarning)
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
         assert_raises(ValueError, u.fit, nn_data)
 
 
@@ -1362,12 +1379,12 @@ def test_umap_fit_params():
     # x and y are required to be the same length
     u = UMAP()
     x = np.random.uniform(0, 1, (256, 10))
-    y = np.random.randint(10, size=(257, 1))
+    y = np.random.randint(10, size=(257,))
     assert_raises(ValueError, u.fit, x, y)
 
     u = UMAP()
     x = np.random.uniform(0, 1, (256, 10))
-    y = np.random.randint(10, size=(255, 1))
+    y = np.random.randint(10, size=(255,))
     assert_raises(ValueError, u.fit, x, y)
 
     u = UMAP()
@@ -1376,7 +1393,7 @@ def test_umap_fit_params():
 
     u = UMAP()
     x = np.random.uniform(0, 1, (256, 10))
-    y = np.random.randint(10, size=(256, 1))
+    y = np.random.randint(10, size=(256,))
     res = u.fit(x, y)
     assert isinstance(res, UMAP)
 
@@ -1384,6 +1401,41 @@ def test_umap_fit_params():
     x = np.random.uniform(0, 1, (256, 10))
     res = u.fit(x)
     assert isinstance(res, UMAP)
+
+
+def test_umap_transform_embedding_stability():
+    """Test that transforming data does not alter the learned embeddings
+
+    Issue #217 describes how using transform to embed new data using a
+    trained UMAP transformer causes the fitting embedding matrix to change
+    in cases when the new data has the same number of rows as the original
+    training data.
+    """
+
+    data = iris.data[iris_selection]
+    fitter = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit(data)
+    original_embedding = fitter.embedding_.copy()
+
+    # The important point is that the new data has the same number of rows
+    # as the original fit data
+    new_data = np.random.random(data.shape)
+    embedding = fitter.transform(new_data)
+
+    assert_array_equal(original_embedding,
+                       fitter.embedding_,
+                       "Transforming new data changed the original embeddings")
+
+    # Example from issue #217
+    a = np.random.random((1000, 10))
+    b = np.random.random((1000, 5))
+
+    umap = UMAP()
+    u1 = umap.fit_transform(a[:, :5])
+    u1_orig = u1.copy()
+    assert_array_equal(u1_orig, umap.embedding_)
+
+    u2 = umap.transform(b)
+    assert_array_equal(u1_orig, umap.embedding_)
 
 def test_dataframe_umap_bad_params():
     u = DataFrameUMAP(metrics=[('e', 'euclidean', [0, 1, 2, 3, 4])], set_op_mix_ratio=-1.0)
