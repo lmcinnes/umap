@@ -178,7 +178,11 @@ def minkowski_grad(x, y, p=2):
 
     grad = np.empty(x.shape[0], dtype=np.float32)
     for i in range(x.shape[0]):
-        grad[i] = pow(np.abs(x[i] - y[i]), (p - 1.0)) * sign(x[i] - y[i]) * pow(result, (1.0 / (p - 1)))
+        grad[i] = (
+            pow(np.abs(x[i] - y[i]), (p - 1.0))
+            * sign(x[i] - y[i])
+            * pow(result, (1.0 / (p - 1)))
+        )
 
     return result ** (1.0 / p), grad
 
@@ -219,6 +223,7 @@ def hyperboloid_grad(x, y):
 
     return np.arccosh(B), grad
 
+
 @numba.njit()
 def weighted_minkowski(x, y, w=_mock_ones, p=2):
     """A weighted version of Minkowski distance.
@@ -254,8 +259,12 @@ def weighted_minkowski_grad(x, y, w=_mock_ones, p=2):
 
     grad = np.empty(x.shape[0], dtype=np.float32)
     for i in range(x.shape[0]):
-        grad[i] = w[i] ** p * pow(np.abs(x[i] - y[i]), (p - 1.0)) * \
-                  sign(x[i] - y[i]) * pow(result, (1.0 / (p - 1)))
+        grad[i] = (
+            w[i] ** p
+            * pow(np.abs(x[i] - y[i]), (p - 1.0))
+            * sign(x[i] - y[i])
+            * pow(result, (1.0 / (p - 1)))
+        )
 
     return result ** (1.0 / p), grad
 
@@ -328,8 +337,10 @@ def canberra_grad(x, y):
         denominator = np.abs(x[i]) + np.abs(y[i])
         if denominator > 0:
             result += np.abs(x[i] - y[i]) / denominator
-            grad[i] = np.sign(x[i] - y[i]) / denominator - \
-                      np.abs(x[i] - y[i]) * np.sign(x[i]) / denominator ** 2
+            grad[i] = (
+                np.sign(x[i] - y[i]) / denominator
+                - np.abs(x[i] - y[i]) * np.sign(x[i]) / denominator ** 2
+            )
 
     return result, grad
 
@@ -423,7 +434,7 @@ def kulsinski(x, y):
         return 0.0
     else:
         return float(num_not_equal - num_true_true + x.shape[0]) / (
-                num_not_equal + x.shape[0]
+            num_not_equal + x.shape[0]
         )
 
 
@@ -506,11 +517,16 @@ def haversine_grad(x, y):
     a_1 = a_0 + sin_lat ** 2
 
     d = 2.0 * np.arcsin(np.sqrt(min(max(abs(a_1), 0), 1)))
-    denom = (np.sqrt(abs(a_1 - 1)) * np.sqrt(abs(a_1)))
-    grad = np.array([
-        (sin_lat * cos_lat - np.sin(x[0] + np.pi / 2) * np.cos(y[0] + np.pi / 2) * sin_long ** 2),
-        (np.cos(x[0] + np.pi / 2) * np.cos(y[0] + np.pi / 2) * sin_long * cos_long),
-    ]) / (denom + 1e-6)
+    denom = np.sqrt(abs(a_1 - 1)) * np.sqrt(abs(a_1))
+    grad = np.array(
+        [
+            (
+                sin_lat * cos_lat
+                - np.sin(x[0] + np.pi / 2) * np.cos(y[0] + np.pi / 2) * sin_long ** 2
+            ),
+            (np.cos(x[0] + np.pi / 2) * np.cos(y[0] + np.pi / 2) * sin_long * cos_long),
+        ]
+    ) / (denom + 1e-6)
     return d, grad
 
 
@@ -532,7 +548,7 @@ def yule(x, y):
         return 0.0
     else:
         return (2.0 * num_true_false * num_false_true) / (
-                num_true_true * num_false_false + num_true_false * num_false_true
+            num_true_true * num_false_false + num_true_false * num_false_true
         )
 
 
@@ -650,8 +666,7 @@ def hellinger_grad(x, y):
         dist_denom = np.sqrt(l1_norm_x * l1_norm_y)
         dist = np.sqrt(1 - result / dist_denom)
         grad_denom = 2 * dist
-        grad_numer_const = (l1_norm_y * result) / \
-                           (2 * dist_denom ** 3)
+        grad_numer_const = (l1_norm_y * result) / (2 * dist_denom ** 3)
 
         grad = (grad_numer_const - (y / grad_term * dist_denom)) / grad_denom
 
@@ -695,6 +710,7 @@ def log_single_beta(x):
 #  x2*(4722116521.0/176160768.0 + x2*(-968383680827.0/3087007744.0 +\
 #  x2*(14717667114151.0/3355443200.0 ))))))))))))
 
+
 @numba.njit()
 def ll_dirichlet(data1, data2):
     """ The symmetric relative log likelihood of rolling data2 vs data1
@@ -724,8 +740,10 @@ def ll_dirichlet(data1, data2):
             if data2[i] > 0.9:
                 self_denom2 += log_single_beta(data2[i])
 
-    return np.sqrt(1.0 / n2 * (log_b - log_beta(n1, n2) - (self_denom2 - log_single_beta(n2))) + \
-                   1.0 / n1 * (log_b - log_beta(n2, n1) - (self_denom1 - log_single_beta(n1))))
+    return np.sqrt(
+        1.0 / n2 * (log_b - log_beta(n1, n2) - (self_denom2 - log_single_beta(n2)))
+        + 1.0 / n1 * (log_b - log_beta(n2, n1) - (self_denom1 - log_single_beta(n1)))
+    )
 
 
 @numba.njit()
@@ -820,6 +838,7 @@ def sinkhorn_distance(x, y, M=_mock_identity, cost=_mock_cost, maxiter=64):
 #
 #     return dist, grad
 
+
 @numba.njit(fastmath=True)
 def spherical_gaussian_energy_grad(x, y):
     mu_1 = x[0] - y[0]
@@ -828,12 +847,12 @@ def spherical_gaussian_energy_grad(x, y):
     sigma = np.abs(x[2]) + np.abs(y[2])
     sign_sigma = np.sign(x[2])
 
-    dist = (mu_1 ** 2 + mu_2 **2) / (2 * sigma) + np.log(sigma) + np.log(2*np.pi)
+    dist = (mu_1 ** 2 + mu_2 ** 2) / (2 * sigma) + np.log(sigma) + np.log(2 * np.pi)
     grad = np.empty(3, np.float32)
 
     grad[0] = mu_1 / sigma
     grad[1] = mu_2 / sigma
-    grad[2] = sign_sigma * (1.0 / sigma - (mu_1 ** 2 + mu_2 **2) / (2 * sigma**2))
+    grad[2] = sign_sigma * (1.0 / sigma - (mu_1 ** 2 + mu_2 ** 2) / (2 * sigma ** 2))
 
     return dist, grad
 
@@ -853,14 +872,16 @@ def diagonal_gaussian_energy_grad(x, y):
 
     if det == 0.0:
         # TODO: figure out the right thing to do here
-        return mu_1**2 + mu_2**2, np.array([0.0, 0.0, 1.0, 1.0], dtype=np.float32)
+        return mu_1 ** 2 + mu_2 ** 2, np.array([0.0, 0.0, 1.0, 1.0], dtype=np.float32)
 
     cross_term = 2 * sigma_12
-    m_dist = np.abs(sigma_22) * (mu_1 ** 2) - \
-             cross_term * mu_1 * mu_2 + \
-             np.abs(sigma_11) * (mu_2 ** 2)
+    m_dist = (
+        np.abs(sigma_22) * (mu_1 ** 2)
+        - cross_term * mu_1 * mu_2
+        + np.abs(sigma_11) * (mu_2 ** 2)
+    )
 
-    dist = (m_dist / det + np.log(np.abs(det))) / 2.0 + np.log(2*np.pi)
+    dist = (m_dist / det + np.log(np.abs(det))) / 2.0 + np.log(2 * np.pi)
     grad = np.empty(6, dtype=np.float32)
 
     grad[0] = (2 * sigma_22 * mu_1 - cross_term * mu_2) / (2 * det)
@@ -889,9 +910,9 @@ def gaussian_energy_grad(x, y):
     y[4] = np.arcsin(np.sin(y[4]))
 
     # Covariance entries for y
-    a = y[2] * np.cos(y[4])**2 + y[3] * np.sin(y[4]) **2
+    a = y[2] * np.cos(y[4]) ** 2 + y[3] * np.sin(y[4]) ** 2
     b = (y[2] - y[3]) * np.sin(y[4]) * np.cos(y[4])
-    c = y[3] * np.cos(y[4])**2 + y[2] * np.sin(y[4]) **2
+    c = y[3] * np.cos(y[4]) ** 2 + y[2] * np.sin(y[4]) ** 2
 
     # Sum of covariance matrices
     sigma_11 = x[2] * np.cos(x[4]) ** 2 + x[3] * np.sin(x[4]) ** 2 + a
@@ -900,39 +921,41 @@ def gaussian_energy_grad(x, y):
 
     # Determinant of the sum of covariances
     det_sigma = np.abs(sigma_11 * sigma_22 - sigma_12 ** 2)
-    x_inv_sigma_y_numerator = (sigma_22 * mu_1 ** 2
-            - 2 * sigma_12 * mu_1 * mu_2
-            + sigma_11 * mu_2 ** 2)
+    x_inv_sigma_y_numerator = (
+        sigma_22 * mu_1 ** 2 - 2 * sigma_12 * mu_1 * mu_2 + sigma_11 * mu_2 ** 2
+    )
 
     if det_sigma < 1e-32:
-        return mu_1**2 + mu_2**2, np.array([0.0, 0.0, 1.0, 1.0, 0.0], dtype=np.float32)
+        return (
+            mu_1 ** 2 + mu_2 ** 2,
+            np.array([0.0, 0.0, 1.0, 1.0, 0.0], dtype=np.float32),
+        )
 
-    dist = x_inv_sigma_y_numerator / det_sigma \
-           + np.log(det_sigma) \
-           + np.log(2 * np.pi)
+    dist = x_inv_sigma_y_numerator / det_sigma + np.log(det_sigma) + np.log(2 * np.pi)
 
     grad = np.zeros(5, np.float32)
     grad[0] = (2 * sigma_22 * mu_1 - 2 * sigma_12 * mu_2) / det_sigma
     grad[1] = (2 * sigma_11 * mu_2 - 2 * sigma_12 * mu_1) / det_sigma
 
-    grad[2] = mu_2 * (mu_2 * np.cos(x[4])**2 - mu_1 * np.cos(x[4]) * np.sin(x[4]))
-    grad[2] += mu_1 * (mu_1 * np.sin(x[4])**2 - mu_2 * np.cos(x[4]) * np.sin(x[4]))
+    grad[2] = mu_2 * (mu_2 * np.cos(x[4]) ** 2 - mu_1 * np.cos(x[4]) * np.sin(x[4]))
+    grad[2] += mu_1 * (mu_1 * np.sin(x[4]) ** 2 - mu_2 * np.cos(x[4]) * np.sin(x[4]))
     grad[2] *= det_sigma
-    grad[2] -= x_inv_sigma_y_numerator * np.cos(x[4])**2 * sigma_22
-    grad[2] -= x_inv_sigma_y_numerator * np.sin(x[4])**2 * sigma_11
+    grad[2] -= x_inv_sigma_y_numerator * np.cos(x[4]) ** 2 * sigma_22
+    grad[2] -= x_inv_sigma_y_numerator * np.sin(x[4]) ** 2 * sigma_11
     grad[2] += x_inv_sigma_y_numerator * 2 * sigma_12 * np.sin(x[4]) * np.cos(x[4])
     grad[2] /= det_sigma ** 2 + 1e-8
 
-    grad[3] = mu_1 * (mu_1 * np.cos(x[4])**2 - mu_2 * np.cos(x[4]) * np.sin(x[4]))
-    grad[3] += mu_2 * (mu_2 * np.sin(x[4])**2 - mu_1 * np.cos(x[4]) * np.sin(x[4]))
+    grad[3] = mu_1 * (mu_1 * np.cos(x[4]) ** 2 - mu_2 * np.cos(x[4]) * np.sin(x[4]))
+    grad[3] += mu_2 * (mu_2 * np.sin(x[4]) ** 2 - mu_1 * np.cos(x[4]) * np.sin(x[4]))
     grad[3] *= det_sigma
-    grad[3] -= x_inv_sigma_y_numerator * np.sin(x[4])**2 * sigma_22
-    grad[3] -= x_inv_sigma_y_numerator * np.cos(x[4])**2 * sigma_11
+    grad[3] -= x_inv_sigma_y_numerator * np.sin(x[4]) ** 2 * sigma_22
+    grad[3] -= x_inv_sigma_y_numerator * np.cos(x[4]) ** 2 * sigma_11
     grad[3] -= x_inv_sigma_y_numerator * 2 * sigma_12 * np.sin(x[4]) * np.cos(x[4])
     grad[3] /= det_sigma ** 2 + 1e-8
 
-    grad[4] = (x[3] - x[2]) * (2 * mu_1 * mu_2 * np.cos(2 * x[4]) - (mu_1**2 - mu_2**2) * np.sin(
-        2 * x[4]))
+    grad[4] = (x[3] - x[2]) * (
+        2 * mu_1 * mu_2 * np.cos(2 * x[4]) - (mu_1 ** 2 - mu_2 ** 2) * np.sin(2 * x[4])
+    )
     grad[4] *= det_sigma
     grad[4] -= x_inv_sigma_y_numerator * (x[3] - x[2]) * np.sin(2 * x[4]) * sigma_22
     grad[4] -= x_inv_sigma_y_numerator * (x[2] - x[3]) * np.sin(2 * x[4]) * sigma_11
@@ -953,44 +976,43 @@ def spherical_gaussian_grad(x, y):
     if sigma == 0:
         return 10.0, np.array([0.0, 0.0, -1.0], dtype=np.float32)
 
-    dist = (mu_1 ** 2 + mu_2 ** 2) / np.abs(sigma) + 2 * np.log(np.abs(sigma)) + np.log(
-        2 * np.pi)
+    dist = (
+        (mu_1 ** 2 + mu_2 ** 2) / np.abs(sigma)
+        + 2 * np.log(np.abs(sigma))
+        + np.log(2 * np.pi)
+    )
     grad = np.empty(3, dtype=np.float32)
 
     grad[0] = (2 * mu_1) / np.abs(sigma)
     grad[1] = (2 * mu_2) / np.abs(sigma)
     grad[2] = sigma_sign * (
-                -(mu_1 ** 2 + mu_2 ** 2) / (sigma ** 2) + (2 / np.abs(sigma)))
+        -(mu_1 ** 2 + mu_2 ** 2) / (sigma ** 2) + (2 / np.abs(sigma))
+    )
 
     return dist, grad
 
 
-
 # Special discrete distances -- where x and y are objects, not vectors
 
+
 def get_discrete_params(data, metric):
-    if metric == 'ordinal':
-        return {'support_size': float(data.max() - data.min()) / 2.0}
-    elif metric == 'count':
+    if metric == "ordinal":
+        return {"support_size": float(data.max() - data.min()) / 2.0}
+    elif metric == "count":
         min_count = scipy.stats.tmin(data)
         max_count = scipy.stats.tmax(data)
         lambda_ = scipy.stats.tmean(data)
-        normalisation = count_distance(
-            min_count, max_count, poisson_lambda=lambda_
-        )
+        normalisation = count_distance(min_count, max_count, poisson_lambda=lambda_)
         return {
-            'poisson_lambda': lambda_,
-            'normalisation': normalisation / 2.0,  # heuristic
+            "poisson_lambda": lambda_,
+            "normalisation": normalisation / 2.0,  # heuristic
         }
-    elif metric == 'string':
+    elif metric == "string":
         lengths = np.array([len(x) for x in data])
         max_length = scipy.stats.tmax(lengths)
         max_dist = max_length / 1.5  # heuristic
         normalisation = max_dist / 2.0  # heuristic
-        return {
-            'normalisation': normalisation,
-            'max_dist': max_dist / 2.0,  # heuristic
-        }
+        return {"normalisation": normalisation, "max_dist": max_dist / 2.0}  # heuristic
 
     else:
         return {}
@@ -1151,15 +1173,14 @@ named_distances_with_gradients = {
     "diagonal_gaussian_energy": diagonal_gaussian_energy_grad,
     "gaussian_energy": gaussian_energy_grad,
     "hyperboloid": hyperboloid_grad,
-
 }
 
 DISCRETE_METRICS = (
-    'categorical',
-    'hierarchical_categorical',
-    'ordinal',
-    'count',
-    'string',
+    "categorical",
+    "hierarchical_categorical",
+    "ordinal",
+    "count",
+    "string",
 )
 
 

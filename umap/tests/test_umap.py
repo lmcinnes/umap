@@ -1,4 +1,3 @@
-
 from nose import SkipTest
 from functools import wraps
 from tempfile import mkdtemp
@@ -40,10 +39,7 @@ from sklearn import datasets
 import umap.distances as dist
 import umap.sparse as spdist
 import umap.validation as valid
-from umap.nndescent import (
-    initialized_nnd_search,
-    initialise_search,
-)
+from umap.nndescent import initialized_nnd_search, initialise_search
 from umap.sparse_nndescent import (
     sparse_initialized_nnd_search,
     sparse_initialise_search,
@@ -58,7 +54,7 @@ from umap.umap_ import (
     smooth_knn_dist,
     fuzzy_simplicial_set,
     UMAP,
-    DataFrameUMAP
+    DataFrameUMAP,
 )
 
 np.random.seed(42)
@@ -66,10 +62,9 @@ spatial_data = np.random.randn(10, 20)
 spatial_data = np.vstack(
     [spatial_data, np.zeros((2, 20))]
 )  # Add some all zero data for corner case test
-binary_data = np.random.choice(
-    a=[False, True], size=(10, 20), p=[0.66, 1 - 0.66])
+binary_data = np.random.choice(a=[False, True], size=(10, 20), p=[0.66, 1 - 0.66])
 binary_data = np.vstack(
-    [binary_data, np.zeros((2, 20), dtype='bool')]
+    [binary_data, np.zeros((2, 20), dtype="bool")]
 )  # Add some all zero data for corner case test
 sparse_spatial_data = sparse.csr_matrix(spatial_data * binary_data)
 sparse_binary_data = sparse.csr_matrix(binary_data)
@@ -78,26 +73,21 @@ nn_data = np.random.uniform(0, 1, size=(1000, 5))
 nn_data = np.vstack(
     [nn_data, np.zeros((2, 5))]
 )  # Add some all zero data for corner case test
-binary_nn_data = np.random.choice(
-    a=[False, True], size=(1000, 5), p=[0.66, 1 - 0.66])
+binary_nn_data = np.random.choice(a=[False, True], size=(1000, 5), p=[0.66, 1 - 0.66])
 binary_nn_data = np.vstack(
-    [binary_nn_data, np.zeros((2, 5), dtype='bool')]
+    [binary_nn_data, np.zeros((2, 5), dtype="bool")]
 )  # Add some all zero data for corner case test
 sparse_test_data = sparse.csr_matrix(nn_data * binary_nn_data)
-sparse_nn_data = sparse.random(1000, 50, density=0.5, format='csr')
+sparse_nn_data = sparse.random(1000, 50, density=0.5, format="csr")
 
 iris = datasets.load_iris()
-iris_selection = np.random.choice(
-    [True, False], 150, replace=True, p=[0.75, 0.25])
+iris_selection = np.random.choice([True, False], 150, replace=True, p=[0.75, 0.25])
 
-iris_model = UMAP(n_neighbors=10,
-                  min_dist=0.01,
-                  random_state=42).fit(iris.data)
+iris_model = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit(iris.data)
 
-supervised_iris_model = UMAP(n_neighbors=10, min_dist=0.01,
-                             n_epochs=200, random_state=42).fit(
-    iris.data, iris.target
-)
+supervised_iris_model = UMAP(
+    n_neighbors=10, min_dist=0.01, n_epochs=200, random_state=42
+).fit(iris.data, iris.target)
 
 spatial_distances = (
     "euclidean",
@@ -122,6 +112,7 @@ binary_distances = (
     "sokalsneath",
     "yule",
 )
+
 
 def spatial_check(metric):
     dist_matrix = pairwise_distances(spatial_data, metric=metric)
@@ -178,9 +169,7 @@ def binary_check(metric):
 
 def sparse_spatial_check(metric):
     if metric in spdist.sparse_named_distances:
-        dist_matrix = pairwise_distances(
-            sparse_spatial_data.todense(), metric=metric
-        )
+        dist_matrix = pairwise_distances(sparse_spatial_data.todense(), metric=metric)
     if metric in ("braycurtis", "dice", "sokalsneath", "yule"):
         dist_matrix[np.where(~np.isfinite(dist_matrix))] = 0.0
     if metric in ("cosine", "correlation", "kulsinski", "russellrao"):
@@ -231,9 +220,7 @@ def sparse_spatial_check(metric):
 
 def sparse_binary_check(metric):
     if metric in spdist.sparse_named_distances:
-        dist_matrix = pairwise_distances(
-            sparse_binary_data.todense(), metric=metric
-        )
+        dist_matrix = pairwise_distances(sparse_binary_data.todense(), metric=metric)
     if metric in ("jaccard", "dice", "sokalsneath", "yule"):
         dist_matrix[np.where(~np.isfinite(dist_matrix))] = 0.0
     if metric in ("kulsinski", "russellrao"):
@@ -241,7 +228,6 @@ def sparse_binary_check(metric):
         # And because distance between all zero vectors should be zero
         dist_matrix[10, 11] = 0.0
         dist_matrix[11, 10] = 0.0
-
 
     dist_function = spdist.sparse_named_distances[metric]
     if metric in spdist.sparse_need_n_features:
@@ -336,8 +322,7 @@ def test_sparse_nn_descent_neighbor_accuracy():
     )
 
     tree = KDTree(sparse_nn_data.todense())
-    true_indices = tree.query(sparse_nn_data.todense(),
-                              10, return_distance=False)
+    true_indices = tree.query(sparse_nn_data.todense(), 10, return_distance=False)
 
     num_correct = 0.0
     for i in range(sparse_nn_data.shape[0]):
@@ -462,8 +447,7 @@ def test_nn_search():
         False,
     )
 
-    search_graph = sparse.lil_matrix(
-        (train.shape[0], train.shape[0]), dtype=np.int8)
+    search_graph = sparse.lil_matrix((train.shape[0], train.shape[0]), dtype=np.int8)
     search_graph.rows = knn_indices
     search_graph.data = (knn_dists != 0).astype(np.int8)
     search_graph = search_graph.maximum(search_graph.transpose()).tocsr()
@@ -473,8 +457,7 @@ def test_nn_search():
         rp_forest, train, test, int(10 * 3), rng_state, dist.euclidean, ()
     )
     result = initialized_nnd_search(
-        train, search_graph.indptr,
-                    search_graph.indices, init, test, dist.euclidean, ()
+        train, search_graph.indptr, search_graph.indices, init, test, dist.euclidean, ()
     )
 
     indices, dists = deheap_sort(result)
@@ -493,6 +476,7 @@ def test_nn_search():
         0.99,
         "Sparse NN-descent did not get " "99% accuracy on nearest " "neighbors",
     )
+
 
 def test_sparse_nn_search():
     train = sparse_nn_data[100:]
@@ -522,14 +506,30 @@ def test_sparse_nn_search():
 
     rng_state = np.random.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
     init = sparse_initialise_search(
-        rp_forest, train.indices, train.indptr, train.data, test.indices,
-        test.indptr, test.data,
+        rp_forest,
+        train.indices,
+        train.indptr,
+        train.data,
+        test.indices,
+        test.indptr,
+        test.data,
         int(10 * 6),
-        rng_state, spdist.sparse_euclidean, ()
+        rng_state,
+        spdist.sparse_euclidean,
+        (),
     )
     result = sparse_initialized_nnd_search(
-        train.indices, train.indptr, train.data, search_graph.indptr, search_graph.indices, init,
-        test.indices, test.indptr, test.data, spdist.sparse_euclidean, ()
+        train.indices,
+        train.indptr,
+        train.data,
+        search_graph.indptr,
+        search_graph.indices,
+        init,
+        test.indices,
+        test.indptr,
+        test.data,
+        spdist.sparse_euclidean,
+        (),
     )
 
     indices, dists = deheap_sort(result)
@@ -548,6 +548,7 @@ def test_sparse_nn_search():
         0.85,
         "Sparse NN-descent did not get " "85% accuracy on nearest " "neighbors",
     )
+
 
 def test_euclidean():
     spatial_check("euclidean")
@@ -621,7 +622,6 @@ def test_yule():
     binary_check("yule")
 
 
-
 def test_sparse_euclidean():
     sparse_spatial_check("euclidean")
 
@@ -692,8 +692,7 @@ def test_seuclidean():
     test_matrix = np.array(
         [
             [
-                dist.standardised_euclidean(
-                    spatial_data[i], spatial_data[j], v)
+                dist.standardised_euclidean(spatial_data[i], spatial_data[j], v)
                 for j in range(spatial_data.shape[0])
             ]
             for i in range(spatial_data.shape[0])
@@ -708,13 +707,11 @@ def test_seuclidean():
 
 def test_weighted_minkowski():
     v = np.abs(np.random.randn(spatial_data.shape[1]))
-    dist_matrix = pairwise_distances(
-        spatial_data, metric="wminkowski", w=v, p=3)
+    dist_matrix = pairwise_distances(spatial_data, metric="wminkowski", w=v, p=3)
     test_matrix = np.array(
         [
             [
-                dist.weighted_minkowski(
-                    spatial_data[i], spatial_data[j], v, p=3)
+                dist.weighted_minkowski(spatial_data[i], spatial_data[j], v, p=3)
                 for j in range(spatial_data.shape[0])
             ]
             for i in range(spatial_data.shape[0])
@@ -765,6 +762,7 @@ def test_haversine():
         err_msg="Distances don't match " "for metric haversine",
     )
 
+
 def test_hellinger():
     hellinger_data = np.abs(spatial_data[:-2].copy())
     hellinger_data = hellinger_data / hellinger_data.sum(axis=1)[:, np.newaxis]
@@ -784,17 +782,24 @@ def test_hellinger():
     )
 
     # Ensure ll_dirichlet runs
-    test_matrix = dist.pairwise_special_metric(np.abs(spatial_data[:-2]), metric='ll_dirichlet')
+    test_matrix = dist.pairwise_special_metric(
+        np.abs(spatial_data[:-2]), metric="ll_dirichlet"
+    )
+
 
 def test_sparse_hellinger():
-    dist_matrix = dist.pairwise_special_metric(np.abs(sparse_spatial_data[:-2].toarray()))
+    dist_matrix = dist.pairwise_special_metric(
+        np.abs(sparse_spatial_data[:-2].toarray())
+    )
     test_matrix = np.array(
         [
             [
-                spdist.sparse_hellinger(np.abs(sparse_spatial_data[i]).indices,
-                                        np.abs(sparse_spatial_data[i]).data,
-                                        np.abs(sparse_spatial_data[j]).indices,
-                                        np.abs(sparse_spatial_data[j]).data)
+                spdist.sparse_hellinger(
+                    np.abs(sparse_spatial_data[i]).indices,
+                    np.abs(sparse_spatial_data[i]).data,
+                    np.abs(sparse_spatial_data[j]).indices,
+                    np.abs(sparse_spatial_data[j]).data,
+                )
                 for j in range(sparse_spatial_data.shape[0] - 2)
             ]
             for i in range(sparse_spatial_data.shape[0] - 2)
@@ -812,10 +817,12 @@ def test_sparse_hellinger():
     test_matrix = np.array(
         [
             [
-                spdist.sparse_ll_dirichlet(sparse_spatial_data[i].indices,
-                                           sparse_spatial_data[i].data,
-                                           sparse_spatial_data[j].indices,
-                                           sparse_spatial_data[j].data)
+                spdist.sparse_ll_dirichlet(
+                    sparse_spatial_data[i].indices,
+                    sparse_spatial_data[i].data,
+                    sparse_spatial_data[j].indices,
+                    sparse_spatial_data[j].data,
+                )
                 for j in range(sparse_spatial_data.shape[0])
             ]
             for i in range(sparse_spatial_data.shape[0])
@@ -849,7 +856,8 @@ def test_grad_metrics_match_metrics():
             assert_array_almost_equal(
                 test_matrix,
                 dist_matrix,
-                err_msg="Distances with grad don't match " "for metric {}".format(metric),
+                err_msg="Distances with grad don't match "
+                "for metric {}".format(metric),
             )
 
     # Handle the few special distances separately
@@ -876,7 +884,9 @@ def test_grad_metrics_match_metrics():
     test_matrix = np.array(
         [
             [
-                dist.weighted_minkowski_grad(spatial_data[i], spatial_data[j], v, p=3)[0]
+                dist.weighted_minkowski_grad(spatial_data[i], spatial_data[j], v, p=3)[
+                    0
+                ]
                 for j in range(spatial_data.shape[0])
             ]
             for i in range(spatial_data.shape[0])
@@ -906,13 +916,13 @@ def test_grad_metrics_match_metrics():
     )
 
     # Hellinger
-    dist_matrix = dist.pairwise_special_metric(np.abs(spatial_data[:-2]),
-                                               np.abs(spatial_data[:-2]))
+    dist_matrix = dist.pairwise_special_metric(
+        np.abs(spatial_data[:-2]), np.abs(spatial_data[:-2])
+    )
     test_matrix = np.array(
         [
             [
-                dist.hellinger_grad(np.abs(spatial_data[i]),
-                                    np.abs(spatial_data[j]))[0]
+                dist.hellinger_grad(np.abs(spatial_data[i]), np.abs(spatial_data[j]))[0]
                 for j in range(spatial_data.shape[0] - 2)
             ]
             for i in range(spatial_data.shape[0] - 2)
@@ -923,6 +933,7 @@ def test_grad_metrics_match_metrics():
         dist_matrix,
         err_msg="Distances don't match " "for metric hellinger",
     )
+
 
 def test_umap_sparse_trustworthiness():
     embedding = UMAP(n_neighbors=10).fit_transform(sparse_test_data[:100])
@@ -937,17 +948,18 @@ def test_umap_sparse_trustworthiness():
 
 def test_umap_trustworthiness_fast_approx():
     data = nn_data[:50]
-    embedding = UMAP(n_neighbors=10,
-                     min_dist=0.01,
-                     random_state=42,
-                     n_epochs=100,
-                     force_approximation_algorithm=True).fit_transform(data)
+    embedding = UMAP(
+        n_neighbors=10,
+        min_dist=0.01,
+        random_state=42,
+        n_epochs=100,
+        force_approximation_algorithm=True,
+    ).fit_transform(data)
     trust = trustworthiness(data, embedding, 10)
     assert_greater_equal(
         trust,
         0.75,
-        "Insufficiently trustworthy embedding for" "nn dataset: {}".format(
-            trust),
+        "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust),
     )
 
 
@@ -960,8 +972,7 @@ def test_umap_trustworthiness_random_init():
     assert_greater_equal(
         trust,
         0.75,
-        "Insufficiently trustworthy embedding for" "nn dataset: {}".format(
-            trust),
+        "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust),
     )
 
 
@@ -974,8 +985,7 @@ def test_supervised_umap_trustworthiness():
     assert_greater_equal(
         trust,
         0.97,
-        "Insufficiently trustworthy embedding for" "blobs dataset: {}".format(
-            trust),
+        "Insufficiently trustworthy embedding for" "blobs dataset: {}".format(trust),
     )
 
 
@@ -995,14 +1005,14 @@ def test_semisupervised_umap_trustworthiness():
 
 def test_metric_supervised_umap_trustworthiness():
     data, labels = datasets.make_blobs(50, cluster_std=0.5, random_state=42)
-    embedding = UMAP(n_neighbors=10,
-                     min_dist=0.01,
-                     target_metric='l1',
-                     target_weight=0.8,
-                     n_epochs=100,
-                     random_state=42).fit_transform(
-        data, labels
-    )
+    embedding = UMAP(
+        n_neighbors=10,
+        min_dist=0.01,
+        target_metric="l1",
+        target_weight=0.8,
+        n_epochs=100,
+        random_state=42,
+    ).fit_transform(data, labels)
     trust = trustworthiness(data, embedding, 10)
     assert_greater_equal(
         trust,
@@ -1014,14 +1024,14 @@ def test_metric_supervised_umap_trustworthiness():
 def test_string_metric_supervised_umap_trustworthiness():
     data, labels = datasets.make_blobs(50, cluster_std=0.5, random_state=42)
     labels = np.array(["this", "that", "other"])[labels]
-    embedding = UMAP(n_neighbors=10,
-                     min_dist=0.01,
-                     target_metric='string',
-                     target_weight=0.8,
-                     n_epochs=100,
-                     random_state=42).fit_transform(
-        data, labels
-    )
+    embedding = UMAP(
+        n_neighbors=10,
+        min_dist=0.01,
+        target_metric="string",
+        target_weight=0.8,
+        n_epochs=100,
+        random_state=42,
+    ).fit_transform(data, labels)
     trust = trustworthiness(data, embedding, 10)
     assert_greater_equal(
         trust,
@@ -1032,14 +1042,14 @@ def test_string_metric_supervised_umap_trustworthiness():
 
 def test_discrete_metric_supervised_umap_trustworthiness():
     data, labels = datasets.make_blobs(50, cluster_std=0.5, random_state=42)
-    embedding = UMAP(n_neighbors=10,
-                     min_dist=0.01,
-                     target_metric='ordinal',
-                     target_weight=0.8,
-                     n_epochs=100,
-                     random_state=42).fit_transform(
-        data, labels
-    )
+    embedding = UMAP(
+        n_neighbors=10,
+        min_dist=0.01,
+        target_metric="ordinal",
+        target_weight=0.8,
+        n_epochs=100,
+        random_state=42,
+    ).fit_transform(data, labels)
     trust = trustworthiness(data, embedding, 10)
     assert_greater_equal(
         trust,
@@ -1051,14 +1061,14 @@ def test_discrete_metric_supervised_umap_trustworthiness():
 def test_count_metric_supervised_umap_trustworthiness():
     data, labels = datasets.make_blobs(50, cluster_std=0.5, random_state=42)
     labels = (labels ** 2) + 2 * labels
-    embedding = UMAP(n_neighbors=10,
-                     min_dist=0.01,
-                     target_metric='count',
-                     target_weight=0.8,
-                     n_epochs=100,
-                     random_state=42).fit_transform(
-        data, labels
-    )
+    embedding = UMAP(
+        n_neighbors=10,
+        min_dist=0.01,
+        target_metric="count",
+        target_weight=0.8,
+        n_epochs=100,
+        random_state=42,
+    ).fit_transform(data, labels)
     trust = trustworthiness(data, embedding, 10)
     assert_greater_equal(
         trust,
@@ -1073,30 +1083,28 @@ def test_umap_trustworthiness_on_iris():
     assert_greater_equal(
         trust,
         0.97,
-        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(
-            trust),
+        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
     )
 
 
 def test_initialized_umap_trustworthiness_on_iris():
     data = iris.data
     embedding = UMAP(
-        n_neighbors=10, min_dist=0.01, init=data[:, 2:],
-        n_epochs=200, random_state=42
+        n_neighbors=10, min_dist=0.01, init=data[:, 2:], n_epochs=200, random_state=42
     ).fit_transform(data)
     trust = trustworthiness(iris.data, embedding, 10)
     assert_greater_equal(
         trust,
         0.97,
-        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(
-            trust),
+        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
     )
 
 
 def test_umap_transform_on_iris():
     data = iris.data[iris_selection]
-    fitter = UMAP(n_neighbors=10, min_dist=0.01,
-                  n_epochs=200, random_state=42).fit(data)
+    fitter = UMAP(n_neighbors=10, min_dist=0.01, n_epochs=200, random_state=42).fit(
+        data
+    )
 
     new_data = iris.data[~iris_selection]
     embedding = fitter.transform(new_data)
@@ -1111,15 +1119,17 @@ def test_umap_transform_on_iris():
 
 def test_umap_sparse_transform_on_iris():
     data = sparse.csr_matrix(iris.data[iris_selection])
-    assert (sparse.issparse(data))
-    fitter = UMAP(n_neighbors=10,
-                  min_dist=0.01,
-                  random_state=42,
-                  n_epochs=100,
-                  force_approximation_algorithm=True).fit(data)
+    assert sparse.issparse(data)
+    fitter = UMAP(
+        n_neighbors=10,
+        min_dist=0.01,
+        random_state=42,
+        n_epochs=100,
+        force_approximation_algorithm=True,
+    ).fit(data)
 
     new_data = sparse.csr_matrix(iris.data[~iris_selection])
-    assert (sparse.issparse(new_data))
+    assert sparse.issparse(new_data)
     embedding = fitter.transform(new_data)
 
     trust = trustworthiness(new_data, embedding, 10)
@@ -1149,22 +1159,29 @@ def test_umap_transform_on_iris_modified_dtype():
 def test_umap_trustworthiness_on_sphere_iris():
     data = iris.data
     embedding = UMAP(
-        n_neighbors=10, min_dist=0.01, n_epochs=200,
-        random_state=42, output_metric="haversine"
+        n_neighbors=10,
+        min_dist=0.01,
+        n_epochs=200,
+        random_state=42,
+        output_metric="haversine",
     ).fit_transform(data)
     # Since trustworthiness doesn't support haversine, project onto
     # a 3D embedding of the sphere and use cosine distance
     r = 3
-    projected_embedding = np.vstack([
-        r * np.sin(embedding[:, 0]) * np.cos(embedding[:, 1]),
-        r * np.sin(embedding[:, 0]) * np.sin(embedding[:, 1]),
-        r * np.cos(embedding[:, 0])
-    ]).T
+    projected_embedding = np.vstack(
+        [
+            r * np.sin(embedding[:, 0]) * np.cos(embedding[:, 1]),
+            r * np.sin(embedding[:, 0]) * np.sin(embedding[:, 1]),
+            r * np.cos(embedding[:, 0]),
+        ]
+    ).T
     trust = trustworthiness(iris.data, projected_embedding, 10, metric="cosine")
     assert_greater_equal(
         trust,
         0.80,
-        "Insufficiently trustworthy spherical embedding for iris dataset: {}".format(trust),
+        "Insufficiently trustworthy spherical embedding for iris dataset: {}".format(
+            trust
+        ),
     )
 
 
@@ -1195,15 +1212,18 @@ def test_umap_inverse_transform_on_iris():
         near_points = lowd_tree.query([query_point], k=5, return_distance=False)
         centroid = np.mean(np.squeeze(fitter.embedding_[near_points]), axis=0)
         highd_centroid = fitter.inverse_transform([centroid])
-        highd_near_points = highd_tree.query(highd_centroid, k=10, return_distance=False)
-        assert_greater_equal(np.intersect1d(near_points, highd_near_points[0]).shape[0], 4)
+        highd_near_points = highd_tree.query(
+            highd_centroid, k=10, return_distance=False
+        )
+        assert_greater_equal(
+            np.intersect1d(near_points, highd_near_points[0]).shape[0], 4
+        )
 
 
 def test_blobs_cluster():
     data, labels = datasets.make_blobs(n_samples=500, n_features=10, centers=5)
     embedding = UMAP().fit_transform(data)
-    assert_equal(adjusted_rand_score(
-        labels, KMeans(5).fit_predict(embedding)), 1.0)
+    assert_equal(adjusted_rand_score(labels, KMeans(5).fit_predict(embedding)), 1.0)
 
 
 def test_multi_component_layout():
@@ -1211,8 +1231,7 @@ def test_multi_component_layout():
         100, 2, centers=5, cluster_std=0.5, center_box=[-20, 20], random_state=42
     )
 
-    true_centroids = np.empty(
-        (labels.max() + 1, data.shape[1]), dtype=np.float64)
+    true_centroids = np.empty((labels.max() + 1, data.shape[1]), dtype=np.float64)
 
     for label in range(labels.max() + 1):
         true_centroids[label] = data[labels == label].mean(axis=0)
@@ -1220,8 +1239,7 @@ def test_multi_component_layout():
     true_centroids = normalize(true_centroids, norm="l2")
 
     embedding = UMAP(n_neighbors=4).fit_transform(data)
-    embed_centroids = np.empty(
-        (labels.max() + 1, data.shape[1]), dtype=np.float64)
+    embed_centroids = np.empty((labels.max() + 1, data.shape[1]), dtype=np.float64)
     embed_labels = KMeans(n_clusters=5).fit_predict(embedding)
 
     for label in range(embed_labels.max() + 1):
@@ -1322,6 +1340,7 @@ def test_negative_target_nneighbors():
     u = UMAP(target_n_neighbors=1)
     assert_raises(ValueError, u.fit, nn_data)
 
+
 def test_bad_output_metric():
     u = UMAP(output_metric="foobar")
     assert_raises(ValueError, u.fit, nn_data)
@@ -1330,29 +1349,24 @@ def test_bad_output_metric():
     u = UMAP(output_metric="hamming")
     assert_raises(ValueError, u.fit, nn_data)
 
+
 def test_haversine_on_highd():
     u = UMAP(metric="haversine")
     assert_raises(ValueError, u.fit, nn_data)
 
+
 def test_haversine_embed_to_highd():
     u = UMAP(n_components=3, output_metric="haversine")
     assert_raises(ValueError, u.fit, nn_data)
+
 
 def test_bad_transform_data():
     u = UMAP().fit([[1, 1, 1, 1]])
     assert_raises(ValueError, u.transform, [[0, 0, 0, 0]])
 
 
-
 def test_umap_bad_nn():
-    assert_raises(ValueError,
-                  nearest_neighbors,
-                  nn_data,
-                  10,
-                  42,
-                  {},
-                  False,
-                  np.random)
+    assert_raises(ValueError, nearest_neighbors, nn_data, 10, 42, {}, False, np.random)
 
 
 def test_umap_bad_nn_sparse():
@@ -1370,7 +1384,7 @@ def test_umap_bad_nn_sparse():
 
 def test_too_many_neighbors_warns():
     u = UMAP(a=1.2, b=1.75, n_neighbors=2000, n_epochs=11, init="random")
-    u.fit(nn_data[:100, ])
+    u.fit(nn_data[:100,])
     assert_equal(u._a, 1.2)
     assert_equal(u._b, 1.75)
 
@@ -1421,9 +1435,11 @@ def test_umap_transform_embedding_stability():
     new_data = np.random.random(data.shape)
     embedding = fitter.transform(new_data)
 
-    assert_array_equal(original_embedding,
-                       fitter.embedding_,
-                       "Transforming new data changed the original embeddings")
+    assert_array_equal(
+        original_embedding,
+        fitter.embedding_,
+        "Transforming new data changed the original embeddings",
+    )
 
     # Example from issue #217
     a = np.random.random((1000, 10))
@@ -1437,42 +1453,56 @@ def test_umap_transform_embedding_stability():
     u2 = umap.transform(b)
     assert_array_equal(u1_orig, umap.embedding_)
 
+
 def test_dataframe_umap_bad_params():
-    u = DataFrameUMAP(metrics=[('e', 'euclidean', [0, 1, 2, 3, 4])], set_op_mix_ratio=-1.0)
+    u = DataFrameUMAP(
+        metrics=[("e", "euclidean", [0, 1, 2, 3, 4])], set_op_mix_ratio=-1.0
+    )
     assert_raises(ValueError, u.fit, nn_data)
-    u = DataFrameUMAP(metrics=[('e', 'euclidean', [0, 1, 2, 3, 4])], set_op_mix_ratio=1.5)
+    u = DataFrameUMAP(
+        metrics=[("e", "euclidean", [0, 1, 2, 3, 4])], set_op_mix_ratio=1.5
+    )
     assert_raises(ValueError, u.fit, nn_data)
-    u = DataFrameUMAP(metrics=[('e', 'euclidean', [0, 1, 2, 3, 4])], min_dist=2.0)
+    u = DataFrameUMAP(metrics=[("e", "euclidean", [0, 1, 2, 3, 4])], min_dist=2.0)
     assert_raises(ValueError, u.fit, nn_data)
-    u = DataFrameUMAP(metrics=[('e', 'euclidean', [0, 1, 2, 3, 4])], min_dist=-1)
+    u = DataFrameUMAP(metrics=[("e", "euclidean", [0, 1, 2, 3, 4])], min_dist=-1)
     assert_raises(ValueError, u.fit, nn_data)
-    u = DataFrameUMAP(metrics=[('e', 'euclidean', [0, 1, 2, 3, 4])], n_components=-1)
+    u = DataFrameUMAP(metrics=[("e", "euclidean", [0, 1, 2, 3, 4])], n_components=-1)
     assert_raises(ValueError, u.fit, nn_data)
-    u = DataFrameUMAP(metrics=[('e', 'euclidean', [0, 1, 2, 3, 4])], n_components=1.5)
+    u = DataFrameUMAP(metrics=[("e", "euclidean", [0, 1, 2, 3, 4])], n_components=1.5)
     assert_raises(ValueError, u.fit, nn_data)
-    u = DataFrameUMAP(metrics=[('e', 'euclidean', [0, 1, 2, 3, 4])], n_neighbors=0.5)
+    u = DataFrameUMAP(metrics=[("e", "euclidean", [0, 1, 2, 3, 4])], n_neighbors=0.5)
     assert_raises(ValueError, u.fit, nn_data)
-    u = DataFrameUMAP(metrics=[('e', 'euclidean', [0, 1, 2, 3, 4])], n_neighbors=-1)
+    u = DataFrameUMAP(metrics=[("e", "euclidean", [0, 1, 2, 3, 4])], n_neighbors=-1)
     assert_raises(ValueError, u.fit, nn_data)
-    u = DataFrameUMAP(metrics=[('e', 'foobar', [0, 1, 2, 3, 4])])
+    u = DataFrameUMAP(metrics=[("e", "foobar", [0, 1, 2, 3, 4])])
     assert_raises(AssertionError, u.fit, nn_data)
-    u = DataFrameUMAP(metrics=[('e', 'euclidean', [0, 1, 2, 3, 4])], learning_rate=-1.5)
+    u = DataFrameUMAP(metrics=[("e", "euclidean", [0, 1, 2, 3, 4])], learning_rate=-1.5)
     assert_raises(ValueError, u.fit, nn_data)
-    u = DataFrameUMAP(metrics=[('e', 'euclidean', [0, 1, 2, 3, 4])], repulsion_strength=-0.5)
+    u = DataFrameUMAP(
+        metrics=[("e", "euclidean", [0, 1, 2, 3, 4])], repulsion_strength=-0.5
+    )
     assert_raises(ValueError, u.fit, nn_data)
-    u = DataFrameUMAP(metrics=[('e', 'euclidean', [0, 1, 2, 3, 4])], negative_sample_rate=-1)
+    u = DataFrameUMAP(
+        metrics=[("e", "euclidean", [0, 1, 2, 3, 4])], negative_sample_rate=-1
+    )
     assert_raises(ValueError, u.fit, nn_data)
-    u = DataFrameUMAP(metrics=[('e', 'euclidean', [0, 1, 2, 3, 4])], init="foobar")
+    u = DataFrameUMAP(metrics=[("e", "euclidean", [0, 1, 2, 3, 4])], init="foobar")
     assert_raises(ValueError, u.fit, nn_data)
-    u = DataFrameUMAP(metrics=[('e', 'euclidean', [0, 1, 2, 3, 4])], init=42)
+    u = DataFrameUMAP(metrics=[("e", "euclidean", [0, 1, 2, 3, 4])], init=42)
     assert_raises(ValueError, u.fit, nn_data)
-    u = DataFrameUMAP(metrics=[('e', 'euclidean', [0, 1, 2, 3, 4])], init=np.array([[0, 0, 0], [0, 0, 0]]))
+    u = DataFrameUMAP(
+        metrics=[("e", "euclidean", [0, 1, 2, 3, 4])],
+        init=np.array([[0, 0, 0], [0, 0, 0]]),
+    )
     assert_raises(ValueError, u.fit, nn_data)
-    u = DataFrameUMAP(metrics=[('e', 'euclidean', [0, 1, 2, 3, 4])], n_epochs=-2)
+    u = DataFrameUMAP(metrics=[("e", "euclidean", [0, 1, 2, 3, 4])], n_epochs=-2)
     assert_raises(ValueError, u.fit, nn_data)
-    u = DataFrameUMAP(metrics=[('e', 'euclidean', [0, 1, 2, 3, 4])], target_n_neighbors=1)
+    u = DataFrameUMAP(
+        metrics=[("e", "euclidean", [0, 1, 2, 3, 4])], target_n_neighbors=1
+    )
     assert_raises(ValueError, u.fit, nn_data)
-    u = DataFrameUMAP(metrics=[('e', 'euclidean', "bad_columns")])
+    u = DataFrameUMAP(metrics=[("e", "euclidean", "bad_columns")])
     assert_raises(AssertionError, u.fit, nn_data)
-    u = DataFrameUMAP(metrics=[('e', 'euclidean', [0.1, 0.2, 0.75])])
+    u = DataFrameUMAP(metrics=[("e", "euclidean", [0.1, 0.2, 0.75])])
     assert_raises(AssertionError, u.fit, nn_data)

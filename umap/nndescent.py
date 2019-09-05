@@ -22,18 +22,18 @@ from umap.rp_tree import search_flat_tree
 
 @numba.njit()
 def nn_descent(
-        data,
-        n_neighbors,
-        rng_state,
-        dist,
-        dist_args=(),
-        max_candidates=50,
-        n_iters=10,
-        delta=0.001,
-        rho=0.5,
-        rp_tree_init=True,
-        leaf_array=None,
-        verbose=False,
+    data,
+    n_neighbors,
+    rng_state,
+    dist,
+    dist_args=(),
+    max_candidates=50,
+    n_iters=10,
+    delta=0.001,
+    rho=0.5,
+    rp_tree_init=True,
+    leaf_array=None,
+    verbose=False,
 ):
     n_vertices = data.shape[0]
     tried = set([(-1, -1)])
@@ -58,9 +58,7 @@ def nn_descent(
                         break
                     if (leaf_array[n, i], leaf_array[n, j]) in tried:
                         continue
-                    d = dist(
-                        data[leaf_array[n, i]], data[leaf_array[n, j]], *dist_args
-                    )
+                    d = dist(data[leaf_array[n, i]], data[leaf_array[n, j]], *dist_args)
                     unchecked_heap_push(
                         current_graph, leaf_array[n, i], d, leaf_array[n, j], 1
                     )
@@ -70,15 +68,11 @@ def nn_descent(
                     tried.add((leaf_array[n, i], leaf_array[n, j]))
                     tried.add((leaf_array[n, j], leaf_array[n, i]))
 
-
     for n in range(n_iters):
 
-        (new_candidate_neighbors,
-         old_candidate_neighbors) = new_build_candidates(current_graph,
-                                                         n_vertices,
-                                                         n_neighbors,
-                                                         max_candidates,
-                                                         rng_state, rho)
+        (new_candidate_neighbors, old_candidate_neighbors) = new_build_candidates(
+            current_graph, n_vertices, n_neighbors, max_candidates, rng_state, rho
+        )
 
         c = 0
         for i in range(n_vertices):
@@ -148,19 +142,25 @@ def init_from_tree(tree, data, query_points, heap, rng_state, dist, dist_args):
 
 
 def initialise_search(
-        forest, data, query_points, n_neighbors, rng_state, dist, dist_args
+    forest, data, query_points, n_neighbors, rng_state, dist, dist_args
 ):
     results = make_heap(query_points.shape[0], n_neighbors)
-    init_from_random(n_neighbors, data, query_points, results, rng_state, dist, dist_args)
+    init_from_random(
+        n_neighbors, data, query_points, results, rng_state, dist, dist_args
+    )
     if forest is not None:
         for tree in forest:
-            init_from_tree(tree, data, query_points, results, rng_state, dist, dist_args)
+            init_from_tree(
+                tree, data, query_points, results, rng_state, dist, dist_args
+            )
 
     return results
 
 
 @numba.njit(parallel=True)
-def initialized_nnd_search(data, indptr, indices, initialization, query_points, dist, dist_args):
+def initialized_nnd_search(
+    data, indptr, indices, initialization, query_points, dist, dist_args
+):
     for i in numba.prange(query_points.shape[0]):
 
         tried = set(initialization[0, i])
@@ -172,12 +172,12 @@ def initialized_nnd_search(data, indptr, indices, initialization, query_points, 
 
             if vertex == -1:
                 break
-            candidates = indices[indptr[vertex]: indptr[vertex + 1]]
+            candidates = indices[indptr[vertex] : indptr[vertex + 1]]
             for j in range(candidates.shape[0]):
                 if (
-                        candidates[j] == vertex
-                        or candidates[j] == -1
-                        or candidates[j] in tried
+                    candidates[j] == vertex
+                    or candidates[j] == -1
+                    or candidates[j] in tried
                 ):
                     continue
                 d = dist(data[candidates[j]], query_points[i], *dist_args)
