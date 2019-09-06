@@ -78,11 +78,11 @@ def sparse_nn_descent(
                     if (p, q) in tried:
                         continue
 
-                    from_inds = inds[indptr[p]: indptr[p + 1]]
-                    from_data = data[indptr[p]: indptr[p + 1]]
+                    from_inds = inds[indptr[p] : indptr[p + 1]]
+                    from_data = data[indptr[p] : indptr[p + 1]]
 
-                    to_inds = inds[indptr[q]: indptr[q + 1]]
-                    to_data = data[indptr[q]: indptr[q + 1]]
+                    to_inds = inds[indptr[q] : indptr[q + 1]]
+                    to_data = data[indptr[q] : indptr[q + 1]]
                     d = sparse_dist(from_inds, from_data, to_inds, to_data, *dist_args)
                     heap_push(current_graph, p, d, q, 1)
                     tried.add((p, q))
@@ -95,12 +95,7 @@ def sparse_nn_descent(
             print("\t", n, " / ", n_iters)
 
         (new_candidate_neighbors, old_candidate_neighbors) = new_build_candidates(
-            current_graph,
-            n_vertices,
-            n_neighbors,
-            max_candidates,
-            rng_state,
-            rho,
+            current_graph, n_vertices, n_neighbors, max_candidates, rng_state, rho
         )
 
         c = 0
@@ -114,11 +109,11 @@ def sparse_nn_descent(
                     if q < 0 or (p, q) in tried:
                         continue
 
-                    from_inds = inds[indptr[p]: indptr[p + 1]]
-                    from_data = data[indptr[p]: indptr[p + 1]]
+                    from_inds = inds[indptr[p] : indptr[p + 1]]
+                    from_data = data[indptr[p] : indptr[p + 1]]
 
-                    to_inds = inds[indptr[q]: indptr[q + 1]]
-                    to_data = data[indptr[q]: indptr[q + 1]]
+                    to_inds = inds[indptr[q] : indptr[q + 1]]
+                    to_data = data[indptr[q] : indptr[q + 1]]
 
                     d = sparse_dist(from_inds, from_data, to_inds, to_data, *dist_args)
 
@@ -146,7 +141,6 @@ def sparse_nn_descent(
                     if p != q:
                         c += unchecked_heap_push(current_graph, q, d, p, 1)
                         tried.add((q, p))
-
 
         if c <= delta * n_neighbors * n_vertices:
             break

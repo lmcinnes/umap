@@ -12,7 +12,13 @@ from umap.distances import pairwise_special_metric
 
 
 def component_layout(
-        data, n_components, component_labels, dim, random_state, metric="euclidean", metric_kwds={}
+    data,
+    n_components,
+    component_labels,
+    dim,
+    random_state,
+    metric="euclidean",
+    metric_kwds={},
 ):
     """Provide a layout relating the separate connected components. This is done
     by taking the centroid of each component and then performing a spectral embedding
@@ -53,9 +59,7 @@ def component_layout(
         component_centroids[label] = data[component_labels == label].mean(axis=0)
 
     if metric in ("hellinger", "ll_dirichlet"):
-        distance_matrix = pairwise_special_metric(
-            component_centroids, metric=metric
-        )
+        distance_matrix = pairwise_special_metric(component_centroids, metric=metric)
     else:
         distance_matrix = pairwise_distances(
             component_centroids, metric=metric, **metric_kwds
@@ -64,7 +68,7 @@ def component_layout(
     affinity_matrix = np.exp(-distance_matrix ** 2)
 
     component_embedding = SpectralEmbedding(
-        n_components=dim, affinity="precomputed", random_state=random_state,
+        n_components=dim, affinity="precomputed", random_state=random_state
     ).fit_transform(affinity_matrix)
     component_embedding /= component_embedding.max()
 
@@ -276,10 +280,7 @@ def spectral_layout(data, graph, dim, random_state, metric="euclidean", metric_k
             )
         else:
             eigenvalues, eigenvectors = scipy.sparse.linalg.lobpcg(
-                L,
-                random_state.normal(size=(L.shape[0], k)),
-                largest=False,
-                tol=1e-8
+                L, random_state.normal(size=(L.shape[0], k)), largest=False, tol=1e-8
             )
         order = np.argsort(eigenvalues)[1:k]
         return eigenvectors[:, order]

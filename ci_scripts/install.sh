@@ -44,6 +44,8 @@ if [[ "$DISTRIB" == "conda" ]]; then
 
   source activate testenv
 
+  pip install black
+
   if [[ "$COVERAGE" == "true" ]]; then
       pip install coverage coveralls
   fi

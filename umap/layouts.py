@@ -48,20 +48,20 @@ def rdist(x, y):
 
 @numba.njit(fastmath=True, parallel=True)
 def optimize_layout_euclidean(
-        head_embedding,
-        tail_embedding,
-        head,
-        tail,
-        n_epochs,
-        n_vertices,
-        epochs_per_sample,
-        a,
-        b,
-        rng_state,
-        gamma=1.0,
-        initial_alpha=1.0,
-        negative_sample_rate=5.0,
-        verbose=False,
+    head_embedding,
+    tail_embedding,
+    head,
+    tail,
+    n_epochs,
+    n_vertices,
+    epochs_per_sample,
+    a,
+    b,
+    rng_state,
+    gamma=1.0,
+    initial_alpha=1.0,
+    negative_sample_rate=5.0,
+    verbose=False,
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
     fuzzy set cross entropy between the 1-skeletons of the high dimensional
@@ -156,7 +156,7 @@ def optimize_layout_euclidean(
                     if dist_squared > 0.0:
                         grad_coeff = 2.0 * gamma * b
                         grad_coeff /= (0.001 + dist_squared) * (
-                                a * pow(dist_squared, b) + 1
+                            a * pow(dist_squared, b) + 1
                         )
                     elif j == k:
                         continue
@@ -171,7 +171,7 @@ def optimize_layout_euclidean(
                         current[d] += grad_d * alpha
 
                 epoch_of_next_negative_sample[i] += (
-                        n_neg_samples * epochs_per_negative_sample[i]
+                    n_neg_samples * epochs_per_negative_sample[i]
                 )
 
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
@@ -184,22 +184,22 @@ def optimize_layout_euclidean(
 
 @numba.njit(fastmath=True)
 def optimize_layout_generic(
-        head_embedding,
-        tail_embedding,
-        head,
-        tail,
-        n_epochs,
-        n_vertices,
-        epochs_per_sample,
-        a,
-        b,
-        rng_state,
-        gamma=1.0,
-        initial_alpha=1.0,
-        negative_sample_rate=5.0,
-        output_metric=dist.euclidean,
-        output_metric_kwds=(),
-        verbose=False,
+    head_embedding,
+    tail_embedding,
+    head,
+    tail,
+    n_epochs,
+    n_vertices,
+    epochs_per_sample,
+    a,
+    b,
+    rng_state,
+    gamma=1.0,
+    initial_alpha=1.0,
+    negative_sample_rate=5.0,
+    output_metric=dist.euclidean,
+    output_metric_kwds=(),
+    verbose=False,
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
     fuzzy set cross entropy between the 1-skeletons of the high dimensional
@@ -332,7 +332,7 @@ def optimize_layout_generic(
                         current[d] += grad_d * alpha
 
                 epoch_of_next_negative_sample[i] += (
-                        n_neg_samples * epochs_per_negative_sample[i]
+                    n_neg_samples * epochs_per_negative_sample[i]
                 )
 
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
@@ -345,25 +345,25 @@ def optimize_layout_generic(
 
 @numba.njit(fastmath=True)
 def optimize_layout_inverse(
-        head_embedding,
-        tail_embedding,
-        head,
-        tail,
-        weight,
-        sigmas,
-        rhos,
-        n_epochs,
-        n_vertices,
-        epochs_per_sample,
-        a,
-        b,
-        rng_state,
-        gamma=1.0,
-        initial_alpha=1.0,
-        negative_sample_rate=5.0,
-        output_metric=dist.euclidean,
-        output_metric_kwds=(),
-        verbose=False,
+    head_embedding,
+    tail_embedding,
+    head,
+    tail,
+    weight,
+    sigmas,
+    rhos,
+    n_epochs,
+    n_vertices,
+    epochs_per_sample,
+    a,
+    b,
+    rng_state,
+    gamma=1.0,
+    initial_alpha=1.0,
+    negative_sample_rate=5.0,
+    output_metric=dist.euclidean,
+    output_metric_kwds=(),
+    verbose=False,
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
     fuzzy set cross entropy between the 1-skeletons of the high dimensional
@@ -477,17 +477,14 @@ def optimize_layout_inverse(
 
                     # w_l = 0.0 # for negative samples, the edge does not exist
                     w_h = np.exp(-max(dist_output - rhos[k], 1e-6) / (sigmas[k] + 1e-6))
-                    grad_coeff = -gamma * (
-                            (0 - w_h) /
-                            ((1 - w_h) * sigmas[k] + 1e-6)
-                    )
+                    grad_coeff = -gamma * ((0 - w_h) / ((1 - w_h) * sigmas[k] + 1e-6))
 
                     for d in range(dim):
                         grad_d = clip(grad_coeff * grad_dist_output[d])
                         current[d] += grad_d * alpha
 
                 epoch_of_next_negative_sample[i] += (
-                        n_neg_samples * epochs_per_negative_sample[i]
+                    n_neg_samples * epochs_per_negative_sample[i]
                 )
 
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))

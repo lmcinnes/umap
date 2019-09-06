@@ -9,6 +9,31 @@ import numba
 import scipy.sparse
 
 
+@numba.njit(parallel=True)
+def fast_knn_indices(X, n_neighbors):
+    """A fast computation of knn indices.
+
+    Parameters
+    ----------
+    X: array of shape (n_samples, n_features)
+        The input data to compute the k-neighbor indices of.
+
+    n_neighbors: int
+        The number of nearest neighbors to compute for each sample in ``X``.
+
+    Returns
+    -------
+    knn_indices: array of shape (n_samples, n_neighbors)
+        The indices on the ``n_neighbors`` closest points in the dataset.
+    """
+    knn_indices = np.empty((X.shape[0], n_neighbors), dtype=np.int32)
+    for row in numba.prange(X.shape[0]):
+        v = X[row].argsort(kind="quicksort")
+        v = v[:n_neighbors]
+        knn_indices[row] = v
+    return knn_indices
+
+
 @numba.njit("i4(i8[:])")
 def tau_rand_int(state):
     """A fast (pseudo)-random number generator.
@@ -22,14 +47,14 @@ def tau_rand_int(state):
     -------
     A (pseudo)-random int32 value
     """
-    state[0] = (((state[0] & 4294967294) << 12) & 0xffffffff) ^ (
-        (((state[0] << 13) & 0xffffffff) ^ state[0]) >> 19
+    state[0] = (((state[0] & 4294967294) << 12) & 0xFFFFFFFF) ^ (
+        (((state[0] << 13) & 0xFFFFFFFF) ^ state[0]) >> 19
     )
-    state[1] = (((state[1] & 4294967288) << 4) & 0xffffffff) ^ (
-        (((state[1] << 2) & 0xffffffff) ^ state[1]) >> 25
+    state[1] = (((state[1] & 4294967288) << 4) & 0xFFFFFFFF) ^ (
+        (((state[1] << 2) & 0xFFFFFFFF) ^ state[1]) >> 25
     )
-    state[2] = (((state[2] & 4294967280) << 17) & 0xffffffff) ^ (
-        (((state[2] << 3) & 0xffffffff) ^ state[2]) >> 11
+    state[2] = (((state[2] & 4294967280) << 17) & 0xFFFFFFFF) ^ (
+        (((state[2] << 3) & 0xFFFFFFFF) ^ state[2]) >> 11
     )
 
     return state[0] ^ state[1] ^ state[2]
@@ -49,7 +74,7 @@ def tau_rand(state):
     A (pseudo)-random float32 in the interval [0, 1]
     """
     integer = tau_rand_int(state)
-    return abs(float(integer) / 0x7fffffff)
+    return abs(float(integer) / 0x7FFFFFFF)
 
 
 @numba.njit()
@@ -138,7 +163,7 @@ def make_heap(n_points, size):
     return result
 
 
-@numba.jit("i8(f8[:,:,:],i8,f8,i8,i8)")
+@numba.njit("i8(f8[:,:,:],i8,f8,i8,i8)")
 def heap_push(heap, row, weight, index, flag):
     """Push a new element onto the heap. The heap stores potential neighbors
     for each data point. The ``row`` parameter determines which data point we
@@ -222,7 +247,7 @@ def heap_push(heap, row, weight, index, flag):
     return 1
 
 
-@numba.jit("i8(f8[:,:,:],i8,f8,i8,i8)")
+@numba.njit("i8(f8[:,:,:],i8,f8,i8,i8)")
 def unchecked_heap_push(heap, row, weight, index, flag):
     """Push a new element onto the heap. The heap stores potential neighbors
     for each data point. The ``row`` parameter determines which data point we
@@ -319,8 +344,8 @@ def siftdown(heap1, heap2, elt):
         if swap == elt:
             break
         else:
-            heap1[elt], heap1[swap] = heap1[swap], heap1[elt]
-            heap2[elt], heap2[swap] = heap2[swap], heap2[elt]
+            heap1[elt], heap1[swap] = (heap1[swap], heap1[elt])
+            heap2[elt], heap2[swap] = (heap2[swap], heap2[elt])
             elt = swap
 
 
