@@ -27,7 +27,8 @@ def fast_knn_indices(X, n_neighbors):
     """
     knn_indices = np.empty((X.shape[0], n_neighbors), dtype=np.int32)
     for row in numba.prange(X.shape[0]):
-        v = np.argsort(X[row])  # Need to call argsort this way for numba
+        # v = np.argsort(X[row])  # Need to call argsort this way for numba
+        v = X[row].argsort(kind='quicksort')
         v = v[:n_neighbors]
         knn_indices[row] = v
     return knn_indices
