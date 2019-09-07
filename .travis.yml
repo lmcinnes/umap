@@ -17,7 +17,7 @@ matrix:
   include:
     - python: 3.6
       os: linux
-    - env: DISTRIB="conda" PYTHON_VERSION="3.5" NUMPY_VERSION="1.13.3" SCIPY_VERSION="0.19.1"
+    - env: DISTRIB="conda" PYTHON_VERSION="3.7" NUMPY_VERSION="1.13.3" SCIPY_VERSION="0.19.1"
       os: linux
     - env: DISTRIB="conda" PYTHON_VERSION="3.6" COVERAGE="true" NUMPY_VERSION="1.13.3" SCIPY_VERSION="0.19.1"
       os: linux
