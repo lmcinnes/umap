@@ -1150,7 +1150,7 @@ DISCRETE_METRICS = (
 )
 
 
-@numba.jit(parallel=True)
+@numba.njit()
 def pairwise_special_metric(X, Y=None, metric="hellinger"):
     special_metric_func = named_distances[metric]
 
