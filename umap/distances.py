@@ -805,40 +805,6 @@ def sinkhorn_distance(x, y, M=_mock_identity, cost=_mock_cost, maxiter=64):
     return result
 
 
-# @numba.njit(fastmath=True)
-# def uncertainty_embedding_grad(x, y):
-#     mu_1 = x[0] - y[0]
-#     mu_2 = x[1] - y[1]
-#
-#     sigma_11 = np.abs(x[2]) + np.abs(y[2])
-#     sigma_12 = x[3] + y[3]
-#     sigma_22 = np.abs(x[4]) + np.abs(y[4])
-#
-#     det = sigma_11 * sigma_22 - sigma_12 ** 2
-#     sign_s1 = np.sign(x[2])
-#     sign_s2 = np.sign(x[4])
-#
-#     if det == 0.0:
-#         # TODO: figure out the right thing to do here
-#         return mu_1**2 + mu_2**2, np.array([0.0, 0.0, 1.0, 0.0, 0.0, 1.0], dtype=np.float32)
-#
-#     cross_term = 2 * sigma_12
-#     m_dist = np.abs(sigma_22) * (mu_1 ** 2) - \
-#              cross_term * mu_1 * mu_2 + \
-#              np.abs(sigma_11) * (mu_2 ** 2)
-#
-#     dist = (m_dist / det + np.log(np.abs(det))) / 2.0 + np.log(2*np.pi)
-#     grad = np.empty(6, dtype=np.float32)
-#
-#     grad[0] = (2 * sigma_22 * mu_1 - cross_term * mu_2) / (2 * det)
-#     grad[1] = (2 * sigma_11 * mu_2 - cross_term * mu_1) / (2 * det)
-#     grad[2] = sign_s1 * (sigma_22 * (det - m_dist) + det * mu_2 ** 2) / (2 * det ** 2)
-#     grad[3] = (sigma_12 * (m_dist - det) - det * mu_1 * mu_2) / (2 * det ** 2)
-#     grad[4] = sign_s2 * (sigma_11 * (det - m_dist) + det * mu_1 ** 2) / (2 * det ** 2)
-#
-#     return dist, grad
-
-
 @numba.njit(fastmath=True)
 def spherical_gaussian_energy_grad(x, y):
     mu_1 = x[0] - y[0]
