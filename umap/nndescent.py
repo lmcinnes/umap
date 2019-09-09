@@ -16,28 +16,13 @@ from umap.utils import (
     new_build_candidates,
     deheap_sort,
 )
+import umap.distances as dist
 
 from umap.rp_tree import search_flat_tree
 
 
-@numba.njit()
-def nn_descent(
-    data,
-    n_neighbors,
-    rng_state,
-    dist,
-    dist_args=(),
-    max_candidates=50,
-    n_iters=10,
-    delta=0.001,
-    rho=0.5,
-    rp_tree_init=True,
-    leaf_array=None,
-    verbose=False,
-):
-    n_vertices = data.shape[0]
-    tried = set([(-1, -1)])
-
+@numba.njit(fastmath=True)
+def init_current_graph(data, dist, dist_args, n_neighbors, rng_state):
     current_graph = make_heap(data.shape[0], n_neighbors)
     for i in range(data.shape[0]):
         indices = rejection_sample(n_neighbors, data.shape[0], rng_state)
@@ -45,30 +30,107 @@ def nn_descent(
             d = dist(data[i], data[indices[j]], *dist_args)
             heap_push(current_graph, i, d, indices[j], 1)
             heap_push(current_graph, indices[j], d, i, 1)
-            tried.add((i, indices[j]))
-            tried.add((indices[j], i))
+    return current_graph
 
-    if rp_tree_init:
-        for n in range(leaf_array.shape[0]):
-            for i in range(leaf_array.shape[1]):
-                if leaf_array[n, i] < 0:
+
+@numba.njit(fastmath=True)
+def init_rp_tree(data, dist, dist_args, current_graph, leaf_array, tried=None):
+    if tried is None:
+        tried = set([(-1, -1)])
+
+    for n in range(leaf_array.shape[0]):
+        for i in range(leaf_array.shape[1]):
+            p = leaf_array[n, i]
+            if p < 0:
+                break
+            for j in range(i + 1, leaf_array.shape[1]):
+                q = leaf_array[n, j]
+                if q < 0:
                     break
-                for j in range(i + 1, leaf_array.shape[1]):
-                    if leaf_array[n, j] < 0:
-                        break
-                    if (leaf_array[n, i], leaf_array[n, j]) in tried:
-                        continue
-                    d = dist(data[leaf_array[n, i]], data[leaf_array[n, j]], *dist_args)
-                    unchecked_heap_push(
-                        current_graph, leaf_array[n, i], d, leaf_array[n, j], 1
-                    )
-                    unchecked_heap_push(
-                        current_graph, leaf_array[n, j], d, leaf_array[n, i], 1
-                    )
-                    tried.add((leaf_array[n, i], leaf_array[n, j]))
-                    tried.add((leaf_array[n, j], leaf_array[n, i]))
+                if (p, q) in tried:
+                    continue
+                d = dist(data[p], data[q], *dist_args)
+                heap_push(current_graph, p, d, q, 1)
+                tried.add((p, q))
+                if p != q:
+                    heap_push(current_graph, q, d, p, 1)
+                    tried.add((q, p))
+
+
+@numba.njit(fastmath=True)
+def nn_descent_internal_low_memory(
+    current_graph,
+    data,
+    n_neighbors,
+    rng_state,
+    max_candidates=50,
+    dist=dist.euclidean,
+    dist_args=(),
+    n_iters=10,
+    delta=0.001,
+    rho=0.5,
+    verbose=False,
+):
+    n_vertices = data.shape[0]
 
     for n in range(n_iters):
+        if verbose:
+            print("\t", n, " / ", n_iters)
+
+        (new_candidate_neighbors, old_candidate_neighbors) = new_build_candidates(
+            current_graph, n_vertices, n_neighbors, max_candidates, rng_state, rho
+        )
+
+        c = 0
+        for i in range(n_vertices):
+            for j in range(max_candidates):
+                p = int(new_candidate_neighbors[0, i, j])
+                if p < 0:
+                    continue
+                for k in range(j, max_candidates):
+                    q = int(new_candidate_neighbors[0, i, k])
+                    if q < 0:
+                        continue
+
+                    d = dist(data[p], data[q], *dist_args)
+                    c += heap_push(current_graph, p, d, q, 1)
+                    if p != q:
+                        c += heap_push(current_graph, q, d, p, 1)
+
+                for k in range(max_candidates):
+                    q = int(old_candidate_neighbors[0, i, k])
+                    if q < 0:
+                        continue
+
+                    d = dist(data[p], data[q], *dist_args)
+                    c += heap_push(current_graph, p, d, q, 1)
+                    if p != q:
+                        c += heap_push(current_graph, q, d, p, 1)
+
+        if c <= delta * n_neighbors * data.shape[0]:
+            return
+
+
+@numba.njit(fastmath=True)
+def nn_descent_internal_high_memory(
+    current_graph,
+    data,
+    n_neighbors,
+    rng_state,
+    tried,
+    max_candidates=50,
+    dist=dist.euclidean,
+    dist_args=(),
+    n_iters=10,
+    delta=0.001,
+    rho=0.5,
+    verbose=False,
+):
+    n_vertices = data.shape[0]
+
+    for n in range(n_iters):
+        if verbose:
+            print("\t", n, " / ", n_iters)
 
         (new_candidate_neighbors, old_candidate_neighbors) = new_build_candidates(
             current_graph, n_vertices, n_neighbors, max_candidates, rng_state, rho
@@ -87,9 +149,10 @@ def nn_descent(
 
                     d = dist(data[p], data[q], *dist_args)
                     c += unchecked_heap_push(current_graph, p, d, q, 1)
-                    c += unchecked_heap_push(current_graph, q, d, p, 1)
                     tried.add((p, q))
-                    tried.add((q, p))
+                    if p != q:
+                        c += unchecked_heap_push(current_graph, q, d, p, 1)
+                        tried.add((q, p))
 
                 for k in range(max_candidates):
                     q = int(old_candidate_neighbors[0, i, k])
@@ -98,17 +161,80 @@ def nn_descent(
 
                     d = dist(data[p], data[q], *dist_args)
                     c += unchecked_heap_push(current_graph, p, d, q, 1)
-                    c += unchecked_heap_push(current_graph, q, d, p, 1)
                     tried.add((p, q))
-                    tried.add((q, p))
+                    if p != q:
+                        c += unchecked_heap_push(current_graph, q, d, p, 1)
+                        tried.add((q, p))
 
         if c <= delta * n_neighbors * data.shape[0]:
-            break
+            return
+
+
+@numba.njit(fastmath=True)
+def nn_descent(
+    data,
+    n_neighbors,
+    rng_state,
+    max_candidates=50,
+    dist=dist.euclidean,
+    dist_args=(),
+    n_iters=10,
+    delta=0.001,
+    rho=0.5,
+    rp_tree_init=True,
+    leaf_array=None,
+    low_memory=False,
+    verbose=False,
+):
+    tried = set([(-1, -1)])
+
+    current_graph = make_heap(data.shape[0], n_neighbors)
+    for i in range(data.shape[0]):
+        indices = rejection_sample(n_neighbors, data.shape[0], rng_state)
+        for j in range(indices.shape[0]):
+            d = dist(data[i], data[indices[j]], *dist_args)
+            heap_push(current_graph, i, d, indices[j], 1)
+            heap_push(current_graph, indices[j], d, i, 1)
+            tried.add((i, indices[j]))
+            tried.add((indices[j], i))
+
+    if rp_tree_init:
+        init_rp_tree(data, dist, dist_args, current_graph, leaf_array, tried=tried)
+
+    if low_memory:
+        nn_descent_internal_low_memory(
+            current_graph,
+            data,
+            n_neighbors,
+            rng_state,
+            max_candidates=max_candidates,
+            dist=dist,
+            dist_args=dist_args,
+            n_iters=n_iters,
+            delta=delta,
+            rho=rho,
+            verbose=verbose,
+        )
+    else:
+        nn_descent_internal_high_memory(
+            current_graph,
+            data,
+            n_neighbors,
+            rng_state,
+            tried,
+            max_candidates=max_candidates,
+            dist=dist,
+            dist_args=dist_args,
+            n_iters=n_iters,
+            delta=delta,
+            rho=rho,
+            verbose=verbose,
+        )
 
     return deheap_sort(current_graph)
 
 
-@numba.njit(parallel=True)
+@numba.njit()
 def init_from_random(n_neighbors, data, query_points, heap, rng_state, dist, dist_args):
     for i in range(query_points.shape[0]):
         indices = rejection_sample(n_neighbors, data.shape[0], rng_state)
@@ -120,7 +246,7 @@ def init_from_random(n_neighbors, data, query_points, heap, rng_state, dist, dis
     return
 
 
-@numba.njit(parallel=True)
+@numba.njit()
 def init_from_tree(tree, data, query_points, heap, rng_state, dist, dist_args):
     for i in range(query_points.shape[0]):
         indices = search_flat_tree(

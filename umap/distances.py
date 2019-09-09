@@ -1032,7 +1032,7 @@ def count_distance(x, y, poisson_lambda=1.0, normalisation=1.0):
     return result / normalisation
 
 
-@numba.jit()
+@numba.njit()
 def levenshtein(x, y, normalisation=1.0, max_distance=20):
     x_len, y_len = len(x), len(y)
 
@@ -1040,7 +1040,7 @@ def levenshtein(x, y, normalisation=1.0, max_distance=20):
     if abs(x_len - y_len) > max_distance:
         return abs(x_len - y_len) / normalisation
 
-    v0 = np.arange(y_len + 1)
+    v0 = np.arange(y_len + 1).astype(np.float64)
     v1 = np.zeros(y_len + 1)
 
     for i in range(x_len):
@@ -1150,22 +1150,25 @@ DISCRETE_METRICS = (
 )
 
 
-@numba.njit()
-def pairwise_special_metric(X, Y=None, metric="hellinger"):
-    special_metric_func = named_distances[metric]
-
+@numba.njit(parallel=True)
+def parallel_special_metric(X, Y=None, metric=hellinger):
     if Y is None:
         result = np.zeros((X.shape[0], X.shape[0]))
 
         for i in range(X.shape[0]):
             for j in range(i + 1, X.shape[0]):
-                result[i, j] = special_metric_func(X[i], X[j])
+                result[i, j] = metric(X[i], X[j])
                 result[j, i] = result[i, j]
     else:
         result = np.zeros((X.shape[0], Y.shape[0]))
 
         for i in range(X.shape[0]):
             for j in range(Y.shape[0]):
-                result[i, j] = special_metric_func(X[i], Y[j])
+                result[i, j] = metric(X[i], Y[j])
 
     return result
+
+
+def pairwise_special_metric(X, Y=None, metric="hellinger"):
+    special_metric_func = named_distances[metric]
+    return parallel_special_metric(X, Y, metric=special_metric_func)
