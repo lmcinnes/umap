@@ -505,9 +505,6 @@ def fuzzy_simplicial_set(
         knn_indices, knn_mask = parallel_knn_indices(X, n_neighbors)
         knn_dists = X[np.arange(X.shape[0])[:, None], knn_indices].copy()
         knn_dists[np.logical_not(knn_mask)] = -1
-        print(knn_indices)
-        print(knn_dists)
-        print(knn_mask)
 
     sigmas, rhos = smooth_knn_dist(
         knn_dists, knn_mask, local_connectivity=local_connectivity
@@ -532,8 +529,6 @@ def fuzzy_simplicial_set(
     )
 
     result.eliminate_zeros()
-
-    print(result.todense())
 
     return result
 
