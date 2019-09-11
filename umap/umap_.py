@@ -326,7 +326,7 @@ def nearest_neighbors(
                     n_neighbors,
                     rng_state,
                     max_candidates=60,
-                    dist=distance_func,
+                    sparse_dist=distance_func,
                     dist_args=tuple(metric_kwds.values()),
                     low_memory=low_memory,
                     rp_tree_init=True,
