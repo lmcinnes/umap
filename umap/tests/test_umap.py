@@ -294,6 +294,7 @@ def test_nn_descent_neighbor_accuracy():
         "NN-descent did not get 99% " "accuracy on nearest neighbors",
     )
 
+
 def test_nn_descent_neighbor_accuracy_low_memory():
     knn_indices, knn_dists, _ = nearest_neighbors(
         nn_data, 10, "euclidean", {}, False, np.random, low_memory=True

@@ -193,7 +193,14 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
 
 
 def nearest_neighbors(
-    X, n_neighbors, metric, metric_kwds, angular, random_state, low_memory=False, verbose=False
+    X,
+    n_neighbors,
+    metric,
+    metric_kwds,
+    angular,
+    random_state,
+    low_memory=False,
+    verbose=False,
 ):
     """Compute the ``n_neighbors`` nearest points for each data point in ``X``
     under ``metric``. This may be exact, but more likely is approximated via
@@ -785,9 +792,7 @@ def discrete_metric_simplicial_set_intersection(
         if metric in dist.named_distances:
             metric_func = dist.named_distances[metric]
         else:
-            raise ValueError(
-                "Discrete intersection metric is not recognized"
-            )
+            raise ValueError("Discrete intersection metric is not recognized")
 
         fast_metric_intersection(
             simplicial_set.row,

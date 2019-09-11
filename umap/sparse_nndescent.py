@@ -81,12 +81,7 @@ def sparse_nn_descent_internal_low_memory(
             print("\t", n, " / ", n_iters)
 
         (new_candidate_neighbors, old_candidate_neighbors) = new_build_candidates(
-            current_graph,
-            n_vertices,
-            n_neighbors,
-            max_candidates,
-            rng_state,
-            rho,
+            current_graph, n_vertices, n_neighbors, max_candidates, rng_state, rho
         )
 
         c = 0
@@ -156,12 +151,7 @@ def sparse_nn_descent_internal_high_memory(
             print("\t", n, " / ", n_iters)
 
         (new_candidate_neighbors, old_candidate_neighbors) = new_build_candidates(
-            current_graph,
-            n_vertices,
-            n_neighbors,
-            max_candidates,
-            rng_state,
-            rho,
+            current_graph, n_vertices, n_neighbors, max_candidates, rng_state, rho
         )
 
         c = 0
