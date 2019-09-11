@@ -294,6 +294,25 @@ def test_nn_descent_neighbor_accuracy():
         "NN-descent did not get 99% " "accuracy on nearest neighbors",
     )
 
+def test_nn_descent_neighbor_accuracy_low_memory():
+    knn_indices, knn_dists, _ = nearest_neighbors(
+        nn_data, 10, "euclidean", {}, False, np.random, low_memory=True
+    )
+
+    tree = KDTree(nn_data)
+    true_indices = tree.query(nn_data, 10, return_distance=False)
+
+    num_correct = 0.0
+    for i in range(nn_data.shape[0]):
+        num_correct += np.sum(np.in1d(true_indices[i], knn_indices[i]))
+
+    percent_correct = num_correct / (nn_data.shape[0] * 10)
+    assert_greater_equal(
+        percent_correct,
+        0.89,
+        "NN-descent did not get 99% " "accuracy on nearest neighbors",
+    )
+
 
 def test_angular_nn_descent_neighbor_accuracy():
     knn_indices, knn_dists, _ = nearest_neighbors(
@@ -319,6 +338,26 @@ def test_angular_nn_descent_neighbor_accuracy():
 def test_sparse_nn_descent_neighbor_accuracy():
     knn_indices, knn_dists, _ = nearest_neighbors(
         sparse_nn_data, 20, "euclidean", {}, False, np.random
+    )
+
+    tree = KDTree(sparse_nn_data.todense())
+    true_indices = tree.query(sparse_nn_data.todense(), 10, return_distance=False)
+
+    num_correct = 0.0
+    for i in range(sparse_nn_data.shape[0]):
+        num_correct += np.sum(np.in1d(true_indices[i], knn_indices[i]))
+
+    percent_correct = num_correct / (sparse_nn_data.shape[0] * 10)
+    assert_greater_equal(
+        percent_correct,
+        0.90,
+        "Sparse NN-descent did not get " "99% accuracy on nearest " "neighbors",
+    )
+
+
+def test_sparse_nn_descent_neighbor_accuracy_low_memory():
+    knn_indices, knn_dists, _ = nearest_neighbors(
+        sparse_nn_data, 20, "euclidean", {}, False, np.random, low_memory=True
     )
 
     tree = KDTree(sparse_nn_data.todense())
