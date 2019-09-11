@@ -87,7 +87,6 @@ def sparse_nn_descent_internal_low_memory(
             max_candidates,
             rng_state,
             rho,
-            False,
         )
 
         c = 0
@@ -163,7 +162,6 @@ def sparse_nn_descent_internal_high_memory(
             max_candidates,
             rng_state,
             rho,
-            False,
         )
 
         c = 0
