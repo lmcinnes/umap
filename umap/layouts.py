@@ -46,7 +46,7 @@ def rdist(x, y):
     return result
 
 
-def _optimize_layout_single_epoch(
+def _optimize_layout_euclidean_single_epoch(
     head_embedding,
     tail_embedding,
     head,
@@ -120,14 +120,6 @@ def _optimize_layout_single_epoch(
             epoch_of_next_negative_sample[i] += (
                 n_neg_samples * epochs_per_negative_sample[i]
             )
-
-
-_optimize_layout_single_epoch_jit = numba.njit(
-    _optimize_layout_single_epoch, fastmath=True
-)
-_optimize_layout_single_epoch_jit_parallel = numba.njit(
-    _optimize_layout_single_epoch, parallel=True, fastmath=True
-)
 
 
 def optimize_layout_euclidean(
@@ -204,10 +196,8 @@ def optimize_layout_euclidean(
     epoch_of_next_negative_sample = epochs_per_negative_sample.copy()
     epoch_of_next_sample = epochs_per_sample.copy()
 
-    optimize_fn = (
-        _optimize_layout_single_epoch_jit_parallel
-        if parallel
-        else _optimize_layout_single_epoch_jit
+    optimize_fn = numba.njit(
+        _optimize_layout_euclidean_single_epoch, fastmath=True, parallel=parallel
     )
     for n in range(n_epochs):
         optimize_fn(
