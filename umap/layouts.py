@@ -46,7 +46,90 @@ def rdist(x, y):
     return result
 
 
-@numba.njit(fastmath=True, parallel=True)
+def _optimize_layout_single_epoch(
+    head_embedding,
+    tail_embedding,
+    head,
+    tail,
+    n_vertices,
+    epochs_per_sample,
+    a,
+    b,
+    rng_state,
+    gamma,
+    dim,
+    move_other,
+    alpha,
+    epochs_per_negative_sample,
+    epoch_of_next_negative_sample,
+    epoch_of_next_sample,
+    n,
+):
+    for i in numba.prange(epochs_per_sample.shape[0]):
+        if epoch_of_next_sample[i] <= n:
+            j = head[i]
+            k = tail[i]
+
+            current = head_embedding[j]
+            other = tail_embedding[k]
+
+            dist_squared = rdist(current, other)
+
+            if dist_squared > 0.0:
+                grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
+                grad_coeff /= a * pow(dist_squared, b) + 1.0
+            else:
+                grad_coeff = 0.0
+
+            for d in range(dim):
+                grad_d = clip(grad_coeff * (current[d] - other[d]))
+                current[d] += grad_d * alpha
+                if move_other:
+                    other[d] += -grad_d * alpha
+
+            epoch_of_next_sample[i] += epochs_per_sample[i]
+
+            n_neg_samples = int(
+                (n - epoch_of_next_negative_sample[i]) / epochs_per_negative_sample[i]
+            )
+
+            for p in range(n_neg_samples):
+                k = tau_rand_int(rng_state) % n_vertices
+
+                other = tail_embedding[k]
+
+                dist_squared = rdist(current, other)
+
+                if dist_squared > 0.0:
+                    grad_coeff = 2.0 * gamma * b
+                    grad_coeff /= (0.001 + dist_squared) * (
+                        a * pow(dist_squared, b) + 1
+                    )
+                elif j == k:
+                    continue
+                else:
+                    grad_coeff = 0.0
+
+                for d in range(dim):
+                    if grad_coeff > 0.0:
+                        grad_d = clip(grad_coeff * (current[d] - other[d]))
+                    else:
+                        grad_d = 4.0
+                    current[d] += grad_d * alpha
+
+            epoch_of_next_negative_sample[i] += (
+                n_neg_samples * epochs_per_negative_sample[i]
+            )
+
+
+_optimize_layout_single_epoch_jit = numba.njit(
+    _optimize_layout_single_epoch, fastmath=True
+)
+_optimize_layout_single_epoch_jit_parallel = numba.njit(
+    _optimize_layout_single_epoch, parallel=True, fastmath=True
+)
+
+
 def optimize_layout_euclidean(
     head_embedding,
     tail_embedding,
@@ -61,6 +144,7 @@ def optimize_layout_euclidean(
     gamma=1.0,
     initial_alpha=1.0,
     negative_sample_rate=5.0,
+    parallel=False,
     verbose=False,
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
@@ -100,6 +184,10 @@ def optimize_layout_euclidean(
         Initial learning rate for the SGD.
     negative_sample_rate: int (optional, default 5)
         Number of negative samples to use per positive sample.
+    parallel: bool (optional, default False)
+        Whether to run the computation using numba parallel.
+        Running in parallel is non-deterministic, and is not used
+        if a random seed has been set, to ensure reproducibility.
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
     Returns
@@ -116,63 +204,31 @@ def optimize_layout_euclidean(
     epoch_of_next_negative_sample = epochs_per_negative_sample.copy()
     epoch_of_next_sample = epochs_per_sample.copy()
 
+    optimize_fn = (
+        _optimize_layout_single_epoch_jit_parallel
+        if parallel
+        else _optimize_layout_single_epoch_jit
+    )
     for n in range(n_epochs):
-        for i in range(epochs_per_sample.shape[0]):
-            if epoch_of_next_sample[i] <= n:
-                j = head[i]
-                k = tail[i]
-
-                current = head_embedding[j]
-                other = tail_embedding[k]
-
-                dist_squared = rdist(current, other)
-
-                if dist_squared > 0.0:
-                    grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
-                    grad_coeff /= a * pow(dist_squared, b) + 1.0
-                else:
-                    grad_coeff = 0.0
-
-                for d in range(dim):
-                    grad_d = clip(grad_coeff * (current[d] - other[d]))
-                    current[d] += grad_d * alpha
-                    if move_other:
-                        other[d] += -grad_d * alpha
-
-                epoch_of_next_sample[i] += epochs_per_sample[i]
-
-                n_neg_samples = int(
-                    (n - epoch_of_next_negative_sample[i])
-                    / epochs_per_negative_sample[i]
-                )
-
-                for p in range(n_neg_samples):
-                    k = tau_rand_int(rng_state) % n_vertices
-
-                    other = tail_embedding[k]
-
-                    dist_squared = rdist(current, other)
-
-                    if dist_squared > 0.0:
-                        grad_coeff = 2.0 * gamma * b
-                        grad_coeff /= (0.001 + dist_squared) * (
-                            a * pow(dist_squared, b) + 1
-                        )
-                    elif j == k:
-                        continue
-                    else:
-                        grad_coeff = 0.0
-
-                    for d in range(dim):
-                        if grad_coeff > 0.0:
-                            grad_d = clip(grad_coeff * (current[d] - other[d]))
-                        else:
-                            grad_d = 4.0
-                        current[d] += grad_d * alpha
-
-                epoch_of_next_negative_sample[i] += (
-                    n_neg_samples * epochs_per_negative_sample[i]
-                )
+        optimize_fn(
+            head_embedding,
+            tail_embedding,
+            head,
+            tail,
+            n_vertices,
+            epochs_per_sample,
+            a,
+            b,
+            rng_state,
+            gamma,
+            dim,
+            move_other,
+            alpha,
+            epochs_per_negative_sample,
+            epoch_of_next_negative_sample,
+            epoch_of_next_sample,
+            n,
+        )
 
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
 

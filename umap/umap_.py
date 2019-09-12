@@ -879,6 +879,7 @@ def simplicial_set_embedding(
     output_metric=dist.named_distances_with_gradients["euclidean"],
     output_metric_kwds={},
     euclidean_output=True,
+    parallel=False,
     verbose=False,
 ):
     """Perform a fuzzy simplicial set embedding, using a specified
@@ -949,6 +950,11 @@ def simplicial_set_embedding(
 
     euclidean_output: bool
         Whether to use the faster code specialised for euclidean output metrics
+
+    parallel: bool (optional, default False)
+        Whether to run the computation using numba parallel.
+        Running in parallel is non-deterministic, and is not used
+        if a random seed has been set, to ensure reproducibility.
 
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
@@ -1034,6 +1040,7 @@ def simplicial_set_embedding(
             gamma,
             initial_alpha,
             negative_sample_rate,
+            parallel=parallel,
             verbose=verbose,
         )
     else:
@@ -1703,6 +1710,7 @@ class UMAP(BaseEstimator):
             self._output_distance_func,
             self._output_metric_kwds,
             self.output_metric in ("euclidean", "l2"),
+            self.random_state is None,
             self.verbose,
         )
 
@@ -1905,6 +1913,7 @@ class UMAP(BaseEstimator):
                 self.repulsion_strength,
                 self._initial_alpha / 4.0,
                 self.negative_sample_rate,
+                self.random_state is None,
                 verbose=self.verbose,
             )
         else:
@@ -2428,6 +2437,7 @@ class DataFrameUMAP(BaseEstimator):
             self._output_distance_func,
             self._output_metric_kwds,
             self.output_metric in ("euclidean", "l2"),
+            self.random_state is None,
             self.verbose,
         )
 
