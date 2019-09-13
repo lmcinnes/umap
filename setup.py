@@ -37,8 +37,8 @@ configuration = {
                          'numba >= 0.37'],
     'ext_modules' : [],
     'cmdclass' : {},
-    'test_suite' : 'nose.collector',
-    'tests_require' : ['nose'],
+    # 'test_suite' : 'nose.collector',
+    # 'tests_require' : ['nose'],
     'data_files' : ()
     }
 

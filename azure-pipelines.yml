@@ -1,0 +1,132 @@
+jobs:
+- job: 'Format_with_black'
+  pool:
+    vmImage: 'ubuntu-latest'
+  strategy:
+    matrix:
+      Python36:
+        python.version: '3.6'
+
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '$(python.version)'
+
+  - script: python -m pip install --upgrade pip setuptools wheel
+    displayName: 'Install tools'
+
+  - script: pip install black
+    displayName: 'Install black'
+
+  - script: black --check --diff umap
+    displayName: 'Run black'
+
+- job: 'Test_and_Coverage_Ubuntu'
+  dependsOn: 'Format_with_black'
+  condition: succeeded()
+  pool:
+    vmImage: 'ubuntu-latest'
+  strategy:
+    matrix:
+      Python36:
+        python.version: '3.6'
+
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '$(python.version)'
+
+  - script: python -m pip install --upgrade pip setuptools wheel
+    displayName: 'Install tools'
+
+  - script: pip install -r requirements.txt
+    displayName: 'Install requirements'
+
+  - script: |
+      pip install pytest
+      pip install pytest-cov
+    displayName: 'Install pytest'
+
+  - script: pip install -e .
+    displayName: 'Install UMAP'
+
+  - script: pytest umap --doctest-modules --junitxml=junit/test-results.xml --cov=umap --cov-report=xml --cov-report=html
+    displayName: 'Run pytest'
+
+  - task: PublishTestResults@2
+    condition: succeededOrFailed()
+    inputs:
+      testResultsFiles: '**/test-*.xml'
+      failTaskOnFailedTests: true
+      testRunTitle: 'Publish test results for $(python.version)'
+
+- job: 'Test_and_Coverage_OSX'
+  dependsOn: 'Format_with_black'
+  condition: succeeded()
+  pool:
+    vmImage: 'macOS-latest'
+  strategy:
+    matrix:
+      Python36:
+        python.version: '3.6'
+
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '$(python.version)'
+
+  - script: python -m pip install --upgrade pip setuptools wheel
+    displayName: 'Install tools'
+
+  - script: pip install -r requirements.txt
+    displayName: 'Install requirements'
+
+  - script: |
+      pip install pytest
+      pip install pytest-cov
+    displayName: 'Install pytest'
+
+  - script: pip install -e .
+    displayName: 'Install UMAP'
+
+  - script: pytest umap --doctest-modules
+    displayName: 'Run pytest'
+
+  - task: PublishTestResults@2
+    condition: succeededOrFailed()
+    inputs:
+      testResultsFiles: '**/test-*.xml'
+      failTaskOnFailedTests: true
+      testRunTitle: 'Publish test results for $(python.version)'
+
+- job: 'Test_and_Coverage_Windows'
+  dependsOn: 'Format_with_black'
+  condition: succeeded()
+  pool:
+    vmImage: 'windows-latest'
+  strategy:
+    matrix:
+      Python36:
+        python.version: '3.6'
+
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '$(python.version)'
+
+  - script: python -m pip install --upgrade pip setuptools wheel
+    displayName: 'Install tools'
+
+  - script: pip install -r requirements.txt
+    displayName: 'Install requirements'
+
+  - script: |
+      pip install pytest
+      pip install pytest-cov
+    displayName: 'Install pytest'
+
+  - script: pip install -e .
+    displayName: 'Install UMAP'
+
+  - script: pytest umap --doctest-modules
+    displayName: 'Run pytest'

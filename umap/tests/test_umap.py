@@ -18,7 +18,6 @@ import umap.validation as valid
 import umap.sparse as spdist
 import umap.distances as dist
 from sklearn import datasets
-from nose import SkipTest
 from functools import wraps
 from tempfile import mkdtemp
 from scipy.stats import mode
@@ -44,8 +43,7 @@ from scipy import sparse
 from scipy.spatial import distance
 import numpy as np
 import os.path
-from nose.tools import assert_greater_equal
-from nose.tools import assert_less
+import pytest
 
 """
 Tests for UMAP to ensure things are working as expected.
@@ -104,7 +102,7 @@ def spatial_check(metric):
     assert_array_almost_equal(
         test_matrix,
         dist_matrix,
-        err_msg="Distances don't match " "for metric {}".format(metric),
+        err_msg="Distances don't match for metric {}".format(metric),
     )
 
 
@@ -130,7 +128,7 @@ def binary_check(metric):
     assert_array_almost_equal(
         test_matrix,
         dist_matrix,
-        err_msg="Distances don't match " "for metric {}".format(metric),
+        err_msg="Distances don't match for metric {}".format(metric),
     )
 
 
@@ -181,7 +179,7 @@ def sparse_spatial_check(metric):
     assert_array_almost_equal(
         test_matrix,
         dist_matrix,
-        err_msg="Sparse distances don't match " "for metric {}".format(metric),
+        err_msg="Sparse distances don't match for metric {}".format(metric),
     )
 
 
@@ -232,12 +230,13 @@ def sparse_binary_check(metric):
     assert_array_almost_equal(
         test_matrix,
         dist_matrix,
-        err_msg="Sparse distances don't match " "for metric {}".format(metric),
+        err_msg="Sparse distances don't match for metric {}".format(metric),
     )
 
 
-# Transform isn't stable under batching; hard to opt out of this.
-@SkipTest
+@pytest.mark.skip(
+    reason="Transform isn't stable under batching; hard to opt out of this."
+)
 def test_scikit_learn_compatibility():
     check_estimator(UMAP)
 
@@ -255,11 +254,9 @@ def test_nn_descent_neighbor_accuracy():
         num_correct += np.sum(np.in1d(true_indices[i], knn_indices[i]))
 
     percent_correct = num_correct / (spatial_data.shape[0] * 10)
-    assert_greater_equal(
-        percent_correct,
-        0.99,
-        "NN-descent did not get 99% " "accuracy on nearest neighbors",
-    )
+    assert (
+        percent_correct >= 0.99
+    ), "NN-descent did not get 99% accuracy on nearest neighbors"
 
 
 def test_angular_nn_descent_neighbor_accuracy():
@@ -276,11 +273,9 @@ def test_angular_nn_descent_neighbor_accuracy():
         num_correct += np.sum(np.in1d(true_indices[i], knn_indices[i]))
 
     percent_correct = num_correct / (spatial_data.shape[0] * 10)
-    assert_greater_equal(
-        percent_correct,
-        0.99,
-        "NN-descent did not get 99% " "accuracy on nearest neighbors",
-    )
+    assert (
+        percent_correct >= 0.99
+    ), "NN-descent did not get 99% accuracy on nearest neighbors"
 
 
 def test_sparse_nn_descent_neighbor_accuracy():
@@ -296,11 +291,9 @@ def test_sparse_nn_descent_neighbor_accuracy():
         num_correct += np.sum(np.in1d(true_indices[i], knn_indices[i]))
 
     percent_correct = num_correct / (spatial_data.shape[0] * 10)
-    assert_greater_equal(
-        percent_correct,
-        0.99,
-        "Sparse NN-descent did not get " "99% accuracy on nearest " "neighbors",
-    )
+    assert (
+        percent_correct >= 0.99
+    ), "Sparse NN-descent did not get 99% accuracy on nearest neighbors"
 
 
 def test_sparse_angular_nn_descent_neighbor_accuracy():
@@ -317,11 +310,9 @@ def test_sparse_angular_nn_descent_neighbor_accuracy():
         num_correct += np.sum(np.in1d(true_indices[i], knn_indices[i]))
 
     percent_correct = num_correct / (spatial_data.shape[0] * 10)
-    assert_greater_equal(
-        percent_correct,
-        0.99,
-        "NN-descent did not get 99% " "accuracy on nearest neighbors",
-    )
+    assert (
+        percent_correct >= 0.99
+    ), "NN-descent did not get 99% accuracy on nearest neighbors"
 
 
 def test_smooth_knn_dist_l1norms():
@@ -338,7 +329,7 @@ def test_smooth_knn_dist_l1norms():
         norms,
         1.0 + np.log2(10) * np.ones(norms.shape[0]),
         decimal=3,
-        err_msg="Smooth knn-dists does not give expected" "norms",
+        err_msg="Smooth knn-dists does not give expectednorms",
     )
 
 
@@ -355,12 +346,9 @@ def test_nn_descent_neighbor_accuracy_callable_metric():
         num_correct += np.sum(np.in1d(true_indices[i], knn_indices[i]))
 
     percent_correct = num_correct / (spatial_data.shape[0] * 10)
-    assert_greater_equal(
-        percent_correct,
-        0.99,
-        "NN-descent did not get 99% "
-        "accuracy on nearest neighbors with callable metric",
-    )
+    assert (
+        percent_correct >= 0.99
+    ), "NN-descent did not get 99% accuracy on nearest neighbors with callable metric"
 
 
 def test_smooth_knn_dist_l1norms_w_connectivity():
@@ -439,11 +427,9 @@ def test_nn_search():
         num_correct += np.sum(np.in1d(true_indices[i], indices[i]))
 
     percent_correct = num_correct / (test.shape[0] * 10)
-    assert_greater_equal(
-        percent_correct,
-        0.99,
-        "Sparse NN-descent did not get " "99% accuracy on nearest " "neighbors",
-    )
+    assert (
+        percent_correct >= 0.99
+    ), "Sparse NN-descent did not get 99% accuracy on nearest neighbors"
 
 
 def test_euclidean():
@@ -595,9 +581,7 @@ def test_seuclidean():
         ]
     )
     assert_array_almost_equal(
-        test_matrix,
-        dist_matrix,
-        err_msg="Distances don't match " "for metric seuclidean",
+        test_matrix, dist_matrix, err_msg="Distances don't match for metric seuclidean"
     )
 
 
@@ -616,7 +600,7 @@ def test_weighted_minkowski():
     assert_array_almost_equal(
         test_matrix,
         dist_matrix,
-        err_msg="Distances don't match " "for metric weighted_minkowski",
+        err_msg="Distances don't match for metric weighted_minkowski",
     )
 
 
@@ -633,9 +617,7 @@ def test_mahalanobis():
         ]
     )
     assert_array_almost_equal(
-        test_matrix,
-        dist_matrix,
-        err_msg="Distances don't match " "for metric mahalanobis",
+        test_matrix, dist_matrix, err_msg="Distances don't match for metric mahalanobis"
     )
 
 
@@ -653,32 +635,25 @@ def test_haversine():
     )
     test_matrix.sort(axis=1)
     assert_array_almost_equal(
-        test_matrix,
-        dist_matrix,
-        err_msg="Distances don't match " "for metric haversine",
+        test_matrix, dist_matrix, err_msg="Distances don't match for metric haversine"
     )
 
 
 def test_umap_sparse_trustworthiness():
     embedding = UMAP(n_neighbors=10).fit_transform(sparse_nn_data[:100])
     trust = trustworthiness(sparse_nn_data[:100].toarray(), embedding, 10)
-    assert_greater_equal(
-        trust,
-        0.92,
-        "Insufficiently trustworthy embedding for"
-        "sparse test dataset: {}".format(trust),
-    )
+    assert (
+        trust >= 0.92
+    ), "Insufficiently trustworthy embedding for sparse test dataset: {}".format(trust)
 
 
 def test_umap_trustworthiness_on_iris():
     data = iris.data
     embedding = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit_transform(data)
     trust = trustworthiness(iris.data, embedding, 10)
-    assert_greater_equal(
-        trust,
-        0.97,
-        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
-    )
+    assert (
+        trust >= 0.97
+    ), "Insufficiently trustworthy embedding for iris dataset: {}".format(trust)
 
 
 def test_umap_trustworthiness_on_iris_random_init():
@@ -687,11 +662,9 @@ def test_umap_trustworthiness_on_iris_random_init():
         n_neighbors=10, min_dist=0.01, random_state=42, init="random"
     ).fit_transform(data)
     trust = trustworthiness(iris.data, embedding, 10)
-    assert_greater_equal(
-        trust,
-        0.95,
-        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
-    )
+    assert (
+        trust >= 0.95
+    ), "Insufficiently trustworthy embedding for iris dataset: {}".format(trust)
 
 
 def test_supervised_umap_trustworthiness_on_iris():
@@ -700,11 +673,9 @@ def test_supervised_umap_trustworthiness_on_iris():
         data, iris.target
     )
     trust = trustworthiness(iris.data, embedding, 10)
-    assert_greater_equal(
-        trust,
-        0.97,
-        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
-    )
+    assert (
+        trust >= 0.97
+    ), "Insufficiently trustworthy embedding for iris dataset: {}".format(trust)
 
 
 def test_semisupervised_umap_trustworthiness_on_iris():
@@ -715,11 +686,9 @@ def test_semisupervised_umap_trustworthiness_on_iris():
         data, target
     )
     trust = trustworthiness(iris.data, embedding, 10)
-    assert_greater_equal(
-        trust,
-        0.97,
-        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
-    )
+    assert (
+        trust >= 0.97
+    ), "Insufficiently trustworthy embedding for iris dataset: {}".format(trust)
 
 
 def test_initialized_umap_trustworthiness_on_iris():
@@ -728,11 +697,9 @@ def test_initialized_umap_trustworthiness_on_iris():
         n_neighbors=10, min_dist=0.01, init=data[:, 2:], random_state=42
     ).fit_transform(data, iris.target)
     trust = trustworthiness(iris.data, embedding, 10)
-    assert_greater_equal(
-        trust,
-        0.97,
-        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
-    )
+    assert (
+        trust >= 0.97
+    ), "Insufficiently trustworthy embedding for iris dataset: {}".format(trust)
 
 
 def test_umap_transform_on_iris():
@@ -743,11 +710,9 @@ def test_umap_transform_on_iris():
     embedding = fitter.transform(new_data)
 
     trust = trustworthiness(new_data, embedding, 10)
-    assert_greater_equal(
-        trust,
-        0.89,
-        "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust),
-    )
+    assert (
+        trust >= 0.89
+    ), "Insufficiently trustworthy transform for iris dataset: {}".format(trust)
 
 
 def test_umap_transform_on_iris_modified_dtype():
@@ -759,23 +724,18 @@ def test_umap_transform_on_iris_modified_dtype():
     embedding = fitter.transform(new_data)
 
     trust = trustworthiness(new_data, embedding, 10)
-    assert_greater_equal(
-        trust,
-        0.89,
-        "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust),
-    )
+    assert (
+        trust >= 0.89
+    ), "Insufficiently trustworthy transform for iris dataset: {}".format(trust)
 
 
-# # This test is currently to expensive to run when turning
-# # off numba JITting to detect coverage.
-# @SkipTest
-# def test_umap_regression_supervision(): # pragma: no cover
-#     boston = datasets.load_boston()
-#     data = boston.data
-#     embedding = UMAP(n_neighbors=10,
-#                      min_dist=0.01,
-#                      target_metric='euclidean',
-#                      random_state=42).fit_transform(data, boston.target)
+@pytest.mark.skip(reason="Too expensive with numba jit deactivated for coverage")
+def test_umap_regression_supervision():  # pragma: no cover
+    boston = datasets.load_boston()
+    data = boston.data
+    embedding = UMAP(
+        n_neighbors=10, min_dist=0.01, target_metric="euclidean", random_state=42
+    ).fit_transform(data, boston.target)
 
 
 def test_blobs_cluster():
@@ -807,7 +767,7 @@ def test_multi_component_layout():
 
     error = np.sum((true_centroids - embed_centroids) ** 2)
 
-    assert_less(error, 15.0, msg="Multi component embedding to far astray")
+    assert error < 15.0, "Multi component embedding to far astray"
 
 
 def test_negative_op():
@@ -969,9 +929,11 @@ def test_umap_transform_embedding_stability():
     new_data = np.random.random(data.shape)
     embedding = fitter.transform(new_data)
 
-    assert_array_equal(original_embedding,
-                       fitter.embedding_,
-                       "Transforming new data changed the original embeddings")
+    assert_array_equal(
+        original_embedding,
+        fitter.embedding_,
+        "Transforming new data changed the original embeddings",
+    )
 
     # Example from issue #217
     a = np.random.random((1000, 10))
