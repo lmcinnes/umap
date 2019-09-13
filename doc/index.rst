@@ -55,6 +55,7 @@ PyPI install, presuming you have numba and sklearn and all its requirements
    parameters
    plotting
    transform
+   sparse
    supervised
    clustering
    outliers

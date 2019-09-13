@@ -193,7 +193,14 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
 
 
 def nearest_neighbors(
-    X, n_neighbors, metric, metric_kwds, angular, random_state, verbose=False
+    X,
+    n_neighbors,
+    metric,
+    metric_kwds,
+    angular,
+    random_state,
+    low_memory=False,
+    verbose=False,
 ):
     """Compute the ``n_neighbors`` nearest points for each data point in ``X``
     under ``metric``. This may be exact, but more likely is approximated via
@@ -219,7 +226,10 @@ def nearest_neighbors(
     random_state: np.random state
         The random state to use for approximate NN computations.
 
-    verbose: bool
+    low_memory: bool (optional, default False)
+        Whether to pursue lower memory NNdescent.
+
+    verbose: bool (optional, default False)
         Whether to print status data during the computation.
 
     Returns
@@ -240,6 +250,7 @@ def nearest_neighbors(
         # Note that this does not support sparse distance matrices yet ...
         # Compute indices of n nearest neighbors
         knn_indices = fast_knn_indices(X, n_neighbors)
+        # knn_indices = np.argsort(X)[:, :n_neighbors]
         # Compute the nearest neighbor distances
         #   (equivalent to np.sort(X)[:,:n_neighbors])
         knn_dists = X[np.arange(X.shape[0])[:, None], knn_indices].copy()
@@ -263,6 +274,7 @@ def nearest_neighbors(
                 n_trees=n_trees,
                 n_iters=n_iters,
                 max_candidates=60,
+                low_memory=low_memory,
                 verbose=verbose,
             )
             knn_indices, knn_dists = nnd._neighbor_graph
@@ -320,9 +332,10 @@ def nearest_neighbors(
                     X.shape[0],
                     n_neighbors,
                     rng_state,
-                    distance_func,
-                    tuple(metric_kwds.values()),
                     max_candidates=60,
+                    sparse_dist=distance_func,
+                    dist_args=tuple(metric_kwds.values()),
+                    low_memory=low_memory,
                     rp_tree_init=True,
                     leaf_array=leaf_array,
                     n_iters=n_iters,
@@ -343,9 +356,10 @@ def nearest_neighbors(
                     X,
                     n_neighbors,
                     rng_state,
-                    distance_func,
-                    tuple(metric_kwds.values()),
                     max_candidates=60,
+                    dist=distance_func,
+                    dist_args=tuple(metric_kwds.values()),
+                    low_memory=low_memory,
                     rp_tree_init=True,
                     leaf_array=leaf_array,
                     n_iters=n_iters,
@@ -616,7 +630,7 @@ def fast_intersection(rows, cols, values, target, unknown_dist=1.0, far_dist=5.0
 
 @numba.jit()
 def fast_metric_intersection(
-    rows, cols, values, discrete_space, metric, metric_kws, scale
+    rows, cols, values, discrete_space, metric, metric_args, scale
 ):
     """Under the assumption of categorical distance for the intersecting
     simplicial set perform a fast intersection.
@@ -648,8 +662,6 @@ def fast_metric_intersection(
     -------
     None
     """
-    metric_args = tuple(metric_kws.values())
-
     for nz in range(rows.shape[0]):
         i = rows[nz]
         j = cols[nz]
@@ -699,7 +711,6 @@ def reset_local_metrics(simplicial_set):
     return csr_mat.tocoo()
 
 
-@numba.jit()
 def reset_local_connectivity(simplicial_set, reset_local_metric=False):
     """Reset the local connectivity requirement -- each data sample should
     have complete confidence in at least one 1-simplex in the simplicial set.
@@ -729,7 +740,6 @@ def reset_local_connectivity(simplicial_set, reset_local_metric=False):
     return simplicial_set
 
 
-@numba.jit()
 def discrete_metric_simplicial_set_intersection(
     simplicial_set,
     discrete_space,
@@ -782,10 +792,7 @@ def discrete_metric_simplicial_set_intersection(
         if metric in dist.named_distances:
             metric_func = dist.named_distances[metric]
         else:
-            raise ValueError(
-                "Discrete intersection metric {}" " is not recognized".format(metric)
-            )
-        print(metric, metric_func)
+            raise ValueError("Discrete intersection metric is not recognized")
 
         fast_metric_intersection(
             simplicial_set.row,
@@ -793,7 +800,7 @@ def discrete_metric_simplicial_set_intersection(
             simplicial_set.data,
             discrete_space,
             metric_func,
-            metric_kws,
+            tuple(metric_kws.values()),
             metric_scale,
         )
     else:
@@ -869,10 +876,11 @@ def simplicial_set_embedding(
     random_state,
     metric,
     metric_kwds,
-    output_metric,
-    output_metric_kwds,
-    euclidean_output,
-    verbose,
+    output_metric=dist.named_distances_with_gradients["euclidean"],
+    output_metric_kwds={},
+    euclidean_output=True,
+    parallel=False,
+    verbose=False,
 ):
     """Perform a fuzzy simplicial set embedding, using a specified
     initialisation method and then minimizing the fuzzy set cross entropy
@@ -942,6 +950,11 @@ def simplicial_set_embedding(
 
     euclidean_output: bool
         Whether to use the faster code specialised for euclidean output metrics
+
+    parallel: bool (optional, default False)
+        Whether to run the computation using numba parallel.
+        Running in parallel is non-deterministic, and is not used
+        if a random seed has been set, to ensure reproducibility.
 
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
@@ -1027,6 +1040,7 @@ def simplicial_set_embedding(
             gamma,
             initial_alpha,
             negative_sample_rate,
+            parallel=parallel,
             verbose=verbose,
         )
     else:
@@ -1185,6 +1199,12 @@ class UMAP(BaseEstimator):
         The effective scale of embedded points. In combination with ``min_dist``
         this determines how clustered/clumped the embedded points are.
 
+    low_memory: bool (optional, default False)
+        For some datasets the nearest neighbor computation can consume a lot of
+        memory. If you find that UMAP is failing due to memory constraints
+        consider setting this option to True. This approach is more
+        computationally expensive, but avoids excessive memory use.
+
     set_op_mix_ratio: float (optional, default 1.0)
         Interpolate between (fuzzy) union and intersection as the set operation
         used to combine local fuzzy simplicial sets to obtain a global fuzzy
@@ -1292,6 +1312,7 @@ class UMAP(BaseEstimator):
         init="spectral",
         min_dist=0.1,
         spread=1.0,
+        low_memory=False,
         set_op_mix_ratio=1.0,
         local_connectivity=1.0,
         repulsion_strength=1.0,
@@ -1328,6 +1349,7 @@ class UMAP(BaseEstimator):
 
         self.spread = spread
         self.min_dist = min_dist
+        self.low_memory = low_memory
         self.set_op_mix_ratio = set_op_mix_ratio
         self.local_connectivity = local_connectivity
         self.negative_sample_rate = negative_sample_rate
@@ -1553,6 +1575,7 @@ class UMAP(BaseEstimator):
                 self._metric_kwds,
                 self.angular_rp_forest,
                 random_state,
+                self.low_memory,
                 self.verbose,
             )
 
@@ -1725,6 +1748,7 @@ class UMAP(BaseEstimator):
             self._output_distance_func,
             self._output_metric_kwds,
             self.output_metric in ("euclidean", "l2"),
+            self.random_state is None,
             self.verbose,
         )[inverse]
 
@@ -1927,6 +1951,7 @@ class UMAP(BaseEstimator):
                 self.repulsion_strength,
                 self._initial_alpha / 4.0,
                 self.negative_sample_rate,
+                self.random_state is None,
                 verbose=self.verbose,
             )
         else:
@@ -2450,6 +2475,7 @@ class DataFrameUMAP(BaseEstimator):
             self._output_distance_func,
             self._output_metric_kwds,
             self.output_metric in ("euclidean", "l2"),
+            self.random_state is None,
             self.verbose,
         )
 
