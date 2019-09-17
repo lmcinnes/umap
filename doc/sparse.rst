@@ -163,7 +163,7 @@ That was easy! But is it really working? We can easily plot the results:
     umap.plot.points(mapper, values=np.arange(100000), theme='viridis')
 
 
-.. image:: sparse_files/sparse_11_1.png
+.. image:: images/sparse_11_1.png
 
 
 And this looks very much in line with the results `John Williamson
@@ -232,7 +232,7 @@ matplotlib for plotting.
 
 
 
-.. image:: sparse_files/sparse_18_0.png
+.. image:: images/sparse_18_0.png
 
 
 The color scale is different in this case, but you can see that the data
@@ -377,7 +377,7 @@ variable of the data -- which newsgroup the posting was drawn from.
 
 
 
-.. image:: sparse_files/sparse_31_1.png
+.. image:: images/sparse_31_1.png
 
 
 We can see that even going directly from a 130,000 dimensional space
@@ -403,5 +403,5 @@ can plot the end result:
 
 
 
-.. image:: sparse_files/sparse_35_0.png
+.. image:: images/sparse_35_0.png
 
