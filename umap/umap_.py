@@ -273,6 +273,7 @@ def nearest_neighbors(
                 random_state=random_state,
                 n_trees=n_trees,
                 n_iters=n_iters,
+                n_jobs=-1,
                 max_candidates=60,
                 low_memory=low_memory,
                 verbose=verbose,
