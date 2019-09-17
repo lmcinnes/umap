@@ -1445,7 +1445,7 @@ class UMAP(BaseEstimator):
             ``target_metric_kwds``.
         """
 
-        X = check_array(X, dtype=np.float32, accept_sparse="csr")
+        X = check_array(X, dtype=np.float32, accept_sparse="csr", order='C')
         self._raw_data = X
 
         # Handle all the optional arguments, setting default
