@@ -80,7 +80,6 @@ binary_nn_data = np.vstack(
 sparse_test_data = sparse.csr_matrix(nn_data * binary_nn_data)
 sparse_nn_data = sparse.random(1000, 50, density=0.5, format="csr")
 
-
 iris = datasets.load_iris()
 iris_selection = np.random.choice([True, False], 150, replace=True, p=[0.75, 0.25])
 
