@@ -273,7 +273,6 @@ def nearest_neighbors(
                 random_state=random_state,
                 n_trees=n_trees,
                 n_iters=n_iters,
-                n_jobs=-1,
                 max_candidates=60,
                 low_memory=low_memory,
                 verbose=verbose,
@@ -1460,7 +1459,7 @@ class UMAP(BaseEstimator):
             ``target_metric_kwds``.
         """
 
-        X = check_array(X, dtype=np.float32, accept_sparse="csr", order='C')
+        X = check_array(X, dtype=np.float32, accept_sparse="csr", order="C")
         self._raw_data = X
 
         # Handle all the optional arguments, setting default
@@ -1805,7 +1804,7 @@ class UMAP(BaseEstimator):
                 "only a single data sample."
             )
         # If we just have the original input then short circuit things
-        X = check_array(X, dtype=np.float32, accept_sparse="csr", order='C')
+        X = check_array(X, dtype=np.float32, accept_sparse="csr", order="C")
         x_hash = joblib.hash(X)
         if x_hash == self._input_hash:
             return self.embedding_
@@ -1815,7 +1814,7 @@ class UMAP(BaseEstimator):
                 "Transform  of new data not available for " "precomputed metric."
             )
 
-        X = check_array(X, dtype=np.float32, order="C", accept_sparse="csr")
+        # X = check_array(X, dtype=np.float32, order="C", accept_sparse="csr")
         random_state = check_random_state(self.transform_seed)
         rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
