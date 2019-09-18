@@ -6,7 +6,7 @@ UMAP has some support for inverse transforms -- generating a high
 dimensional data sample given a location in the low dimensional
 embedding space. To start let's load all the relavent libraries.
 
-.. code:: ipython3
+.. code:: python3
 
     import numpy as np
     import matplotlib.pyplot as plt
@@ -23,7 +23,7 @@ dimension of this dataset to something small, and then see if we can
 generate new digits by sampling points from the embedding space. To load
 the MNIST dataset we'll make use of sklearn's ``fetch_openml`` function.
 
-.. code:: ipython3
+.. code:: python3
 
     data, labels = sklearn.datasets.fetch_openml('mnist_784', version=1, return_X_y=True)
 
@@ -33,7 +33,7 @@ This is straightforward with umap, but in this case rather than using
 trained model for later generating new digits based on samples from the
 embedding space.
 
-.. code:: ipython3
+.. code:: python3
 
     mapper = umap.UMAP(random_state=42).fit(data)
 
@@ -41,7 +41,7 @@ To ensure that things worked correctly we can plot the data (since we
 reduced it to two dimensions). We'll use the ``umap.plot`` functionality
 to do this.
 
-.. code:: ipython3
+.. code:: python3
 
     umap.plot.points(mapper, labels=labels)
 
@@ -58,7 +58,7 @@ four corner points. To make out selection interesting we'll carefully
 choose the corners to span over the dataset, and sample different digits
 so that we can better see the transitions.
 
-.. code:: ipython3
+.. code:: python3
 
     corners = np.array([
         [-5, -10],  # 1
@@ -84,7 +84,7 @@ trained model and passing it the set of test points that we want to
 convert into high dimensional representations. Be warned that this can
 be quite expensive computationally.
 
-.. code:: ipython3
+.. code:: python3
 
     inv_transformed_points = mapper.inverse_transform(test_pts)
 
@@ -99,7 +99,7 @@ and finally a grid of the images we generated (converting the inverse
 transformed vectors into images is just a matter of reshaping them back
 to 28 by 28 pixel grids and using ``imshow``).
 
-.. code:: ipython3
+.. code:: python3
 
     # Set up the grid
     fig = plt.figure(figsize=(12,6))
@@ -151,19 +151,19 @@ the bounds about the embedding you will likely get strange results
 Let's continue the demonstration by looking at the Fashion MNIST
 dataset. As before we can load this through sklearn.
 
-.. code:: ipython3
+.. code:: python3
 
     data, labels = sklearn.datasets.fetch_openml('Fashion-MNIST', version=1, return_X_y=True)
 
 Again we can fit this data with UMAP and get a mapper object.
 
-.. code:: ipython3
+.. code:: python3
 
     mapper = umap.UMAP(random_state=42).fit(data)
 
 Let's plot the embedding to see what we got as a result:
 
-.. code:: ipython3
+.. code:: python3
 
     umap.plot.points(mapper, labels=labels)
 
@@ -178,7 +178,7 @@ between four corners. As before we'll select the corners so that we can
 stay within the convex hull of the embedding points and ensure nothign
 to strange happens with the inverse transforms.
 
-.. code:: ipython3
+.. code:: python3
 
     corners = np.array([
         [-2, -6],  # bags
@@ -198,14 +198,14 @@ Now we simply apply the inverse transform just as before. Again, be
 warned, this is quite expensive computationally and may take some time
 to complete.
 
-.. code:: ipython3
+.. code:: python3
 
     inv_transformed_points = mapper.inverse_transform(test_pts)
 
 And now we can use similar code as above to set up out plot of the
 embedding with test points overlaid, and the generated images.
 
-.. code:: ipython3
+.. code:: python3
 
     # Set up the grid
     fig = plt.figure(figsize=(12,6))

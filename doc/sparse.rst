@@ -22,7 +22,7 @@ and we'll use sklearn for that (specifically
 ``sklearn.feature_extraction.text``). Beyond that we'll need umap, and
 plotting tools.
 
-.. code:: ipython3
+.. code:: python3
 
     import numpy as np
     import scipy.sparse
@@ -56,7 +56,7 @@ single call to ``primerange``. We'll also need a dictionary mapping the
 different primes to the column number they correspond to in our data
 structure; effectively we'll just be enumerating the primes.
 
-.. code:: ipython3
+.. code:: python3
 
     primes = list(sympy.primerange(2, 110000))
     prime_to_column = {p:i for i, p in enumerate(primes)}
@@ -87,7 +87,7 @@ to insert into a matrix. Since we are only concerned with divisibility
 this will simply be a one in every non-zero entry, so we can just add a
 list of ones of the appropriate length for each row.
 
-.. code:: ipython3
+.. code:: python3
 
     %%time
     lil_matrix_rows = []
@@ -115,7 +115,7 @@ to be the corresponding structure of values (all ones). The result is a
 sparse matrix data structure which can then be easily manipulated and
 converted into other sparse matrix formats easily.
 
-.. code:: ipython3
+.. code:: python3
 
     factor_matrix = scipy.sparse.lil_matrix((len(lil_matrix_rows), len(primes)), dtype=np.float32)
     factor_matrix.rows = np.array(lil_matrix_rows)
@@ -144,7 +144,7 @@ straightforward -- we just hand it directly to the fit method. Just like
 other sklearn estimators that can handle sparse input UMAP will detect
 the sparse matrix and just do the right thing.
 
-.. code:: ipython3
+.. code:: python3
 
     %%time
     mapper = umap.UMAP(metric='cosine', random_state=42, low_memory=True).fit(factor_matrix)
@@ -158,7 +158,7 @@ the sparse matrix and just do the right thing.
 
 That was easy! But is it really working? We can easily plot the results:
 
-.. code:: ipython3
+.. code:: python3
 
     umap.plot.points(mapper, values=np.arange(100000), theme='viridis')
 
@@ -177,7 +177,7 @@ that we'll need some more data. Fortunately there are more integers.
 We'll grab the next 10,000 and put them in a sparse matrix, much as we
 did for the first 100,000.
 
-.. code:: ipython3
+.. code:: python3
 
     %%time
     lil_matrix_rows = []
@@ -194,7 +194,7 @@ did for the first 100,000.
     Wall time: 222 ms
 
 
-.. code:: ipython3
+.. code:: python3
 
     new_data = scipy.sparse.lil_matrix((len(lil_matrix_rows), len(primes)), dtype=np.float32)
     new_data.rows = np.array(lil_matrix_rows)
@@ -215,7 +215,7 @@ To map the new data we generated we can simply hand it to the
 ``transform`` method of our trained model. This is a little slow, but it
 does work.
 
-.. code:: ipython3
+.. code:: python3
 
     new_data_embedding = mapper.transform(new_data)
 
@@ -223,7 +223,7 @@ And we can plot the results. Since we just got the locations of the
 points this time (rather than a model) we'll have to resort to
 matplotlib for plotting.
 
-.. code:: ipython3
+.. code:: python3
 
     fig = plt.figure(figsize=(12,12))
     ax = fig.add_subplot(111)
@@ -274,7 +274,7 @@ easily fetch the data, and, in fact, we can fetch a pre-vectorized
 version to save us the trouble of running ``CountVectorizer`` ourselves.
 We'll grab both the training set, and the test set for later use.
 
-.. code:: ipython3
+.. code:: python3
 
     news_train = sklearn.datasets.fetch_20newsgroups_vectorized(subset='train')
     news_test = sklearn.datasets.fetch_20newsgroups_vectorized(subset='test')
@@ -283,7 +283,7 @@ If we look at the actual data we have pulled back, we'll see that
 sklearn has run a ``CountVectorizer`` and produced the data is sparse
 matrix format.
 
-.. code:: ipython3
+.. code:: python3
 
     news_train.data
 
@@ -325,7 +325,7 @@ their associated columns up-weighted. We can apply this transformation
 to both the train and test sets (using the same transformer trained on
 the training set).
 
-.. code:: ipython3
+.. code:: python3
 
     tfidf = sklearn.feature_extraction.text.TfidfTransformer(norm='l1').fit(news_train.data)
     train_data = tfidf.transform(news_train.data)
@@ -334,7 +334,7 @@ the training set).
 The result is still a sparse matrix, since TF-IDF doesn't change the
 zero elements at all, nor the number of features.
 
-.. code:: ipython3
+.. code:: python3
 
     train_data
 
@@ -355,7 +355,7 @@ need to use other techniques to reduce the data to be able to be
 represented as a dense ``numpy`` array; we can work directly on the
 130,000 dimensional sparse matrix.
 
-.. code:: ipython3
+.. code:: python3
 
     %%time
     mapper = umap.UMAP(metric='hellinger', random_state=42).fit(train_data)
@@ -370,7 +370,7 @@ represented as a dense ``numpy`` array; we can work directly on the
 Now we can plot the results, with labels according to the target
 variable of the data -- which newsgroup the posting was drawn from.
 
-.. code:: ipython3
+.. code:: python3
 
     umap.plot.points(mapper, labels=news_train.target)
 
@@ -387,14 +387,14 @@ many of the different newsgroups.
 We can now attempt to add the test data to the same space using the
 ``transform`` method.
 
-.. code:: ipython3
+.. code:: python3
 
     test_embedding = mapper.transform(test_data)
 
 While this is somewhat expensive computationally, it does work, and we
 can plot the end result:
 
-.. code:: ipython3
+.. code:: python3
 
     fig = plt.figure(figsize=(12,12))
     ax = fig.add_subplot(111)
