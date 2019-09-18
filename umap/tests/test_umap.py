@@ -113,6 +113,98 @@ binary_distances = (
     "yule",
 )
 
+######## Create a bunch of data with repeats ############
+# Dense data for testing small n
+repetition_dense = np.array(
+    [
+        [5, 6, 7, 8],
+        [5, 6, 7, 8],
+        [5, 6, 7, 8],
+        [5, 6, 7, 8],
+        [5, 6, 7, 8],
+        [5, 6, 7, 8],
+        [1, 1, 1, 1],
+        [1, 2, 3, 4],
+        [1, 1, 2, 1],
+    ]
+)
+
+# Sparse data for testing
+spatial_repeats = np.vstack(
+    [np.repeat(spatial_data[0:2], [2, 0], axis=0), spatial_data, np.zeros((2, 20))]
+)  # Add some all zero data for corner case test.  Make the first three rows identical
+binary_repeats = np.vstack(
+    [
+        np.repeat(binary_data[0:2], [2, 0], axis=0),
+        binary_data,
+        np.zeros((2, 20), dtype="bool"),
+    ]
+)  # Add some all zero data for corner case test.  Make the first three rows identical
+sparse_spatial_data_repeats = sparse.csr_matrix(spatial_repeats * binary_repeats)
+sparse_binary_data_repeats = sparse.csr_matrix(binary_repeats)
+
+######################### Spatial test cases ###############################
+# Use force_approximation_algorithm in order to test the region of the code that is called for n>4096
+def repeated_points_large_sparse_spatial():
+    model = UMAP(n_neighbors=3, unique=True, force_approximation_algorithm=True).fit(
+        sparse_spatial_data_repeats
+    )
+    assert_equal(np.unique(model.embedding_[0:2], axis=0).shape[0], 1)
+
+
+def repeated_points_small_sparse_spatial():
+    model = UMAP(n_neighbors=3, unique=True).fit(sparse_spatial_data_repeats)
+    assert_equal(np.unique(model.embedding_[0:2], axis=0).shape[0], 1)
+
+
+# Use force_approximation_algorithm in order to test the region of the code that is called for n>4096
+def repeated_points_large_dense_spatial():
+    model = UMAP(n_neighbors=3, unique=True, force_approximation_algorithm=True).fit(
+        spatial_repeats
+    )
+    assert_equal(np.unique(model.embedding_[0:2], axis=0).shape[0], 1)
+
+
+def repeated_points_small_dense_spatial():
+    model = UMAP(n_neighbors=3, unique=True).fit(spatial_repeats)
+    assert_equal(np.unique(model.embedding_[0:2], axis=0).shape[0], 1)
+
+
+######################## Binary test cases ###################################
+# Use force_approximation_algorithm in order to test the region of the code that is called for n>4096
+def repeated_points_large_sparse_binary():
+    model = UMAP(n_neighbors=3, unique=True, force_approximation_algorithm=True).fit(
+        sparse_binary_data_repeats
+    )
+    assert_equal(np.unique(model.embedding_[0:2], axis=0).shape[0], 1)
+
+
+def repeated_points_small_sparse_binary():
+    model = UMAP(n_neighbors=3, unique=True).fit(sparse_binary_data_repeats)
+    assert_equal(np.unique(model.embedding_[0:2], axis=0).shape[0], 1)
+
+
+# Use force_approximation_algorithm in order to test the region of the code that is called for n>4096
+def repeated_points_large_dense_binary():
+    model = UMAP(n_neighbors=3, unique=True, force_approximation_algorithm=True).fit(
+        binary_repeats
+    )
+    assert_equal(np.unique(model.embedding_[0:2], axis=0).shape[0], 1)
+
+
+def repeated_points_small_dense_binary():
+    model = UMAP(n_neighbors=3, unique=True).fit(binary_repeats)
+    # assert_equal(np.unique(binary_repeats[0:2], axis=0).shape[0],1)
+    assert_equal(np.unique(model.embedding_[0:2], axis=0).shape[0], 1)
+
+
+#######################################################################################
+# This should test whether the n_neighbours are being reduced properly when your n_neighbours is larger
+# than the uniqued data set size
+def repeated_points_large_n():
+    model = UMAP(n_neighbors=5, unique=True).fit(repetition_dense)
+    assert_equal(model._n_neighbors, 3)
+
 
 def spatial_check(metric):
     dist_matrix = pairwise_distances(spatial_data, metric=metric)
