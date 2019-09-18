@@ -563,11 +563,13 @@ def submatrix(dmat, indices_col, n_neighbors):
 def ts():
     return time.ctime(time.time())
 
-#I'm not enough of a numba ninja to numba this successfully. np.arrays of lists which are objects...
+
+# I'm not enough of a numba ninja to numba this successfully.
+# np.arrays of lists, which are objects...
 def csr_unique(matrix, return_index=True, return_inverse=True, return_counts=True):
     """Find the unique elements of a sparse csr matrix.
-    We don't explicitly construct the unique matrix leaving that to the user who may not want to
-    duplicate a massive array in memory.
+    We don't explicitly construct the unique matrix leaving that to the user
+    who may not want to duplicate a massive array in memory.
     Returns the indices of the input array that give the unique values.
     Returns the indices of the unique array that reconstructs the input array.
     Returns the number of times each unique row appears in the input matrix.
@@ -576,7 +578,8 @@ def csr_unique(matrix, return_index=True, return_inverse=True, return_counts=Tru
     return_index = bool, optional
         If true, return the row indices of 'matrix'
     return_inverse: bool, optional
-        If true, return the the indices of the unique array that can be used to reconstruct 'matrix'.
+        If true, return the the indices of the unique array that can be
+           used to reconstruct 'matrix'.
     return_counts = bool, optional
         If true, returns the number of times each unique item appears in 'matrix'
 
@@ -585,9 +588,12 @@ def csr_unique(matrix, return_index=True, return_inverse=True, return_counts=Tru
     and the original matrix reconstructed via
     unique_matrix[inverse]
     """
-
     lil_matrix = matrix.tolil()
-    rows = [x+y for x,y in zip(lil_matrix.rows, lil_matrix.data)]
-    return_values = return_counts+ return_inverse+ return_index
-    return np.unique(rows, return_index=return_index, return_inverse=return_inverse, return_counts=return_counts)[1:(return_values+1)]
-
+    rows = [x + y for x, y in zip(lil_matrix.rows, lil_matrix.data)]
+    return_values = return_counts + return_inverse + return_index
+    return np.unique(
+        rows,
+        return_index=return_index,
+        return_inverse=return_inverse,
+        return_counts=return_counts,
+    )[1 : (return_values + 1)]
