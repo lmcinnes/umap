@@ -273,7 +273,6 @@ def nearest_neighbors(
                 random_state=random_state,
                 n_trees=n_trees,
                 n_iters=n_iters,
-                n_jobs=-1,
                 max_candidates=60,
                 low_memory=low_memory,
                 verbose=verbose,
@@ -1777,7 +1776,7 @@ class UMAP(BaseEstimator):
                 "Transform  of new data not available for " "precomputed metric."
             )
 
-        X = check_array(X, dtype=np.float32, order="C", accept_sparse="csr")
+        # X = check_array(X, dtype=np.float32, order="C", accept_sparse="csr")
         random_state = check_random_state(self.transform_seed)
         rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
