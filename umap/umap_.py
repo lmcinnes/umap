@@ -1445,7 +1445,7 @@ class UMAP(BaseEstimator):
             ``target_metric_kwds``.
         """
 
-        X = check_array(X, dtype=np.float32, accept_sparse="csr", order='C')
+        X = check_array(X, dtype=np.float32, accept_sparse="csr", order="C")
         self._raw_data = X
 
         # Handle all the optional arguments, setting default
@@ -1766,7 +1766,7 @@ class UMAP(BaseEstimator):
                 "only a single data sample."
             )
         # If we just have the original input then short circuit things
-        X = check_array(X, dtype=np.float32, accept_sparse="csr", order='C')
+        X = check_array(X, dtype=np.float32, accept_sparse="csr", order="C")
         x_hash = joblib.hash(X)
         if x_hash == self._input_hash:
             return self.embedding_
