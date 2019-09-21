@@ -2,7 +2,8 @@
 #
 # License: BSD 3 clause
 from __future__ import print_function
-from past.builtins import basestring
+from __future__ import unicode_literals
+from builtins import str
 from warnings import warn
 import time
 
@@ -1502,7 +1503,7 @@ class UMAP(BaseEstimator):
                 "target_n_neighbors must be greater than 2"
             )
         if not isinstance(self.n_components, int):
-            if isinstance(self.n_components, basestring):
+            if isinstance(self.n_components, str):
                 raise ValueError(
                     "n_components must be an int"
                 )
