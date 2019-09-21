@@ -2,6 +2,7 @@
 #
 # License: BSD 3 clause
 from __future__ import print_function
+from past.builtins import basestring
 from warnings import warn
 import time
 
@@ -1501,10 +1502,19 @@ class UMAP(BaseEstimator):
                 "target_n_neighbors must be greater than 2"
             )
         if not isinstance(self.n_components, int):
+            if isinstance(self.n_components, basestring):
+                raise ValueError(
+                    "n_components must be an int"
+                )
+            if self.n_components % 1 != 0:
+                raise ValueError("n_components must be a whole number")
             try:
+                # this will convert other types of int (eg. numpy int64) to Python int
                 self.n_components = int(self.n_components)
             except ValueError:
-                raise ValueError("n_components must be an int")
+                raise ValueError(
+                    "n_components must be an int"
+                )
         if self.n_components < 1:
             raise ValueError(
                 "n_components must be greater than 0"
