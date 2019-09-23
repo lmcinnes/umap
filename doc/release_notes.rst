@@ -6,10 +6,13 @@ Some notes on new features in various releases
 What's new in 0.4
 -----------------
 
-* Inverse transform method. Generate points in the original space corresponding to points in embedded space. (Thanks for Joseph Courtney)
-* Different embedding spaces. Support for embedding to a variety of different spaces other than Euclidean. (Thanks for Joseph Courtney)
+* Inverse transform method. Generate points in the original space corresponding to points in embedded space. (Thanks to Joseph Courtney)
+* Different embedding spaces. Support for embedding to a variety of different spaces other than Euclidean. (Thanks to Joseph Courtney)
 * New metrics, including Hellinger distance for sparse count data.
 * New discrete/label metrics, including hierarchical categories, counts, ordinal data, and string edit distance.
+* Support for parallelism in neighbor search and layout optimization. (Thanks to Tom White)
+* Support for alternative methods to handling duplicated data samples. (Thanks to John Healy)
+* New plotting methods for fast and easy plots.
 * Initial support for dataframe embedding -- still experimental, but worth trying.
 * Support for transform methods with sparse data.
 
