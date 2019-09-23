@@ -1404,7 +1404,16 @@ class UMAP(BaseEstimator):
         if self.target_n_neighbors < 2 and self.target_n_neighbors != -1:
             raise ValueError("target_n_neighbors must be greater than 2")
         if not isinstance(self.n_components, int):
-            raise ValueError("n_components must be an int")
+            if isinstance(self.n_components, str):
+                raise ValueError("n_components must be an int")
+            if self.n_components % 1 != 0:
+                raise ValueError("n_components must be a whole number")
+            try:
+                # this will convert other types of int (eg. numpy int64)
+                # to Python int
+                self.n_components = int(self.n_components)
+            except ValueError:
+                raise ValueError("n_components must be an int")
         if self.n_components < 1:
             raise ValueError("n_components must be greater than 0")
         if self.n_epochs is not None and (
