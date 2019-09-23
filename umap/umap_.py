@@ -2,6 +2,7 @@
 #
 # License: BSD 3 clause
 from __future__ import print_function
+
 import locale
 from warnings import warn
 import time
