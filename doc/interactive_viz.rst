@@ -82,6 +82,6 @@ generate the 2D embedding.
 .. image:: images/audio_explorer.png
    :width: 400px
 
-http://doc.gold.ac.uk/~lfedd001/three/demo.html
+`Audio Explorer <http://doc.gold.ac.uk/~lfedd001/three/demo.html>`__
 
 Thanks to Leon Fedden.
