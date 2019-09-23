@@ -14,7 +14,7 @@ of different animals. Attempting to guess the animal from the 2D UMAP representa
 fun game. In practice this tool can go a long way to helping to build at least some intuitions
 for what UMAP tends to do with data.
 
-.. image:: UMAP_zoo.png
+.. image:: images/UMAP_zoo.png
    :width: 400px
 
 `UMAP Zoo <https://duhaime.s3.amazonaws.com/apps/umap-zoo/index.html>`__
@@ -29,7 +29,7 @@ it also has facilities for inspecting and searching labels and tags on the data.
 it loads up word2vec vectors, but you can uplod any data you wish. You can then select
 the UMAP option among the tabs for embeddings choices (alongside PCA and t-SNE).
 
-.. image:: embedding_projector.png
+.. image:: images/embedding_projector.png
    :width: 400px
 
 `Embedding Projector <https://projector.tensorflow.org/>`__
@@ -47,7 +47,7 @@ ending up in similar regions of the map allowing for easy perusal of large photo
 collections. The PixPlot project is also available on github in case you wish to train
 it on your own photo collection.
 
-.. image:: pixplot.png
+.. image:: images/pixplot.png
    :width: 400px
 
 `PixPlot <https://dhlab.yale.edu/projects/pixplot/>`__
@@ -63,7 +63,7 @@ over the images will make them larger and provide a view of the digit in the upp
 and zoom around the emebdding to get a better understanding of how UMAP has mapped the different styles of
 handwritten digits down to 2 dimensions.
 
-.. image:: umap_explorer.png
+.. image:: images/umap_explorer.png
    :width: 400px
 
 `UMAP Explorer <https://grantcuster.github.io/umap-explorer/>`__
@@ -79,7 +79,7 @@ to quickly find exactly the right sound sample to use. Audio explorer uses MFCCs
 provide an initial useful vector representation of the sound samples, before applying UMAP to
 generate the 2D embedding.
 
-.. image:: audio_explorer.png
+.. image:: images/audio_explorer.png
    :width: 400px
 
 http://doc.gold.ac.uk/~lfedd001/three/demo.html
