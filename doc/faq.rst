@@ -79,6 +79,19 @@ show the underlying detail that can otherwise be lost. We
 highly recommend investing the time to learn datashader for
 UMAP plot particularly for larger datasets.
 
+I ran out of memory. Help!
+--------------------------
+
+For some datasets the default options for approximate
+nearest neighbor search can result in excessive memory use.
+If your dataset is not especially large but you have found
+that UMAP runs out of memory when operating on it consider
+using the ``low_memory=True`` option, which will switch
+to a slower but less memory intensive approach to computing
+the approximate nearest neighbors. This may alleviate your
+issues.
+
+
 Is there GPU or multicore-CPU support?
 --------------------------------------
 
@@ -98,6 +111,10 @@ potentially hurt single core performance, and so has
 been deferred for now. If you have expertise in GPU
 programming with Numba and would be interested in
 adding GPU support we would welcome your contributions.
+
+There is a UMAP implementation for GPU available in
+the NVIDIA RAPIDS cuML library, so if you need GPU
+support that is currently the best palce to go.
 
 Can I add a custom loss function?
 ---------------------------------
@@ -230,5 +247,10 @@ Successful use-cases
 
 UMAP can be / has been Successfully applied to the following domains:
 
+- Single cell data visualization in biology;
+- Mapping malware based on behavioural data;
 - Pre-processing phrase vectors for clustering;
 - Pre-processing image embeddings (Inception) for clustering;
+
+and many more -- if you have a successful use-case please submit
+a pull request adding it to this list!

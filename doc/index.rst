@@ -53,9 +53,14 @@ PyPI install, presuming you have numba and sklearn and all its requirements
 
    basic_usage
    parameters
+   plotting
    transform
+   inverse_transform
+   sparse
    supervised
    clustering
+   outliers
+   embedding_space
    auto_examples/index
    faq
 

@@ -6,6 +6,7 @@ import time
 
 import numpy as np
 import numba
+import scipy.sparse
 
 
 @numba.njit(parallel=True)
@@ -25,10 +26,9 @@ def fast_knn_indices(X, n_neighbors):
     knn_indices: array of shape (n_samples, n_neighbors)
         The indices on the ``n_neighbors`` closest points in the dataset.
     """
-    knn_indices = np.empty(
-        (X.shape[0], n_neighbors), dtype=np.int32
-    )
+    knn_indices = np.empty((X.shape[0], n_neighbors), dtype=np.int32)
     for row in numba.prange(X.shape[0]):
+        # v = np.argsort(X[row])  # Need to call argsort this way for numba
         v = X[row].argsort(kind="quicksort")
         v = v[:n_neighbors]
         knn_indices[row] = v
@@ -48,15 +48,15 @@ def tau_rand_int(state):
     -------
     A (pseudo)-random int32 value
     """
-    state[0] = (
-        ((state[0] & 4294967294) << 12) & 0xFFFFFFFF
-    ) ^ ((((state[0] << 13) & 0xFFFFFFFF) ^ state[0]) >> 19)
-    state[1] = (
-        ((state[1] & 4294967288) << 4) & 0xFFFFFFFF
-    ) ^ ((((state[1] << 2) & 0xFFFFFFFF) ^ state[1]) >> 25)
-    state[2] = (
-        ((state[2] & 4294967280) << 17) & 0xFFFFFFFF
-    ) ^ ((((state[2] << 3) & 0xFFFFFFFF) ^ state[2]) >> 11)
+    state[0] = (((state[0] & 4294967294) << 12) & 0xFFFFFFFF) ^ (
+        (((state[0] << 13) & 0xFFFFFFFF) ^ state[0]) >> 19
+    )
+    state[1] = (((state[1] & 4294967288) << 4) & 0xFFFFFFFF) ^ (
+        (((state[1] << 2) & 0xFFFFFFFF) ^ state[1]) >> 25
+    )
+    state[2] = (((state[2] & 4294967280) << 17) & 0xFFFFFFFF) ^ (
+        (((state[2] << 3) & 0xFFFFFFFF) ^ state[2]) >> 11
+    )
 
     return state[0] ^ state[1] ^ state[2]
 
@@ -121,6 +121,7 @@ def rejection_sample(n_samples, pool_size, rng_state):
     result = np.empty(n_samples, dtype=np.int64)
     for i in range(n_samples):
         reject_sample = True
+        j = 0
         while reject_sample:
             j = tau_rand_int(rng_state) % pool_size
             for k in range(i):
@@ -155,9 +156,7 @@ def make_heap(n_points, size):
     -------
     heap: An ndarray suitable for passing to other numba enabled heap functions.
     """
-    result = np.zeros(
-        (3, int(n_points), int(size)), dtype=np.float64
-    )
+    result = np.zeros((3, int(n_points), int(size)), dtype=np.float64)
     result[0] = -1
     result[1] = np.infty
     result[2] = 0
@@ -278,12 +277,12 @@ def unchecked_heap_push(heap, row, weight, index, flag):
     -------
     success: The number of new elements successfully pushed into the heap.
     """
+    if weight >= heap[1, row, 0]:
+        return 0
+
     indices = heap[0, row]
     weights = heap[1, row]
     is_new = heap[2, row]
-
-    if weight >= weights[0]:
-        return 0
 
     # insert val at position zero
     weights[0] = weight
@@ -340,23 +339,14 @@ def siftdown(heap1, heap2, elt):
         if heap1[swap] < heap1[left_child]:
             swap = left_child
 
-        if (
-            right_child < heap1.shape[0]
-            and heap1[swap] < heap1[right_child]
-        ):
+        if right_child < heap1.shape[0] and heap1[swap] < heap1[right_child]:
             swap = right_child
 
         if swap == elt:
             break
         else:
-            heap1[elt], heap1[swap] = (
-                heap1[swap],
-                heap1[elt],
-            )
-            heap2[elt], heap2[swap] = (
-                heap2[swap],
-                heap2[elt],
-            )
+            heap1[elt], heap1[swap] = (heap1[swap], heap1[elt])
+            heap2[elt], heap2[swap] = (heap2[swap], heap2[elt])
             elt = swap
 
 
@@ -386,15 +376,11 @@ def deheap_sort(heap):
         dist_heap = weights[i]
 
         for j in range(ind_heap.shape[0] - 1):
-            ind_heap[0], ind_heap[
-                ind_heap.shape[0] - j - 1
-            ] = (
+            ind_heap[0], ind_heap[ind_heap.shape[0] - j - 1] = (
                 ind_heap[ind_heap.shape[0] - j - 1],
                 ind_heap[0],
             )
-            dist_heap[0], dist_heap[
-                dist_heap.shape[0] - j - 1
-            ] = (
+            dist_heap[0], dist_heap[dist_heap.shape[0] - j - 1] = (
                 dist_heap[dist_heap.shape[0] - j - 1],
                 dist_heap[0],
             )
@@ -448,13 +434,7 @@ def smallest_flagged(heap, row):
 
 
 @numba.njit(parallel=True)
-def build_candidates(
-    current_graph,
-    n_vertices,
-    n_neighbors,
-    max_candidates,
-    rng_state,
-):
+def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates, rng_state):
     """Build a heap of candidate neighbors for nearest neighbor descent. For
     each vertex the candidate neighbors are any current neighbors, and any
     vertices that have the vertex as one of their nearest neighbors.
@@ -481,9 +461,7 @@ def build_candidates(
     candidate_neighbors: A heap with an array of (randomly sorted) candidate
     neighbors for each vertex in the graph.
     """
-    candidate_neighbors = make_heap(
-        n_vertices, max_candidates
-    )
+    candidate_neighbors = make_heap(n_vertices, max_candidates)
     for i in range(n_vertices):
         for j in range(n_neighbors):
             if current_graph[0, i, j] < 0:
@@ -498,14 +476,9 @@ def build_candidates(
     return candidate_neighbors
 
 
-@numba.njit(parallel=True)
+@numba.njit()
 def new_build_candidates(
-    current_graph,
-    n_vertices,
-    n_neighbors,
-    max_candidates,
-    rng_state,
-    rho=0.5,
+    current_graph, n_vertices, n_neighbors, max_candidates, rng_state, rho=0.5
 ):  # pragma: no cover
     """Build a heap of candidate neighbors for nearest neighbor descent. For
     each vertex the candidate neighbors are any current neighbors, and any
@@ -533,14 +506,10 @@ def new_build_candidates(
     candidate_neighbors: A heap with an array of (randomly sorted) candidate
     neighbors for each vertex in the graph.
     """
-    new_candidate_neighbors = make_heap(
-        n_vertices, max_candidates
-    )
-    old_candidate_neighbors = make_heap(
-        n_vertices, max_candidates
-    )
+    new_candidate_neighbors = make_heap(n_vertices, max_candidates)
+    old_candidate_neighbors = make_heap(n_vertices, max_candidates)
 
-    for i in numba.prange(n_vertices):
+    for i in range(n_vertices):
         for j in range(n_neighbors):
             if current_graph[0, i, j] < 0:
                 continue
@@ -550,35 +519,11 @@ def new_build_candidates(
             if tau_rand(rng_state) < rho:
                 c = 0
                 if isn:
-                    c += heap_push(
-                        new_candidate_neighbors,
-                        i,
-                        d,
-                        idx,
-                        isn,
-                    )
-                    c += heap_push(
-                        new_candidate_neighbors,
-                        idx,
-                        d,
-                        i,
-                        isn,
-                    )
+                    c += heap_push(new_candidate_neighbors, i, d, idx, isn)
+                    c += heap_push(new_candidate_neighbors, idx, d, i, isn)
                 else:
-                    heap_push(
-                        old_candidate_neighbors,
-                        i,
-                        d,
-                        idx,
-                        isn,
-                    )
-                    heap_push(
-                        old_candidate_neighbors,
-                        idx,
-                        d,
-                        i,
-                        isn,
-                    )
+                    heap_push(old_candidate_neighbors, i, d, idx, isn)
+                    heap_push(old_candidate_neighbors, idx, d, i, isn)
 
                 if c > 0:
                     current_graph[2, i, j] = 0
@@ -592,7 +537,7 @@ def submatrix(dmat, indices_col, n_neighbors):
 
     Parameters
     ----------
-    mat: array, shape (n_samples, n_samples)
+    dmat: array, shape (n_samples, n_samples)
         Original matrix.
 
     indices_col: array, shape (n_samples, n_neighbors)
@@ -607,9 +552,7 @@ def submatrix(dmat, indices_col, n_neighbors):
         The corresponding submatrix.
     """
     n_samples_transform, n_samples_fit = dmat.shape
-    submat = np.zeros(
-        (n_samples_transform, n_neighbors), dtype=dmat.dtype
-    )
+    submat = np.zeros((n_samples_transform, n_neighbors), dtype=dmat.dtype)
     for i in numba.prange(n_samples_transform):
         for j in numba.prange(n_neighbors):
             submat[i, j] = dmat[i, indices_col[i, j]]
@@ -619,3 +562,38 @@ def submatrix(dmat, indices_col, n_neighbors):
 # Generates a timestamp for use in logging messages when verbose=True
 def ts():
     return time.ctime(time.time())
+
+
+# I'm not enough of a numba ninja to numba this successfully.
+# np.arrays of lists, which are objects...
+def csr_unique(matrix, return_index=True, return_inverse=True, return_counts=True):
+    """Find the unique elements of a sparse csr matrix.
+    We don't explicitly construct the unique matrix leaving that to the user
+    who may not want to duplicate a massive array in memory.
+    Returns the indices of the input array that give the unique values.
+    Returns the indices of the unique array that reconstructs the input array.
+    Returns the number of times each unique row appears in the input matrix.
+
+    matrix: a csr matrix
+    return_index = bool, optional
+        If true, return the row indices of 'matrix'
+    return_inverse: bool, optional
+        If true, return the the indices of the unique array that can be
+           used to reconstruct 'matrix'.
+    return_counts = bool, optional
+        If true, returns the number of times each unique item appears in 'matrix'
+
+    The unique matrix can computed via
+    unique_matrix = matrix[index]
+    and the original matrix reconstructed via
+    unique_matrix[inverse]
+    """
+    lil_matrix = matrix.tolil()
+    rows = [x + y for x, y in zip(lil_matrix.rows, lil_matrix.data)]
+    return_values = return_counts + return_inverse + return_index
+    return np.unique(
+        rows,
+        return_index=return_index,
+        return_inverse=return_inverse,
+        return_counts=return_counts,
+    )[1 : (return_values + 1)]

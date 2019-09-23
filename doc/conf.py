@@ -203,6 +203,7 @@ intersphinx_mapping = {
 sphinx_gallery_conf = {
     # path to your examples scripts
     'examples_dirs': '../examples',
+    'ignore_pattern': r'(.*torus.*|inverse_transform.*)\.py',
     # path where to save gallery generated examples
     'gallery_dirs': 'auto_examples',
     'plot_gallery': False,  # Turn off running the examples for now
