@@ -72,6 +72,13 @@ PyPI install, presuming you have numba and sklearn and all its requirements
    how_umap_works
    benchmarking
 
+.. toctree::
+   :maxdepth: 2
+   :caption: Examples of UMAP usage
+
+   interactive_viz
+   exploratory_analysis
+   scientific_papers
 
 .. toctree::
    :caption: API Reference:
