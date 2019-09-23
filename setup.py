@@ -6,7 +6,7 @@ def readme():
 
 configuration = {
     'name' : 'umap-learn',
-    'version': '0.3.10',
+    'version': '0.4.0',
     'description' : 'Uniform Manifold Approximation and Projection',
     'long_description' : readme(),
     'classifiers' : [
@@ -22,8 +22,9 @@ configuration = {
         'Operating System :: POSIX',
         'Operating System :: Unix',
         'Operating System :: MacOS',
-        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.8',
     ],
     'keywords' : 'dimension reduction t-sne manifold',
     'url' : 'http://github.com/lmcinnes/umap',
@@ -32,9 +33,9 @@ configuration = {
     'license' : 'BSD',
     'packages' : ['umap'],
     'install_requires': ['numpy >= 1.13',
-                         'scikit-learn >= 0.16',
-                          'scipy >= 0.19',
-                         'numba >= 0.37'],
+                         'scikit-learn >= 0.20',
+                          'scipy >= 1.0',
+                         'numba >= 0.42'],
     'ext_modules' : [],
     'cmdclass' : {},
     'test_suite' : 'nose.collector',
