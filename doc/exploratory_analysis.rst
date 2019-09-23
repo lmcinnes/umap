@@ -82,6 +82,8 @@ thw working of convolutional neural networks.
 
 `The Activation Atlas <https://distill.pub/2019/activation-atlas/>`__
 
+Thanks to Shan Carter, Zan Armstrong, Ludwig Schubert, Ian Johnson, and Chris Olah
+
 Open Syllabus Galaxy
 --------------------
 Suppose you wanted to explore the space of commonly assigned texts from Open Syllabus? That
@@ -97,3 +99,5 @@ of the results.
    :width: 400px
 
 `Open Syllabus Galaxy <https://galaxy.opensyllabus.org/>`__
+
+Thanks to David McClure.
