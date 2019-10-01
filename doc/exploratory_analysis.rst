@@ -74,7 +74,7 @@ baffling mis-classifications. To better understand this researchers from
 Google and OpenAI built the activation atlas -- analysing the space of activations
 of a neural network. Here UMAP provides a means to compress the activation landscape
 down to 2 dimensions for visualization. The result was an impressive interactive paper
-in the distill journal, providing rich visualizations and new insights into
+in the Distill journal, providing rich visualizations and new insights into
 thw working of convolutional neural networks.
 
 .. image:: images/activation_atlas.png
