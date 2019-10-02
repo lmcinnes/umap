@@ -95,26 +95,38 @@ issues.
 Is there GPU or multicore-CPU support?
 --------------------------------------
 
-Not at this time. The bottlenecks in the code are the
-(approximate) nearest neighbor search and the optimization
-of the low dimensional representation. The first of these
-(ANN) is performed by a random projection forest and
-nearest-neighbor-descent. Both of those are, at the least,
-parellelisable in principle, and could be converted to
-support multicore (at the cost of single core performance).
-The optimization is performed via a (slightly custom)
-stochastic gradient descent. SGD is both parallelisable
-and amenable to GPUs. This means that in principle UMAP
-could support multicore and use GPUs for optimization.
-In practice this would involve GPU expertise and would
-potentially hurt single core performance, and so has
-been deferred for now. If you have expertise in GPU
-programming with Numba and would be interested in
-adding GPU support we would welcome your contributions.
-
 There is a UMAP implementation for GPU available in
 the NVIDIA RAPIDS cuML library, so if you need GPU
-support that is currently the best palce to go.
+support that is currently the best place to go.
+
+For multicore CPU, the two main bottlenecks in the code are the
+(approximate) nearest neighbor search and the optimization of the low
+dimensional representation. The first of these has a multicore implementation
+in the pynndescent library, which is used by UMAP if it is installed.
+Otherwise UMAP uses its own version of nearest neighbor search, which is not
+multicore. The second bottleneck, the optimization of the low dimensional
+representation is performed via a (slightly custom) stochastic gradient
+descent. SGD in UMAP can take advantage of multicore, but only if
+`random_state` is set to `None`, which is the default (as explained in the
+next question).
+
+Is the output of UMAP reproducible?
+-----------------------------------
+
+Yes, but not by default. The random seed used by UMAP is not set by default
+(`random_state` is set to `None`), so the resulting output embedding will
+change if run repeatedly on the same input. UMAP is a stochastic algorithm,
+so it is advisable to run it several times with no random seed set to confirm
+that the conclusions you draw from the output are not affected by the
+randomness in the algorithm. (Credit to Vito Zanotelli for this suggestion.)
+Then once you are happy with the results, fix the seed to ensure the output is
+reproducible. Having reproducible visual output is very useful to identically
+reproduce an image for a paper, or to provide others with code that will
+exactly reproduce your results.
+
+When `random_state` is `None` the algorithm runs faster since it can take
+advantage of multiple cores for some parts of the algorithm. This optimization
+is not possible in the current implementation when a seed is set.
 
 Can I add a custom loss function?
 ---------------------------------
