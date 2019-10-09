@@ -170,15 +170,15 @@ It is worth checking the
 for potential solutions. If all else fails please add an
 `issue on github <https://github.com/lmcinnes/umap/issues/new>`_.
 
-What is the difference between UMAP / VAEs / PCA?
+What is the difference between PCA / UMAP / VAEs?
 -------------------------------------------------
 
 This is an example of an embedding for a popular Fashion MNIST dataset.
 
 .. figure:: images/umap_vae_pca.png
-    :alt: Comparison of UMAP / PCA / VAE embeddings
+    :alt: Comparison of PCA / UMAP / VAE embeddings
 
-    Comparison of UMAP / PCA / VAE embeddings
+    Comparison of PCA / UMAP / VAE embeddings
 
 Note that FMNIST is mostly a toy dataset (MNIST on steroids).
 On such a simplistic case UMAP shows distillation results
