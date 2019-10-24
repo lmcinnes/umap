@@ -1853,7 +1853,7 @@ class UMAP(BaseEstimator):
         if self._small_data:
             if self.metric in ("ll_dirichlet", "hellinger"):
                 dmat = dist.pairwise_special_metric(
-                    X, self._raw_data, dmetric=self.metric
+                    X, self._raw_data, metric=self.metric
                 )
             else:
                 dmat = pairwise_distances(
