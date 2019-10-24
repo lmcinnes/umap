@@ -960,7 +960,7 @@ def simplicial_set_embedding(
 
     parallel: bool (optional, default False)
         Whether to run the computation using numba parallel.
-        Running in parallel is non-deterministic, and is not used
+        Running in parallel is non-deterministic, and should not be used
         if a random seed has been set, to ensure reproducibility.
 
     verbose: bool (optional, default False)
@@ -1257,7 +1257,9 @@ class UMAP(BaseEstimator):
         If int, random_state is the seed used by the random number generator;
         If RandomState instance, random_state is the random number generator;
         If None, the random number generator is the RandomState instance used
-        by `np.random`.
+        by `np.random`. Furthermore, when set to None, UMAP can make use
+        of multiple cores for some parts of the algorithm that means it runs
+        faster, but at the expense of reproducibility.
 
     metric_kwds: dict (optional, default None)
         Arguments to pass on to the metric, such as the ``p`` value for
