@@ -37,6 +37,8 @@ from umap.utils import (
     ts,
     csr_unique,
     fast_knn_indices,
+    reset_local_connectivity,
+    make_epochs_per_sample,
 )
 from umap.rp_tree import rptree_leaf_array, make_forest
 from umap.nndescent import (
@@ -678,78 +680,6 @@ def fast_metric_intersection(
     return
 
 
-@numba.njit()
-def reprocess_row(probabilities, k=15, n_iters=32):
-    target = np.log2(k)
-
-    lo = 0.0
-    hi = NPY_INFINITY
-    mid = 1.0
-
-    for n in range(n_iters):
-
-        psum = 0.0
-        for j in range(probabilities.shape[0]):
-            psum += pow(probabilities[j], mid)
-
-        if np.fabs(psum - target) < SMOOTH_K_TOLERANCE:
-            break
-
-        if psum < target:
-            hi = mid
-            mid = (lo + hi) / 2.0
-        else:
-            lo = mid
-            if hi == NPY_INFINITY:
-                mid *= 2
-            else:
-                mid = (lo + hi) / 2.0
-
-    return np.power(probabilities, mid)
-
-
-@numba.njit()
-def reset_local_metrics(simplicial_set_indptr, simplicial_set_data):
-    for i in range(simplicial_set_indptr.shape[0] - 1):
-        simplicial_set_data[
-            simplicial_set_indptr[i] : simplicial_set_indptr[i + 1]
-        ] = reprocess_row(
-            simplicial_set_data[simplicial_set_indptr[i] : simplicial_set_indptr[i + 1]]
-        )
-    return
-
-
-def reset_local_connectivity(simplicial_set, reset_local_metric=False):
-    """Reset the local connectivity requirement -- each data sample should
-    have complete confidence in at least one 1-simplex in the simplicial set.
-    We can enforce this by locally rescaling confidences, and then remerging the
-    different local simplicial sets together.
-
-    Parameters
-    ----------
-    simplicial_set: sparse matrix
-        The simplicial set for which to recalculate with respect to local
-        connectivity.
-
-    Returns
-    -------
-    simplicial_set: sparse_matrix
-        The recalculated simplicial set, now with the local connectivity
-        assumption restored.
-    """
-    simplicial_set = normalize(simplicial_set, norm="max")
-    if reset_local_metric:
-        simplicial_set = simplicial_set.tocsr()
-        reset_local_metrics(simplicial_set.indptr, simplicial_set.data)
-        simplicial_set = simplicial_set.tocoo()
-    transpose = simplicial_set.transpose()
-    prod_matrix = simplicial_set.multiply(transpose)
-    simplicial_set = simplicial_set + transpose - prod_matrix
-    simplicial_set.eliminate_zeros()
-
-    return simplicial_set
-
-
 def discrete_metric_simplicial_set_intersection(
     simplicial_set,
     discrete_space,
@@ -847,28 +777,6 @@ def general_simplicial_set_intersection(simplicial_set1, simplicial_set2, weight
         weight,
     )
 
-    return result
-
-
-def make_epochs_per_sample(weights, n_epochs):
-    """Given a set of weights and number of epochs generate the number of
-    epochs per sample for each weight.
-
-    Parameters
-    ----------
-    weights: array of shape (n_1_simplices)
-        The weights ofhow much we wish to sample each 1-simplex.
-
-    n_epochs: int
-        The total number of epochs we want to train for.
-
-    Returns
-    -------
-    An array of number of epochs per sample, one for each 1-simplex.
-    """
-    result = -1.0 * np.ones(weights.shape[0], dtype=np.float64)
-    n_samples = n_epochs * (weights / weights.max())
-    result[n_samples > 0] = float(n_epochs) / n_samples[n_samples > 0]
     return result
 
 

@@ -539,3 +539,31 @@ def optimize_layout_inverse(
             print("\tcompleted ", n, " / ", n_epochs, "epochs")
 
     return head_embedding
+
+
+@numba.njit(fastmath=True, parallel=True)
+def small_data_layout(graph, embedding, n_epochs=2000, min_dist=0.1,
+                      momentum_alpha=0.9, learning_rate=0.1):
+
+    momentum = np.zeros_like(embedding)
+
+    for n in range(n_epochs):
+        for i in numba.prange(graph.shape[0]):
+            grad_vector = np.zeros(embedding.shape[1])
+            for j in range(graph.shape[1]):
+                dist = np.sqrt(rdist(embedding[i], embedding[j]))
+
+                if dist > min_dist:
+                    attractive_force_coeff = -graph[i, j] / (dist)
+                    repulsive_force_coeff = -(1.0 - graph[i, j]) * (np.exp(min_dist) /
+                                                                    (dist * (np.exp(
+                                                                        min_dist) - np.exp(dist))))
+                    grad_coeff = attractive_force_coeff + repulsive_force_coeff
+                    grad_vector += learning_rate * clip(grad_coeff * (embedding[i] - embedding[j]))
+
+            momentum[i] = (momentum_alpha * momentum[i] +
+                           (1.0 - momentum_alpha) * grad_vector)
+
+        embedding += momentum
+
+    return embedding
