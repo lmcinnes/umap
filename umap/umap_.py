@@ -711,7 +711,9 @@ def reprocess_row(probabilities, k=15, n_iters=32):
 @numba.njit()
 def reset_local_metrics(simplicial_set_indptr, simplicial_set_data):
     for i in range(simplicial_set_indptr.shape[0] - 1):
-        simplicial_set_data[simplicial_set_indptr[i] : simplicial_set_indptr[i + 1]] = reprocess_row(
+        simplicial_set_data[
+            simplicial_set_indptr[i] : simplicial_set_indptr[i + 1]
+        ] = reprocess_row(
             simplicial_set_data[simplicial_set_indptr[i] : simplicial_set_indptr[i + 1]]
         )
     return
@@ -738,9 +740,7 @@ def reset_local_connectivity(simplicial_set, reset_local_metric=False):
     simplicial_set = normalize(simplicial_set, norm="max")
     if reset_local_metric:
         simplicial_set = simplicial_set.tocsr()
-        reset_local_metrics(
-            simplicial_set.indptr, simplicial_set.data
-        )
+        reset_local_metrics(simplicial_set.indptr, simplicial_set.data)
         simplicial_set = simplicial_set.tocoo()
     transpose = simplicial_set.transpose()
     prod_matrix = simplicial_set.multiply(transpose)
