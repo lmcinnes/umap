@@ -91,26 +91,25 @@ to a slower but less memory intensive approach to computing
 the approximate nearest neighbors. This may alleviate your
 issues.
 
+UMAP is eating all my cores. Help!
+----------------------------------
+
+If run without a random seed UMAP will use numba's parallel
+implementation to do multithreaded work and use many cores.
+By default this will make use of as many cores as are available.
+If you are on a shared machine or otherwise don't wish to
+use *all* the cores at once you can restrict the number of
+threads that numba uses by making use of the environment
+variable ``NUMBA_NUM_THREADS``; see the `numba
+documentation <https://numba.pydata.org/numba-doc/dev/reference/envvars.html#threading-control>`__
+for more details.
 
 Is there GPU or multicore-CPU support?
 --------------------------------------
 
-Not at this time. The bottlenecks in the code are the
-(approximate) nearest neighbor search and the optimization
-of the low dimensional representation. The first of these
-(ANN) is performed by a random projection forest and
-nearest-neighbor-descent. Both of those are, at the least,
-parellelisable in principle, and could be converted to
-support multicore (at the cost of single core performance).
-The optimization is performed via a (slightly custom)
-stochastic gradient descent. SGD is both parallelisable
-and amenable to GPUs. This means that in principle UMAP
-could support multicore and use GPUs for optimization.
-In practice this would involve GPU expertise and would
-potentially hurt single core performance, and so has
-been deferred for now. If you have expertise in GPU
-programming with Numba and would be interested in
-adding GPU support we would welcome your contributions.
+There is basic multicore support as of version 0.4.
+In the future it is possible that GPU support may
+be added.
 
 There is a UMAP implementation for GPU available in
 the NVIDIA RAPIDS cuML library, so if you need GPU

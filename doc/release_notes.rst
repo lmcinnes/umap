@@ -15,6 +15,7 @@ What's new in 0.4
 * New plotting methods for fast and easy plots.
 * Initial support for dataframe embedding -- still experimental, but worth trying.
 * Support for transform methods with sparse data.
+* Multithreading support when no random seed is set.
 
 
 What's new in 0.3
