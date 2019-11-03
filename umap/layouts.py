@@ -26,6 +26,15 @@ def clip(val):
         return val
 
 
+@numba.vectorize()
+def vclip(val):
+    if val > 4.0:
+        return 4.0
+    elif val < -4.0:
+        return -4.0
+    else:
+        return val
+
 @numba.njit("f4(f4[:],f4[:])", fastmath=True)
 def rdist(x, y):
     """Reduced Euclidean distance.
@@ -559,7 +568,8 @@ def small_data_layout(graph, embedding, n_epochs=2000, min_dist=0.1,
                                                                     (dist * (np.exp(
                                                                         min_dist) - np.exp(dist))))
                     grad_coeff = attractive_force_coeff + repulsive_force_coeff
-                    grad_vector += learning_rate * clip(grad_coeff * (embedding[i] - embedding[j]))
+                    grad_vector += learning_rate * vclip(grad_coeff * (embedding[i] -
+                                                                       embedding[j]))
 
             momentum[i] = (momentum_alpha * momentum[i] +
                            (1.0 - momentum_alpha) * grad_vector)

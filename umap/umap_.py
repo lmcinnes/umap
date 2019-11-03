@@ -57,6 +57,7 @@ from umap.layouts import (
     optimize_layout_generic,
     optimize_layout_inverse,
 )
+from umap.recusive_init import recursive_initialise_embedding
 
 locale.setlocale(locale.LC_NUMERIC, "C")
 
@@ -919,6 +920,23 @@ def simplicial_set_embedding(
         ).astype(
             np.float32
         )
+    elif isinstance(init, str) and init == "umap":
+        embedding = recursive_initialise_embedding(
+            graph,
+            n_components,
+            a,
+            b,
+            0.1,
+            random_state,
+            output_metric=output_metric,
+            output_metric_kwds=output_metric_kwds,
+            euclidean_output=euclidean_output,
+            parallel=parallel,
+            verbose=verbose,
+        )
+
+        # Because the init is good we need less epochs
+        n_epochs = int(round(n_epochs / 2.0))
     else:
         init_data = np.array(init)
         if len(init_data.shape) == 2:
@@ -1297,7 +1315,8 @@ class UMAP(BaseEstimator):
             raise ValueError("min_dist must be greater than 0.0")
         if not isinstance(self.init, str) and not isinstance(self.init, np.ndarray):
             raise ValueError("init must be a string or ndarray")
-        if isinstance(self.init, str) and self.init not in ("spectral", "random"):
+        if isinstance(self.init, str) and self.init not in ("spectral", "random",
+                                                            "umap"):
             raise ValueError('string init values must be "spectral" or "random"')
         if (
             isinstance(self.init, np.ndarray)

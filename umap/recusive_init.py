@@ -5,6 +5,7 @@ from sklearn.neighbors import KDTree
 
 from umap.layouts import small_data_layout, optimize_layout_euclidean, optimize_layout_generic
 from umap.utils import reset_local_connectivity, make_epochs_per_sample
+from umap.spectral import spectral_layout
 
 import umap.distances as dist
 
@@ -100,9 +101,9 @@ def merged_graph_internal(graph_ind, graph_indptr, graph_data, partition):
             merged_j = relabelled_partition[j]
             if merged_i != merged_j:
                 if (merged_i, merged_j) in dok:
-                    dok[(merged_i, merged_j)] += graph_data[k]
+                    dok[(merged_i, merged_j)] += np.log(1.0 - graph_data[k])
                 else:
-                    dok[(merged_i, merged_j)] = graph_data[k]
+                    dok[(merged_i, merged_j)] = np.log(1.0 - graph_data[k])
 
     nnzs = len(dok)
     row = np.empty(nnzs, dtype=np.int32)
@@ -112,7 +113,7 @@ def merged_graph_internal(graph_ind, graph_indptr, graph_data, partition):
         i, j = key
         row[nz] = i
         col[nz] = j
-        val[nz] = dok[key]
+        val[nz] = 1.0 - np.exp(dok[key])
 
     return row, col, val, relabelled_partition
 
@@ -133,9 +134,8 @@ def merged_graph(graph, partition):
 
 
 @numba.njit(parallel=True)
-def init_from_merged_graph_internal(merged_embedding, partition,
+def init_from_merged_graph_internal(init, merged_embedding, partition,
                                     graph_ind, graph_indptr, graph_data):
-    init = np.zeros((graph_indptr.shape[0] - 1, 2))
     for i in numba.prange(graph_indptr.shape[0] - 1):
         weights = dict()
         total_weight = 0
@@ -161,7 +161,8 @@ def init_from_merged_graph(merged_embedding, partition, source_graph):
             raise ValueError("Unrecognized graph input -- please specify an adjacency matrix")
         source_graph = scipy.sparse.csr_matrix(source_graph)
 
-    return init_from_merged_graph_internal(merged_embedding, partition,
+    init = np.zeros((source_graph.shape[0], 2), dtype=np.float32, order='C')
+    return init_from_merged_graph_internal(init, merged_embedding, partition,
                                            source_graph.indices, source_graph.indptr,
                                            source_graph.data)
 
@@ -318,8 +319,8 @@ def recursive_initialise_embedding(
     partition = label_propagation_partitioning(graph, random_state)
 
     sub_graph, partition = merged_graph(graph, partition)
-    sub_graph = reset_local_connectivity(sub_graph,
-                                        reset_local_metric=True)
+    # sub_graph = reset_local_connectivity(sub_graph,
+    #                                     reset_local_metric=True)
 
     if sub_graph.shape[0] < 150:
         sub_layout = small_data_layout(sub_graph.toarray(),
@@ -327,16 +328,44 @@ def recursive_initialise_embedding(
                                                              n_components)).astype(
                                       np.float32, order='C'),
                                       min_dist=min_dist)
-
-    else:
-        initialization = recursive_initialise_embedding(sub_graph).astype(np.float32, order='C')
+    elif sub_graph.shape[0] < 8192:
+        initialization = spectral_layout(
+            None, sub_graph, n_components, random_state
+        ).astype(np.float32, order='C')
         sub_layout = simple_simplicial_set_embedding(
             sub_graph,
             a,
             b,
-            20,
+            150,
             initialization,
-            np.random,
+            random_state,
+            output_metric=output_metric,
+            output_metric_kwds=output_metric_kwds,
+            euclidean_output=euclidean_output,
+            parallel=parallel,
+            verbose=verbose,
+        )
+    else:
+        initialization = recursive_initialise_embedding(
+            sub_graph,
+            n_components,
+            a,
+            b,
+            min_dist,
+            random_state,
+            output_metric=output_metric,
+            output_metric_kwds=output_metric_kwds,
+            euclidean_output=euclidean_output,
+            parallel=parallel,
+            verbose=verbose,
+        ).astype(np.float32, order='C')
+        sub_layout = simple_simplicial_set_embedding(
+            sub_graph,
+            a,
+            b,
+            30,
+            initialization,
+            random_state,
             output_metric=output_metric,
             output_metric_kwds=output_metric_kwds,
             euclidean_output=euclidean_output,
