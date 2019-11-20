@@ -26,7 +26,13 @@ def clip(val):
         return val
 
 
-@numba.njit("f4(f4[:],f4[:])", fastmath=True)
+@numba.njit("f4(f4[::1],f4[::1])",
+            fastmath=True,
+            cache=True,
+            locals={"result": numba.types.float32,
+                    "diff": numba.types.float32,
+                    "dim": numba.types.int32},
+            )
 def rdist(x, y):
     """Reduced Euclidean distance.
 
@@ -40,8 +46,10 @@ def rdist(x, y):
     The squared euclidean distance between x and y
     """
     result = 0.0
-    for i in range(x.shape[0]):
-        result += (x[i] - y[i]) ** 2
+    dim = x.shape[0]
+    for i in range(dim):
+        diff = x[i] - y[i]
+        result += diff * diff
 
     return result
 
