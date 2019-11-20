@@ -54,6 +54,7 @@ PyPI install, presuming you have numba and sklearn and all its requirements
    basic_usage
    parameters
    plotting
+   reproducibility
    transform
    inverse_transform
    sparse
