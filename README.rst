@@ -33,7 +33,7 @@ UMAP
 Uniform Manifold Approximation and Projection (UMAP) is a dimension reduction
 technique that can be used for visualisation similarly to t-SNE, but also for
 general non-linear dimension reduction. The algorithm is founded on three
-assumptions about the data
+assumptions about the data:
 
 1. The data is uniformly distributed on a Riemannian manifold;
 2. The Riemannian metric is locally constant (or can be approximated as such);
@@ -50,11 +50,11 @@ The details for the underlying mathematics can be found in
 McInnes, L, Healy, J, *UMAP: Uniform Manifold Approximation and Projection
 for Dimension Reduction*, ArXiv e-prints 1802.03426, 2018
 
-The important thing is that you don't need to worry about that -- you can use
+The important thing is that you don't need to worry about that—you can use
 UMAP right now for dimension reduction and visualisation as easily as a drop
 in replacement for scikit-learn's t-SNE.
 
-Documentation is `available via ReadTheDocs <https://umap-learn.readthedocs.io/>`_.
+Documentation is `available via Read the Docs <https://umap-learn.readthedocs.io/>`_.
 
 ---------------
 How to use UMAP
@@ -117,7 +117,7 @@ First of all UMAP is *fast*. It can handle large datasets and high
 dimensional data without too much difficulty, scaling beyond what most t-SNE
 packages can manage.
 
-Second, UMAP scales well in embedding dimension -- it isn't just for
+Second, UMAP scales well in embedding dimension—it isn't just for
 visualisation! You can use UMAP as a general purpose dimension reduction
 technique as a preliminary step to other machine learning tasks. With a
 little care it partners well with the `hdbscan
@@ -140,10 +140,10 @@ used as a preprocessing transformer in sklearn pipelines.
 Sixth, UMAP supports supervised and semi-supervised dimension reduction.
 This means that if you have label information that you wish to use as
 extra information for dimension reduction (even if it is just partial
-labelling) you can do that -- as simply as providing it as the ``y``
+labelling) you can do that—as simply as providing it as the ``y``
 parameter in the fit method.
 
-Finally UMAP has solid theoretical foundations in manifold learning
+Finally, UMAP has solid theoretical foundations in manifold learning
 (see `our paper on ArXiv <https://arxiv.org/abs/1802.03426>`_).
 This both justifies the approach and allows for further
 extensions that will soon be added to the library
@@ -158,16 +158,16 @@ particular it scales well with both input dimension and embedding dimension.
 Thus, for a problem such as the 784-dimensional MNIST digits dataset with
 70000 data samples, UMAP can complete the embedding in around 2.5 minutes (as
 compared with around 45 minutes for most t-SNE implementations). Despite this
-runtime efficiency UMAP still produces high quality embeddings.
+runtime efficiency, UMAP still produces high quality embeddings.
 
-The obligatory MNIST digits dataset, embedded in 2 minutes  and 22
+The obligatory MNIST digits dataset, embedded in 2 minutes and 22
 seconds using a 3.1 GHz Intel Core i7 processor (n_neighbors=10, min_dist=0
 .001):
 
 .. image:: images/umap_example_mnist1.png
     :alt: UMAP embedding of MNIST digits
 
-The MNIST digits dataset is fairly straightforward however. A better test is
+The MNIST digits dataset is fairly straightforward, however. A better test is
 the more recent "Fashion MNIST" dataset of images of fashion items (again
 70000 data sample in 784 dimensions). UMAP
 produced this embedding in 2 minutes exactly (n_neighbors=5, min_dist=0.1):
@@ -206,7 +206,7 @@ Conda install, via the excellent work of the conda-forge team:
 
     conda install -c conda-forge umap-learn
 
-The conda-forge packages are available for linux, OS X, and Windows 64 bit.
+The conda-forge packages are available for Linux, OS X, and Windows 64 bit.
 
 PyPI install, presuming you have numba and sklearn and all its requirements
 (numpy and scipy) installed:
@@ -256,7 +256,7 @@ Install the package
 Help and Support
 ----------------
 
-Documentation is at `ReadTheDocs <https://umap-learn.readthedocs.io/>`_.
+Documentation is at `Read the Docs <https://umap-learn.readthedocs.io/>`_.
 The documentation `includes a FAQ <https://umap-learn.readthedocs.io/en/latest/faq.html>`_ that
 may answer your questions. If you still have questions then please
 `open an issue <https://github.com/lmcinnes/umap/issues/new>`_
