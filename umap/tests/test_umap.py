@@ -1516,7 +1516,9 @@ def test_umap_bad_nn_sparse():
 
 def test_too_many_neighbors_warns():
     u = UMAP(a=1.2, b=1.75, n_neighbors=2000, n_epochs=11, init="random")
-    u.fit(nn_data[:100,])
+    u.fit(
+        nn_data[:100, ]
+    )
     assert_equal(u._a, 1.2)
     assert_equal(u._b, 1.75)
 

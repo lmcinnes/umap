@@ -26,13 +26,16 @@ def clip(val):
         return val
 
 
-@numba.njit("f4(f4[::1],f4[::1])",
-            fastmath=True,
-            cache=True,
-            locals={"result": numba.types.float32,
-                    "diff": numba.types.float32,
-                    "dim": numba.types.int32},
-            )
+@numba.njit(
+    "f4(f4[::1],f4[::1])",
+    fastmath=True,
+    cache=True,
+    locals={
+        "result": numba.types.float32,
+        "diff": numba.types.float32,
+        "dim": numba.types.int32,
+    },
+)
 def rdist(x, y):
     """Reduced Euclidean distance.
 
