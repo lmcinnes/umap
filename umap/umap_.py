@@ -56,6 +56,14 @@ from umap.layouts import (
     optimize_layout_inverse,
 )
 
+try:
+    # Use pynndescent, if installed (python 3 only)
+    from pynndescent import NNDescent
+
+    _HAVE_PYNNDESCENT = True
+except ImportError:
+    _HAVE_PYNNDESCENT = False
+
 locale.setlocale(locale.LC_NUMERIC, "C")
 
 INT32_MIN = np.iinfo(np.int32).min + 1
@@ -93,6 +101,7 @@ def breadth_first_search(adjmat, start, min_vertices):
 
 
 @numba.njit(
+    'UniTuple(f4[::1],2)(f4[:,::1],f4,u1,f4,f4)',
     fastmath=True
 )  # benchmarking `parallel=True` shows it to *decrease* performance
 def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0):
@@ -135,8 +144,8 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
         The distance to the 1st nearest neighbor for each point.
     """
     target = np.log2(k) * bandwidth
-    rho = np.zeros(distances.shape[0])
-    result = np.zeros(distances.shape[0])
+    rho = np.zeros(distances.shape[0], dtype=np.float32)
+    result = np.zeros(distances.shape[0], dtype=np.float32)
 
     mean_distances = np.mean(distances)
 
@@ -268,10 +277,7 @@ def nearest_neighbors(
         n_trees = 5 + int(round((X.shape[0]) ** 0.5 / 20.0))
         n_iters = max(5, int(round(np.log2(X.shape[0]))))
 
-        try:
-            # Use pynndescent, if installed (python 3 only)
-            from pynndescent import NNDescent
-
+        if _HAVE_PYNNDESCENT:
             nnd = NNDescent(
                 X,
                 n_neighbors=n_neighbors,
@@ -286,7 +292,7 @@ def nearest_neighbors(
             )
             knn_indices, knn_dists = nnd._neighbor_graph
             rp_forest = nnd._rp_forest
-        except ImportError:
+        else:
             # Otherwise fall back to nn descent in umap
             if callable(metric):
                 distance_func = metric
