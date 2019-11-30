@@ -55,7 +55,7 @@ from umap.umap_ import (
     fuzzy_simplicial_set,
     UMAP,
     DataFrameUMAP,
-)
+    _HAVE_PYNNDESCENT)
 
 np.random.seed(42)
 spatial_data = np.random.randn(10, 20)
@@ -493,7 +493,7 @@ def test_smooth_knn_dist_l1norms():
     knn_indices, knn_dists, _ = nearest_neighbors(
         nn_data, 10, "euclidean", {}, False, np.random
     )
-    sigmas, rhos = smooth_knn_dist(knn_dists, 10)
+    sigmas, rhos = smooth_knn_dist(knn_dists, 10.0)
     shifted_dists = knn_dists - rhos[:, np.newaxis]
     shifted_dists[shifted_dists < 0.0] = 0.0
     vals = np.exp(-(shifted_dists / sigmas[:, np.newaxis]))
@@ -532,7 +532,7 @@ def test_smooth_knn_dist_l1norms_w_connectivity():
     knn_indices, knn_dists, _ = nearest_neighbors(
         nn_data, 10, "euclidean", {}, False, np.random
     )
-    sigmas, rhos = smooth_knn_dist(knn_dists, 10, local_connectivity=1.75)
+    sigmas, rhos = smooth_knn_dist(knn_dists, 10.0, local_connectivity=1.75)
     shifted_dists = knn_dists - rhos[:, np.newaxis]
     shifted_dists[shifted_dists < 0.0] = 0.0
     vals = np.exp(-(shifted_dists / sigmas[:, np.newaxis]))
@@ -561,8 +561,9 @@ def test_smooth_knn_dist_l1norms_w_connectivity():
 def test_nn_search():
     train = nn_data[100:]
     test = nn_data[:100]
+
     (knn_indices, knn_dists, rp_forest) = nearest_neighbors(
-        train, 10, "euclidean", {}, False, np.random
+        train, 10, "euclidean", {}, False, np.random, use_pynndescent=False,
     )
 
     graph = fuzzy_simplicial_set(
@@ -614,7 +615,7 @@ def test_sparse_nn_search():
     train = sparse_nn_data[100:]
     test = sparse_nn_data[:100]
     (knn_indices, knn_dists, rp_forest) = nearest_neighbors(
-        train, 15, "euclidean", {}, False, np.random
+        train, 15, "euclidean", {}, False, np.random, use_pynndescent=False,
     )
 
     graph = fuzzy_simplicial_set(

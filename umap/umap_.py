@@ -101,7 +101,6 @@ def breadth_first_search(adjmat, start, min_vertices):
 
 
 @numba.njit(
-    'UniTuple(f4[::1],2)(f4[:,::1],f8,u1,f4,f4)',
     locals={
         "psum": numba.types.float32,
         "lo": numba.types.float32,
@@ -222,6 +221,7 @@ def nearest_neighbors(
     angular,
     random_state,
     low_memory=False,
+        use_pynndescent=True,
     verbose=False,
 ):
     """Compute the ``n_neighbors`` nearest points for each data point in ``X``
@@ -283,7 +283,7 @@ def nearest_neighbors(
         n_trees = 5 + int(round((X.shape[0]) ** 0.5 / 20.0))
         n_iters = max(5, int(round(np.log2(X.shape[0]))))
 
-        if _HAVE_PYNNDESCENT:
+        if _HAVE_PYNNDESCENT and use_pynndescent:
             nnd = NNDescent(
                 X,
                 n_neighbors=n_neighbors,
@@ -297,7 +297,7 @@ def nearest_neighbors(
                 verbose=verbose,
             )
             knn_indices, knn_dists = nnd._neighbor_graph
-            rp_forest = nnd._rp_forest
+            rp_forest = nnd
         else:
             # Otherwise fall back to nn descent in umap
             if callable(metric):
@@ -396,7 +396,16 @@ def nearest_neighbors(
     return knn_indices, knn_dists, rp_forest
 
 
-@numba.njit(parallel=True, fastmath=True)
+@numba.njit(
+    locals={
+        "knn_dists": numba.types.float32[:, ::1],
+        "sigmas": numba.types.float32[::1],
+        "rhos": numba.types.float32[::1],
+        "val": numba.types.float32,
+    },
+    parallel=True,
+    fastmath=True,
+)
 def compute_membership_strengths(knn_indices, knn_dists, sigmas, rhos):
     """Construct the membership strength data for the 1-skeleton of each local
     fuzzy simplicial set -- this is formed as a sparse matrix where each row is
@@ -576,8 +585,12 @@ def fuzzy_simplicial_set(
             X, n_neighbors, metric, metric_kwds, angular, random_state, verbose=verbose
         )
 
+    knn_dists = knn_dists.astype(np.float32)
+
     sigmas, rhos = smooth_knn_dist(
-        knn_dists, float(n_neighbors), local_connectivity=local_connectivity
+        knn_dists,
+        float(n_neighbors),
+        local_connectivity=float(local_connectivity),
     )
 
     rows, cols, vals = compute_membership_strengths(
@@ -1626,7 +1639,8 @@ class UMAP(BaseEstimator):
                 self.angular_rp_forest,
                 random_state,
                 self.low_memory,
-                self.verbose,
+                use_pynndescent=True,
+                verbose=self.verbose,
             )
 
             self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
@@ -1882,6 +1896,8 @@ class UMAP(BaseEstimator):
             indices_sorted = np.argsort(dmat_shortened)
             indices = submatrix(indices, indices_sorted, self._n_neighbors)
             dists = submatrix(dmat_shortened, indices_sorted, self._n_neighbors)
+        elif _HAVE_PYNNDESCENT:
+            indices, dists = self._rp_forest.query(X, self.n_neighbors)
         elif self._sparse_data:
             if not scipy.sparse.issparse(X):
                 X = scipy.sparse.csr_matrix(X)
@@ -1944,11 +1960,11 @@ class UMAP(BaseEstimator):
             indices = indices[:, : self._n_neighbors]
             dists = dists[:, : self._n_neighbors]
 
-        adjusted_local_connectivity = max(0, self.local_connectivity - 1.0)
+        adjusted_local_connectivity = max(0.0, self.local_connectivity - 1.0)
         sigmas, rhos = smooth_knn_dist(
             dists,
             float(self._n_neighbors),
-            local_connectivity=adjusted_local_connectivity,
+            local_connectivity=float(adjusted_local_connectivity),
         )
 
         rows, cols, vals = compute_membership_strengths(indices, dists, sigmas, rhos)
@@ -2465,7 +2481,8 @@ class DataFrameUMAP(BaseEstimator):
                         {},
                         self.angular_rp_forest,
                         random_state,
-                        self.verbose,
+                        use_pynndescent=True,
+                        verbose=self.verbose,
                     )
 
                     (
