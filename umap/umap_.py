@@ -101,7 +101,10 @@ def breadth_first_search(adjmat, start, min_vertices):
 
 
 @numba.njit(
-    'UniTuple(f4[::1],2)(f4[:,::1],f4,u1,f4,f4)',
+    'UniTuple(f4[::1],2)(f4[:,::1],f8,u1,f4,f4)',
+    locals={
+        "psum": numba.types.float32,
+    }
     fastmath=True
 )  # benchmarking `parallel=True` shows it to *decrease* performance
 def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0):
@@ -571,7 +574,7 @@ def fuzzy_simplicial_set(
         )
 
     sigmas, rhos = smooth_knn_dist(
-        knn_dists, n_neighbors, local_connectivity=local_connectivity
+        knn_dists, float(n_neighbors), local_connectivity=local_connectivity
     )
 
     rows, cols, vals = compute_membership_strengths(
@@ -1940,7 +1943,9 @@ class UMAP(BaseEstimator):
 
         adjusted_local_connectivity = max(0, self.local_connectivity - 1.0)
         sigmas, rhos = smooth_knn_dist(
-            dists, self._n_neighbors, local_connectivity=adjusted_local_connectivity
+            dists,
+            float(self._n_neighbors),
+            local_connectivity=adjusted_local_connectivity,
         )
 
         rows, cols, vals = compute_membership_strengths(indices, dists, sigmas, rhos)
