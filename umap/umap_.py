@@ -104,8 +104,11 @@ def breadth_first_search(adjmat, start, min_vertices):
     'UniTuple(f4[::1],2)(f4[:,::1],f8,u1,f4,f4)',
     locals={
         "psum": numba.types.float32,
-    }
-    fastmath=True
+        "lo": numba.types.float32,
+        "mid": numba.types.float32,
+        "hi": numba.types.float32,
+    },
+    fastmath=True,
 )  # benchmarking `parallel=True` shows it to *decrease* performance
 def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0):
     """Compute a continuous version of the distance to the kth nearest
