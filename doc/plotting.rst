@@ -70,10 +70,10 @@ data density, and watermarks the image with the UMAP parameters that
 were used (this will include the metric if it is non-standard). The
 function also returns the matplotlib axes object associated to the plot,
 so further matplotlib functions, such as adding titles, axis labels etc.
-can be done by the user of required.
+can be done by the user if required.
 
 It is common for data passed to UMAP to have an associated set of
-labels, which may have been derived from ground-thruth, from clustering,
+labels, which may have been derived from ground-truth, from clustering,
 or via other means. In such cases it is desirable to be able to color
 the scatterplot according to the labelling. We can do this by simply
 passing the array of label information in with the ``labels`` keyword.
@@ -108,8 +108,8 @@ predefined color choices. Themes include:
 -  darkred
 -  darkgreen
 
-Here we will make use of the 'fire' theme to demonstrate how simple if
-is to chance the aesthetics.
+Here we will make use of the 'fire' theme to demonstrate how simple it
+is to change the aesthetics.
 
 .. code:: python3
 
@@ -119,7 +119,7 @@ is to chance the aesthetics.
 
 
 If you want greater control you can specify exact colormaps and
-background colors. For example here we want to coor the data by label,
+background colors. For example here we want to color the data by label,
 but use a black background and use the 'Paired' colormap for the
 categorical coloring (passed as ``color_key_cmap``; the ``cmap`` keyword
 defines the continuous colormap).
@@ -137,7 +137,7 @@ continous colormap, or the width and height of the resulting plot.
 Again, this does not provide comprehensive control of the plot
 aesthetics, but the goal here is to provide a simple to use interface
 rather than the ability for the user to fine tune all aspects -- users
-seeking such control are far better served making use on the individual
+seeking such control are far better served making use of the individual
 underlying packages (matplotlib, datashader, and bokeh) by themselves.
 
 Plotting larger datasets
@@ -149,12 +149,12 @@ overlap and pile up on top of each other, can deceive you into thinking
 that extremely dense clumps may only contain a few points. While there
 are things that can be done to help remedy this, such as reducing the
 point size, or adding an alpha channel, few are sufficient to be sure
-the plot isn't subtley lying to you in some way. `This essay <>`__ in
+the plot isn't subtly lying to you in some way. `This essay <>`__ in
 the datashader documentation does an excellent job of describing the
 issues with overplotting, why the obvious solutions are not quite
 sufficient, and how to get around the problem. To make life easier for
 users the ``umap.plot`` package will automatically switch to using
-datashader for rendering once your dataset gets large enough. This help
+datashader for rendering once your dataset gets large enough. This helps
 to ensure you don't get fooled by overplotting. We can see this in
 action by working with one of the larger datasets such as Fashion-MNIST.
 
@@ -176,7 +176,7 @@ rendering.
 
 
 All the same plot options as before hold, so we can color by labels, and
-apply the same themes, and it will all seamlessly use datashder for the
+apply the same themes, and it will all seamlessly use datashader for the
 actual rendering. Thus, regardless of how much data you have
 ``umap.plot.points`` will render it well with a transparent user
 interface. You, as a user, don't need to worry about switching to
@@ -214,16 +214,16 @@ dataset. We can quickly train a new mapper object on that.
 
     mapper = umap.UMAP().fit(fmnist.data[:30000])
 
-The goal is to be able t hover over different points and see data
+The goal is to be able to hover over different points and see data
 associated with the given point (or points) under the cursor. For this
 simple demonstration we'll just use the target information of the point.
 To create hover information you need to construct a dataframe of all the
 data you would like to appear in the hover. Each row should correspond
-to a source data points (appearing in the same order), and the columns
+to a source of data points (appearing in the same order), and the columns
 can provide whatever extra data you would like to display in the hover
 tooltip. In this case we'll need a dataframe that can include the index
 of the point, its target number, and the actual name of the type of
-fashion item tat target corresponds to. This is easy to quickly put
+fashion item that target corresponds to. This is easy to quickly put
 together using pandas.
 
 .. code:: python3
@@ -323,7 +323,7 @@ a simple plot showing the points:
 
 
 As with ``umap.plot.points`` there are options to control the basic
-aesthetics, including theme options and an ``edge_cmap`` keyworkd
+aesthetics, including theme options and an ``edge_cmap`` keyword
 argument to specify the colormap used for displaying the edges.
 
 Since this approach already leverages datashader for edge plotting, we
@@ -425,7 +425,7 @@ the points have consistently lower local dimension.
 .. image:: images/plotting_42_0.png
 
 
-As you can, the local dimension of the data varies quite widely across
+As you can see, the local dimension of the data varies quite widely across
 the data. In particular the lower left cluster has the lowest local
 dimension -- this is actually unsurprising as this is the cluster
 corresponding to the digits 1: there are relatively few degrees of
