@@ -41,7 +41,8 @@ configuration = {
     'cmdclass' : {},
     'test_suite' : 'nose.collector',
     'tests_require' : ['nose'],
-    'data_files' : ()
+    'data_files' : (),
+    'zip_safe' : False
     }
 
 setup(**configuration)
