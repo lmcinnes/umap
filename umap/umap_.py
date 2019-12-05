@@ -1607,7 +1607,9 @@ class UMAP(BaseEstimator):
                 dmat = pairwise_distances(
                     X[index], metric=self.metric, **self._metric_kwds
                 )
-            except ValueError:  # metric is not supported by sklearn, fallback to pairwise special
+            except (ValueError, TypeError) as e:
+                # metric is not supported by sklearn,
+                # fallback to pairwise special
                 if self._sparse_data:
                     dmat = dist.pairwise_special_metric(
                         X[index].toarray(), metric=self.metric
