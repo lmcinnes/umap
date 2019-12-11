@@ -1057,9 +1057,10 @@ def simplicial_set_embedding(
 
     rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
-    embedding = (embedding - np.min(embedding, 0)) / (
+    embedding = (10.0 * (embedding - np.min(embedding, 0)) / (
         np.max(embedding, 0) - np.min(embedding, 0)
-    )
+    )).astype(np.float32, order='C')
+
     if euclidean_output:
         embedding = optimize_layout_euclidean(
             embedding,
@@ -1964,7 +1965,7 @@ class UMAP(BaseEstimator):
 
         adjusted_local_connectivity = max(0.0, self.local_connectivity - 1.0)
         sigmas, rhos = smooth_knn_dist(
-            dists,
+            dists.astype(np.float32, order='C'),
             float(self._n_neighbors),
             local_connectivity=float(adjusted_local_connectivity),
         )
