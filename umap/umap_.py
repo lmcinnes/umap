@@ -1963,9 +1963,11 @@ class UMAP(BaseEstimator):
             indices = indices[:, : self._n_neighbors]
             dists = dists[:, : self._n_neighbors]
 
+        dists = dists.astype(np.float32, order='C')
+
         adjusted_local_connectivity = max(0.0, self.local_connectivity - 1.0)
         sigmas, rhos = smooth_knn_dist(
-            dists.astype(np.float32, order='C'),
+            dists,
             float(self._n_neighbors),
             local_connectivity=float(adjusted_local_connectivity),
         )
