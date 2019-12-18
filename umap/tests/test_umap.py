@@ -1074,7 +1074,7 @@ def test_umap_sparse_trustworthiness():
     trust = trustworthiness(sparse_test_data[:100].toarray(), embedding, 10)
     assert_greater_equal(
         trust,
-        0.92,
+        0.91,
         "Insufficiently trustworthy embedding for"
         "sparse test dataset: {}".format(trust),
     )
