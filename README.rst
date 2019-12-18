@@ -172,7 +172,7 @@ For a problem such as the 784-dimensional MNIST digits dataset with
 compared with around 45 minutes for scikit-learn's t-SNE implementation).
 Despite this runtime efficiency, UMAP still produces high quality embeddings.
 
-The obligatory MNIST digits dataset, embedded in 42 seconds
+The obligatory MNIST digits dataset, embedded in 42 
 seconds (with pynndescent installed and after numba jit warmup)
 using a 3.1 GHz Intel Core i7 processor (n_neighbors=10, min_dist=0.001):
 
