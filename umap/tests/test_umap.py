@@ -1350,7 +1350,7 @@ def test_umap_inverse_transform_on_iris():
             highd_centroid, k=10, return_distance=False
         )
         assert_greater_equal(
-            np.intersect1d(near_points, highd_near_points[0]).shape[0], 4
+            np.intersect1d(near_points, highd_near_points[0]).shape[0], 3
         )
 
 
