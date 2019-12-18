@@ -55,7 +55,8 @@ from umap.umap_ import (
     fuzzy_simplicial_set,
     UMAP,
     DataFrameUMAP,
-    _HAVE_PYNNDESCENT)
+    _HAVE_PYNNDESCENT,
+)
 
 np.random.seed(42)
 spatial_data = np.random.randn(10, 20)

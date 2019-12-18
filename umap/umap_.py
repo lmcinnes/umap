@@ -221,7 +221,7 @@ def nearest_neighbors(
     angular,
     random_state,
     low_memory=False,
-        use_pynndescent=True,
+    use_pynndescent=True,
     verbose=False,
 ):
     """Compute the ``n_neighbors`` nearest points for each data point in ``X``
@@ -588,9 +588,7 @@ def fuzzy_simplicial_set(
     knn_dists = knn_dists.astype(np.float32)
 
     sigmas, rhos = smooth_knn_dist(
-        knn_dists,
-        float(n_neighbors),
-        local_connectivity=float(local_connectivity),
+        knn_dists, float(n_neighbors), local_connectivity=float(local_connectivity),
     )
 
     rows, cols, vals = compute_membership_strengths(
@@ -1057,9 +1055,11 @@ def simplicial_set_embedding(
 
     rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
-    embedding = (10.0 * (embedding - np.min(embedding, 0)) / (
-        np.max(embedding, 0) - np.min(embedding, 0)
-    )).astype(np.float32, order='C')
+    embedding = (
+        10.0
+        * (embedding - np.min(embedding, 0))
+        / (np.max(embedding, 0) - np.min(embedding, 0))
+    ).astype(np.float32, order="C")
 
     if euclidean_output:
         embedding = optimize_layout_euclidean(
@@ -1963,7 +1963,7 @@ class UMAP(BaseEstimator):
             indices = indices[:, : self._n_neighbors]
             dists = dists[:, : self._n_neighbors]
 
-        dists = dists.astype(np.float32, order='C')
+        dists = dists.astype(np.float32, order="C")
 
         adjusted_local_connectivity = max(0.0, self.local_connectivity - 1.0)
         sigmas, rhos = smooth_knn_dist(
