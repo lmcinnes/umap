@@ -918,7 +918,9 @@ def test_umap_bad_nn_sparse():
 
 def test_too_many_neighbors_warns():
     u = UMAP(a=1.2, b=1.75, n_neighbors=2000, n_epochs=11, init="random")
-    u.fit(nn_data[:100,])
+    u.fit(
+        nn_data[:100,]
+    )
     assert_equal(u._a, 1.2)
     assert_equal(u._b, 1.75)
 
@@ -969,9 +971,11 @@ def test_umap_transform_embedding_stability():
     new_data = np.random.random(data.shape)
     embedding = fitter.transform(new_data)
 
-    assert_array_equal(original_embedding,
-                       fitter.embedding_,
-                       "Transforming new data changed the original embeddings")
+    assert_array_equal(
+        original_embedding,
+        fitter.embedding_,
+        "Transforming new data changed the original embeddings",
+    )
 
     # Example from issue #217
     a = np.random.random((1000, 10))

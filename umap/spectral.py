@@ -52,7 +52,7 @@ def component_layout(
     distance_matrix = pairwise_distances(
         component_centroids, metric=metric, **metric_kwds
     )
-    affinity_matrix = np.exp(-distance_matrix ** 2)
+    affinity_matrix = np.exp(-(distance_matrix ** 2))
 
     component_embedding = SpectralEmbedding(
         n_components=dim, affinity="precomputed"
