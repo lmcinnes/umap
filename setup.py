@@ -1,7 +1,7 @@
 from setuptools import setup
 
 def readme():
-    with open('README.rst') as readme_file:
+    with open('README.rst', encoding='UTF-8') as readme_file:
         return readme_file.read()
 
 configuration = {
