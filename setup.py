@@ -2,8 +2,14 @@ from setuptools import setup
 
 
 def readme():
-    with open("README.rst", encoding="UTF-8") as readme_file:
-        return readme_file.read()
+    try:
+        with open("README.rst", encoding="UTF-8") as readme_file:
+            return readme_file.read()
+    except TypeError:
+        # Python 2.7 doesn't support encoding argument in builtin open
+        import io
+        with io.open("README.rst", encoding="UTF-8") as readme_file:
+            return readme_file.read()
 
 
 configuration = {
