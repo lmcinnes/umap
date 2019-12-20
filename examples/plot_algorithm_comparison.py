@@ -105,7 +105,7 @@ ax_list = []
 # plt.figure(figsize=(9 * 2 + 3, 12.5))
 plt.figure(figsize=(10, 8))
 plt.subplots_adjust(
-    left=.02, right=.98, bottom=.001, top=.96, wspace=.05, hspace=.01
+    left=0.02, right=0.98, bottom=0.001, top=0.96, wspace=0.05, hspace=0.01
 )
 for data, labels in test_data:
     for reducer, args in reducers:
@@ -116,9 +116,7 @@ for data, labels in test_data:
         if isinstance(labels[0], tuple):
             ax.scatter(*embedding.T, s=10, c=labels, alpha=0.5)
         else:
-            ax.scatter(
-                *embedding.T, s=10, c=labels, cmap="Spectral", alpha=0.5
-            )
+            ax.scatter(*embedding.T, s=10, c=labels, cmap="Spectral", alpha=0.5)
         ax.text(
             0.99,
             0.01,

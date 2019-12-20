@@ -25,9 +25,7 @@ def fast_knn_indices(X, n_neighbors):
     knn_indices: array of shape (n_samples, n_neighbors)
         The indices on the ``n_neighbors`` closest points in the dataset.
     """
-    knn_indices = np.empty(
-        (X.shape[0], n_neighbors), dtype=np.int32
-    )
+    knn_indices = np.empty((X.shape[0], n_neighbors), dtype=np.int32)
     for row in numba.prange(X.shape[0]):
         v = X[row].argsort(kind="quicksort")
         v = v[:n_neighbors]
@@ -48,15 +46,15 @@ def tau_rand_int(state):
     -------
     A (pseudo)-random int32 value
     """
-    state[0] = (
-        ((state[0] & 4294967294) << 12) & 0xFFFFFFFF
-    ) ^ ((((state[0] << 13) & 0xFFFFFFFF) ^ state[0]) >> 19)
-    state[1] = (
-        ((state[1] & 4294967288) << 4) & 0xFFFFFFFF
-    ) ^ ((((state[1] << 2) & 0xFFFFFFFF) ^ state[1]) >> 25)
-    state[2] = (
-        ((state[2] & 4294967280) << 17) & 0xFFFFFFFF
-    ) ^ ((((state[2] << 3) & 0xFFFFFFFF) ^ state[2]) >> 11)
+    state[0] = (((state[0] & 4294967294) << 12) & 0xFFFFFFFF) ^ (
+        (((state[0] << 13) & 0xFFFFFFFF) ^ state[0]) >> 19
+    )
+    state[1] = (((state[1] & 4294967288) << 4) & 0xFFFFFFFF) ^ (
+        (((state[1] << 2) & 0xFFFFFFFF) ^ state[1]) >> 25
+    )
+    state[2] = (((state[2] & 4294967280) << 17) & 0xFFFFFFFF) ^ (
+        (((state[2] << 3) & 0xFFFFFFFF) ^ state[2]) >> 11
+    )
 
     return state[0] ^ state[1] ^ state[2]
 
@@ -155,9 +153,7 @@ def make_heap(n_points, size):
     -------
     heap: An ndarray suitable for passing to other numba enabled heap functions.
     """
-    result = np.zeros(
-        (3, int(n_points), int(size)), dtype=np.float64
-    )
+    result = np.zeros((3, int(n_points), int(size)), dtype=np.float64)
     result[0] = -1
     result[1] = np.infty
     result[2] = 0
@@ -340,10 +336,7 @@ def siftdown(heap1, heap2, elt):
         if heap1[swap] < heap1[left_child]:
             swap = left_child
 
-        if (
-            right_child < heap1.shape[0]
-            and heap1[swap] < heap1[right_child]
-        ):
+        if right_child < heap1.shape[0] and heap1[swap] < heap1[right_child]:
             swap = right_child
 
         if swap == elt:
@@ -386,15 +379,11 @@ def deheap_sort(heap):
         dist_heap = weights[i]
 
         for j in range(ind_heap.shape[0] - 1):
-            ind_heap[0], ind_heap[
-                ind_heap.shape[0] - j - 1
-            ] = (
+            ind_heap[0], ind_heap[ind_heap.shape[0] - j - 1] = (
                 ind_heap[ind_heap.shape[0] - j - 1],
                 ind_heap[0],
             )
-            dist_heap[0], dist_heap[
-                dist_heap.shape[0] - j - 1
-            ] = (
+            dist_heap[0], dist_heap[dist_heap.shape[0] - j - 1] = (
                 dist_heap[dist_heap.shape[0] - j - 1],
                 dist_heap[0],
             )
@@ -449,11 +438,7 @@ def smallest_flagged(heap, row):
 
 @numba.njit(parallel=True)
 def build_candidates(
-    current_graph,
-    n_vertices,
-    n_neighbors,
-    max_candidates,
-    rng_state,
+    current_graph, n_vertices, n_neighbors, max_candidates, rng_state,
 ):
     """Build a heap of candidate neighbors for nearest neighbor descent. For
     each vertex the candidate neighbors are any current neighbors, and any
@@ -481,9 +466,7 @@ def build_candidates(
     candidate_neighbors: A heap with an array of (randomly sorted) candidate
     neighbors for each vertex in the graph.
     """
-    candidate_neighbors = make_heap(
-        n_vertices, max_candidates
-    )
+    candidate_neighbors = make_heap(n_vertices, max_candidates)
     for i in range(n_vertices):
         for j in range(n_neighbors):
             if current_graph[0, i, j] < 0:
@@ -500,12 +483,7 @@ def build_candidates(
 
 @numba.njit(parallel=True)
 def new_build_candidates(
-    current_graph,
-    n_vertices,
-    n_neighbors,
-    max_candidates,
-    rng_state,
-    rho=0.5,
+    current_graph, n_vertices, n_neighbors, max_candidates, rng_state, rho=0.5,
 ):  # pragma: no cover
     """Build a heap of candidate neighbors for nearest neighbor descent. For
     each vertex the candidate neighbors are any current neighbors, and any
@@ -533,12 +511,8 @@ def new_build_candidates(
     candidate_neighbors: A heap with an array of (randomly sorted) candidate
     neighbors for each vertex in the graph.
     """
-    new_candidate_neighbors = make_heap(
-        n_vertices, max_candidates
-    )
-    old_candidate_neighbors = make_heap(
-        n_vertices, max_candidates
-    )
+    new_candidate_neighbors = make_heap(n_vertices, max_candidates)
+    old_candidate_neighbors = make_heap(n_vertices, max_candidates)
 
     for i in numba.prange(n_vertices):
         for j in range(n_neighbors):
@@ -550,34 +524,14 @@ def new_build_candidates(
             if tau_rand(rng_state) < rho:
                 c = 0
                 if isn:
-                    c += heap_push(
-                        new_candidate_neighbors,
-                        i,
-                        d,
-                        idx,
-                        isn,
-                    )
-                    c += heap_push(
-                        new_candidate_neighbors,
-                        idx,
-                        d,
-                        i,
-                        isn,
-                    )
+                    c += heap_push(new_candidate_neighbors, i, d, idx, isn,)
+                    c += heap_push(new_candidate_neighbors, idx, d, i, isn,)
                 else:
                     heap_push(
-                        old_candidate_neighbors,
-                        i,
-                        d,
-                        idx,
-                        isn,
+                        old_candidate_neighbors, i, d, idx, isn,
                     )
                     heap_push(
-                        old_candidate_neighbors,
-                        idx,
-                        d,
-                        i,
-                        isn,
+                        old_candidate_neighbors, idx, d, i, isn,
                     )
 
                 if c > 0:
@@ -607,9 +561,7 @@ def submatrix(dmat, indices_col, n_neighbors):
         The corresponding submatrix.
     """
     n_samples_transform, n_samples_fit = dmat.shape
-    submat = np.zeros(
-        (n_samples_transform, n_neighbors), dtype=dmat.dtype
-    )
+    submat = np.zeros((n_samples_transform, n_neighbors), dtype=dmat.dtype)
     for i in numba.prange(n_samples_transform):
         for j in numba.prange(n_neighbors):
             submat[i, j] = dmat[i, indices_col[i, j]]

@@ -43,7 +43,10 @@ if [[ "$DISTRIB" == "conda" ]]; then
 
   source activate testenv
 
-  pip install black
+  # black requires Python 3.x; don't try to install for Python 2.7 test
+  if [[ "$PYTHON_VERSION" != "2.7" ]]; then
+    pip install black
+  fi
 
   if [[ "$COVERAGE" == "true" ]]; then
       pip install coverage coveralls

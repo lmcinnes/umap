@@ -449,9 +449,12 @@ def sparse_euclidean_random_projection_split(inds, indptr, data, indices, rng_st
 
 def make_euclidean_tree(data, indices, rng_state, leaf_size=30):
     if indices.shape[0] > leaf_size:
-        left_indices, right_indices, hyperplane, offset = euclidean_random_projection_split(
-            data, indices, rng_state
-        )
+        (
+            left_indices,
+            right_indices,
+            hyperplane,
+            offset,
+        ) = euclidean_random_projection_split(data, indices, rng_state)
 
         left_node = make_euclidean_tree(data, left_indices, rng_state, leaf_size)
         right_node = make_euclidean_tree(data, right_indices, rng_state, leaf_size)
@@ -467,9 +470,12 @@ def make_euclidean_tree(data, indices, rng_state, leaf_size=30):
 
 def make_angular_tree(data, indices, rng_state, leaf_size=30):
     if indices.shape[0] > leaf_size:
-        left_indices, right_indices, hyperplane, offset = angular_random_projection_split(
-            data, indices, rng_state
-        )
+        (
+            left_indices,
+            right_indices,
+            hyperplane,
+            offset,
+        ) = angular_random_projection_split(data, indices, rng_state)
 
         left_node = make_angular_tree(data, left_indices, rng_state, leaf_size)
         right_node = make_angular_tree(data, right_indices, rng_state, leaf_size)
@@ -485,7 +491,12 @@ def make_angular_tree(data, indices, rng_state, leaf_size=30):
 
 def make_sparse_euclidean_tree(inds, indptr, data, indices, rng_state, leaf_size=30):
     if indices.shape[0] > leaf_size:
-        left_indices, right_indices, hyperplane, offset = sparse_euclidean_random_projection_split(
+        (
+            left_indices,
+            right_indices,
+            hyperplane,
+            offset,
+        ) = sparse_euclidean_random_projection_split(
             inds, indptr, data, indices, rng_state
         )
 
@@ -507,7 +518,12 @@ def make_sparse_euclidean_tree(inds, indptr, data, indices, rng_state, leaf_size
 
 def make_sparse_angular_tree(inds, indptr, data, indices, rng_state, leaf_size=30):
     if indices.shape[0] > leaf_size:
-        left_indices, right_indices, hyperplane, offset = sparse_angular_random_projection_split(
+        (
+            left_indices,
+            right_indices,
+            hyperplane,
+            offset,
+        ) = sparse_angular_random_projection_split(
             inds, indptr, data, indices, rng_state
         )
 
