@@ -149,7 +149,8 @@ overlap and pile up on top of each other, can deceive you into thinking
 that extremely dense clumps may only contain a few points. While there
 are things that can be done to help remedy this, such as reducing the
 point size, or adding an alpha channel, few are sufficient to be sure
-the plot isn't subtly lying to you in some way. `This essay <>`__ in
+the plot isn't subtly lying to you in some way. `This essay
+<https://datashader.org/user_guide/Plotting_Pitfalls.html>`_ in
 the datashader documentation does an excellent job of describing the
 issues with overplotting, why the obvious solutions are not quite
 sufficient, and how to get around the problem. To make life easier for
