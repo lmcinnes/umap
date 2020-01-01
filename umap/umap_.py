@@ -96,7 +96,7 @@ def smooth_knn_dist(
     result: array of shape(n_samples)
         The normalization factor derived from the metric tensor approximation.
 
-    rhos: array of shape(n_samples)
+    rho: array of shape(n_samples)
         The local connectivity adjustment.
     """
     target = np.log2(k) * bandwidth
