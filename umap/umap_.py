@@ -93,11 +93,11 @@ def smooth_knn_dist(
 
     Returns
     -------
-    knn_dist: array of shape (n_samples,)
-        The distance to kth nearest neighbor, as suitably approximated.
+    result: array of shape(n_samples)
+        The normalization factor derived from the metric tensor approximation.
 
-    nn_dist: array of shape (n_samples,)
-        The distance to the 1st nearest neighbor for each point.
+    rhos: array of shape(n_samples)
+        The local connectivity adjustment.
     """
     target = np.log2(k) * bandwidth
     rho = np.zeros(distances.shape[0])
