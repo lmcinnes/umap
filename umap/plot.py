@@ -231,7 +231,7 @@ def _datashade_points(
     background="white",
     width=800,
     height=800,
-    show_legend=True
+    show_legend=True,
 ):
 
     """Use datashader to plot points"""
@@ -266,11 +266,15 @@ def _datashade_points(
             color_key = _to_hex(
                 plt.get_cmap(color_key_cmap)(np.linspace(0, 1, num_labels))
             )
-            legend_elements = [Patch(facecolor=color_key[i], label = k)
-                               for i, k in enumerate(unique_labels)]
+            legend_elements = [
+                Patch(facecolor=color_key[i], label=k)
+                for i, k in enumerate(unique_labels)
+            ]
             result = tf.shade(aggregation, color_key=color_key, how="eq_hist")
         else:
-            legend_elements = [Patch(facecolor=color_key[k], label = k) for k in color_key.keys()]
+            legend_elements = [
+                Patch(facecolor=color_key[k], label=k) for k in color_key.keys()
+            ]
             result = tf.shade(aggregation, color_key=color_key, how="eq_hist")
 
     # Color by values
@@ -329,7 +333,7 @@ def _matplotlib_points(
     background="white",
     width=800,
     height=800,
-    show_legend=True
+    show_legend=True,
 ):
     """Use matplotlib to plot points"""
     point_size = 100.0 / np.sqrt(points.shape[0])
@@ -356,14 +360,17 @@ def _matplotlib_points(
             unique_labels = np.unique(labels)
             num_labels = unique_labels.shape[0]
             color_key = plt.get_cmap(color_key_cmap)(np.linspace(0, 1, num_labels))
-            legend_elements = [Patch(facecolor=color_key[i], label = unique_labels[i])
-                               for i, k in enumerate(unique_labels)]
+            legend_elements = [
+                Patch(facecolor=color_key[i], label=unique_labels[i])
+                for i, k in enumerate(unique_labels)
+            ]
 
         if isinstance(color_key, dict):
             colors = pd.Series(labels).map(color_key)
             unique_labels = np.unique(labels)
-            legend_elements = [Patch(facecolor=color_key[k], label = k)
-                               for k in unique_labels]
+            legend_elements = [
+                Patch(facecolor=color_key[k], label=k) for k in unique_labels
+            ]
         else:
             unique_labels = np.unique(labels)
             if len(color_key) < unique_labels.shape[0]:
@@ -372,8 +379,10 @@ def _matplotlib_points(
                 )
 
             new_color_key = {k: color_key[i] for i, k in enumerate(unique_labels)}
-            legend_elements = [Patch(facecolor=color_key[i], label = k)
-                               for i, k in enumerate(unique_labels)]
+            legend_elements = [
+                Patch(facecolor=color_key[i], label=k)
+                for i, k in enumerate(unique_labels)
+            ]
             colors = pd.Series(labels).map(new_color_key)
 
         ax.scatter(points[:, 0], points[:, 1], s=point_size, c=colors)
@@ -412,7 +421,7 @@ def points(
     background="white",
     width=800,
     height=800,
-    show_legend=True
+    show_legend=True,
 ):
     """Plot an embedding as points. Currently this only works
     for 2D embeddings. While there are many optional parameters
@@ -553,7 +562,7 @@ def points(
             background,
             width,
             height,
-            show_legend
+            show_legend,
         )
     else:
         ax = _datashade_points(
@@ -567,7 +576,7 @@ def points(
             background,
             width,
             height,
-            show_legend
+            show_legend,
         )
 
     ax.set(xticks=[], yticks=[])
@@ -792,7 +801,7 @@ def connectivity(
             None,
             width,
             height,
-            show_legend
+            show_legend,
         )
         if px_size > 1:
             point_img = tf.dynspread(point_img, threshold=0.5, max_px=px_size)
@@ -1070,21 +1079,21 @@ def diagnostic(
 
         fig, axs = plt.subplots(rows, cols, figsize=(10, 10), constrained_layout=True)
         axs = axs.flat
-        for ax in axs[len(_diagnostic_types):]:
+        for ax in axs[len(_diagnostic_types) :]:
             ax.remove()
         for ax, plt_type in zip(axs, _diagnostic_types):
             diagnostic(
-                    umap_object,
-                    diagnostic_type=plt_type,
-                    ax=ax,
-                    point_size=point_size / 4.0,
+                umap_object,
+                diagnostic_type=plt_type,
+                ax=ax,
+                point_size=point_size / 4.0,
             )
 
     else:
         raise ValueError(
-            "Unknown diagnostic; should be one of " +
-            ", ".join(list(_diagnostic_types)) +
-            ' or "all"'
+            "Unknown diagnostic; should be one of "
+            + ", ".join(list(_diagnostic_types))
+            + ' or "all"'
         )
 
     return ax
