@@ -19,6 +19,8 @@ import sklearn.decomposition
 import sklearn.cluster
 import sklearn.neighbors
 
+from matplotlib.patches import Patch
+
 from umap.nndescent import initialise_search, initialized_nnd_search
 from umap.utils import deheap_sort, submatrix
 
@@ -122,7 +124,7 @@ _themes = {
     },
 }
 
-_diagnostic_types = np.array([["pca", "ica"], ["vq", "local_dim"]])
+_diagnostic_types = np.array(["pca", "ica", "vq", "local_dim", "neighborhood"])
 
 
 def _embed_datashader_in_an_axis(datashader_image, ax):
@@ -229,6 +231,7 @@ def _datashade_points(
     background="white",
     width=800,
     height=800,
+    show_legend=True,
 ):
 
     """Use datashader to plot points"""
@@ -240,6 +243,8 @@ def _datashade_points(
         y_range=(extent[2], extent[3]),
     )
     data = pd.DataFrame(points, columns=("x", "y"))
+
+    legend_elements = None
 
     # Color by labels
     if labels is not None:
@@ -261,8 +266,15 @@ def _datashade_points(
             color_key = _to_hex(
                 plt.get_cmap(color_key_cmap)(np.linspace(0, 1, num_labels))
             )
+            legend_elements = [
+                Patch(facecolor=color_key[i], label=k)
+                for i, k in enumerate(unique_labels)
+            ]
             result = tf.shade(aggregation, color_key=color_key, how="eq_hist")
         else:
+            legend_elements = [
+                Patch(facecolor=color_key[k], label=k) for k in color_key.keys()
+            ]
             result = tf.shade(aggregation, color_key=color_key, how="eq_hist")
 
     # Color by values
@@ -303,6 +315,8 @@ def _datashade_points(
 
     if ax is not None:
         _embed_datashader_in_an_axis(result, ax)
+        if show_legend and legend_elements is not None:
+            ax.legend(handles=legend_elements)
         return ax
     else:
         return result
@@ -319,9 +333,12 @@ def _matplotlib_points(
     background="white",
     width=800,
     height=800,
+    show_legend=True,
 ):
     """Use matplotlib to plot points"""
     point_size = 100.0 / np.sqrt(points.shape[0])
+
+    legend_elements = None
 
     if ax is None:
         dpi = plt.rcParams["figure.dpi"]
@@ -343,9 +360,17 @@ def _matplotlib_points(
             unique_labels = np.unique(labels)
             num_labels = unique_labels.shape[0]
             color_key = plt.get_cmap(color_key_cmap)(np.linspace(0, 1, num_labels))
+            legend_elements = [
+                Patch(facecolor=color_key[i], label=unique_labels[i])
+                for i, k in enumerate(unique_labels)
+            ]
 
         if isinstance(color_key, dict):
             colors = pd.Series(labels).map(color_key)
+            unique_labels = np.unique(labels)
+            legend_elements = [
+                Patch(facecolor=color_key[k], label=k) for k in unique_labels
+            ]
         else:
             unique_labels = np.unique(labels)
             if len(color_key) < unique_labels.shape[0]:
@@ -354,6 +379,10 @@ def _matplotlib_points(
                 )
 
             new_color_key = {k: color_key[i] for i, k in enumerate(unique_labels)}
+            legend_elements = [
+                Patch(facecolor=color_key[i], label=k)
+                for i, k in enumerate(unique_labels)
+            ]
             colors = pd.Series(labels).map(new_color_key)
 
         ax.scatter(points[:, 0], points[:, 1], s=point_size, c=colors)
@@ -375,6 +404,9 @@ def _matplotlib_points(
         color = plt.get_cmap(cmap)(0.5)
         ax.scatter(points[:, 0], points[:, 1], s=point_size, c=color)
 
+    if show_legend and legend_elements is not None:
+        ax.legend(handles=legend_elements)
+
     return ax
 
 
@@ -389,6 +421,7 @@ def points(
     background="white",
     width=800,
     height=800,
+    show_legend=True,
 ):
     """Plot an embedding as points. Currently this only works
     for 2D embeddings. While there are many optional parameters
@@ -481,6 +514,9 @@ def points(
     height: int (optional, default 800)
         The desired height of the plot in pixels
 
+    show_legend: bool (optional, default True)
+        Whether to display a legend of the labels
+
     Returns
     -------
     result: matplotlib axis
@@ -526,6 +562,7 @@ def points(
             background,
             width,
             height,
+            show_legend,
         )
     else:
         ax = _datashade_points(
@@ -539,6 +576,7 @@ def points(
             background,
             width,
             height,
+            show_legend,
         )
 
     ax.set(xticks=[], yticks=[])
@@ -763,6 +801,7 @@ def connectivity(
             None,
             width,
             height,
+            show_legend,
         )
         if px_size > 1:
             point_img = tf.dynspread(point_img, threshold=0.5, max_px=px_size)
@@ -888,8 +927,6 @@ def diagnostic(
         dpi = plt.rcParams["figure.dpi"]
         if diagnostic_type in ("local_dim", "neighborhood"):
             width *= 1.1
-        fig = plt.figure(figsize=(width / dpi, height / dpi))
-        ax = fig.add_subplot(111)
 
     font_color = _select_font_color(background)
 
@@ -1037,23 +1074,26 @@ def diagnostic(
         plt.colorbar(mappable, ax=ax)
 
     elif diagnostic_type == "all":
+        cols = int(len(_diagnostic_types) ** 0.5 // 1)
+        rows = len(_diagnostic_types) // cols + 1
 
-        fig, axs = plt.subplots(2, 2, figsize=(10, 10))
-        for i in range(2):
-            for j in range(2):
-                diagnostic(
-                    umap_object,
-                    diagnostic_type=_diagnostic_types[i, j],
-                    ax=axs[i, j],
-                    point_size=point_size / 4.0,
-                )
-
-        plt.tight_layout()
+        fig, axs = plt.subplots(rows, cols, figsize=(10, 10), constrained_layout=True)
+        axs = axs.flat
+        for ax in axs[len(_diagnostic_types) :]:
+            ax.remove()
+        for ax, plt_type in zip(axs, _diagnostic_types):
+            diagnostic(
+                umap_object,
+                diagnostic_type=plt_type,
+                ax=ax,
+                point_size=point_size / 4.0,
+            )
 
     else:
         raise ValueError(
             "Unknown diagnostic; should be one of "
-            '"pca", "ica", "vq", "neighborhood", or "all"'
+            + ", ".join(list(_diagnostic_types))
+            + ' or "all"'
         )
 
     return ax
