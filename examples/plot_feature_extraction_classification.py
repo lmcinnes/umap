@@ -24,8 +24,8 @@ from sklearn.datasets import make_classification
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.svm import LinearSVC
-from umap import UMAP
 
+from umap import UMAP
 
 # Make a toy dataset
 X, y = make_classification(
@@ -60,6 +60,7 @@ params_grid_pipeline = {
     "umap__n_components": [15, 25, 50],
     "svc__C": [10 ** k for k in range(-3, 4)],
 }
+
 
 clf_pipeline = GridSearchCV(pipeline, params_grid_pipeline)
 clf_pipeline.fit(X_train, y_train)

@@ -1,3 +1,5 @@
+from warnings import warn
+
 import numpy as np
 
 import scipy.sparse
@@ -5,11 +7,18 @@ import scipy.sparse.csgraph
 
 from sklearn.manifold import SpectralEmbedding
 from sklearn.metrics import pairwise_distances
-from warnings import warn
+
+from umap.distances import pairwise_special_metric
 
 
 def component_layout(
-    data, n_components, component_labels, dim, metric="euclidean", metric_kwds={}
+    data,
+    n_components,
+    component_labels,
+    dim,
+    random_state,
+    metric="euclidean",
+    metric_kwds={},
 ):
     """Provide a layout relating the separate connected components. This is done
     by taking the centroid of each component and then performing a spectral embedding
@@ -49,13 +58,17 @@ def component_layout(
     for label in range(n_components):
         component_centroids[label] = data[component_labels == label].mean(axis=0)
 
-    distance_matrix = pairwise_distances(
-        component_centroids, metric=metric, **metric_kwds
-    )
+    if metric in ("hellinger", "ll_dirichlet"):
+        distance_matrix = pairwise_special_metric(component_centroids, metric=metric)
+    else:
+        distance_matrix = pairwise_distances(
+            component_centroids, metric=metric, **metric_kwds
+        )
+
     affinity_matrix = np.exp(-(distance_matrix ** 2))
 
     component_embedding = SpectralEmbedding(
-        n_components=dim, affinity="precomputed"
+        n_components=dim, affinity="precomputed", random_state=random_state
     ).fit_transform(affinity_matrix)
     component_embedding /= component_embedding.max()
 
@@ -118,6 +131,7 @@ def multi_component_layout(
             n_components,
             component_labels,
             dim,
+            random_state,
             metric=metric,
             metric_kwds=metric_kwds,
         )
