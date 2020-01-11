@@ -1214,10 +1214,10 @@ def interactive(
 
     point_size: int (optional, default None)
         The size of each point marker
-    
+
     subset_points: array, shape (n_samples,) (optional, default None)
         A way to select a subset of points based on an array of boolean
-        values. 
+        values.
 
     Returns
     -------
@@ -1280,8 +1280,8 @@ def interactive(
     if subset_points is not None:
         if len(subset_points) != points.shape[0]:
             raise ValueError(
-                "Size of subset points ({}) does not match number of input points ({})".format(
-                    len(subset_points), points.shape[0]
+                "Size of subset points ({}) does not match number of input points ({})" \
+                .format(len(subset_points), points.shape[0]
                 )
             )
 
