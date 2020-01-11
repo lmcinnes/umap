@@ -1112,6 +1112,7 @@ def interactive(
     width=800,
     height=800,
     point_size=None,
+    subset_points=None,
 ):
     """Create an interactive bokeh plot of a UMAP embedding.
     While static plots are useful, sometimes a plot that
@@ -1196,7 +1197,7 @@ def interactive(
         is passed then this value will be overridden by the
         corresponding option of the theme.
 
-    background: string (optional, default 'white)
+    background: string (optional, default 'white')
         The color of the background. Usually this will be either
         'white' or 'black', but any color name will work. Ideally
         one wants to match this appropriately to the colors being
@@ -1210,6 +1211,13 @@ def interactive(
 
     height: int (optional, default 800)
         The desired height of the plot in pixels
+
+    point_size: int (optional, default None)
+        The size of each point marker
+
+    subset_points: array, shape (n_samples,) (optional, default None)
+        A way to select a subset of points based on an array of boolean
+        values.
 
     Returns
     -------
@@ -1268,6 +1276,18 @@ def interactive(
 
     else:
         colors = matplotlib.colors.rgb2hex(plt.get_cmap(cmap)(0.5))
+
+    if subset_points is not None:
+        if len(subset_points) != points.shape[0]:
+            raise ValueError(
+                "Size of subset points ({}) does not match number of input points ({})" \
+                .format(len(subset_points), points.shape[0]
+                )
+            )
+
+        data = data[subset_points]
+        if hover_data is not None:
+            hover_data = hover_data[subset_points]
 
     if points.shape[0] <= width * height // 10:
 
