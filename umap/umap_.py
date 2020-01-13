@@ -1412,7 +1412,7 @@ class UMAP(BaseEstimator):
         if self.min_dist > self.spread:
             raise ValueError("min_dist must be less than or equal to spread")
         if self.min_dist < 0.0:
-            raise ValueError("min_dist must be greater than 0.0")
+            raise ValueError("min_dist cannot be negative")
         if not isinstance(self.init, str) and not isinstance(self.init, np.ndarray):
             raise ValueError("init must be a string or ndarray")
         if isinstance(self.init, str) and self.init not in ("spectral", "random"):
@@ -1429,9 +1429,9 @@ class UMAP(BaseEstimator):
         if self._initial_alpha < 0.0:
             raise ValueError("learning_rate must be positive")
         if self.n_neighbors < 2:
-            raise ValueError("n_neighbors must be greater than 2")
+            raise ValueError("n_neighbors must be greater than 1")
         if self.target_n_neighbors < 2 and self.target_n_neighbors != -1:
-            raise ValueError("target_n_neighbors must be greater than 2")
+            raise ValueError("target_n_neighbors must be greater than 1")
         if not isinstance(self.n_components, int):
             if isinstance(self.n_components, str):
                 raise ValueError("n_components must be an int")
