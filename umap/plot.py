@@ -801,7 +801,7 @@ def connectivity(
             None,
             width,
             height,
-            show_legend,
+            False,
         )
         if px_size > 1:
             point_img = tf.dynspread(point_img, threshold=0.5, max_px=px_size)
