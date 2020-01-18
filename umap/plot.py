@@ -1247,6 +1247,8 @@ def interactive(
         )
 
     points = umap_object.embedding_
+    if subset_points:
+        points = points[subset_points]
 
     if points.shape[1] != 2:
         raise ValueError("Plotting is currently only implemented for 2D embeddings")
