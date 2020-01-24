@@ -301,9 +301,9 @@ def nearest_neighbors(
         else:
             # Otherwise fall back to nn descent in umap
             if callable(metric):
-                distance_func = metric
+                _distance_func = metric
             elif metric in dist.named_distances:
-                distance_func = dist.named_distances[metric]
+                _distance_func = dist.named_distances[metric]
             else:
                 raise ValueError(
                     "Metric is neither callable, " + "nor a recognised string"
@@ -323,15 +323,29 @@ def nearest_neighbors(
 
             if scipy.sparse.isspmatrix_csr(X):
                 if metric in sparse.sparse_named_distances:
-                    distance_func = sparse.sparse_named_distances[metric]
+                    _distance_func = sparse.sparse_named_distances[metric]
                     if metric in sparse.sparse_need_n_features:
                         metric_kwds["n_features"] = X.shape[1]
                 elif callable(metric):
-                    distance_func = metric
+                    _distance_func = metric
                 else:
                     raise ValueError(
                         "Metric {} not supported for sparse " + "data".format(metric)
                     )
+
+                # Create a partial function for distances with arguments
+                if len(metric_kwds) > 0:
+                    dist_args = tuple(metric_kwds.values())
+
+                    @numba.njit()
+                    def _partial_dist_func(ind1, data1, ind2, data2):
+                        return _distance_func(
+                            ind1, data1, ind2, data2, *dist_args
+                        )
+
+                    distance_func = _partial_dist_func
+                else:
+                    distance_func = _distance_func
                 # metric_nn_descent = sparse.make_sparse_nn_descent(
                 #     distance_func, tuple(metric_kwds.values())
                 # )
@@ -353,7 +367,6 @@ def nearest_neighbors(
                     rng_state,
                     max_candidates=60,
                     sparse_dist=distance_func,
-                    dist_args=tuple(metric_kwds.values()),
                     low_memory=low_memory,
                     rp_tree_init=True,
                     leaf_array=leaf_array,
@@ -364,6 +377,16 @@ def nearest_neighbors(
                 # metric_nn_descent = make_nn_descent(
                 #     distance_func, tuple(metric_kwds.values())
                 # )
+                if len(metric_kwds) > 0:
+                    dist_args = tuple(metric_kwds.values())
+
+                    @numba.njit()
+                    def _partial_dist_func(x, y):
+                        return _distance_func(x, y, *dist_args)
+
+                    distance_func = _partial_dist_func
+                else:
+                    distance_func = _distance_func
 
                 if verbose:
                     print(ts(), "Building RP forest with", str(n_trees), "trees")
@@ -377,7 +400,6 @@ def nearest_neighbors(
                     rng_state,
                     max_candidates=60,
                     dist=distance_func,
-                    dist_args=tuple(metric_kwds.values()),
                     low_memory=low_memory,
                     rp_tree_init=True,
                     leaf_array=leaf_array,
@@ -1671,13 +1693,13 @@ class UMAP(BaseEstimator):
             ).tocsr()
 
             if callable(self.metric):
-                self._distance_func = self.metric
+                _distance_func = self.metric
             elif self.metric in dist.named_distances:
                 # Choose the right metric based on sparsity
                 if self._sparse_data:
-                    self._distance_func = sparse.sparse_named_distances[self.metric]
+                    _distance_func = sparse.sparse_named_distances[self.metric]
                 else:
-                    self._distance_func = dist.named_distances[self.metric]
+                    _distance_func = dist.named_distances[self.metric]
             elif self.metric == "precomputed":
                 warn(
                     "Using precomputed metric; transform will be unavailable for new data"
@@ -1689,6 +1711,25 @@ class UMAP(BaseEstimator):
 
             if self.metric != "precomputed":
                 self._dist_args = tuple(self._metric_kwds.values())
+
+                # Create a partial function for distances with arguments
+                if len(self._dist_args) > 0:
+                    if self._sparse_data:
+                        @numba.njit()
+                        def _partial_dist_func(ind1, data1, ind2, data2):
+                            return _distance_func(
+                                ind1, data1, ind2, data2, *self._dist_args
+                            )
+
+                        self._distance_func = _partial_dist_func
+                    else:
+                        @numba.njit()
+                        def _partial_dist_func(x, y):
+                            return _distance_func(x, y, *self._dist_args)
+
+                        self._distance_func = _partial_dist_func
+                else:
+                    self._distance_func = _distance_func
 
                 # self._random_init, self._tree_init = make_initialisations(
                 #     self._distance_func, self._dist_args
@@ -1920,7 +1961,6 @@ class UMAP(BaseEstimator):
                 ),
                 rng_state,
                 self._distance_func,
-                self._dist_args,
             )
             result = sparse_nn.sparse_initialized_nnd_search(
                 self._raw_data.indices,
@@ -1933,7 +1973,6 @@ class UMAP(BaseEstimator):
                 X.indptr,
                 X.data,
                 self._distance_func,
-                self._dist_args,
             )
 
             indices, dists = deheap_sort(result)
@@ -1947,7 +1986,6 @@ class UMAP(BaseEstimator):
                 int(self._n_neighbors * self.transform_queue_size),
                 rng_state,
                 self._distance_func,
-                self._dist_args,
             )
             result = initialized_nnd_search(
                 self._raw_data,
@@ -1956,7 +1994,6 @@ class UMAP(BaseEstimator):
                 init,
                 X,
                 self._distance_func,
-                self._dist_args,
             )
 
             indices, dists = deheap_sort(result)

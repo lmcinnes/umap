@@ -29,7 +29,7 @@ locale.setlocale(locale.LC_NUMERIC, "C")
 
 @numba.njit(fastmath=True)
 def sparse_init_rp_tree(
-    inds, indptr, data, sparse_dist, dist_args, current_graph, leaf_array, tried=None
+        inds, indptr, data, sparse_dist, current_graph, leaf_array, tried=None
 ):
     if tried is None:
         tried = set([(-1, -1)])
@@ -51,7 +51,7 @@ def sparse_init_rp_tree(
 
                 to_inds = inds[indptr[q] : indptr[q + 1]]
                 to_data = data[indptr[q] : indptr[q + 1]]
-                d = sparse_dist(from_inds, from_data, to_inds, to_data, *dist_args)
+                d = sparse_dist(from_inds, from_data, to_inds, to_data)
                 heap_push(current_graph, p, d, q, 1)
                 tried.add((p, q))
                 if p != q:
@@ -70,7 +70,6 @@ def sparse_nn_descent_internal_low_memory(
     rng_state,
     max_candidates=50,
     sparse_dist=umap.sparse.sparse_euclidean,
-    dist_args=(),
     n_iters=10,
     delta=0.001,
     rho=0.5,
@@ -101,7 +100,7 @@ def sparse_nn_descent_internal_low_memory(
                     to_inds = inds[indptr[q] : indptr[q + 1]]
                     to_data = data[indptr[q] : indptr[q + 1]]
 
-                    d = sparse_dist(from_inds, from_data, to_inds, to_data, *dist_args)
+                    d = sparse_dist(from_inds, from_data, to_inds, to_data)
 
                     c += heap_push(current_graph, p, d, q, 1)
                     if p != q:
@@ -118,7 +117,7 @@ def sparse_nn_descent_internal_low_memory(
                     to_inds = inds[indptr[q] : indptr[q + 1]]
                     to_data = data[indptr[q] : indptr[q + 1]]
 
-                    d = sparse_dist(from_inds, from_data, to_inds, to_data, *dist_args)
+                    d = sparse_dist(from_inds, from_data, to_inds, to_data)
 
                     c += heap_push(current_graph, p, d, q, 1)
                     if p != q:
@@ -140,7 +139,6 @@ def sparse_nn_descent_internal_high_memory(
     tried,
     max_candidates=50,
     sparse_dist=umap.sparse.sparse_euclidean,
-    dist_args=(),
     n_iters=10,
     delta=0.001,
     rho=0.5,
@@ -171,7 +169,7 @@ def sparse_nn_descent_internal_high_memory(
                     to_inds = inds[indptr[q] : indptr[q + 1]]
                     to_data = data[indptr[q] : indptr[q + 1]]
 
-                    d = sparse_dist(from_inds, from_data, to_inds, to_data, *dist_args)
+                    d = sparse_dist(from_inds, from_data, to_inds, to_data)
 
                     c += unchecked_heap_push(current_graph, p, d, q, 1)
                     tried.add((p, q))
@@ -190,7 +188,7 @@ def sparse_nn_descent_internal_high_memory(
                     to_inds = inds[indptr[q] : indptr[q + 1]]
                     to_data = data[indptr[q] : indptr[q + 1]]
 
-                    d = sparse_dist(from_inds, from_data, to_inds, to_data, *dist_args)
+                    d = sparse_dist(from_inds, from_data, to_inds, to_data)
 
                     c += unchecked_heap_push(current_graph, p, d, q, 1)
                     tried.add((p, q))
@@ -212,7 +210,6 @@ def sparse_nn_descent(
     rng_state,
     max_candidates=50,
     sparse_dist=umap.sparse.sparse_euclidean,
-    dist_args=(),
     n_iters=10,
     delta=0.001,
     rho=0.5,
@@ -235,7 +232,7 @@ def sparse_nn_descent(
             to_inds = inds[indptr[indices[j]] : indptr[indices[j] + 1]]
             to_data = data[indptr[indices[j]] : indptr[indices[j] + 1]]
 
-            d = sparse_dist(from_inds, from_data, to_inds, to_data, *dist_args)
+            d = sparse_dist(from_inds, from_data, to_inds, to_data)
 
             heap_push(current_graph, i, d, indices[j], 1)
             heap_push(current_graph, indices[j], d, i, 1)
@@ -248,7 +245,6 @@ def sparse_nn_descent(
             indptr,
             data,
             sparse_dist,
-            dist_args,
             current_graph,
             leaf_array,
             tried=tried,
@@ -265,7 +261,6 @@ def sparse_nn_descent(
             rng_state,
             max_candidates=max_candidates,
             sparse_dist=sparse_dist,
-            dist_args=dist_args,
             n_iters=n_iters,
             delta=delta,
             rho=rho,
@@ -283,7 +278,6 @@ def sparse_nn_descent(
             tried,
             max_candidates=max_candidates,
             sparse_dist=sparse_dist,
-            dist_args=dist_args,
             n_iters=n_iters,
             delta=delta,
             rho=rho,
@@ -305,7 +299,6 @@ def sparse_init_from_random(
     heap,
     rng_state,
     sparse_dist,
-    dist_args,
 ):
     for i in range(query_indptr.shape[0] - 1):
         indices = rejection_sample(n_neighbors, indptr.shape[0] - 1, rng_state)
@@ -320,7 +313,7 @@ def sparse_init_from_random(
             from_inds = inds[indptr[indices[j]] : indptr[indices[j] + 1]]
             from_data = data[indptr[indices[j]] : indptr[indices[j] + 1]]
 
-            d = sparse_dist(from_inds, from_data, to_inds, to_data, *dist_args)
+            d = sparse_dist(from_inds, from_data, to_inds, to_data)
             heap_push(heap, i, d, indices[j], 1)
     return
 
@@ -337,7 +330,6 @@ def sparse_init_from_tree(
     heap,
     rng_state,
     sparse_dist,
-    dist_args,
 ):
     for i in range(query_indptr.shape[0] - 1):
 
@@ -360,7 +352,7 @@ def sparse_init_from_tree(
             from_inds = inds[indptr[indices[j]] : indptr[indices[j] + 1]]
             from_data = data[indptr[indices[j]] : indptr[indices[j] + 1]]
 
-            d = sparse_dist(from_inds, from_data, to_inds, to_data, *dist_args)
+            d = sparse_dist(from_inds, from_data, to_inds, to_data)
             heap_push(heap, i, d, indices[j], 1)
 
     return
@@ -377,7 +369,6 @@ def sparse_initialise_search(
     n_neighbors,
     rng_state,
     sparse_dist,
-    dist_args,
 ):
     results = make_heap(query_indptr.shape[0] - 1, n_neighbors)
     sparse_init_from_random(
@@ -391,7 +382,6 @@ def sparse_initialise_search(
         results,
         rng_state,
         sparse_dist,
-        dist_args,
     )
     if forest is not None:
         for tree in forest:
@@ -406,7 +396,6 @@ def sparse_initialise_search(
                 results,
                 rng_state,
                 sparse_dist,
-                dist_args,
             )
 
     return results
@@ -424,7 +413,6 @@ def sparse_initialized_nnd_search(
     query_indptr,
     query_data,
     sparse_dist,
-    dist_args,
 ):
     for i in numba.prange(query_indptr.shape[0] - 1):
 
@@ -453,7 +441,7 @@ def sparse_initialized_nnd_search(
                 from_inds = inds[indptr[candidates[j]] : indptr[candidates[j] + 1]]
                 from_data = data[indptr[candidates[j]] : indptr[candidates[j] + 1]]
 
-                d = sparse_dist(from_inds, from_data, to_inds, to_data, *dist_args)
+                d = sparse_dist(from_inds, from_data, to_inds, to_data)
                 unchecked_heap_push(initialization, i, d, candidates[j], 1)
                 tried.add(candidates[j])
 

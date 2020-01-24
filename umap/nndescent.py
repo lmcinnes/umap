@@ -22,19 +22,19 @@ from umap.rp_tree import search_flat_tree
 
 
 @numba.njit(fastmath=True)
-def init_current_graph(data, dist, dist_args, n_neighbors, rng_state):
+def init_current_graph(data, dist, n_neighbors, rng_state):
     current_graph = make_heap(data.shape[0], n_neighbors)
     for i in range(data.shape[0]):
         indices = rejection_sample(n_neighbors, data.shape[0], rng_state)
         for j in range(indices.shape[0]):
-            d = dist(data[i], data[indices[j]], *dist_args)
+            d = dist(data[i], data[indices[j]])
             heap_push(current_graph, i, d, indices[j], 1)
             heap_push(current_graph, indices[j], d, i, 1)
     return current_graph
 
 
 @numba.njit(fastmath=True)
-def init_rp_tree(data, dist, dist_args, current_graph, leaf_array, tried=None):
+def init_rp_tree(data, dist, current_graph, leaf_array, tried=None):
     if tried is None:
         tried = set([(-1, -1)])
 
@@ -49,7 +49,7 @@ def init_rp_tree(data, dist, dist_args, current_graph, leaf_array, tried=None):
                     break
                 if (p, q) in tried:
                     continue
-                d = dist(data[p], data[q], *dist_args)
+                d = dist(data[p], data[q])
                 heap_push(current_graph, p, d, q, 1)
                 tried.add((p, q))
                 if p != q:
@@ -65,7 +65,6 @@ def nn_descent_internal_low_memory(
     rng_state,
     max_candidates=50,
     dist=dist.euclidean,
-    dist_args=(),
     n_iters=10,
     delta=0.001,
     rho=0.5,
@@ -92,7 +91,7 @@ def nn_descent_internal_low_memory(
                     if q < 0:
                         continue
 
-                    d = dist(data[p], data[q], *dist_args)
+                    d = dist(data[p], data[q])
                     c += heap_push(current_graph, p, d, q, 1)
                     if p != q:
                         c += heap_push(current_graph, q, d, p, 1)
@@ -102,7 +101,7 @@ def nn_descent_internal_low_memory(
                     if q < 0:
                         continue
 
-                    d = dist(data[p], data[q], *dist_args)
+                    d = dist(data[p], data[q])
                     c += heap_push(current_graph, p, d, q, 1)
                     if p != q:
                         c += heap_push(current_graph, q, d, p, 1)
@@ -120,7 +119,6 @@ def nn_descent_internal_high_memory(
     tried,
     max_candidates=50,
     dist=dist.euclidean,
-    dist_args=(),
     n_iters=10,
     delta=0.001,
     rho=0.5,
@@ -147,7 +145,7 @@ def nn_descent_internal_high_memory(
                     if q < 0 or (p, q) in tried:
                         continue
 
-                    d = dist(data[p], data[q], *dist_args)
+                    d = dist(data[p], data[q])
                     c += unchecked_heap_push(current_graph, p, d, q, 1)
                     tried.add((p, q))
                     if p != q:
@@ -159,7 +157,7 @@ def nn_descent_internal_high_memory(
                     if q < 0 or (p, q) in tried:
                         continue
 
-                    d = dist(data[p], data[q], *dist_args)
+                    d = dist(data[p], data[q])
                     c += unchecked_heap_push(current_graph, p, d, q, 1)
                     tried.add((p, q))
                     if p != q:
@@ -177,7 +175,6 @@ def nn_descent(
     rng_state,
     max_candidates=50,
     dist=dist.euclidean,
-    dist_args=(),
     n_iters=10,
     delta=0.001,
     rho=0.5,
@@ -192,14 +189,14 @@ def nn_descent(
     for i in range(data.shape[0]):
         indices = rejection_sample(n_neighbors, data.shape[0], rng_state)
         for j in range(indices.shape[0]):
-            d = dist(data[i], data[indices[j]], *dist_args)
+            d = dist(data[i], data[indices[j]])
             heap_push(current_graph, i, d, indices[j], 1)
             heap_push(current_graph, indices[j], d, i, 1)
             tried.add((i, indices[j]))
             tried.add((indices[j], i))
 
     if rp_tree_init:
-        init_rp_tree(data, dist, dist_args, current_graph, leaf_array, tried=tried)
+        init_rp_tree(data, dist, current_graph, leaf_array, tried=tried)
 
     if low_memory:
         nn_descent_internal_low_memory(
@@ -209,7 +206,6 @@ def nn_descent(
             rng_state,
             max_candidates=max_candidates,
             dist=dist,
-            dist_args=dist_args,
             n_iters=n_iters,
             delta=delta,
             rho=rho,
@@ -224,7 +220,6 @@ def nn_descent(
             tried,
             max_candidates=max_candidates,
             dist=dist,
-            dist_args=dist_args,
             n_iters=n_iters,
             delta=delta,
             rho=rho,
@@ -235,19 +230,19 @@ def nn_descent(
 
 
 @numba.njit()
-def init_from_random(n_neighbors, data, query_points, heap, rng_state, dist, dist_args):
+def init_from_random(n_neighbors, data, query_points, heap, rng_state, dist):
     for i in range(query_points.shape[0]):
         indices = rejection_sample(n_neighbors, data.shape[0], rng_state)
         for j in range(indices.shape[0]):
             if indices[j] < 0:
                 continue
-            d = dist(data[indices[j]], query_points[i], *dist_args)
+            d = dist(data[indices[j]], query_points[i])
             heap_push(heap, i, d, indices[j], 1)
     return
 
 
 @numba.njit()
-def init_from_tree(tree, data, query_points, heap, rng_state, dist, dist_args):
+def init_from_tree(tree, data, query_points, heap, rng_state, dist):
     for i in range(query_points.shape[0]):
         indices = search_flat_tree(
             query_points[i],
@@ -261,23 +256,23 @@ def init_from_tree(tree, data, query_points, heap, rng_state, dist, dist_args):
         for j in range(indices.shape[0]):
             if indices[j] < 0:
                 continue
-            d = dist(data[indices[j]], query_points[i], *dist_args)
+            d = dist(data[indices[j]], query_points[i])
             heap_push(heap, i, d, indices[j], 1)
 
     return
 
 
 def initialise_search(
-    forest, data, query_points, n_neighbors, rng_state, dist, dist_args
+        forest, data, query_points, n_neighbors, rng_state, dist
 ):
     results = make_heap(query_points.shape[0], n_neighbors)
     init_from_random(
-        n_neighbors, data, query_points, results, rng_state, dist, dist_args
+        n_neighbors, data, query_points, results, rng_state, dist
     )
     if forest is not None:
         for tree in forest:
             init_from_tree(
-                tree, data, query_points, results, rng_state, dist, dist_args
+                tree, data, query_points, results, rng_state, dist
             )
 
     return results
@@ -285,7 +280,7 @@ def initialise_search(
 
 @numba.njit(parallel=True)
 def initialized_nnd_search(
-    data, indptr, indices, initialization, query_points, dist, dist_args
+        data, indptr, indices, initialization, query_points, dist
 ):
     for i in numba.prange(query_points.shape[0]):
 
@@ -306,7 +301,7 @@ def initialized_nnd_search(
                     or candidates[j] in tried
                 ):
                     continue
-                d = dist(data[candidates[j]], query_points[i], *dist_args)
+                d = dist(data[candidates[j]], query_points[i])
                 unchecked_heap_push(initialization, i, d, candidates[j], 1)
                 tried.add(candidates[j])
 
