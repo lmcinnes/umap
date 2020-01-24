@@ -56,6 +56,85 @@ in replacement for scikit-learn's t-SNE.
 
 Documentation is `available via Read the Docs <https://umap-learn.readthedocs.io/>`_.
 
+----------
+Installing
+----------
+
+UMAP depends upon ``scikit-learn``, and thus ``scikit-learn``'s dependencies
+such as ``numpy`` and ``scipy``. UMAP adds a requirement for ``numba`` for
+performance reasons. The original version used Cython, but the improved code
+clarity, simplicity and performance of Numba made the transition necessary.
+
+Requirements:
+
+* numpy
+* scipy
+* scikit-learn
+* numba
+
+Recommended packages:
+
+* `pynndescent <https://github.com/lmcinnes/pynndescent>`_
+* For plotting
+   * matplotlib
+   * datashader
+   * holoviews
+
+
+**Install Options**
+
+Conda install, via the excellent work of the conda-forge team:
+
+.. code:: bash
+
+    conda install -c conda-forge umap-learn
+
+The conda-forge packages are available for Linux, OS X, and Windows 64 bit.
+
+PyPI install, presuming you have numba and sklearn and all its requirements
+(numpy and scipy) installed:
+
+.. code:: bash
+
+    pip install umap-learn
+
+If pip is having difficulties pulling the dependencies then we'd suggest installing
+the dependencies manually using anaconda followed by pulling umap from pip:
+
+.. code:: bash
+
+    conda install numpy scipy
+    conda install scikit-learn
+    conda install numba
+    pip install umap-learn
+
+For a manual install get this package:
+
+.. code:: bash
+
+    wget https://github.com/lmcinnes/umap/archive/master.zip
+    unzip master.zip
+    rm master.zip
+    cd umap-master
+
+Install the requirements
+
+.. code:: bash
+
+    sudo pip install -r requirements.txt
+
+or
+
+.. code:: bash
+
+    conda install scikit-learn numba
+
+Install the package
+
+.. code:: bash
+
+    python setup.py install
+
 ---------------
 How to use UMAP
 ---------------
@@ -217,85 +296,6 @@ example of use:
 
 The plotting package offers basic plots, as well as interactive plots with hover
 tools and various diagnostic plotting options. See the documentation for more details.
-
-----------
-Installing
-----------
-
-UMAP depends upon ``scikit-learn``, and thus ``scikit-learn``'s dependencies
-such as ``numpy`` and ``scipy``. UMAP adds a requirement for ``numba`` for
-performance reasons. The original version used Cython, but the improved code
-clarity, simplicity and performance of Numba made the transition necessary.
-
-Requirements:
-
-* numpy
-* scipy
-* scikit-learn
-* numba
-
-Recommended packages:
-
-* `pynndescent <https://github.com/lmcinnes/pynndescent>`_
-* For plotting
-   * matplotlib
-   * datashader
-   * holoviews
-
-
-**Install Options**
-
-Conda install, via the excellent work of the conda-forge team:
-
-.. code:: bash
-
-    conda install -c conda-forge umap-learn
-
-The conda-forge packages are available for Linux, OS X, and Windows 64 bit.
-
-PyPI install, presuming you have numba and sklearn and all its requirements
-(numpy and scipy) installed:
-
-.. code:: bash
-
-    pip install umap-learn
-
-If pip is having difficulties pulling the dependencies then we'd suggest installing
-the dependencies manually using anaconda followed by pulling umap from pip:
-
-.. code:: bash
-
-    conda install numpy scipy
-    conda install scikit-learn
-    conda install numba
-    pip install umap-learn
-
-For a manual install get this package:
-
-.. code:: bash
-
-    wget https://github.com/lmcinnes/umap/archive/master.zip
-    unzip master.zip
-    rm master.zip
-    cd umap-master
-
-Install the requirements
-
-.. code:: bash
-
-    sudo pip install -r requirements.txt
-
-or
-
-.. code:: bash
-
-    conda install scikit-learn numba
-
-Install the package
-
-.. code:: bash
-
-    python setup.py install
 
 ----------------
 Help and Support
