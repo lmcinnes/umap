@@ -422,6 +422,7 @@ def points(
     width=800,
     height=800,
     show_legend=True,
+    subset_points=None,
 ):
     """Plot an embedding as points. Currently this only works
     for 2D embeddings. While there are many optional parameters
@@ -517,6 +518,10 @@ def points(
     show_legend: bool (optional, default True)
         Whether to display a legend of the labels
 
+    subset_points: array, shape (n_samples,) (optional, default None)
+        A way to select a subset of points based on an array of boolean
+        values.
+
     Returns
     -------
     result: matplotlib axis
@@ -540,6 +545,14 @@ def points(
         )
 
     points = umap_object.embedding_
+
+    if subset_points is not None:
+        points = points[subset_points]
+
+        if labels is not None:
+            labels = labels[subset_points]
+        if values is not None:
+            values = values[subset_points]
 
     if points.shape[1] != 2:
         raise ValueError("Plotting is currently only implemented for 2D embeddings")
@@ -801,7 +814,7 @@ def connectivity(
             None,
             width,
             height,
-            show_legend,
+            False,
         )
         if px_size > 1:
             point_img = tf.dynspread(point_img, threshold=0.5, max_px=px_size)
@@ -1234,6 +1247,8 @@ def interactive(
         )
 
     points = umap_object.embedding_
+    if subset_points:
+        points = points[subset_points]
 
     if points.shape[1] != 2:
         raise ValueError("Plotting is currently only implemented for 2D embeddings")
@@ -1280,8 +1295,8 @@ def interactive(
     if subset_points is not None:
         if len(subset_points) != points.shape[0]:
             raise ValueError(
-                "Size of subset points ({}) does not match number of input points ({})" \
-                .format(len(subset_points), points.shape[0]
+                "Size of subset points ({}) does not match number of input points ({})".format(
+                    len(subset_points), points.shape[0]
                 )
             )
 
