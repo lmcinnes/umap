@@ -29,7 +29,7 @@ locale.setlocale(locale.LC_NUMERIC, "C")
 
 @numba.njit(fastmath=True)
 def sparse_init_rp_tree(
-        inds, indptr, data, sparse_dist, current_graph, leaf_array, tried=None
+    inds, indptr, data, sparse_dist, current_graph, leaf_array, tried=None
 ):
     if tried is None:
         tried = set([(-1, -1)])
