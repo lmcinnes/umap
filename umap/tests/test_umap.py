@@ -588,10 +588,10 @@ def test_nn_search():
 
     rng_state = np.random.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
     init = initialise_search(
-        rp_forest, train, test, int(10 * 3), rng_state, dist.euclidean, ()
+        rp_forest, train, test, int(10 * 3), rng_state, dist.euclidean
     )
     result = initialized_nnd_search(
-        train, search_graph.indptr, search_graph.indices, init, test, dist.euclidean, ()
+        train, search_graph.indptr, search_graph.indices, init, test, dist.euclidean
     )
 
     indices, dists = deheap_sort(result)
@@ -650,7 +650,6 @@ def test_sparse_nn_search():
         int(10 * 6),
         rng_state,
         spdist.sparse_euclidean,
-        (),
     )
     result = sparse_initialized_nnd_search(
         train.indices,
@@ -663,7 +662,6 @@ def test_sparse_nn_search():
         test.indptr,
         test.data,
         spdist.sparse_euclidean,
-        (),
     )
 
     indices, dists = deheap_sort(result)
