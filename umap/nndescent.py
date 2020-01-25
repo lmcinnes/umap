@@ -262,26 +262,18 @@ def init_from_tree(tree, data, query_points, heap, rng_state, dist):
     return
 
 
-def initialise_search(
-        forest, data, query_points, n_neighbors, rng_state, dist
-):
+def initialise_search(forest, data, query_points, n_neighbors, rng_state, dist):
     results = make_heap(query_points.shape[0], n_neighbors)
-    init_from_random(
-        n_neighbors, data, query_points, results, rng_state, dist
-    )
+    init_from_random(n_neighbors, data, query_points, results, rng_state, dist)
     if forest is not None:
         for tree in forest:
-            init_from_tree(
-                tree, data, query_points, results, rng_state, dist
-            )
+            init_from_tree(tree, data, query_points, results, rng_state, dist)
 
     return results
 
 
 @numba.njit(parallel=True)
-def initialized_nnd_search(
-        data, indptr, indices, initialization, query_points, dist
-):
+def initialized_nnd_search(data, indptr, indices, initialization, query_points, dist):
     for i in numba.prange(query_points.shape[0]):
 
         tried = set(initialization[0, i])

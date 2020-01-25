@@ -339,9 +339,7 @@ def nearest_neighbors(
 
                     @numba.njit()
                     def _partial_dist_func(ind1, data1, ind2, data2):
-                        return _distance_func(
-                            ind1, data1, ind2, data2, *dist_args
-                        )
+                        return _distance_func(ind1, data1, ind2, data2, *dist_args)
 
                     distance_func = _partial_dist_func
                 else:
@@ -1715,6 +1713,7 @@ class UMAP(BaseEstimator):
                 # Create a partial function for distances with arguments
                 if len(self._dist_args) > 0:
                     if self._sparse_data:
+
                         @numba.njit()
                         def _partial_dist_func(ind1, data1, ind2, data2):
                             return _distance_func(
@@ -1723,6 +1722,7 @@ class UMAP(BaseEstimator):
 
                         self._distance_func = _partial_dist_func
                     else:
+
                         @numba.njit()
                         def _partial_dist_func(x, y):
                             return _distance_func(x, y, *self._dist_args)

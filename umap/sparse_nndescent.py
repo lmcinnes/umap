@@ -241,13 +241,7 @@ def sparse_nn_descent(
 
     if rp_tree_init:
         sparse_init_rp_tree(
-            inds,
-            indptr,
-            data,
-            sparse_dist,
-            current_graph,
-            leaf_array,
-            tried=tried,
+            inds, indptr, data, sparse_dist, current_graph, leaf_array, tried=tried,
         )
 
     if low_memory:
