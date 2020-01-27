@@ -1,5 +1,5 @@
 numpy>=1.13
 scipy>=1.0
 scikit-learn>=0.20
-numba>=0.42
+numba>=0.42,!=0.47
 tbb>=2019.0

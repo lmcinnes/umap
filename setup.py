@@ -43,7 +43,7 @@ configuration = {
     'install_requires': ['numpy >= 1.13',
                          'scikit-learn >= 0.20',
                           'scipy >= 1.0',
-                         'numba >= 0.42',
+                         'numba >= 0.42, != 0.47',
                          'tbb >= 2019.0'],
     'ext_modules': [],
     'cmdclass': {},
