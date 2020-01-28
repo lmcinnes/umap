@@ -1340,10 +1340,11 @@ def interactive(
         hv.output(size=300)
         hv.opts('RGB [bgcolor="{}", xaxis=None, yaxis=None]'.format(background))
         if labels is not None:
-            point_plot = hv.Points(data, kdims=["x", "y"], vdims=["color"])
+            point_plot = hv.Points(data, kdims=["x", "y"])
             plot = hd.datashade(
                 point_plot,
                 aggregator=ds.count_cat("color"),
+                color_key=color_key,
                 cmap=plt.get_cmap(cmap),
                 width=width,
                 height=height,
