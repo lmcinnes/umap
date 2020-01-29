@@ -1549,7 +1549,7 @@ class UMAP(BaseEstimator):
 
         self._validate_parameters()
 
-        if self.metric is "hellinger" and X.min() < 0:
+        if self.metric == "hellinger" and X.min() < 0:
             raise ValueError("Metric 'hellinger' does not support negative values")
 
         if self.verbose:
