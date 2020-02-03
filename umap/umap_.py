@@ -296,7 +296,7 @@ def nearest_neighbors(
                 low_memory=low_memory,
                 verbose=verbose,
             )
-            knn_indices, knn_dists = nnd._neighbor_graph
+            knn_indices, knn_dists = nnd.neighbor_graph
             rp_forest = nnd
         else:
             # Otherwise fall back to nn descent in umap
