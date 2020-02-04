@@ -1685,8 +1685,13 @@ class UMAP(BaseEstimator):
                 self._search_graph = scipy.sparse.lil_matrix(
                     (X[index].shape[0], X[index].shape[0]), dtype=np.int8
                 )
-                self._search_graph.rows = self._knn_indices
-                self._search_graph.data = (self._knn_dists != 0).astype(np.int8)
+                _rows = []
+                _data = []
+                for i in range(self._knn_indices.shape[0]):
+                    _rows.append(self._knn_indices[self._knn_indices >= 0])
+                    _data.append(np.ones(_rows[-1].shape[0], dtype=np.int8))
+                self._search_graph.rows = _rows
+                self._search_graph.data = _data
                 self._search_graph = self._search_graph.maximum(
                     self._search_graph.transpose()
                 ).tocsr()
