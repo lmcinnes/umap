@@ -21,7 +21,7 @@ matrix:
       os: linux
     - env: DISTRIB="conda" PYTHON_VERSION="3.6" COVERAGE="true" NUMPY_VERSION="1.13.3" SCIPY_VERSION="0.19.1" NUMBA_VERSION="0.46"
       os: linux
-    - env: DISTRIB="conda" PYTHON_VERSION="3.6" NUMPY_VERSION="1.13.3" SCIPY_VERSION="0.19.1"
+    - env: DISTRIB="conda" PYTHON_VERSION="3.6" NUMPY_VERSION="1.16.4" SCIPY_VERSION="0.19.1"
       os: osx
       language: generic
     - env: DISTRIB="conda" PYTHON_VERSION="3.6" NUMPY_VERSION="1.13.3" SCIPY_VERSION="0.19.1" NUMBA_VERSION="0.45"
