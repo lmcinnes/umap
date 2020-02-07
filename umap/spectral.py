@@ -238,11 +238,6 @@ def spectral_layout(data, graph, dim, random_state, metric="euclidean", metric_k
     n_components, labels = scipy.sparse.csgraph.connected_components(graph)
 
     if n_components > 1:
-        warn(
-            "Embedding a total of {} separate connected components using meta-embedding (experimental)".format(
-                n_components
-            )
-        )
         return multi_component_layout(
             data,
             graph,
