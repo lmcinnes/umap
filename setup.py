@@ -46,7 +46,7 @@ configuration = {
                          'numba >= 0.42, != 0.47',
                          'tbb >= 2019.0'],
     'extras_require': {
-        'plotting': [
+        'plot': [
             'matplotlib',
             'datashader',
             'bokeh',

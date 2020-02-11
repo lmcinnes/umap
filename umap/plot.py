@@ -1,19 +1,33 @@
 import numpy as np
 import pandas as pd
 import numba
+from warnings import warn
 
-import datashader as ds
-import datashader.transfer_functions as tf
-import datashader.bundling as bd
-import matplotlib.pyplot as plt
-import colorcet
-import matplotlib.colors
-import matplotlib.cm
+try:
+    import datashader as ds
+    import datashader.transfer_functions as tf
+    import datashader.bundling as bd
+    import matplotlib.pyplot as plt
+    import colorcet
+    import matplotlib.colors
+    import matplotlib.cm
 
-import bokeh.plotting as bpl
-import bokeh.transform as btr
-import holoviews as hv
-import holoviews.operation.datashader as hd
+    import bokeh.plotting as bpl
+    import bokeh.transform as btr
+    import holoviews as hv
+    import holoviews.operation.datashader as hd
+except ImportError:
+    warn("""The umap.plot package requires extra plotting libraries to be installed.
+    You can install these via pip using
+    
+    pip install umap-learn[plot]
+    
+    or via conda using
+    
+    conda install seaborn datashader bokeh holoviews
+    """)
+    raise ImportError("umap.plot requires matplotlib, seaborn, datashader and holoviews to be "
+                      "installed") from None
 
 import sklearn.decomposition
 import sklearn.cluster
