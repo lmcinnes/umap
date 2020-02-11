@@ -21,7 +21,6 @@ import sklearn.neighbors
 
 from matplotlib.patches import Patch
 
-from umap.nndescent import initialise_search, initialized_nnd_search
 from umap.utils import deheap_sort, submatrix
 
 from bokeh.plotting import output_notebook, output_file, show
@@ -145,29 +144,9 @@ def _nhood_search(umap_object, nhood_size):
     else:
         rng_state = np.empty(3, dtype=np.int64)
 
-        init = initialise_search(
-            umap_object._rp_forest,
-            umap_object._raw_data,
-            umap_object._raw_data,
-            int(nhood_size * umap_object.transform_queue_size),
-            rng_state,
-            umap_object._distance_func,
-            umap_object._dist_args,
+        indices, dists = umap_object._knn_search_index.query(
+            umap_object._raw_data, k=nhood_size,
         )
-
-        result = initialized_nnd_search(
-            umap_object._raw_data,
-            umap_object._search_graph.indptr,
-            umap_object._search_graph.indices,
-            init,
-            umap_object._raw_data,
-            umap_object._distance_func,
-            umap_object._dist_args,
-        )
-
-        indices, dists = deheap_sort(result)
-        indices = indices[:, :nhood_size]
-        dists = dists[:, :nhood_size]
 
     return indices, dists
 

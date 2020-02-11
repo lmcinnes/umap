@@ -14,7 +14,7 @@ def readme():
 
 configuration = {
     'name': 'umap-learn',
-    'version': '0.4.0.rc1',
+    'version': '0.5.0',
     'description': 'Uniform Manifold Approximation and Projection',
     'long_description': readme(),
     'classifiers': [
@@ -44,18 +44,16 @@ configuration = {
                          'scikit-learn >= 0.20',
                          'scipy >= 1.0',
                          'numba >= 0.42, != 0.47',
+                         'pynndescent >= 0.4.5'
                          'tbb >= 2019.0'],
     'extras_require': {
-        'plotting': [
+        'plot': [
             'matplotlib',
             'datashader',
             'bokeh',
             'holoviews',
             'seaborn'
         ],
-        'performance': [
-            'pynndescent >= 0.4'
-        ]
     },
     'ext_modules': [],
     'cmdclass': {},

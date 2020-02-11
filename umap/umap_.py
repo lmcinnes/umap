@@ -28,7 +28,6 @@ import numba
 import umap.distances as dist
 
 import umap.sparse as sparse
-import umap.sparse_nndescent as sparse_nn
 
 from umap.utils import (
     tau_rand_int,
@@ -38,16 +37,6 @@ from umap.utils import (
     csr_unique,
     fast_knn_indices,
 )
-from umap.rp_tree import rptree_leaf_array, make_forest
-from umap.nndescent import (
-    # make_nn_descent,
-    # make_initialisations,
-    # make_initialized_nnd_search,
-    nn_descent,
-    initialized_nnd_search,
-    initialise_search,
-)
-from umap.rp_tree import rptree_leaf_array, make_forest
 from umap.spectral import spectral_layout
 from umap.utils import deheap_sort, submatrix
 from umap.layouts import (
@@ -56,13 +45,7 @@ from umap.layouts import (
     optimize_layout_inverse,
 )
 
-try:
-    # Use pynndescent, if installed (python 3 only)
-    from pynndescent import NNDescent
-
-    _HAVE_PYNNDESCENT = True
-except ImportError:
-    _HAVE_PYNNDESCENT = False
+from pynndescent import NNDescent
 
 locale.setlocale(locale.LC_NUMERIC, "C")
 
@@ -277,143 +260,29 @@ def nearest_neighbors(
         #   (equivalent to np.sort(X)[:,:n_neighbors])
         knn_dists = X[np.arange(X.shape[0])[:, None], knn_indices].copy()
 
-        rp_forest = []
+        knn_search_index = None
     else:
         # TODO: Hacked values for now
-        n_trees = 5 + int(round((X.shape[0]) ** 0.5 / 20.0))
+        n_trees = min(64, 5 + int(round((X.shape[0]) ** 0.5 / 20.0)))
         n_iters = max(5, int(round(np.log2(X.shape[0]))))
 
-        if _HAVE_PYNNDESCENT and use_pynndescent:
-            nnd = NNDescent(
-                X,
-                n_neighbors=n_neighbors,
-                metric=metric,
-                metric_kwds=metric_kwds,
-                random_state=random_state,
-                n_trees=n_trees,
-                n_iters=n_iters,
-                max_candidates=60,
-                low_memory=low_memory,
-                verbose=verbose,
-            )
-            knn_indices, knn_dists = nnd.neighbor_graph
-            rp_forest = nnd
-        else:
-            # Otherwise fall back to nn descent in umap
-            if callable(metric):
-                _distance_func = metric
-            elif metric in dist.named_distances:
-                _distance_func = dist.named_distances[metric]
-            else:
-                raise ValueError(
-                    "Metric is neither callable, " + "nor a recognised string"
-                )
+        knn_search_index = NNDescent(
+            X,
+            n_neighbors=n_neighbors,
+            metric=metric,
+            metric_kwds=metric_kwds,
+            random_state=random_state,
+            n_trees=n_trees,
+            n_iters=n_iters,
+            max_candidates=60,
+            low_memory=low_memory,
+            verbose=verbose,
+        )
+        knn_indices, knn_dists = knn_search_index.neighbor_graph
 
-            if metric in (
-                "cosine",
-                "correlation",
-                "dice",
-                "jaccard",
-                "ll_dirichlet",
-                "hellinger",
-            ):
-                angular = True
-
-            rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
-
-            if scipy.sparse.isspmatrix_csr(X):
-                if metric in sparse.sparse_named_distances:
-                    _distance_func = sparse.sparse_named_distances[metric]
-                    if metric in sparse.sparse_need_n_features:
-                        metric_kwds["n_features"] = X.shape[1]
-                elif callable(metric):
-                    _distance_func = metric
-                else:
-                    raise ValueError(
-                        "Metric {} not supported for sparse " + "data".format(metric)
-                    )
-
-                # Create a partial function for distances with arguments
-                if len(metric_kwds) > 0:
-                    dist_args = tuple(metric_kwds.values())
-
-                    @numba.njit()
-                    def _partial_dist_func(ind1, data1, ind2, data2):
-                        return _distance_func(ind1, data1, ind2, data2, *dist_args)
-
-                    distance_func = _partial_dist_func
-                else:
-                    distance_func = _distance_func
-                # metric_nn_descent = sparse.make_sparse_nn_descent(
-                #     distance_func, tuple(metric_kwds.values())
-                # )
-
-                if verbose:
-                    print(ts(), "Building RP forest with", str(n_trees), "trees")
-
-                rp_forest = make_forest(X, n_neighbors, n_trees, rng_state, angular)
-                leaf_array = rptree_leaf_array(rp_forest)
-
-                if verbose:
-                    print(ts(), "NN descent for", str(n_iters), "iterations")
-                knn_indices, knn_dists = sparse_nn.sparse_nn_descent(
-                    X.indices,
-                    X.indptr,
-                    X.data,
-                    X.shape[0],
-                    n_neighbors,
-                    rng_state,
-                    max_candidates=60,
-                    sparse_dist=distance_func,
-                    low_memory=low_memory,
-                    rp_tree_init=True,
-                    leaf_array=leaf_array,
-                    n_iters=n_iters,
-                    verbose=verbose,
-                )
-            else:
-                # metric_nn_descent = make_nn_descent(
-                #     distance_func, tuple(metric_kwds.values())
-                # )
-                if len(metric_kwds) > 0:
-                    dist_args = tuple(metric_kwds.values())
-
-                    @numba.njit()
-                    def _partial_dist_func(x, y):
-                        return _distance_func(x, y, *dist_args)
-
-                    distance_func = _partial_dist_func
-                else:
-                    distance_func = _distance_func
-
-                if verbose:
-                    print(ts(), "Building RP forest with", str(n_trees), "trees")
-                rp_forest = make_forest(X, n_neighbors, n_trees, rng_state, angular)
-                leaf_array = rptree_leaf_array(rp_forest)
-                if verbose:
-                    print(ts(), "NN descent for", str(n_iters), "iterations")
-                knn_indices, knn_dists = nn_descent(
-                    X,
-                    n_neighbors,
-                    rng_state,
-                    max_candidates=60,
-                    dist=distance_func,
-                    low_memory=low_memory,
-                    rp_tree_init=True,
-                    leaf_array=leaf_array,
-                    n_iters=n_iters,
-                    verbose=verbose,
-                )
-
-            if np.any(knn_indices < 0):
-                warn(
-                    "Failed to correctly find n_neighbors for some samples."
-                    "Results may be less than ideal. Try re-running with"
-                    "different parameters."
-                )
     if verbose:
         print(ts(), "Finished Nearest Neighbor Search")
-    return knn_indices, knn_dists, rp_forest
+    return knn_indices, knn_dists, knn_search_index
 
 
 @numba.njit(
@@ -1654,7 +1523,11 @@ class UMAP(BaseEstimator):
         else:
             self._small_data = False
             # Standard case
-            (self._knn_indices, self._knn_dists, self._rp_forest) = nearest_neighbors(
+            (
+                self._knn_indices,
+                self._knn_dists,
+                self._knn_search_index,
+            ) = nearest_neighbors(
                 X[index],
                 self._n_neighbors,
                 self.metric,
@@ -1680,69 +1553,6 @@ class UMAP(BaseEstimator):
                 True,
                 self.verbose,
             )
-
-            if not _HAVE_PYNNDESCENT:
-                self._search_graph = scipy.sparse.lil_matrix(
-                    (X[index].shape[0], X[index].shape[0]), dtype=np.int8
-                )
-                _rows = []
-                _data = []
-                for i in range(self._knn_indices.shape[0]):
-                    _rows.append(self._knn_indices[self._knn_indices >= 0])
-                    _data.append(np.ones(_rows[-1].shape[0], dtype=np.int8))
-                self._search_graph.rows = _rows
-                self._search_graph.data = _data
-                self._search_graph = self._search_graph.maximum(
-                    self._search_graph.transpose()
-                ).tocsr()
-
-                if callable(self.metric):
-                    _distance_func = self.metric
-                elif self.metric in dist.named_distances:
-                    # Choose the right metric based on sparsity
-                    if self._sparse_data:
-                        _distance_func = sparse.sparse_named_distances[self.metric]
-                    else:
-                        _distance_func = dist.named_distances[self.metric]
-                elif self.metric == "precomputed":
-                    warn(
-                        "Using precomputed metric; transform will be unavailable for new data"
-                    )
-                else:
-                    raise ValueError(
-                        "Metric is neither callable, " + "nor a recognised string"
-                    )
-
-                if self.metric != "precomputed":
-                    self._dist_args = tuple(self._metric_kwds.values())
-
-                    # Create a partial function for distances with arguments
-                    if len(self._dist_args) > 0:
-                        if self._sparse_data:
-
-                            @numba.njit()
-                            def _partial_dist_func(ind1, data1, ind2, data2):
-                                return _distance_func(
-                                    ind1, data1, ind2, data2, *self._dist_args
-                                )
-
-                            self._distance_func = _partial_dist_func
-                        else:
-
-                            @numba.njit()
-                            def _partial_dist_func(x, y):
-                                return _distance_func(x, y, *self._dist_args)
-
-                            self._distance_func = _partial_dist_func
-                    else:
-                        self._distance_func = _distance_func
-
-                # self._random_init, self._tree_init = make_initialisations(
-                #     self._distance_func, self._dist_args
-                # )
-                # self._search = make_initialized_nnd_search(
-                #     self._distance_func, self._dist_args
-                # )
 
         # Currently not checking if any duplicate points have differing labels
         # Might be worth throwing a warning...
@@ -1946,65 +1756,11 @@ class UMAP(BaseEstimator):
             indices_sorted = np.argsort(dmat_shortened)
             indices = submatrix(indices, indices_sorted, self._n_neighbors)
             dists = submatrix(dmat_shortened, indices_sorted, self._n_neighbors)
-        elif _HAVE_PYNNDESCENT:
-            indices, dists = self._rp_forest.query(X, self.n_neighbors)
-        elif self._sparse_data:
-            if not scipy.sparse.issparse(X):
-                X = scipy.sparse.csr_matrix(X)
-
-            init = sparse_nn.sparse_initialise_search(
-                self._rp_forest,
-                self._raw_data.indices,
-                self._raw_data.indptr,
-                self._raw_data.data,
-                X.indices,
-                X.indptr,
-                X.data,
-                int(
-                    self._n_neighbors
-                    * self.transform_queue_size
-                    * (1 + int(self._sparse_data))
-                ),
-                rng_state,
-                self._distance_func,
-            )
-            result = sparse_nn.sparse_initialized_nnd_search(
-                self._raw_data.indices,
-                self._raw_data.indptr,
-                self._raw_data.data,
-                self._search_graph.indptr,
-                self._search_graph.indices,
-                init,
-                X.indices,
-                X.indptr,
-                X.data,
-                self._distance_func,
-            )
-
-            indices, dists = deheap_sort(result)
-            indices = indices[:, : self._n_neighbors]
-            dists = dists[:, : self._n_neighbors]
         else:
-            init = initialise_search(
-                self._rp_forest,
-                self._raw_data,
-                X,
-                int(self._n_neighbors * self.transform_queue_size),
-                rng_state,
-                self._distance_func,
+            epsilon = 0.24 if self._knn_search_index._angular_trees else 0.12
+            indices, dists = self._knn_search_index.query(
+                X, self.n_neighbors, epsilon=epsilon
             )
-            result = initialized_nnd_search(
-                self._raw_data,
-                self._search_graph.indptr,
-                self._search_graph.indices,
-                init,
-                X,
-                self._distance_func,
-            )
-
-            indices, dists = deheap_sort(result)
-            indices = indices[:, : self._n_neighbors]
-            dists = dists[:, : self._n_neighbors]
 
         dists = dists.astype(np.float32, order="C")
 
@@ -2458,7 +2214,7 @@ class DataFrameUMAP(BaseEstimator):
         self._rhos = {}
         self._knn_indices = {}
         self._knn_dists = {}
-        self._rp_forest = {}
+        self._knn_search_indices = {}
         self.graph_ = None
 
         def is_discrete_metric(metric_data):
@@ -2521,7 +2277,7 @@ class DataFrameUMAP(BaseEstimator):
                     (
                         self._knn_indices[name],
                         self._knn_dists[name],
-                        self._rp_forest[name],
+                        self._knn_search_indices[name],
                     ) = nearest_neighbors(
                         sub_data,
                         self._n_neighbors,
