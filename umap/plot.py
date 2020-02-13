@@ -17,7 +17,8 @@ try:
     import holoviews as hv
     import holoviews.operation.datashader as hd
 except ImportError:
-    warn("""The umap.plot package requires extra plotting libraries to be installed.
+    warn(
+        """The umap.plot package requires extra plotting libraries to be installed.
     You can install these via pip using
     
     pip install umap-learn[plot]
@@ -25,9 +26,12 @@ except ImportError:
     or via conda using
     
     conda install seaborn datashader bokeh holoviews
-    """)
-    raise ImportError("umap.plot requires matplotlib, seaborn, datashader and holoviews to be "
-                      "installed") from None
+    """
+    )
+    raise ImportError(
+        "umap.plot requires matplotlib, seaborn, datashader and holoviews to be "
+        "installed"
+    ) from None
 
 import sklearn.decomposition
 import sklearn.cluster
