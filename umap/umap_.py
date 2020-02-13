@@ -10,6 +10,7 @@ import time
 from scipy.optimize import curve_fit
 from sklearn.base import BaseEstimator
 from sklearn.utils import check_random_state, check_array
+from sklearn.utils.validation import check_is_fitted
 from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import normalize
 from sklearn.neighbors import KDTree
@@ -56,6 +57,18 @@ SMOOTH_K_TOLERANCE = 1e-5
 MIN_K_DIST_SCALE = 1e-3
 NPY_INFINITY = np.inf
 
+
+def flatten_iter(container):
+    for i in container:
+        if isinstance(i, (list,tuple)):
+            for j in flatten_iter(i):
+                yield j
+        else:
+            yield i
+
+
+def flattened(container):
+    return tuple(flatten_iter(container))
 
 def breadth_first_search(adjmat, start, min_vertices):
     explored = []
@@ -1368,6 +1381,86 @@ class UMAP(BaseEstimator):
                 )
         if (self.unique == True) and (self.metric == "precomputed"):
             raise ValueError("unique is poorly defined on a precomputed metric")
+
+
+
+    def _populate_combined_params(self, *models):
+        self.n_neighbors = flattened([m.n_neighbors for m in models])
+        self.metric = flattened([m.metric for m in models])
+        self.metric_kwds = flattened([m.metric_kwds for m in models])
+        self.output_metric = flattened([m.output_metric for m in models])
+
+        self.n_epochs = flattened([m.n_epochs for m in models])
+        self.init = flattened([m.init for m in models])
+        self.n_components = flattened([m.n_components for m in models])
+        self.repulsion_strength = flattened([m.repulsion_strength for m in models])
+        self.learning_rate = flattened([m.learning_rate for m in models])
+
+        self.spread = flattened([m.spread for m in models])
+        self.min_dist = flattened([m.min_dist for m in models])
+        self.low_memory = flattened([m.low_memory for m in models])
+        self.set_op_mix_ratio = flattened([m.set_op_mix_ratio for m in models])
+        self.local_connectivity = flattened([m.local_connectivity for m in models])
+        self.negative_sample_rate = flattened([m.negative_sample_rate for m in models])
+        self.random_state = flattened([m.random_state for m in models])
+        self.angular_rp_forest = flattened([m.angular_rp_forest for m in models])
+        self.transform_queue_size = flattened([m.transform_queue_size for m in models])
+        self.target_n_neighbors = flattened([m.target_n_neighbors for m in models])
+        self.target_metric = flattened([m.target_metric for m in models])
+        self.target_metric_kwds = flattened([m.target_metric_kwds for m in models])
+        self.target_weight = flattened([m.target_weight for m in models])
+        self.transform_seed = flattened([m.transform_seed for m in models])
+        self.force_approximation_algorithm = flattened([m.force_approximation_algorithm for m in
+                                                        models])
+        self.verbose = flattened([m.verbose for m in models])
+        self.unique = flattened([m.unique for m in models])
+
+        self.a = flattened([m.a for m in models])
+        self.b = flattened([m.b for m in models])
+
+        self._a = flattened([m._a for m in models])
+        self._b = flattened([m._b for m in models])
+
+    def __mul__(self, other):
+
+        check_is_fitted(self, ['graph_'], "Only fitted UMAP models can be combined")
+        check_is_fitted(other, ['graph_'], "Only fitted UMAP models can be combined")
+
+        if self.graph_.shape[0] != other.graph_.shape[0]:
+            raise ValueError("Only models with the equivalent samples can be combined")
+
+        result = UMAP()
+        result._populate_combined_params(self, other)
+
+        result.graph_ = general_simplicial_set_intersection(self.graph_, other.graph_, 0.5)
+        result.graph_ = reset_local_connectivity(result.graph_, True)
+
+        if scipy.sparse.csgraph.connected_components(result.graph_)[0] > 1:
+            warn("Combined graph is not connected but mult-component layout is unsupported. "
+                 "Falling back to random initialization.")
+            result.init = "random"
+        else:
+            result.ini = "spectral"
+
+        result.embedding_ = simplicial_set_embedding(
+            None,
+            result.graph_,
+            np.min(result.n_components),
+            np.min(result.learning_rate),
+            np.mean(result._a),
+            np.mean(result._b),
+            np.mean(result.repulsion_strength),
+            np.mean(result.negative_sample_rate),
+            np.max(result.n_epochs),
+            result.init,
+            check_random_state(42),
+            "euclidean",
+            {},
+            parallel=False,
+            verbose=bool(np.max(result.verbose))
+        )
+
+        return result
 
     def fit(self, X, y=None):
         """Fit X into an embedded space.
