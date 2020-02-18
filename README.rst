@@ -208,7 +208,7 @@ more details please see `Using UMAP for Clustering
 Third, UMAP often performs better at preserving some aspects of global structure
 of the data than most implementations of t-SNE. This means that it can often
 provide a better "big picture" view of your data as well as preserving local neighbor
- relations.
+relations.
 
 Fourth, UMAP supports a wide variety of distance functions, including
 non-metric distance functions such as *cosine distance* and *correlation

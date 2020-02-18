@@ -17,6 +17,7 @@ configuration = {
     'version': '0.4.0.rc1',
     'description': 'Uniform Manifold Approximation and Projection',
     'long_description': readme(),
+    'long_description_content_type': 'text/x-rst',
     'classifiers': [
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Science/Research',
