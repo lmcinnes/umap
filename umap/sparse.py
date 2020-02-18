@@ -194,6 +194,40 @@ def general_sset_intersection(
 
 
 @numba.njit()
+def general_sset_union(
+        indptr1,
+        indices1,
+        data1,
+        indptr2,
+        indices2,
+        data2,
+        result_row,
+        result_col,
+        result_val,
+):
+    left_min = max(data1.min() / 2.0, 1.0e-8)
+    right_min = max(data2.min() / 2.0, 1.0e-8)
+
+    for idx in range(result_row.shape[0]):
+        i = result_row[idx]
+        j = result_col[idx]
+
+        left_val = left_min
+        for k in range(indptr1[i], indptr1[i + 1]):
+            if indices1[k] == j:
+                left_val = data1[k]
+
+        right_val = right_min
+        for k in range(indptr2[i], indptr2[i + 1]):
+            if indices2[k] == j:
+                right_val = data2[k]
+
+        result_val[idx] = left_val + right_val - left_val * right_val
+
+    return
+
+
+@numba.njit()
 def sparse_euclidean(ind1, data1, ind2, data2):
     aux_inds, aux_data = sparse_diff(ind1, data1, ind2, data2)
     result = 0.0

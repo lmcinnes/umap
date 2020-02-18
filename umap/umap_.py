@@ -769,7 +769,26 @@ def general_simplicial_set_intersection(simplicial_set1, simplicial_set2, weight
         result.row,
         result.col,
         result.data,
-        weight,
+    )
+
+    return result
+
+
+def general_simplicial_set_union(simplicial_set1, simplicial_set2, weight):
+    result = (simplicial_set1 + simplicial_set2).tocoo()
+    left = simplicial_set1.tocsr()
+    right = simplicial_set2.tocsr()
+
+    sparse.general_sset_union(
+        left.indptr,
+        left.indices,
+        left.data,
+        right.indptr,
+        right.indices,
+        right.data,
+        result.row,
+        result.col,
+        result.data,
     )
 
     return result
@@ -1421,6 +1440,7 @@ class UMAP(BaseEstimator):
         self._a = flattened([m._a for m in models])
         self._b = flattened([m._b for m in models])
 
+
     def __mul__(self, other):
 
         check_is_fitted(self, ['graph_'], "Only fitted UMAP models can be combined")
@@ -1461,6 +1481,49 @@ class UMAP(BaseEstimator):
         )
 
         return result
+
+    def __add__(self, other):
+
+        check_is_fitted(self, ['graph_'], "Only fitted UMAP models can be combined")
+        check_is_fitted(other, ['graph_'], "Only fitted UMAP models can be combined")
+
+        if self.graph_.shape[0] != other.graph_.shape[0]:
+            raise ValueError("Only models with the equivalent samples can be combined")
+
+        result = UMAP()
+        result._populate_combined_params(self, other)
+
+        result.graph_ = general_simplicial_set_union(self.graph_, other.graph_, 0.5)
+        result.graph_ = reset_local_connectivity(result.graph_, True)
+
+        if scipy.sparse.csgraph.connected_components(result.graph_)[0] > 1:
+            warn(
+                "Combined graph is not connected but mult-component layout is unsupported. "
+                "Falling back to random initialization.")
+            result.init = "random"
+        else:
+            result.ini = "spectral"
+
+        result.embedding_ = simplicial_set_embedding(
+            None,
+            result.graph_,
+            np.min(result.n_components),
+            np.min(result.learning_rate),
+            np.mean(result._a),
+            np.mean(result._b),
+            np.mean(result.repulsion_strength),
+            np.mean(result.negative_sample_rate),
+            np.max(result.n_epochs),
+            result.init,
+            check_random_state(42),
+            "euclidean",
+            {},
+            parallel=False,
+            verbose=bool(np.max(result.verbose))
+        )
+
+        return result
+
 
     def fit(self, X, y=None):
         """Fit X into an embedded space.
