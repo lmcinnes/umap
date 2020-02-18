@@ -160,11 +160,15 @@ def general_sset_intersection(
     result_row,
     result_col,
     result_val,
+    right_complement=False,
     mix_weight=0.5,
 ):
 
     left_min = max(data1.min() / 2.0, 1.0e-8)
-    right_min = max(data2.min() / 2.0, 1.0e-8)
+    if right_complement:
+        right_min = max((1.0 - data2).min() / 2.0, 1.0e-8)
+    else:
+        right_min = max(data2.min() / 2.0, 1.0e-8)
 
     for idx in range(result_row.shape[0]):
         i = result_row[idx]
@@ -178,7 +182,10 @@ def general_sset_intersection(
         right_val = right_min
         for k in range(indptr2[i], indptr2[i + 1]):
             if indices2[k] == j:
-                right_val = data2[k]
+                if right_complement:
+                    right_val = 1.0 - data2[k]
+                else:
+                    right_val = data2[k]
 
         if left_val > left_min or right_val > right_min:
             if mix_weight < 0.5:

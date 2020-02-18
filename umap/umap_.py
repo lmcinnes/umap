@@ -753,9 +753,13 @@ def discrete_metric_simplicial_set_intersection(
     return reset_local_connectivity(simplicial_set)
 
 
-def general_simplicial_set_intersection(simplicial_set1, simplicial_set2, weight):
+def general_simplicial_set_intersection(simplicial_set1, simplicial_set2, weight=0.5,
+                                        right_complement=False):
 
-    result = (simplicial_set1 + simplicial_set2).tocoo()
+    if right_complement:
+        result = simplicial_set1.tocoo()
+    else:
+        result = (simplicial_set1 + simplicial_set2).tocoo()
     left = simplicial_set1.tocsr()
     right = simplicial_set2.tocsr()
 
@@ -769,12 +773,14 @@ def general_simplicial_set_intersection(simplicial_set1, simplicial_set2, weight
         result.row,
         result.col,
         result.data,
+        mix_weight=weight,
+        right_complement=right_complement,
     )
 
     return result
 
 
-def general_simplicial_set_union(simplicial_set1, simplicial_set2, weight):
+def general_simplicial_set_union(simplicial_set1, simplicial_set2):
     result = (simplicial_set1 + simplicial_set2).tocoo()
     left = simplicial_set1.tocsr()
     right = simplicial_set2.tocsr()
@@ -1493,7 +1499,51 @@ class UMAP(BaseEstimator):
         result = UMAP()
         result._populate_combined_params(self, other)
 
-        result.graph_ = general_simplicial_set_union(self.graph_, other.graph_, 0.5)
+        result.graph_ = general_simplicial_set_union(self.graph_, other.graph_)
+        result.graph_ = reset_local_connectivity(result.graph_, True)
+
+        if scipy.sparse.csgraph.connected_components(result.graph_)[0] > 1:
+            warn(
+                "Combined graph is not connected but mult-component layout is unsupported. "
+                "Falling back to random initialization.")
+            result.init = "random"
+        else:
+            result.ini = "spectral"
+
+        result.embedding_ = simplicial_set_embedding(
+            None,
+            result.graph_,
+            np.min(result.n_components),
+            np.min(result.learning_rate),
+            np.mean(result._a),
+            np.mean(result._b),
+            np.mean(result.repulsion_strength),
+            np.mean(result.negative_sample_rate),
+            np.max(result.n_epochs),
+            result.init,
+            check_random_state(42),
+            "euclidean",
+            {},
+            parallel=False,
+            verbose=bool(np.max(result.verbose))
+        )
+
+        return result
+
+
+    def __sub__(self, other):
+
+        check_is_fitted(self, ['graph_'], "Only fitted UMAP models can be combined")
+        check_is_fitted(other, ['graph_'], "Only fitted UMAP models can be combined")
+
+        if self.graph_.shape[0] != other.graph_.shape[0]:
+            raise ValueError("Only models with the equivalent samples can be combined")
+
+        result = UMAP()
+        result._populate_combined_params(self, other)
+
+        result.graph_ = general_simplicial_set_intersection(self.graph_, other.graph_, weight=0.5,
+                                                            right_complement=True)
         result.graph_ = reset_local_connectivity(result.graph_, True)
 
         if scipy.sparse.csgraph.connected_components(result.graph_)[0] > 1:
