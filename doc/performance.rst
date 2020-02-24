@@ -33,7 +33,7 @@ have historically had significantly better performance than scikit-learn
 t-SNE (more recent versions of scikit-learn have improved t-SNE
 performance).
 
-.. code:: ipython3
+.. code:: python
 
     from sklearn.manifold import TSNE, LocallyLinearEmbedding, Isomap, MDS, SpectralEmbedding
     from sklearn.decomposition import PCA
