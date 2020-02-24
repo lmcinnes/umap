@@ -159,7 +159,7 @@ on.
     plt.legend()
 
 
-.. image:: performance_files/performance_15_1.png
+.. image:: images/performance_15_1.png
 
 
 We can see straight away that there are some outliers here. The
@@ -219,7 +219,7 @@ out to larger dataset sizes.
 
 
 
-.. image:: performance_files/performance_18_1.png
+.. image:: images/performance_18_1.png
 
 
 At this point we begin to see some significant differentiation among the
@@ -275,7 +275,7 @@ MulticoreTSNE, PCA and UMAP.
     plt.legend()
 
 
-.. image:: performance_files/performance_21_1.png
+.. image:: images/performance_21_1.png
 
 
 Here we see UMAP’s advantages over t-SNE really coming to the forefront.
