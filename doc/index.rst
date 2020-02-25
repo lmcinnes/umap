@@ -71,7 +71,7 @@ PyPI install, presuming you have numba and sklearn and all its requirements
 
    dimension_reduction
    how_umap_works
-   benchmarking
+   performance
 
 .. toctree::
    :maxdepth: 2
