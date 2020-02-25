@@ -162,17 +162,15 @@ on.
 .. image:: images/performance_15_1.png
 
 
-We can see straight away that there are some outliers here. The
-scikit-learn t-SNE is clearly much slower than most of the other
-algorithms – the exception being that openTSNE does poorly on small
-datasets. It does not have the scaling properties of MDS however; for
+We can see straight away that there are some outliers here. It is notable that
+openTSNE does poorly on small datasets. It does not have the scaling properties of MDS however; for
 larger dataset sizes MDS is going to quickly become completely
-unmanageable which openTSNE has failt flat scaling. At the same time
+unmanageable which openTSNE has fairly flat scaling. At the same time
 MulticoreTSNE demonstrates that t-SNE can run fairly efficiently. It is
 hard to tell much about the other implementations other than the fact
 that PCA is far and away the fastest option. To see more we’ll have to
-look at runtimes on larger dataset sizes. Both MDS and scikit-learn’s
-t-SNE are going to take too long to run so let’s restrict ourselves to
+look at runtimes on larger dataset sizes. Both MDS, Isomap and SpectralEmbedding
+will actually take too long to run so let’s restrict ourselves to
 the fastest performing implementations and see what happens as we extend
 out to larger dataset sizes.
 
@@ -228,8 +226,8 @@ performing relatively poorly, but now the scaling effects kick in, and
 we see that is is faster than most. Similarly MulticoreTSNE looked to be
 slower than some of the other algorithms in th earlier plot, but as we
 scale out to larger datasets we see that its relative scaling
-performance is far superior to the scikit-learn implementations of
-Isomap, spectral embedding, and locally linear embedding.
+performance is superior to the scikit-learn implementations of
+TSNE and locally linear embedding.
 
 It is probably worth extending out further – up to the full MNIST digits
 dataset. To manage to do that in any reasonable amount of time we’ll
