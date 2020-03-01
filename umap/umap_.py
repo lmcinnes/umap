@@ -1100,6 +1100,7 @@ def simplicial_set_embedding(
             verbose=verbose,
         )
     else:
+        print("using optimize_layout_generic")
         embedding = optimize_layout_generic(
             embedding,
             embedding,
@@ -1470,11 +1471,28 @@ class UMAP(BaseEstimator):
         ):
             raise ValueError("n_epochs must be a positive integer " "larger than 10")
         if callable(self.metric):
-            self._input_distance_func = self.metric
+            returns_gradient = self._check_custom_metric(self.metric, self._metric_kwds, self._raw_data)
+            if returns_gradient:
+                self._input_distance_func = lambda x, y, kwds: self.metric(x, y, **self._metric_kwds)[0]
+                self._inverse_distance_func = self.metric
+            else:
+                self._input_distance_func = self.metric
+                self._inverse_distance_func = None
+                warn("custom distance metric does not return gradient; inverse_transform will be unavailable. "
+                     "To enable using inverse_transform method method, define a distance function that returns "
+                     "a tuple of (distance [float], gradient [np.array])")
         elif self.metric in dist.named_distances:
             self._input_distance_func = dist.named_distances[self.metric]
+            try:
+                self._inverse_distance_func = dist.named_distances_with_gradients[self.metric]
+            except KeyError:
+                warn("gradient function is not yet implemented for {} distance metric; "
+                     "inverse_transform will be unavailable".format(self.metric))
+                self._inverse_distance_func = None
         elif self.metric == "precomputed":
-            warn("Using precomputed metric; transform will be unavailable for new data")
+            warn("using precomputed metric; transform will be unavailable for new data and inverse_transform "
+                 "will be unavailable for all data")
+            self._inverse_distance_func = None
         else:
             raise ValueError("metric is neither callable, " + "nor a recognised string")
 
@@ -1499,6 +1517,22 @@ class UMAP(BaseEstimator):
                 )
         if (self.unique == True) and (self.metric == "precomputed"):
             raise ValueError("unique is poorly defined on a precomputed metric")
+
+    def _check_custom_metric(self, metric, kwds, data=None):
+        # quick check to determine whether user-defined
+        # self.metric/self.output_metric returns both distance and gradient
+        if data is not None:
+            # if checking the high-dimensional distance metric, test directly on
+            # input data so we don't risk violating any assumptions potentially
+            # hard-coded in the metric (e.g., bounded; non-negative)
+            x, y = data[np.random.randint(0, data.shape[0], 2)]
+        else:
+            # if checking the manifold distance metric, simulate some data on a
+            # reasonable interval with output dimensionality
+            x, y = np.random.uniform(low=-10, high=10, size=(2, self.n_components))
+        metric_out = metric(x, y, **kwds)
+        # True if metric returns iterable of length 2, False otherwise
+        return hasattr(metric_out, "__iter__") and len(metric_out) == 2
 
     def fit(self, X, y=None):
         """Fit X into an embedded space.
@@ -1626,14 +1660,14 @@ class UMAP(BaseEstimator):
             self._small_data = True
             try:
                 dmat = pairwise_distances(
-                    X[index], metric=self.metric, **self._metric_kwds
+                    X[index], metric=self._input_distance_func, **self._metric_kwds
                 )
             except (ValueError, TypeError) as e:
                 # metric is not supported by sklearn,
                 # fallback to pairwise special
                 if self._sparse_data:
                     dmat = dist.pairwise_special_metric(
-                        X[index].toarray(), metric=self.metric
+                        X[index].toarray(), metric=self._input_distance_func
                     )
                 else:
                     dmat = dist.pairwise_special_metric(X[index], metric=self.metric)
