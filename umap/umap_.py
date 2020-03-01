@@ -1503,7 +1503,6 @@ class UMAP(BaseEstimator):
                 self._inverse_distance_func = None
         else:
             raise ValueError("metric is neither callable nor a recognised string")
-
         if callable(self.output_metric):
             out_returns_grad = self._check_custom_metric(self.output_metric, self.output_metric_kwds)
             if out_returns_grad:
@@ -1577,12 +1576,18 @@ class UMAP(BaseEstimator):
         if self.verbose:
             print(str(self))
 
+        # check sparsity of data upfront to save repeated calls to scipy.sparse.isspmatrix_csr
+        if scipy.sparse.isspmatrix_csr(X):
+            self._sparse_data = True
+        else:
+            self._sparse_data = False
+
         # NEW CODE
         # Check if we should unique the data
         # We've already ensured that we aren't in the precomputed case
         if self.unique:
             # check if the matrix is dense
-            if scipy.sparse.isspmatrix_csr(X):
+            if self._sparse_data:
                 # Call a sparse unique function
                 index, inverse, counts = csr_unique(X)
             else:
@@ -1629,14 +1634,10 @@ class UMAP(BaseEstimator):
         else:
             self._n_neighbors = self.n_neighbors
 
-        # I could make the unique check a subcall of this...
-        # probably less readable
-        if scipy.sparse.isspmatrix_csr(X):
-            if not X.has_sorted_indices:
+        # Note: unless it causes issues for setting 'index', could move this to
+        # initial sparsity check above
+        if self._sparse_data and not X.has_sorted_indices:
                 X.sort_indices()
-            self._sparse_data = True
-        else:
-            self._sparse_data = False
 
         random_state = check_random_state(self.random_state)
 
@@ -1658,7 +1659,7 @@ class UMAP(BaseEstimator):
                         X[index].toarray(), metric=self._input_distance_func
                     )
                 else:
-                    dmat = dist.pairwise_special_metric(X[index], metric=self.metric)
+                    dmat = dist.pairwise_special_metric(X[index], metric=self._input_distance_func)
             self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
                 dmat,
                 self._n_neighbors,
@@ -1679,7 +1680,7 @@ class UMAP(BaseEstimator):
             (self._knn_indices, self._knn_dists, self._rp_forest) = nearest_neighbors(
                 X[index],
                 self._n_neighbors,
-                self.metric,
+                self._inverse_distance_func,
                 self.metric_kwds,
                 self.angular_rp_forest,
                 random_state,
@@ -1692,7 +1693,7 @@ class UMAP(BaseEstimator):
                 X[index],
                 self.n_neighbors,
                 random_state,
-                self.metric,
+                self._input_distance_func,
                 self.metric_kwds,
                 self._knn_indices,
                 self._knn_dists,
