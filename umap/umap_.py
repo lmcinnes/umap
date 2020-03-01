@@ -1477,7 +1477,11 @@ class UMAP(BaseEstimator):
         if callable(self.metric):
             in_returns_grad = self._check_custom_metric(self.metric, self.metric_kwds, self._raw_data)
             if in_returns_grad:
-                self._input_distance_func = lambda x, y, **kwargs: self.metric(x, y, **kwargs)[0]
+                m = self.metric
+                @numba.njit(fastmath=True)
+                def _dist_only(x, y, *kwds):
+                    return m(x, y, *kwds)[0]
+                self._input_distance_func = _dist_only  # lambda x, y, **kwargs: self.metric(x, y, **kwargs)[0]
                 self._inverse_distance_func = self.metric
             else:
                 self._input_distance_func = self.metric
@@ -1490,6 +1494,7 @@ class UMAP(BaseEstimator):
                 raise ValueError("unique is poorly defined on a precomputed metric")
             warn("using precomputed metric; transform will be unavailable for new data and inverse_transform "
                  "will be unavailable for all data")
+            self._input_distance_func = self.metric
             self._inverse_distance_func = None
         elif self.metric == "hellinger" and self._raw_data.min() < 0:
             raise ValueError("Metric 'hellinger' does not support negative values")
@@ -1680,7 +1685,7 @@ class UMAP(BaseEstimator):
             (self._knn_indices, self._knn_dists, self._rp_forest) = nearest_neighbors(
                 X[index],
                 self._n_neighbors,
-                self._inverse_distance_func,
+                self._input_distance_func,
                 self.metric_kwds,
                 self.angular_rp_forest,
                 random_state,
@@ -1770,7 +1775,7 @@ class UMAP(BaseEstimator):
         # Currently not checking if any duplicate points have differing labels
         # Might be worth throwing a warning...
         if y is not None:
-            len_X = len(X) if not scipy.sparse.issparse(X) else X.shape[0]
+            len_X = len(X) if not self._sparse_data else X.shape[0]
             if len_X != len(y):
                 raise ValueError(
                     "Length of x = {len_x}, length of y = {len_y}, while it must be equal.".format(
