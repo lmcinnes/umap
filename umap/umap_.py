@@ -1485,6 +1485,14 @@ class UMAP(BaseEstimator):
                 warn("custom distance metric does not return gradient; inverse_transform will be unavailable. "
                      "To enable using inverse_transform method method, define a distance function that returns "
                      "a tuple of (distance [float], gradient [np.array])")
+        elif self.metric == "precomputed":
+            if self.unique is False:
+                raise ValueError("unique is poorly defined on a precomputed metric")
+            warn("using precomputed metric; transform will be unavailable for new data and inverse_transform "
+                 "will be unavailable for all data")
+            self._inverse_distance_func = None
+        elif self.metric == "hellinger" and self._raw_data.min() < 0:
+            raise ValueError("Metric 'hellinger' does not support negative values")
         elif self.metric in dist.named_distances:
             self._input_distance_func = dist.named_distances[self.metric]
             try:
@@ -1493,12 +1501,6 @@ class UMAP(BaseEstimator):
                 warn("gradient function is not yet implemented for {} distance metric; "
                      "inverse_transform will be unavailable".format(self.metric))
                 self._inverse_distance_func = None
-        elif self.metric == "precomputed":
-            if self.unique is False:
-                raise ValueError("unique is poorly defined on a precomputed metric")
-            warn("using precomputed metric; transform will be unavailable for new data and inverse_transform "
-                 "will be unavailable for all data")
-            self._inverse_distance_func = None
         else:
             raise ValueError("metric is neither callable nor a recognised string")
 
@@ -1571,9 +1573,6 @@ class UMAP(BaseEstimator):
         self._initial_alpha = self.learning_rate
 
         self._validate_parameters()
-
-        if self.metric == "hellinger" and X.min() < 0:
-            raise ValueError("Metric 'hellinger' does not support negative values")
 
         if self.verbose:
             print(str(self))
