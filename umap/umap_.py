@@ -1391,18 +1391,15 @@ class UMAP(BaseEstimator):
         self.n_neighbors = n_neighbors
         self.metric = metric
         self.output_metric = output_metric
+        self.target_metric = target_metric
         if metric_kwds is None:
             self.metric_kwds = {}
         else:
             self.metric_kwds = metric_kwds
-        if target_metric_kwds is None:
-            self.target_metric_kwds = {}
-        else:
-            self.target_metric_kwds = target_metric_kwds
         if output_metric_kwds is None:
             self.output_metric_kwds = {}
         else:
-            self._output_metric_kwds = output_metric_kwds
+            self.output_metric_kwds = output_metric_kwds
         self.n_epochs = n_epochs
         self.init = init
         self.n_components = n_components
@@ -1420,7 +1417,10 @@ class UMAP(BaseEstimator):
         self.transform_queue_size = transform_queue_size
         self.target_n_neighbors = target_n_neighbors
         self.target_metric = target_metric
-        self.target_metric_kwds = target_metric_kwds
+        if target_metric_kwds is None:
+            self.target_metric_kwds = {}
+        else:
+            self.target_metric_kwds = target_metric_kwds
         self.target_weight = target_weight
         self.transform_seed = transform_seed
         self.force_approximation_algorithm = force_approximation_algorithm
@@ -1475,7 +1475,7 @@ class UMAP(BaseEstimator):
             self.n_epochs <= 10 or not isinstance(self.n_epochs, int)):
             raise ValueError("n_epochs must be a positive integer of at least 10")
         if callable(self.metric):
-            in_returns_grad = self._check_custom_metric(self.metric, self._metric_kwds, self._raw_data)
+            in_returns_grad = self._check_custom_metric(self.metric, self.metric_kwds, self._raw_data)
             if in_returns_grad:
                 self._input_distance_func = lambda x, y, kwds: self.metric(x, y, **kwds)[0]
                 self._inverse_distance_func = self.metric
@@ -1505,7 +1505,7 @@ class UMAP(BaseEstimator):
             raise ValueError("metric is neither callable nor a recognised string")
 
         if callable(self.output_metric):
-            out_returns_grad = self._check_custom_metric(self.output_metric, self._output_metric_kwds)
+            out_returns_grad = self._check_custom_metric(self.output_metric, self.output_metric_kwds)
             if out_returns_grad:
                 self._output_distance_func = self.output_metric
             else:
@@ -1648,7 +1648,7 @@ class UMAP(BaseEstimator):
             self._small_data = True
             try:
                 dmat = pairwise_distances(
-                    X[index], metric=self._input_distance_func, **self._metric_kwds
+                    X[index], metric=self._input_distance_func, **self.metric_kwds
                 )
             except (ValueError, TypeError) as e:
                 # metric is not supported by sklearn,
@@ -1664,7 +1664,7 @@ class UMAP(BaseEstimator):
                 self._n_neighbors,
                 random_state,
                 "precomputed",
-                self._metric_kwds,
+                self.metric_kwds,
                 None,
                 None,
                 self.angular_rp_forest,
@@ -1680,7 +1680,7 @@ class UMAP(BaseEstimator):
                 X[index],
                 self._n_neighbors,
                 self.metric,
-                self._metric_kwds,
+                self.metric_kwds,
                 self.angular_rp_forest,
                 random_state,
                 self.low_memory,
@@ -1693,7 +1693,7 @@ class UMAP(BaseEstimator):
                 self.n_neighbors,
                 random_state,
                 self.metric,
-                self._metric_kwds,
+                self.metric_kwds,
                 self._knn_indices,
                 self._knn_dists,
                 self.angular_rp_forest,
@@ -1736,7 +1736,7 @@ class UMAP(BaseEstimator):
                     )
 
                 if self.metric != "precomputed":
-                    self._dist_args = tuple(self._metric_kwds.values())
+                    self._dist_args = tuple(self.metric_kwds.values())
 
                     # Create a partial function for distances with arguments
                     if len(self._dist_args) > 0:
@@ -1794,7 +1794,7 @@ class UMAP(BaseEstimator):
                 #     self.graph_,
                 #     y_,
                 #     metric=self.target_metric,
-                #     metric_kws=self._target_metric_kwds,
+                #     metric_kws=self.target_metric_kwds,
                 #     metric_scale=scale
                 # )
 
@@ -1818,7 +1818,7 @@ class UMAP(BaseEstimator):
                     ydmat = pairwise_distances(
                         y_[np.newaxis, :].T,
                         metric=self.target_metric,
-                        **self._target_metric_kwds
+                        **self.target_metric_kwds
                     )
 
                     target_graph, target_sigmas, target_rhos = fuzzy_simplicial_set(
@@ -1826,7 +1826,7 @@ class UMAP(BaseEstimator):
                         target_n_neighbors,
                         random_state,
                         "precomputed",
-                        self._target_metric_kwds,
+                        self.target_metric_kwds,
                         None,
                         None,
                         False,
@@ -1841,7 +1841,7 @@ class UMAP(BaseEstimator):
                         target_n_neighbors,
                         random_state,
                         self.target_metric,
-                        self._target_metric_kwds,
+                        self.target_metric_kwds,
                         None,
                         None,
                         False,
@@ -1880,9 +1880,9 @@ class UMAP(BaseEstimator):
             init,
             random_state,
             self.metric,
-            self._metric_kwds,
+            self.metric_kwds,
             self._output_distance_func,
-            self._output_metric_kwds,
+            self.output_metric_kwds,
             self.output_metric in ("euclidean", "l2"),
             self.random_state is None,
             self.verbose,
@@ -1961,7 +1961,7 @@ class UMAP(BaseEstimator):
                 )
             else:
                 dmat = pairwise_distances(
-                    X, self._raw_data, metric=self.metric, **self._metric_kwds
+                    X, self._raw_data, metric=self.metric, **self.metric_kwds
                 )
             indices = np.argpartition(dmat, self._n_neighbors)[:, : self._n_neighbors]
             dmat_shortened = submatrix(dmat, indices, self._n_neighbors)
@@ -2071,7 +2071,7 @@ class UMAP(BaseEstimator):
 
         # optimize_layout = make_optimize_layout(
         #     self._output_distance_func,
-        #     tuple(self._output_metric_kwds.values()),
+        #     tuple(self.output_metric_kwds.values()),
         # )
 
         if self.output_metric == "euclidean":
@@ -2108,7 +2108,7 @@ class UMAP(BaseEstimator):
                 self._initial_alpha / 4.0,
                 self.negative_sample_rate,
                 self._output_distance_func,
-                tuple(self._output_metric_kwds.values()),
+                tuple(self.output_metric_kwds.values()),
                 verbose=self.verbose,
             )
 
@@ -2167,7 +2167,7 @@ class UMAP(BaseEstimator):
             for v in neighbors
         ]
         dist_func = dist.named_distances[self.output_metric]
-        dist_args = tuple(self._output_metric_kwds.values())
+        dist_args = tuple(self.output_metrickwds.values())
         distances = [
             np.array(
                 [
@@ -2266,7 +2266,7 @@ class UMAP(BaseEstimator):
             self._initial_alpha / 4.0,
             self.negative_sample_rate,
             _input_distance_func,
-            tuple(self._metric_kwds.values()),
+            tuple(self.metric_kwds.values()),
             verbose=self.verbose,
         )
 
@@ -2306,9 +2306,9 @@ class DataFrameUMAP(BaseEstimator):
         self.n_neighbors = n_neighbors
         self.output_metric = output_metric
         if output_metric_kwds is not None:
-            self._output_metric_kwds = output_metric_kwds
+            self.output_metric_kwds = output_metric_kwds
         else:
-            self._output_metric_kwds = {}
+            self.output_metric_kwds = {}
 
         if callable(self.output_metric):
             self._output_distance_func = self.output_metric
@@ -2441,11 +2441,6 @@ class DataFrameUMAP(BaseEstimator):
         else:
             self._a = self.a
             self._b = self.b
-
-        if self.target_metric_kwds is not None:
-            self._target_metric_kwds = self.target_metric_kwds
-        else:
-            self._target_metric_kwds = {}
 
         if isinstance(self.init, np.ndarray):
             init = check_array(self.init, dtype=np.float32, accept_sparse=False)
@@ -2612,7 +2607,7 @@ class DataFrameUMAP(BaseEstimator):
             "manhattan",
             {},
             self._output_distance_func,
-            self._output_metric_kwds,
+            self.output_metric_kwds,
             self.output_metric in ("euclidean", "l2"),
             self.random_state is None,
             self.verbose,
