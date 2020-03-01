@@ -1467,13 +1467,12 @@ class UMAP(BaseEstimator):
         if self.n_components < 1:
             raise ValueError("n_components must be greater than 0")
         if self.n_epochs is not None and (
-            self.n_epochs <= 10 or not isinstance(self.n_epochs, int)
-        ):
-            raise ValueError("n_epochs must be a positive integer " "larger than 10")
+            self.n_epochs <= 10 or not isinstance(self.n_epochs, int)):
+            raise ValueError("n_epochs must be a positive integer of at least 10")
         if callable(self.metric):
-            returns_gradient = self._check_custom_metric(self.metric, self._metric_kwds, self._raw_data)
-            if returns_gradient:
-                self._input_distance_func = lambda x, y, kwds: self.metric(x, y, **self._metric_kwds)[0]
+            in_returns_grad = self._check_custom_metric(self.metric, self._metric_kwds, self._raw_data)
+            if in_returns_grad:
+                self._input_distance_func = lambda x, y, kwds: self.metric(x, y, **kwds)[0]
                 self._inverse_distance_func = self.metric
             else:
                 self._input_distance_func = self.metric
@@ -1490,33 +1489,29 @@ class UMAP(BaseEstimator):
                      "inverse_transform will be unavailable".format(self.metric))
                 self._inverse_distance_func = None
         elif self.metric == "precomputed":
+            if self.unique is False:
+                raise ValueError("unique is poorly defined on a precomputed metric")
             warn("using precomputed metric; transform will be unavailable for new data and inverse_transform "
                  "will be unavailable for all data")
             self._inverse_distance_func = None
         else:
-            raise ValueError("metric is neither callable, " + "nor a recognised string")
+            raise ValueError("metric is neither callable nor a recognised string")
 
         if callable(self.output_metric):
-            self._output_distance_func = self.output_metric
-        elif self.output_metric in dist.named_distances_with_gradients:
-            self._output_distance_func = dist.named_distances_with_gradients[
-                self.output_metric
-            ]
+            out_returns_grad = self._check_custom_metric(self.output_metric, self._output_metric_kwds)
+            if out_returns_grad:
+                self._output_distance_func = self.output_metric
+            else:
+                raise ValueError("custom output_metric must return a tuple of (distance [float], gradient [np.array])")
         elif self.output_metric == "precomputed":
             raise ValueError("output_metric cannnot be 'precomputed'")
+        elif self.output_metric in dist.named_distances_with_gradients:
+            self._output_distance_func = dist.named_distances_with_gradients[self.output_metric]
+        elif self.output_metric in dist.named_distances:
+            raise ValueError("gradient function is not yet implemented for {}.".format(self.output_metric))
         else:
-            if self.output_metric in dist.named_distances:
-                raise ValueError(
-                    "gradient function is not yet implemented for "
-                    + repr(self.output_metric)
-                    + "."
-                )
-            else:
-                raise ValueError(
-                    "output_metric is neither callable, " + "nor a recognised string"
-                )
-        if (self.unique == True) and (self.metric == "precomputed"):
-            raise ValueError("unique is poorly defined on a precomputed metric")
+            raise ValueError("output_metric is neither callable nor a recognised string")
+
 
     def _check_custom_metric(self, metric, kwds, data=None):
         # quick check to determine whether user-defined
