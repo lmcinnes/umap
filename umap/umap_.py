@@ -1388,16 +1388,21 @@ class UMAP(BaseEstimator):
         verbose=False,
         unique=False,
     ):
-
         self.n_neighbors = n_neighbors
         self.metric = metric
-        self.metric_kwds = metric_kwds
         self.output_metric = output_metric
-        if output_metric_kwds is not None:
-            self._output_metric_kwds = output_metric_kwds
+        if metric_kwds is None:
+            self.metric_kwds = {}
         else:
-            self._output_metric_kwds = {}
-
+            self.metric_kwds = metric_kwds
+        if target_metric_kwds is None:
+            self.target_metric_kwds = {}
+        else:
+            self.target_metric_kwds = target_metric_kwds
+        if output_metric_kwds is None:
+            self.output_metric_kwds = {}
+        else:
+            self._output_metric_kwds = output_metric_kwds
         self.n_epochs = n_epochs
         self.init = init
         self.n_components = n_components
@@ -1512,9 +1517,8 @@ class UMAP(BaseEstimator):
         else:
             raise ValueError("output_metric is neither callable nor a recognised string")
 
-
     def _check_custom_metric(self, metric, kwds, data=None):
-        # quick check to determine whether user-defined
+        # quickly check to determine whether user-defined
         # self.metric/self.output_metric returns both distance and gradient
         if data is not None:
             # if checking the high-dimensional distance metric, test directly on
@@ -1558,16 +1562,6 @@ class UMAP(BaseEstimator):
         else:
             self._a = self.a
             self._b = self.b
-
-        if self.metric_kwds is not None:
-            self._metric_kwds = self.metric_kwds
-        else:
-            self._metric_kwds = {}
-
-        if self.target_metric_kwds is not None:
-            self._target_metric_kwds = self.target_metric_kwds
-        else:
-            self._target_metric_kwds = {}
 
         if isinstance(self.init, np.ndarray):
             init = check_array(self.init, dtype=np.float32, accept_sparse=False)
