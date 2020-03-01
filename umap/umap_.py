@@ -1477,7 +1477,7 @@ class UMAP(BaseEstimator):
         if callable(self.metric):
             in_returns_grad = self._check_custom_metric(self.metric, self.metric_kwds, self._raw_data)
             if in_returns_grad:
-                self._input_distance_func = lambda x, y, kwds: self.metric(x, y, **kwds)[0]
+                self._input_distance_func = lambda x, y, **kwargs: self.metric(x, y, **kwargs)[0]
                 self._inverse_distance_func = self.metric
             else:
                 self._input_distance_func = self.metric
@@ -2168,7 +2168,7 @@ class UMAP(BaseEstimator):
             for v in neighbors
         ]
         dist_func = dist.named_distances[self.output_metric]
-        dist_args = tuple(self.output_metrickwds.values())
+        dist_args = tuple(self.output_metric_kwds.values())
         distances = [
             np.array(
                 [
