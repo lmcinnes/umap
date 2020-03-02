@@ -4,6 +4,7 @@
 import numba
 import numpy as np
 import scipy.stats
+from sklearn.metrics import pairwise_distances
 
 _mock_identity = np.eye(2, dtype=np.float64)
 _mock_cost = 1.0 - _mock_identity
@@ -1169,6 +1170,15 @@ def parallel_special_metric(X, Y=None, metric=hellinger):
     return result
 
 
-def pairwise_special_metric(X, Y=None, metric="hellinger"):
-    special_metric_func = named_distances[metric]
+def pairwise_special_metric(X, Y=None, metric="hellinger", kwds=None):
+    if callable(metric):
+        kwd_vals = tuple(kwds.values())
+
+        @numba.njit(fastmath=True)
+        def _pairwise_numba(_X, _Y=None):
+            return metric(_X, _Y, *kwd_vals)
+        
+        return pairwise_distances(X, Y, metric=_pairwise_numba)
+    else:
+        special_metric_func = named_distances[metric]
     return parallel_special_metric(X, Y, metric=special_metric_func)

@@ -1100,7 +1100,6 @@ def simplicial_set_embedding(
             verbose=verbose,
         )
     else:
-        print("using optimize_layout_generic")
         embedding = optimize_layout_generic(
             embedding,
             embedding,
@@ -1657,14 +1656,13 @@ class UMAP(BaseEstimator):
                     X[index], metric=self._input_distance_func, **self.metric_kwds
                 )
             except (ValueError, TypeError) as e:
-                # metric is not supported by sklearn,
+                # metric is numba.jit'd or not supported by sklearn,
                 # fallback to pairwise special
                 if self._sparse_data:
                     dmat = dist.pairwise_special_metric(
-                        X[index].toarray(), metric=self._input_distance_func
-                    )
+                        X[index].toarray(), metric=self._input_distance_func, kwds=self.metric_kwds)
                 else:
-                    dmat = dist.pairwise_special_metric(X[index], metric=self._input_distance_func)
+                    dmat = dist.pairwise_special_metric(X[index], metric=self._input_distance_func, kwds=self.metric_kwds)
             self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
                 dmat,
                 self._n_neighbors,
@@ -1890,7 +1888,7 @@ class UMAP(BaseEstimator):
             n_epochs,
             init,
             random_state,
-            self.metric,
+            self._input_distance_func,
             self.metric_kwds,
             self._output_distance_func,
             self.output_metric_kwds,
