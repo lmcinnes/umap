@@ -42,7 +42,10 @@ from matplotlib.patches import Patch
 from umap.nndescent import initialise_search, initialized_nnd_search
 from umap.utils import deheap_sort, submatrix
 
-from bokeh.plotting import output_notebook, output_file, show
+from bokeh.plotting import output_notebook, output_file
+from bokeh.plotting import show as show_interactive
+from matplotlib.pyplot import show as show_static
+
 from warnings import warn
 
 fire_cmap = matplotlib.colors.LinearSegmentedColormap.from_list("fire", colorcet.fire)
@@ -426,6 +429,26 @@ def _matplotlib_points(
         ax.legend(handles=legend_elements)
 
     return ax
+
+
+def show(plot_to_show):
+    """Display a plot, either interactive or static.
+
+    Parameters
+    ----------
+    plot_to_show: Output of a plotting command (matplotlib axis or bokeh figure)
+        The plot to show
+
+    Returns
+    -------
+    None
+    """
+    if isinstance(plot_to_show, plt.Axes):
+        show_static()
+    elif isinstance(plot_to_show, bpl.Figure):
+        show_interactive(plot_to_show)
+    else:
+        raise ValueError("The type of ``plot_to_show`` was not valid, or not understood.")
 
 
 def points(
