@@ -1477,10 +1477,10 @@ class UMAP(BaseEstimator):
         if callable(self.metric):
             in_returns_grad = self._check_custom_metric(self.metric, self.metric_kwds, self._raw_data)
             if in_returns_grad:
-                m = self.metric
+                _m = self.metric
                 @numba.njit(fastmath=True)
                 def _dist_only(x, y, *kwds):
-                    return m(x, y, *kwds)[0]
+                    return _m(x, y, *kwds)[0]
                 self._input_distance_func = _dist_only  # lambda x, y, **kwargs: self.metric(x, y, **kwargs)[0]
                 self._inverse_distance_func = self.metric
             else:
@@ -2142,11 +2142,8 @@ class UMAP(BaseEstimator):
 
         if self._sparse_data:
             raise ValueError("Inverse transform not available for sparse input.")
-        elif self.metric == "precomputed":
-            raise ValueError(
-                "Inverse transform  of new data not available for "
-                "precomputed metric."
-            )
+        elif self._inverse_distance_func is None:
+            raise ValueError("Inverse transform not available for given metric.")
 
         X = check_array(X, dtype=np.float32, order="C")
         random_state = check_random_state(self.transform_seed)
