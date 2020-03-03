@@ -1745,9 +1745,6 @@ class UMAP(BaseEstimator):
                 )
                 _rows = []
                 _data = []
-                # for i in range(self._knn_indices.shape[0]):
-                #     _rows.append(self._knn_indices[self._knn_indices >= 0])
-                #     _data.append(np.ones(_rows[-1].shape[0], dtype=np.int8))
                 for i in self._knn_indices:
                     _non_neg = i[i >= 0]
                     _rows.append(_non_neg)
