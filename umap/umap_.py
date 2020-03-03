@@ -1751,7 +1751,7 @@ class UMAP(BaseEstimator):
                 for i in self._knn_indices:
                     _non_neg = i[i >= 0]
                     _rows.append(_non_neg)
-                    _data.append((_non_neg > 0).astype(np.int8))
+                    _data.append(np.ones(_non_neg.shape[0], dtype=np.int8))
 
                 self._search_graph.rows = _rows
                 self._search_graph.data = _data
