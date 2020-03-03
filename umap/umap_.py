@@ -2173,16 +2173,12 @@ class UMAP(BaseEstimator):
             breadth_first_search(adjmat, v[0], min_vertices=min_vertices)
             for v in neighbors
         ]
-        dist_func = dist.named_distances[self.output_metric]
         dist_args = tuple(self.output_metric_kwds.values())
         distances = [
             np.array(
-                [
-                    dist_func(X[i], self.embedding_[nb], *dist_args)
-                    for nb in neighborhood[i]
-                ]
-            )
-            for i in range(X.shape[0])
+                [self._output_distance_func(X[i], self.embedding_[nb], *dist_args)
+                 for nb in neighborhood[i]]
+            ) for i in range(X.shape[0])
         ]
         idx = np.array([np.argsort(e)[:min_vertices] for e in distances])
 
