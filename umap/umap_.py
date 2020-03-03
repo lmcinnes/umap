@@ -1474,17 +1474,21 @@ class UMAP(BaseEstimator):
             self.n_epochs <= 10 or not isinstance(self.n_epochs, int)
         ):
             raise ValueError("n_epochs must be a positive integer of at least 10")
+        # check sparsity of data upfront to set proper _input_distance_func &
+        # save repeated checks later on
+        if scipy.sparse.isspmatrix_csr(self._raw_data):
+            self._sparse_data = True
+        else:
+            self._sparse_data = False
         if callable(self.metric):
             in_returns_grad = self._check_custom_metric(
                 self.metric, self.metric_kwds, self._raw_data
             )
             if in_returns_grad:
                 _m = self.metric
-
                 @numba.njit(fastmath=True)
                 def _dist_only(x, y, *kwds):
                     return _m(x, y, *kwds)[0]
-
                 self._input_distance_func =  _dist_only
                 self._inverse_distance_func = self.metric
             else:
@@ -1507,7 +1511,13 @@ class UMAP(BaseEstimator):
         elif self.metric == "hellinger" and self._raw_data.min() < 0:
             raise ValueError("Metric 'hellinger' does not support negative values")
         elif self.metric in dist.named_distances:
-            self._input_distance_func = dist.named_distances[self.metric]
+            if self._sparse_data:
+                if self.metric in sparse.sparse_named_distances:
+                    self._input_distance_func = sparse.sparse_named_distances[self.metric]
+                else:
+                    raise ValueError("Metric {} is not supported for sparse data".format(self.metric))
+            else:
+                self._input_distance_func = dist.named_distances[self.metric]
             try:
                 self._inverse_distance_func = dist.named_distances_with_gradients[
                     self.metric
@@ -1605,13 +1615,6 @@ class UMAP(BaseEstimator):
         if self.verbose:
             print(str(self))
 
-        # check sparsity of data upfront to save repeated calls to scipy.sparse.isspmatrix_csr
-        if scipy.sparse.isspmatrix_csr(X):
-            self._sparse_data = True
-        else:
-            self._sparse_data = False
-
-        # NEW CODE
         # Check if we should unique the data
         # We've already ensured that we aren't in the precomputed case
         if self.unique:
