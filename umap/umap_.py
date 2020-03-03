@@ -302,26 +302,26 @@ def nearest_neighbors(
             # Otherwise fall back to nn descent in umap
             if callable(metric):
                 _distance_func = metric
-            elif metric in dist.named_distances:
-                _distance_func = dist.named_distances[metric]
+            # elif metric in dist.named_distances:
+            #     _distance_func = dist.named_distances[metric]
             else:
                 raise ValueError(
-                    "Metric is neither callable, " + "nor a recognised string"
+                    "Metric is neither callable, nor a recognised string"
                 )
 
             rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
             if scipy.sparse.isspmatrix_csr(X):
-                if metric in sparse.sparse_named_distances:
-                    _distance_func = sparse.sparse_named_distances[metric]
-                    if metric in sparse.sparse_need_n_features:
-                        metric_kwds["n_features"] = X.shape[1]
-                elif callable(metric):
-                    _distance_func = metric
-                else:
-                    raise ValueError(
-                        "Metric {} not supported for sparse " + "data".format(metric)
-                    )
+                # if metric in sparse.sparse_named_distances:
+                #     _distance_func = sparse.sparse_named_distances[metric]
+                #     if metric in sparse.sparse_need_n_features:
+                #         metric_kwds["n_features"] = X.shape[1]
+                # elif callable(metric):
+                #     _distance_func = metric
+                # else:
+                #     raise ValueError(
+                #         "Metric {} not supported for sparse " + "data".format(metric)
+                #     )
 
                 # Create a partial function for distances with arguments
                 if len(metric_kwds) > 0:
@@ -1754,42 +1754,41 @@ class UMAP(BaseEstimator):
                     self._search_graph.transpose()
                 ).tocsr()
 
-                if callable(self.metric):
-                    _distance_func = self._input_distance_func
-                elif self.metric in dist.named_distances:
-                    # Choose the right metric based on sparsity
-                    if self._sparse_data:
-                        _distance_func = sparse.sparse_named_distances[self.metric]
-                    else:
-                        _distance_func = dist.named_distances[self.metric]
-                else:
-                    raise ValueError(
-                        "Metric is neither callable, nor a recognised string"
-                    )
-
-                if self.metric != "precomputed":
-                    _dist_args = tuple(self.metric_kwds.values())
-
+                # if callable(self.metric):
+                #     _distance_func = self._input_distance_func
+                # elif self.metric in dist.named_distances:
+                #     # Choose the right metric based on sparsity
+                #     if self._sparse_data:
+                #         _distance_func = sparse.sparse_named_distances[self.metric]
+                #     else:
+                #         _distance_func = dist.named_distances[self.metric]
+                # else:
+                #     raise ValueError(
+                #         "Metric is neither callable, nor a recognised string"
+                #     )
+                # _distance_func = self._input_distance_func
+                if (self.metric != "precomputed") and (len(self.metric_kwds) > 0):
                     # Create a partial function for distances with arguments
-                    if len(_dist_args) > 0:
-                        if self._sparse_data:
+                    _distance_func = self._input_distance_func
+                    _dist_args = tuple(self.metric_kwds.values())
+                    if self._sparse_data:
 
-                            @numba.njit()
-                            def _partial_dist_func(ind1, data1, ind2, data2):
-                                return _distance_func(
-                                    ind1, data1, ind2, data2, *_dist_args
-                                )
+                        @numba.njit()
+                        def _partial_dist_func(ind1, data1, ind2, data2):
+                            return _distance_func(
+                                ind1, data1, ind2, data2, *_dist_args
+                            )
 
-                            self._input_distance_func = _partial_dist_func
-                        else:
-
-                            @numba.njit()
-                            def _partial_dist_func(x, y):
-                                return _distance_func(x, y, *_dist_args)
-
-                            self._input_distance_func = _partial_dist_func
+                        self._input_distance_func = _partial_dist_func
                     else:
-                        self._input_distance_func = _distance_func
+
+                        @numba.njit()
+                        def _partial_dist_func(x, y):
+                            return _distance_func(x, y, *_dist_args)
+
+                        self._input_distance_func = _partial_dist_func
+                    # else:
+                    #     self._input_distance_func = _distance_func
 
                 # self._random_init, self._tree_init = make_initialisations(
                 #     self._distance_func, self._dist_args
