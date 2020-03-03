@@ -1727,8 +1727,8 @@ class UMAP(BaseEstimator):
                     self._search_graph.transpose()
                 ).tocsr()
 
-                if callable(self.metric):
-                    _distance_func = self.metric
+                if callable(self._input_distance_func):
+                    _distance_func = self._input_distance_func
                 elif self.metric in dist.named_distances:
                     # Choose the right metric based on sparsity
                     if self._sparse_data:
@@ -1824,11 +1824,17 @@ class UMAP(BaseEstimator):
 
                 # Handle the small case as precomputed as before
                 if y.shape[0] < 4096:
-                    ydmat = pairwise_distances(
-                        y_[np.newaxis, :].T,
-                        metric=self.target_metric,
-                        **self.target_metric_kwds
-                    )
+                    try:
+                        ydmat = pairwise_distances(
+                            y_[np.newaxis, :].T,
+                            metric=self.target_metric,
+                            **self.target_metric_kwds
+                        )
+                    except (TypeError, ValueError):
+                        ydmat = dist.pairwise_special_metric(y_[np.newaxis, :].T,
+                                                             metric=self.target_metric,
+                                                             kwds=self.target_metric_kwds
+                                                             )
 
                     target_graph, target_sigmas, target_rhos = fuzzy_simplicial_set(
                         ydmat,
@@ -1956,7 +1962,7 @@ class UMAP(BaseEstimator):
 
         if self.metric == "precomputed":
             raise ValueError(
-                "Transform  of new data not available for " "precomputed metric."
+                "Transform  of new data not available for precomputed metric."
             )
 
         # X = check_array(X, dtype=np.float32, order="C", accept_sparse="csr")
@@ -1964,13 +1970,13 @@ class UMAP(BaseEstimator):
         rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
         if self._small_data:
-            if self.metric in ("ll_dirichlet", "hellinger"):
-                dmat = dist.pairwise_special_metric(
-                    X, self._raw_data, metric=self.metric
-                )
-            else:
+            try:
                 dmat = pairwise_distances(
-                    X, self._raw_data, metric=self.metric, **self.metric_kwds
+                    X, self._raw_data, metric=self._input_distance_func, **self.metric_kwds
+                )
+            except (TypeError, ValueError):
+                dmat = dist.pairwise_special_metric(
+                    X, self._raw_data, metric=self._input_distance_func, kwds=self.metric_kwds
                 )
             indices = np.argpartition(dmat, self._n_neighbors)[:, : self._n_neighbors]
             dmat_shortened = submatrix(dmat, indices, self._n_neighbors)
