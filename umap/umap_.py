@@ -1766,19 +1766,6 @@ class UMAP(BaseEstimator):
                     self._search_graph.transpose()
                 ).tocsr()
 
-                # if callable(self.metric):
-                #     _distance_func = self._input_distance_func
-                # elif self.metric in dist.named_distances:
-                #     # Choose the right metric based on sparsity
-                #     if self._sparse_data:
-                #         _distance_func = sparse.sparse_named_distances[self.metric]
-                #     else:
-                #         _distance_func = dist.named_distances[self.metric]
-                # else:
-                #     raise ValueError(
-                #         "Metric is neither callable, nor a recognised string"
-                #     )
-                # _distance_func = self._input_distance_func
                 if (self.metric != "precomputed") and (len(self.metric_kwds) > 0):
                     # Create a partial function for distances with arguments
                     _distance_func = self._input_distance_func
@@ -1797,15 +1784,6 @@ class UMAP(BaseEstimator):
                             return _distance_func(x, y, *_dist_args)
 
                         self._input_distance_func = _partial_dist_func
-                    # else:
-                    #     self._input_distance_func = _distance_func
-
-                # self._random_init, self._tree_init = make_initialisations(
-                #     self._distance_func, self._dist_args
-                # )
-                # self._search = make_initialized_nnd_search(
-                #     self._distance_func, self._dist_args
-                # )
 
         # Currently not checking if any duplicate points have differing labels
         # Might be worth throwing a warning...
