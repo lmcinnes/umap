@@ -1741,28 +1741,28 @@ class UMAP(BaseEstimator):
                     )
 
                 if self.metric != "precomputed":
-                    self._dist_args = tuple(self.metric_kwds.values())
+                    _dist_args = tuple(self.metric_kwds.values())
 
                     # Create a partial function for distances with arguments
-                    if len(self._dist_args) > 0:
+                    if len(_dist_args) > 0:
                         if self._sparse_data:
 
                             @numba.njit()
                             def _partial_dist_func(ind1, data1, ind2, data2):
                                 return _distance_func(
-                                    ind1, data1, ind2, data2, *self._dist_args
+                                    ind1, data1, ind2, data2, *_dist_args
                                 )
 
-                            self._distance_func = _partial_dist_func
+                            self._input_distance_func = _partial_dist_func
                         else:
 
                             @numba.njit()
                             def _partial_dist_func(x, y):
-                                return _distance_func(x, y, *self._dist_args)
+                                return _distance_func(x, y, *_dist_args)
 
-                            self._distance_func = _partial_dist_func
+                            self._input_distance_func = _partial_dist_func
                     else:
-                        self._distance_func = _distance_func
+                        self._input_distance_func = _distance_func
 
                 # self._random_init, self._tree_init = make_initialisations(
                 #     self._distance_func, self._dist_args
@@ -1947,8 +1947,7 @@ class UMAP(BaseEstimator):
         # If we fit just a single instance then error
         if self.embedding_.shape[0] == 1:
             raise ValueError(
-                "Transform unavailable when model was fit with"
-                "only a single data sample."
+                "Transform unavailable when model was fit with only a single data sample."
             )
         # If we just have the original input then short circuit things
         X = check_array(X, dtype=np.float32, accept_sparse="csr", order="C")
@@ -1999,7 +1998,7 @@ class UMAP(BaseEstimator):
                     * (1 + int(self._sparse_data))
                 ),
                 rng_state,
-                self._distance_func,
+                self._input_distance_func,
             )
             result = sparse_nn.sparse_initialized_nnd_search(
                 self._raw_data.indices,
@@ -2011,7 +2010,7 @@ class UMAP(BaseEstimator):
                 X.indices,
                 X.indptr,
                 X.data,
-                self._distance_func,
+                self._input_distance_func,
             )
 
             indices, dists = deheap_sort(result)
@@ -2024,7 +2023,7 @@ class UMAP(BaseEstimator):
                 X,
                 int(self._n_neighbors * self.transform_queue_size),
                 rng_state,
-                self._distance_func,
+                self._input_distance_func,
             )
             result = initialized_nnd_search(
                 self._raw_data,
@@ -2032,7 +2031,7 @@ class UMAP(BaseEstimator):
                 self._search_graph.indices,
                 init,
                 X,
-                self._distance_func,
+                self._input_distance_func,
             )
 
             indices, dists = deheap_sort(result)
