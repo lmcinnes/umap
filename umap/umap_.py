@@ -1652,8 +1652,10 @@ class UMAP(BaseEstimator):
         if X[index].shape[0] < 4096 and not self.force_approximation_algorithm:
             self._small_data = True
             try:
+                # sklearn pairwise_distances fails for callable metric on sparse data
+                _m = self.metric if self._sparse_data else self._input_distance_func
                 dmat = pairwise_distances(
-                    X[index], metric=self._input_distance_func, **self.metric_kwds
+                    X[index], metric=_m, **self.metric_kwds
                 )
             except (ValueError, TypeError) as e:
                 # metric is numba.jit'd or not supported by sklearn,
