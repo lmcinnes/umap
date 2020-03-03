@@ -1727,7 +1727,7 @@ class UMAP(BaseEstimator):
                     self._search_graph.transpose()
                 ).tocsr()
 
-                if callable(self._input_distance_func):
+                if callable(self.metric):
                     _distance_func = self._input_distance_func
                 elif self.metric in dist.named_distances:
                     # Choose the right metric based on sparsity
@@ -1735,13 +1735,9 @@ class UMAP(BaseEstimator):
                         _distance_func = sparse.sparse_named_distances[self.metric]
                     else:
                         _distance_func = dist.named_distances[self.metric]
-                elif self.metric == "precomputed":
-                    warn(
-                        "Using precomputed metric; transform will be unavailable for new data"
-                    )
                 else:
                     raise ValueError(
-                        "Metric is neither callable, " + "nor a recognised string"
+                        "Metric is neither callable, nor a recognised string"
                     )
 
                 if self.metric != "precomputed":
