@@ -302,24 +302,25 @@ def nearest_neighbors(
             # Otherwise fall back to nn descent in umap
             if callable(metric):
                 _distance_func = metric
-            # elif metric in dist.named_distances:
-            #     _distance_func = dist.named_distances[metric]
+            elif metric in dist.named_distances:
+                _distance_func = dist.named_distances[metric]
             else:
                 raise ValueError("Metric is neither callable, nor a recognised string")
 
             rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
             if scipy.sparse.isspmatrix_csr(X):
-                # if metric in sparse.sparse_named_distances:
-                #     _distance_func = sparse.sparse_named_distances[metric]
-                #     if metric in sparse.sparse_need_n_features:
-                #         metric_kwds["n_features"] = X.shape[1]
-                # elif callable(metric):
-                #     _distance_func = metric
-                # else:
-                #     raise ValueError(
-                #         "Metric {} not supported for sparse " + "data".format(metric)
-                #     )
+                if callable(metric):
+                    _distance_func = metric
+                else:
+                    try:
+                        _distance_func = sparse.sparse_named_distances[metric]
+                        if metric in sparse.sparse_need_n_features:
+                            metric_kwds["n_features"] = X.shape[1]
+                    except KeyError as e:
+                        raise ValueError(
+                            "Metric {} not supported for sparse data".format(metric)
+                        ) from e
 
                 # Create a partial function for distances with arguments
                 if len(metric_kwds) > 0:
