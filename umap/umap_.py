@@ -2248,27 +2248,6 @@ class UMAP(BaseEstimator):
         tail = graph.col
         weight = graph.data
 
-        if callable(self.metric):
-            _input_distance_func = self.metric
-        elif (
-            self.metric in dist.named_distances
-            and self.metric in dist.named_distances_with_gradients
-        ):
-            _input_distance_func = dist.named_distances_with_gradients[self.metric]
-        elif self.metric == "precomputed":
-            raise ValueError("metric cannnot be 'precomputed'")
-        else:
-            if self.output_metric in dist.named_distances:
-                raise ValueError(
-                    "gradient function is not yet implemented for "
-                    + repr(self.output_metric)
-                    + "."
-                )
-            else:
-                raise ValueError(
-                    "output_metric is neither callable, " + "nor a recognised string"
-                )
-
         inv_transformed_points = optimize_layout_inverse(
             inv_transformed_points,
             self._raw_data,
