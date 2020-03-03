@@ -2173,10 +2173,28 @@ class UMAP(BaseEstimator):
             breadth_first_search(adjmat, v[0], min_vertices=min_vertices)
             for v in neighbors
         ]
+        if callable(self.output_metric):
+            # need to create another numba.jit-able wrapper for callable
+            # output_metrics that return a tuple (already checked that it does
+            # during param validation in `fit` method)
+            _out_m = self.output_metric
+
+            @numba.njit(fastmath=True)
+            def _output_dist_only(x, y, *kwds):
+                return _out_m(x, y, *kwds)[0]
+
+            dist_only_func = _output_dist_only
+        elif self.output_metric in dist.named_distances.keys():
+            dist_only_func = dist.named_distances[self.output_metric]
+        else:
+            # shouldn't really ever get here because of checks already performed,
+            # but works as a failsafe in case attr was altered manually after fitting
+            raise ValueError("Unrecognized output metric: {}".format(self.output_metric))
+
         dist_args = tuple(self.output_metric_kwds.values())
         distances = [
             np.array(
-                [self._output_distance_func(X[i], self.embedding_[nb], *dist_args)
+                [dist_only_func(X[i], self.embedding_[nb], *dist_args)
                  for nb in neighborhood[i]]
             ) for i in range(X.shape[0])
         ]
@@ -2268,7 +2286,7 @@ class UMAP(BaseEstimator):
             self.repulsion_strength,
             self._initial_alpha / 4.0,
             self.negative_sample_rate,
-            _input_distance_func,
+            self._inverse_distance_func,
             tuple(self.metric_kwds.values()),
             verbose=self.verbose,
         )
