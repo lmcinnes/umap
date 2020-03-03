@@ -309,16 +309,6 @@ def nearest_neighbors(
                     "Metric is neither callable, " + "nor a recognised string"
                 )
 
-            if metric in (
-                "cosine",
-                "correlation",
-                "dice",
-                "jaccard",
-                "ll_dirichlet",
-                "hellinger",
-            ):
-                angular = True
-
             rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
             if scipy.sparse.isspmatrix_csr(X):
@@ -1480,6 +1470,7 @@ class UMAP(BaseEstimator):
             self._sparse_data = True
         else:
             self._sparse_data = False
+        # set input distance metric & inverse_transform distance metric
         if callable(self.metric):
             in_returns_grad = self._check_custom_metric(
                 self.metric, self.metric_kwds, self._raw_data
@@ -1530,6 +1521,7 @@ class UMAP(BaseEstimator):
                 self._inverse_distance_func = None
         else:
             raise ValueError("metric is neither callable nor a recognised string")
+        # set ooutput distance metric
         if callable(self.output_metric):
             out_returns_grad = self._check_custom_metric(
                 self.output_metric, self.output_metric_kwds
@@ -1556,6 +1548,9 @@ class UMAP(BaseEstimator):
             raise ValueError(
                 "output_metric is neither callable nor a recognised string"
             )
+        # set angularity for NN search based on metric
+        if self.metric in ("cosine", "correlation", "dice", "jaccard", "ll_dirichlet", "hellinger"):
+            self.angular_rp_forest = True
 
     def _check_custom_metric(self, metric, kwds, data=None):
         # quickly check to determine whether user-defined
