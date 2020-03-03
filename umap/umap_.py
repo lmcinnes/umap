@@ -305,9 +305,7 @@ def nearest_neighbors(
             # elif metric in dist.named_distances:
             #     _distance_func = dist.named_distances[metric]
             else:
-                raise ValueError(
-                    "Metric is neither callable, nor a recognised string"
-                )
+                raise ValueError("Metric is neither callable, nor a recognised string")
 
             rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
@@ -1477,10 +1475,12 @@ class UMAP(BaseEstimator):
             )
             if in_returns_grad:
                 _m = self.metric
+
                 @numba.njit(fastmath=True)
                 def _dist_only(x, y, *kwds):
                     return _m(x, y, *kwds)[0]
-                self._input_distance_func =  _dist_only
+
+                self._input_distance_func = _dist_only
                 self._inverse_distance_func = self.metric
             else:
                 self._input_distance_func = self.metric
@@ -1504,9 +1504,13 @@ class UMAP(BaseEstimator):
         elif self.metric in dist.named_distances:
             if self._sparse_data:
                 if self.metric in sparse.sparse_named_distances:
-                    self._input_distance_func = sparse.sparse_named_distances[self.metric]
+                    self._input_distance_func = sparse.sparse_named_distances[
+                        self.metric
+                    ]
                 else:
-                    raise ValueError("Metric {} is not supported for sparse data".format(self.metric))
+                    raise ValueError(
+                        "Metric {} is not supported for sparse data".format(self.metric)
+                    )
             else:
                 self._input_distance_func = dist.named_distances[self.metric]
             try:
@@ -1549,7 +1553,14 @@ class UMAP(BaseEstimator):
                 "output_metric is neither callable nor a recognised string"
             )
         # set angularity for NN search based on metric
-        if self.metric in ("cosine", "correlation", "dice", "jaccard", "ll_dirichlet", "hellinger"):
+        if self.metric in (
+            "cosine",
+            "correlation",
+            "dice",
+            "jaccard",
+            "ll_dirichlet",
+            "hellinger",
+        ):
             self.angular_rp_forest = True
 
     def _check_custom_metric(self, metric, kwds, data=None):
@@ -1775,9 +1786,7 @@ class UMAP(BaseEstimator):
 
                         @numba.njit()
                         def _partial_dist_func(ind1, data1, ind2, data2):
-                            return _distance_func(
-                                ind1, data1, ind2, data2, *_dist_args
-                            )
+                            return _distance_func(ind1, data1, ind2, data2, *_dist_args)
 
                         self._input_distance_func = _partial_dist_func
                     else:
@@ -1996,10 +2005,7 @@ class UMAP(BaseEstimator):
                 # sklearn pairwise_distances fails for callable metric on sparse data
                 _m = self.metric if self._sparse_data else self._input_distance_func
                 dmat = pairwise_distances(
-                    X,
-                    self._raw_data,
-                    metric=_m,
-                    **self.metric_kwds
+                    X, self._raw_data, metric=_m, **self.metric_kwds
                 )
             except (TypeError, ValueError):
                 dmat = dist.pairwise_special_metric(
