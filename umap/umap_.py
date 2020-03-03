@@ -1471,28 +1471,37 @@ class UMAP(BaseEstimator):
         if self.n_components < 1:
             raise ValueError("n_components must be greater than 0")
         if self.n_epochs is not None and (
-            self.n_epochs <= 10 or not isinstance(self.n_epochs, int)):
+            self.n_epochs <= 10 or not isinstance(self.n_epochs, int)
+        ):
             raise ValueError("n_epochs must be a positive integer of at least 10")
         if callable(self.metric):
-            in_returns_grad = self._check_custom_metric(self.metric, self.metric_kwds, self._raw_data)
+            in_returns_grad = self._check_custom_metric(
+                self.metric, self.metric_kwds, self._raw_data
+            )
             if in_returns_grad:
                 _m = self.metric
+
                 @numba.njit(fastmath=True)
                 def _dist_only(x, y, *kwds):
                     return _m(x, y, *kwds)[0]
-                self._input_distance_func = _dist_only  # lambda x, y, **kwargs: self.metric(x, y, **kwargs)[0]
+
+                self._input_distance_func =  _dist_only
                 self._inverse_distance_func = self.metric
             else:
                 self._input_distance_func = self.metric
                 self._inverse_distance_func = None
-                warn("custom distance metric does not return gradient; inverse_transform will be unavailable. "
-                     "To enable using inverse_transform method method, define a distance function that returns "
-                     "a tuple of (distance [float], gradient [np.array])")
+                warn(
+                    "custom distance metric does not return gradient; inverse_transform will be unavailable. "
+                    "To enable using inverse_transform method method, define a distance function that returns "
+                    "a tuple of (distance [float], gradient [np.array])"
+                )
         elif self.metric == "precomputed":
             if self.unique is False:
                 raise ValueError("unique is poorly defined on a precomputed metric")
-            warn("using precomputed metric; transform will be unavailable for new data and inverse_transform "
-                 "will be unavailable for all data")
+            warn(
+                "using precomputed metric; transform will be unavailable for new data and inverse_transform "
+                "will be unavailable for all data"
+            )
             self._input_distance_func = self.metric
             self._inverse_distance_func = None
         elif self.metric == "hellinger" and self._raw_data.min() < 0:
@@ -1500,27 +1509,43 @@ class UMAP(BaseEstimator):
         elif self.metric in dist.named_distances:
             self._input_distance_func = dist.named_distances[self.metric]
             try:
-                self._inverse_distance_func = dist.named_distances_with_gradients[self.metric]
+                self._inverse_distance_func = dist.named_distances_with_gradients[
+                    self.metric
+                ]
             except KeyError:
-                warn("gradient function is not yet implemented for {} distance metric; "
-                     "inverse_transform will be unavailable".format(self.metric))
+                warn(
+                    "gradient function is not yet implemented for {} distance metric; "
+                    "inverse_transform will be unavailable".format(self.metric)
+                )
                 self._inverse_distance_func = None
         else:
             raise ValueError("metric is neither callable nor a recognised string")
         if callable(self.output_metric):
-            out_returns_grad = self._check_custom_metric(self.output_metric, self.output_metric_kwds)
+            out_returns_grad = self._check_custom_metric(
+                self.output_metric, self.output_metric_kwds
+            )
             if out_returns_grad:
                 self._output_distance_func = self.output_metric
             else:
-                raise ValueError("custom output_metric must return a tuple of (distance [float], gradient [np.array])")
+                raise ValueError(
+                    "custom output_metric must return a tuple of (distance [float], gradient [np.array])"
+                )
         elif self.output_metric == "precomputed":
             raise ValueError("output_metric cannnot be 'precomputed'")
         elif self.output_metric in dist.named_distances_with_gradients:
-            self._output_distance_func = dist.named_distances_with_gradients[self.output_metric]
+            self._output_distance_func = dist.named_distances_with_gradients[
+                self.output_metric
+            ]
         elif self.output_metric in dist.named_distances:
-            raise ValueError("gradient function is not yet implemented for {}.".format(self.output_metric))
+            raise ValueError(
+                "gradient function is not yet implemented for {}.".format(
+                    self.output_metric
+                )
+            )
         else:
-            raise ValueError("output_metric is neither callable nor a recognised string")
+            raise ValueError(
+                "output_metric is neither callable nor a recognised string"
+            )
 
     def _check_custom_metric(self, metric, kwds, data=None):
         # quickly check to determine whether user-defined
@@ -1641,7 +1666,7 @@ class UMAP(BaseEstimator):
         # Note: unless it causes issues for setting 'index', could move this to
         # initial sparsity check above
         if self._sparse_data and not X.has_sorted_indices:
-                X.sort_indices()
+            X.sort_indices()
 
         random_state = check_random_state(self.random_state)
 
@@ -1654,17 +1679,22 @@ class UMAP(BaseEstimator):
             try:
                 # sklearn pairwise_distances fails for callable metric on sparse data
                 _m = self.metric if self._sparse_data else self._input_distance_func
-                dmat = pairwise_distances(
-                    X[index], metric=_m, **self.metric_kwds
-                )
+                dmat = pairwise_distances(X[index], metric=_m, **self.metric_kwds)
             except (ValueError, TypeError) as e:
                 # metric is numba.jit'd or not supported by sklearn,
                 # fallback to pairwise special
                 if self._sparse_data:
                     dmat = dist.pairwise_special_metric(
-                        X[index].toarray(), metric=self._input_distance_func, kwds=self.metric_kwds)
+                        X[index].toarray(),
+                        metric=self._input_distance_func,
+                        kwds=self.metric_kwds,
+                    )
                 else:
-                    dmat = dist.pairwise_special_metric(X[index], metric=self._input_distance_func, kwds=self.metric_kwds)
+                    dmat = dist.pairwise_special_metric(
+                        X[index],
+                        metric=self._input_distance_func,
+                        kwds=self.metric_kwds,
+                    )
             self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
                 dmat,
                 self._n_neighbors,
@@ -1829,10 +1859,11 @@ class UMAP(BaseEstimator):
                             **self.target_metric_kwds
                         )
                     except (TypeError, ValueError):
-                        ydmat = dist.pairwise_special_metric(y_[np.newaxis, :].T,
-                                                             metric=self.target_metric,
-                                                             kwds=self.target_metric_kwds
-                                                             )
+                        ydmat = dist.pairwise_special_metric(
+                            y_[np.newaxis, :].T,
+                            metric=self.target_metric,
+                            kwds=self.target_metric_kwds,
+                        )
 
                     target_graph, target_sigmas, target_rhos = fuzzy_simplicial_set(
                         ydmat,
@@ -1969,11 +2000,17 @@ class UMAP(BaseEstimator):
         if self._small_data:
             try:
                 dmat = pairwise_distances(
-                    X, self._raw_data, metric=self._input_distance_func, **self.metric_kwds
+                    X,
+                    self._raw_data,
+                    metric=self._input_distance_func,
+                    **self.metric_kwds
                 )
             except (TypeError, ValueError):
                 dmat = dist.pairwise_special_metric(
-                    X, self._raw_data, metric=self._input_distance_func, kwds=self.metric_kwds
+                    X,
+                    self._raw_data,
+                    metric=self._input_distance_func,
+                    kwds=self.metric_kwds,
                 )
             indices = np.argpartition(dmat, self._n_neighbors)[:, : self._n_neighbors]
             dmat_shortened = submatrix(dmat, indices, self._n_neighbors)
@@ -2191,14 +2228,19 @@ class UMAP(BaseEstimator):
         else:
             # shouldn't really ever get here because of checks already performed,
             # but works as a failsafe in case attr was altered manually after fitting
-            raise ValueError("Unrecognized output metric: {}".format(self.output_metric))
+            raise ValueError(
+                "Unrecognized output metric: {}".format(self.output_metric)
+            )
 
         dist_args = tuple(self.output_metric_kwds.values())
         distances = [
             np.array(
-                [dist_only_func(X[i], self.embedding_[nb], *dist_args)
-                 for nb in neighborhood[i]]
-            ) for i in range(X.shape[0])
+                [
+                    dist_only_func(X[i], self.embedding_[nb], *dist_args)
+                    for nb in neighborhood[i]
+                ]
+            )
+            for i in range(X.shape[0])
         ]
         idx = np.array([np.argsort(e)[:min_vertices] for e in distances])
 
