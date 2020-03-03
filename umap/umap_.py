@@ -1720,12 +1720,17 @@ class UMAP(BaseEstimator):
                 self.verbose,
             )
         else:
-            self._small_data = False
             # Standard case
+            self._small_data = False
+            # pynndescent doesn't accept callable functions for sparse data
+            if _HAVE_PYNNDESCENT and self._sparse_data and isinstance(self.metric, str):
+                nn_metric = self.metric
+            else:
+                nn_metric = self._input_distance_func
             (self._knn_indices, self._knn_dists, self._rp_forest) = nearest_neighbors(
                 X[index],
                 self._n_neighbors,
-                self._input_distance_func,
+                nn_metric,
                 self.metric_kwds,
                 self.angular_rp_forest,
                 random_state,
@@ -1738,7 +1743,7 @@ class UMAP(BaseEstimator):
                 X[index],
                 self.n_neighbors,
                 random_state,
-                self._input_distance_func,
+                self.nn_metric,
                 self.metric_kwds,
                 self._knn_indices,
                 self._knn_dists,
