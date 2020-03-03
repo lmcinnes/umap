@@ -1743,7 +1743,7 @@ class UMAP(BaseEstimator):
                 X[index],
                 self.n_neighbors,
                 random_state,
-                self.nn_metric,
+                nn_metric,
                 self.metric_kwds,
                 self._knn_indices,
                 self._knn_dists,
