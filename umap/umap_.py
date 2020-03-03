@@ -1996,10 +1996,12 @@ class UMAP(BaseEstimator):
 
         if self._small_data:
             try:
+                # sklearn pairwise_distances fails for callable metric on sparse data
+                _m = self.metric if self._sparse_data else self._input_distance_func
                 dmat = pairwise_distances(
                     X,
                     self._raw_data,
-                    metric=self._input_distance_func,
+                    metric=_m,
                     **self.metric_kwds
                 )
             except (TypeError, ValueError):
