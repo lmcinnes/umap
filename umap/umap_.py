@@ -1380,14 +1380,8 @@ class UMAP(BaseEstimator):
         self.metric = metric
         self.output_metric = output_metric
         self.target_metric = target_metric
-        if metric_kwds is None:
-            self.metric_kwds = {}
-        else:
-            self.metric_kwds = metric_kwds
-        if output_metric_kwds is None:
-            self.output_metric_kwds = {}
-        else:
-            self.output_metric_kwds = output_metric_kwds
+        self.metric_kwds = metric_kwds
+        self.output_metric_kwds = output_metric_kwds
         self.n_epochs = n_epochs
         self.init = init
         self.n_components = n_components
@@ -1405,10 +1399,7 @@ class UMAP(BaseEstimator):
         self.transform_queue_size = transform_queue_size
         self.target_n_neighbors = target_n_neighbors
         self.target_metric = target_metric
-        if target_metric_kwds is None:
-            self.target_metric_kwds = {}
-        else:
-            self.target_metric_kwds = target_metric_kwds
+        self.target_metric_kwds = target_metric_kwds
         self.target_weight = target_weight
         self.transform_seed = transform_seed
         self.force_approximation_algorithm = force_approximation_algorithm
@@ -1463,6 +1454,18 @@ class UMAP(BaseEstimator):
             self.n_epochs <= 10 or not isinstance(self.n_epochs, int)
         ):
             raise ValueError("n_epochs must be a positive integer of at least 10")
+        if self.metric_kwds is None:
+            self._metric_kwds = {}
+        else:
+            self._metric_kwds = self.metric_kwds
+        if self.output_metric_kwds is None:
+            self._output_metric_kwds = {}
+        else:
+            self._output_metric_kwds = self.output_metric_kwds
+        if self.target_metric_kwds is None:
+            self._target_metric_kwds = {}
+        else:
+            self._target_metric_kwds = self.target_metric_kwds
         # check sparsity of data upfront to set proper _input_distance_func &
         # save repeated checks later on
         if scipy.sparse.isspmatrix_csr(self._raw_data):
@@ -1472,7 +1475,7 @@ class UMAP(BaseEstimator):
         # set input distance metric & inverse_transform distance metric
         if callable(self.metric):
             in_returns_grad = self._check_custom_metric(
-                self.metric, self.metric_kwds, self._raw_data
+                self.metric, self._metric_kwds, self._raw_data
             )
             if in_returns_grad:
                 _m = self.metric
@@ -1529,7 +1532,7 @@ class UMAP(BaseEstimator):
         # set ooutput distance metric
         if callable(self.output_metric):
             out_returns_grad = self._check_custom_metric(
-                self.output_metric, self.output_metric_kwds
+                self.output_metric, self._output_metric_kwds
             )
             if out_returns_grad:
                 self._output_distance_func = self.output_metric
@@ -1689,7 +1692,7 @@ class UMAP(BaseEstimator):
             try:
                 # sklearn pairwise_distances fails for callable metric on sparse data
                 _m = self.metric if self._sparse_data else self._input_distance_func
-                dmat = pairwise_distances(X[index], metric=_m, **self.metric_kwds)
+                dmat = pairwise_distances(X[index], metric=_m, **self._metric_kwds)
             except (ValueError, TypeError) as e:
                 # metric is numba.jit'd or not supported by sklearn,
                 # fallback to pairwise special
@@ -1697,20 +1700,20 @@ class UMAP(BaseEstimator):
                     dmat = dist.pairwise_special_metric(
                         X[index].toarray(),
                         metric=self._input_distance_func,
-                        kwds=self.metric_kwds,
+                        kwds=self._metric_kwds,
                     )
                 else:
                     dmat = dist.pairwise_special_metric(
                         X[index],
                         metric=self._input_distance_func,
-                        kwds=self.metric_kwds,
+                        kwds=self._metric_kwds,
                     )
             self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
                 dmat,
                 self._n_neighbors,
                 random_state,
                 "precomputed",
-                self.metric_kwds,
+                self._metric_kwds,
                 None,
                 None,
                 self.angular_rp_forest,
@@ -1731,7 +1734,7 @@ class UMAP(BaseEstimator):
                 X[index],
                 self._n_neighbors,
                 nn_metric,
-                self.metric_kwds,
+                self._metric_kwds,
                 self.angular_rp_forest,
                 random_state,
                 self.low_memory,
@@ -1744,7 +1747,7 @@ class UMAP(BaseEstimator):
                 self.n_neighbors,
                 random_state,
                 nn_metric,
-                self.metric_kwds,
+                self._metric_kwds,
                 self._knn_indices,
                 self._knn_dists,
                 self.angular_rp_forest,
@@ -1771,10 +1774,10 @@ class UMAP(BaseEstimator):
                     self._search_graph.transpose()
                 ).tocsr()
 
-                if (self.metric != "precomputed") and (len(self.metric_kwds) > 0):
+                if (self.metric != "precomputed") and (len(self._metric_kwds) > 0):
                     # Create a partial function for distances with arguments
                     _distance_func = self._input_distance_func
-                    _dist_args = tuple(self.metric_kwds.values())
+                    _dist_args = tuple(self._metric_kwds.values())
                     if self._sparse_data:
 
                         @numba.njit()
@@ -1843,13 +1846,13 @@ class UMAP(BaseEstimator):
                         ydmat = pairwise_distances(
                             y_[np.newaxis, :].T,
                             metric=self.target_metric,
-                            **self.target_metric_kwds
+                            **self._target_metric_kwds
                         )
                     except (TypeError, ValueError):
                         ydmat = dist.pairwise_special_metric(
                             y_[np.newaxis, :].T,
                             metric=self.target_metric,
-                            kwds=self.target_metric_kwds,
+                            kwds=self._target_metric_kwds,
                         )
 
                     target_graph, target_sigmas, target_rhos = fuzzy_simplicial_set(
@@ -1857,7 +1860,7 @@ class UMAP(BaseEstimator):
                         target_n_neighbors,
                         random_state,
                         "precomputed",
-                        self.target_metric_kwds,
+                        self._target_metric_kwds,
                         None,
                         None,
                         False,
@@ -1872,7 +1875,7 @@ class UMAP(BaseEstimator):
                         target_n_neighbors,
                         random_state,
                         self.target_metric,
-                        self.target_metric_kwds,
+                        self._target_metric_kwds,
                         None,
                         None,
                         False,
@@ -1911,9 +1914,9 @@ class UMAP(BaseEstimator):
             init,
             random_state,
             self._input_distance_func,
-            self.metric_kwds,
+            self._metric_kwds,
             self._output_distance_func,
-            self.output_metric_kwds,
+            self._output_metric_kwds,
             self.output_metric in ("euclidean", "l2"),
             self.random_state is None,
             self.verbose,
@@ -1989,14 +1992,14 @@ class UMAP(BaseEstimator):
                 # sklearn pairwise_distances fails for callable metric on sparse data
                 _m = self.metric if self._sparse_data else self._input_distance_func
                 dmat = pairwise_distances(
-                    X, self._raw_data, metric=_m, **self.metric_kwds
+                    X, self._raw_data, metric=_m, **self._metric_kwds
                 )
             except (TypeError, ValueError):
                 dmat = dist.pairwise_special_metric(
                     X,
                     self._raw_data,
                     metric=self._input_distance_func,
-                    kwds=self.metric_kwds,
+                    kwds=self._metric_kwds,
                 )
             indices = np.argpartition(dmat, self._n_neighbors)[:, : self._n_neighbors]
             dmat_shortened = submatrix(dmat, indices, self._n_neighbors)
@@ -2143,7 +2146,7 @@ class UMAP(BaseEstimator):
                 self._initial_alpha / 4.0,
                 self.negative_sample_rate,
                 self._output_distance_func,
-                tuple(self.output_metric_kwds.values()),
+                tuple(self._output_metric_kwds.values()),
                 verbose=self.verbose,
             )
 
@@ -2218,7 +2221,7 @@ class UMAP(BaseEstimator):
                 "Unrecognized output metric: {}".format(self.output_metric)
             )
 
-        dist_args = tuple(self.output_metric_kwds.values())
+        dist_args = tuple(self._output_metric_kwds.values())
         distances = [
             np.array(
                 [
@@ -2296,7 +2299,7 @@ class UMAP(BaseEstimator):
             self._initial_alpha / 4.0,
             self.negative_sample_rate,
             self._inverse_distance_func,
-            tuple(self.metric_kwds.values()),
+            tuple(self._metric_kwds.values()),
             verbose=self.verbose,
         )
 
