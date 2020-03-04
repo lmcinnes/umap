@@ -448,7 +448,9 @@ def show(plot_to_show):
     elif isinstance(plot_to_show, bpl.Figure):
         show_interactive(plot_to_show)
     else:
-        raise ValueError("The type of ``plot_to_show`` was not valid, or not understood.")
+        raise ValueError(
+            "The type of ``plot_to_show`` was not valid, or not understood."
+        )
 
 
 def points(
@@ -589,8 +591,11 @@ def points(
 
     if subset_points is not None:
         if len(subset_points) != points.shape[0]:
-            raise ValueError("Size of subset points ({}) does not match number of input points ({})".format(
-                             len(subset_points), points.shape[0]))
+            raise ValueError(
+                "Size of subset points ({}) does not match number of input points ({})".format(
+                    len(subset_points), points.shape[0]
+                )
+            )
         points = points[subset_points]
 
         if labels is not None:
@@ -1293,8 +1298,11 @@ def interactive(
     points = umap_object.embedding_
     if subset_points is not None:
         if len(subset_points) != points.shape[0]:
-            raise ValueError("Size of subset points ({}) does not match number of input points ({})".format(
-                             len(subset_points), points.shape[0]))
+            raise ValueError(
+                "Size of subset points ({}) does not match number of input points ({})".format(
+                    len(subset_points), points.shape[0]
+                )
+            )
         points = points[subset_points]
 
     if points.shape[1] != 2:
