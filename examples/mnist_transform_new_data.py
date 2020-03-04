@@ -24,12 +24,9 @@ import umap
 
 sns.set(context="paper", style="white")
 
-mnist = fetch_openml('mnist_784', version=1)
+mnist = fetch_openml("mnist_784", version=1)
 X_train, X_test, y_train, y_test = train_test_split(
-    mnist.data,
-    mnist.target,
-    stratify=mnist.target,
-    random_state=42
+    mnist.data, mnist.target, stratify=mnist.target, random_state=42
 )
 
 reducer = umap.UMAP(random_state=42)

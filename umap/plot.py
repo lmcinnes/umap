@@ -448,7 +448,9 @@ def show(plot_to_show):
     elif isinstance(plot_to_show, bpl.Figure):
         show_interactive(plot_to_show)
     else:
-        raise ValueError("The type of ``plot_to_show`` was not valid, or not understood.")
+        raise ValueError(
+            "The type of ``plot_to_show`` was not valid, or not understood."
+        )
 
 
 def points(
