@@ -59,6 +59,7 @@ from umap.layouts import (
 try:
     # Use pynndescent, if installed (python 3 only)
     from pynndescent import NNDescent
+    from pynndescent.distances import named_distances as pynn_named_distances
 
     _HAVE_PYNNDESCENT = True
 except ImportError:
@@ -1725,8 +1726,8 @@ class UMAP(BaseEstimator):
         else:
             # Standard case
             self._small_data = False
-            # pynndescent doesn't accept callable functions for sparse data
-            if _HAVE_PYNNDESCENT and self._sparse_data and isinstance(self.metric, str):
+            # pass string identifier if pynndescent also defines distance metric
+            if (_HAVE_PYNNDESCENT) and (self.metric in pynn_named_distances):
                 nn_metric = self.metric
             else:
                 nn_metric = self._input_distance_func
