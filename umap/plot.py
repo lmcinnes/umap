@@ -588,6 +588,9 @@ def points(
     points = umap_object.embedding_
 
     if subset_points is not None:
+        if len(subset_points) != points.shape[0]:
+            raise ValueError("Size of subset points ({}) does not match number of input points ({})".format(
+                             len(subset_points), points.shape[0]))
         points = points[subset_points]
 
         if labels is not None:
@@ -1288,7 +1291,10 @@ def interactive(
         )
 
     points = umap_object.embedding_
-    if subset_points:
+    if subset_points is not None:
+        if len(subset_points) != points.shape[0]:
+            raise ValueError("Size of subset points ({}) does not match number of input points ({})".format(
+                             len(subset_points), points.shape[0]))
         points = points[subset_points]
 
     if points.shape[1] != 2:
@@ -1334,13 +1340,6 @@ def interactive(
         colors = matplotlib.colors.rgb2hex(plt.get_cmap(cmap)(0.5))
 
     if subset_points is not None:
-        if len(subset_points) != points.shape[0]:
-            raise ValueError(
-                "Size of subset points ({}) does not match number of input points ({})".format(
-                    len(subset_points), points.shape[0]
-                )
-            )
-
         data = data[subset_points]
         if hover_data is not None:
             hover_data = hover_data[subset_points]
