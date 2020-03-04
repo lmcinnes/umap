@@ -60,6 +60,7 @@ try:
     # Use pynndescent, if installed (python 3 only)
     from pynndescent import NNDescent
     from pynndescent.distances import named_distances as pynn_named_distances
+    from pynndescent.sparse import sparse_named_distances as pynn_sparse_named_distances
 
     _HAVE_PYNNDESCENT = True
 except ImportError:
@@ -1727,8 +1728,13 @@ class UMAP(BaseEstimator):
             # Standard case
             self._small_data = False
             # pass string identifier if pynndescent also defines distance metric
-            if (_HAVE_PYNNDESCENT) and (self.metric in pynn_named_distances):
-                nn_metric = self.metric
+            if _HAVE_PYNNDESCENT:
+                if self._sparse_data and self.metric in pynn_sparse_named_distances:
+                    nn_metric = self.metric
+                elif not self._sparse_data and self.metric in pynn_named_distances:
+                    nn_metric = self.metric
+                else:
+                    nn_metric = self._input_distance_func
             else:
                 nn_metric = self._input_distance_func
             (self._knn_indices, self._knn_dists, self._rp_forest) = nearest_neighbors(
