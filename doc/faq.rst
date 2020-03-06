@@ -130,7 +130,7 @@ Smallvis only works for small datasets, but provides
 much greater flexibility and control.
 
 Is there support for the R language?
-----------------------------------
+------------------------------------
 
 Yes! A number of people have worked hard to make UMAP
 available to R users.

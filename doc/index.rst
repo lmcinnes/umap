@@ -61,6 +61,7 @@ PyPI install, presuming you have numba and sklearn and all its requirements
    supervised
    clustering
    outliers
+   document_embedding
    embedding_space
    auto_examples/index
    faq
@@ -69,7 +70,6 @@ PyPI install, presuming you have numba and sklearn and all its requirements
    :maxdepth: 2
    :caption: Background on UMAP:
 
-   dimension_reduction
    how_umap_works
    performance
 
