@@ -1842,6 +1842,8 @@ class UMAP(BaseEstimator):
                     metric_scale=scale,
                 )
             else:
+                if len(y_.shape) == 1:
+                    y_ = y_.reshape(-1, 1)
                 if self.target_n_neighbors == -1:
                     target_n_neighbors = self._n_neighbors
                 else:
@@ -1851,13 +1853,13 @@ class UMAP(BaseEstimator):
                 if y.shape[0] < 4096:
                     try:
                         ydmat = pairwise_distances(
-                            y_[np.newaxis, :].T,
+                            y_,
                             metric=self.target_metric,
                             **self._target_metric_kwds
                         )
                     except (TypeError, ValueError):
                         ydmat = dist.pairwise_special_metric(
-                            y_[np.newaxis, :].T,
+                            y_,
                             metric=self.target_metric,
                             kwds=self._target_metric_kwds,
                         )
@@ -1878,7 +1880,7 @@ class UMAP(BaseEstimator):
                 else:
                     # Standard case
                     target_graph, target_sigmas, target_rhos = fuzzy_simplicial_set(
-                        y_[np.newaxis, :].T,
+                        y_,
                         target_n_neighbors,
                         random_state,
                         self.target_metric,
