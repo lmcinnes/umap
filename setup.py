@@ -44,15 +44,15 @@ configuration = {
                          'scikit-learn >= 0.20',
                          'scipy >= 1.0',
                          'numba >= 0.42, != 0.47',
-                         'pynndescent >= 0.4.5'
-                         'tbb >= 2019.0'],
+                         'pynndescent >= 0.4.5',
+                         'tbb >= 2019'],
     'extras_require': {
         'plot': [
             'matplotlib',
             'datashader',
             'bokeh',
             'holoviews',
-            'seaborn'
+            'seaborn',
         ],
     },
     'ext_modules': [],
@@ -60,7 +60,7 @@ configuration = {
     'test_suite': 'nose.collector',
     'tests_require': ['nose'],
     'data_files': (),
-    'zip_safe': False
+    'zip_safe': False,
     }
 
 setup(**configuration)
