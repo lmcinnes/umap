@@ -2202,7 +2202,7 @@ class UMAP(BaseEstimator):
 
         adjmat = scipy.sparse.csr_matrix(adjmat)
 
-        min_vertices = self._raw_data.shape[-1]
+        min_vertices = min(self._raw_data.shape[-1], self._raw_data.shape[0])
 
         neighborhood = [
             breadth_first_search(adjmat, v[0], min_vertices=min_vertices)
