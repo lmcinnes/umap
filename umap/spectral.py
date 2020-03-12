@@ -36,6 +36,8 @@ def component_layout(
 
     metric_kwds: dict (optional, default {})
         Keyword arguments to be passed to the metric function.
+        If metric is 'precomputed', 'linkage' keyword can be used to specify
+        'average', 'complete', or 'single' linkage. Default is 'average'
 
     Returns
     -------
@@ -46,12 +48,32 @@ def component_layout(
 
     component_centroids = np.empty((n_components, data.shape[1]), dtype=np.float64)
 
-    for label in range(n_components):
-        component_centroids[label] = data[component_labels == label].mean(axis=0)
+    if metric == 'precomputed':
+        # cannot compute centroids from precomputed distances
+        # instead, compute centroid distances using linkage
+        distance_matrix = np.zeros((n_components, n_components), dtype=np.float64)
+        linkage = metric_kwds.get('linkage', 'average')
+        if linkage == 'average':
+            linkage = np.mean
+        elif linkage == 'complete':
+            linkage = np.max
+        elif linkage == 'single':
+            linkage = np.min
+        else:
+            raise ValueError("Unrecognized linkage '%s'. Please choose from "
+                             "'average', 'complete', or 'single'" % linkage)
+        for c_i in range(n_components):
+            dm_i = data[component_labels == c_i]
+            for c_j in range(c_i+1, n_components):
+                distance_matrix[c_i, c_j] = linkage(dm_i[:, component_labels == c_j])
+                distance_matrix[c_j, c_i] = distance_matrix[c_i, c_j]
+    else:
+        for label in range(n_components):
+            component_centroids[label] = data[component_labels == label].mean(axis=0)
 
-    distance_matrix = pairwise_distances(
-        component_centroids, metric=metric, **metric_kwds
-    )
+        distance_matrix = pairwise_distances(
+            component_centroids, metric=metric, **metric_kwds
+        )
     affinity_matrix = np.exp(-distance_matrix ** 2)
 
     component_embedding = SpectralEmbedding(
