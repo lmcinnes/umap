@@ -1853,7 +1853,8 @@ class UMAP(BaseEstimator):
                 if y.shape[0] < 4096:
                     try:
                         ydmat = pairwise_distances(
-                            y_, metric=self.target_metric, **self._target_metric_kwds
+                            y_, metric=self.target_metric,
+                            **self._target_metric_kwds
                         )
                     except (TypeError, ValueError):
                         ydmat = dist.pairwise_special_metric(
@@ -2182,8 +2183,9 @@ class UMAP(BaseEstimator):
             warn(
                 "Inverse transform works best with low dimensional embeddings."
                 " Results may be poor, or this approach to inverse transform"
-                " may fail altogether! If you need a high dimensional latent space"
-                " and inverse transform operations consider using an autoencoder."
+                " may fail altogether! If you need a high dimensional latent"
+                " space and inverse transform operations consider using an"
+                " autoencoder."
             )
 
         X = check_array(X, dtype=np.float32, order="C")
