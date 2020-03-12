@@ -63,7 +63,7 @@ the clustering to recover the digit structure.
 
 For visualization purposes we can reduce the data to 2-dimensions using
 UMAP. When we cluster the data in high dimensions we can visualize the
-result of that clustering. First, however, we'll view the data a colored
+result of that clustering. First, however, we'll view the data colored
 by the digit that each data point represents -- we'll use a different
 color for each digit. This will help frame what follows.
 
@@ -103,7 +103,7 @@ out UMAP embedded data by cluster membership.
 This is not really the result we were looking for (though it does expose
 interesting properties of how K-Means chooses clusters in high
 dimensional space, and how UMAP unwraps manifolds by finding manifold
-boundaries. While K-Means gets some cases correct -- the two clusters
+boundaries). While K-Means gets some cases correct -- the two clusters
 are the far right are mostly correct, most of the rest of the data looks
 somewhat arbitrarily carved up among the remaining clusters. We can put
 this impression to the test by evaluating the adjusted Rand score and
@@ -149,7 +149,7 @@ poorly with the dimensionality of the data it will work on.
 We can now inspect the results. Before we do, however, it should be
 noted that one of the features of HDBSCAN is that it can refuse to
 cluster some points and classify the as "noise". To visualize this
-aspect we will colorpoints that were classified as noise gray, and then
+aspect we will color points that were classified as noise gray, and then
 color the remaining points according to the cluster membership.
 
 .. code:: python3
@@ -335,7 +335,7 @@ And now we can visualize the results, just as before.
 
 We can see that we have done a much better job of finding clusters
 rather than merely assigning the majority of data as noise. This is
-because we have we no longer have to try to cope with the relative lack
+because we no longer have to try to cope with the relative lack
 of density in 50 dimensional space and now HDBSCAN can more cleanly
 discern the clusters.
 

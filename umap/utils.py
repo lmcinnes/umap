@@ -6,6 +6,33 @@ import time
 
 import numpy as np
 import numba
+import scipy.sparse
+
+
+@numba.njit(parallel=True)
+def fast_knn_indices(X, n_neighbors):
+    """A fast computation of knn indices.
+
+    Parameters
+    ----------
+    X: array of shape (n_samples, n_features)
+        The input data to compute the k-neighbor indices of.
+
+    n_neighbors: int
+        The number of nearest neighbors to compute for each sample in ``X``.
+
+    Returns
+    -------
+    knn_indices: array of shape (n_samples, n_neighbors)
+        The indices on the ``n_neighbors`` closest points in the dataset.
+    """
+    knn_indices = np.empty((X.shape[0], n_neighbors), dtype=np.int32)
+    for row in numba.prange(X.shape[0]):
+        # v = np.argsort(X[row])  # Need to call argsort this way for numba
+        v = X[row].argsort(kind="quicksort")
+        v = v[:n_neighbors]
+        knn_indices[row] = v
+    return knn_indices
 
 
 @numba.njit("i4(i8[:])")
@@ -94,6 +121,7 @@ def rejection_sample(n_samples, pool_size, rng_state):
     result = np.empty(n_samples, dtype=np.int64)
     for i in range(n_samples):
         reject_sample = True
+        j = 0
         while reject_sample:
             j = tau_rand_int(rng_state) % pool_size
             for k in range(i):
@@ -249,12 +277,12 @@ def unchecked_heap_push(heap, row, weight, index, flag):
     -------
     success: The number of new elements successfully pushed into the heap.
     """
+    if weight >= heap[1, row, 0]:
+        return 0
+
     indices = heap[0, row]
     weights = heap[1, row]
     is_new = heap[2, row]
-
-    if weight >= weights[0]:
-        return 0
 
     # insert val at position zero
     weights[0] = weight
@@ -317,8 +345,8 @@ def siftdown(heap1, heap2, elt):
         if swap == elt:
             break
         else:
-            heap1[elt], heap1[swap] = heap1[swap], heap1[elt]
-            heap2[elt], heap2[swap] = heap2[swap], heap2[elt]
+            heap1[elt], heap1[swap] = (heap1[swap], heap1[elt])
+            heap2[elt], heap2[swap] = (heap2[swap], heap2[elt])
             elt = swap
 
 
@@ -448,7 +476,7 @@ def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates, rng
     return candidate_neighbors
 
 
-@numba.njit(parallel=True)
+@numba.njit()
 def new_build_candidates(
     current_graph, n_vertices, n_neighbors, max_candidates, rng_state, rho=0.5
 ):  # pragma: no cover
@@ -481,7 +509,7 @@ def new_build_candidates(
     new_candidate_neighbors = make_heap(n_vertices, max_candidates)
     old_candidate_neighbors = make_heap(n_vertices, max_candidates)
 
-    for i in numba.prange(n_vertices):
+    for i in range(n_vertices):
         for j in range(n_neighbors):
             if current_graph[0, i, j] < 0:
                 continue
@@ -509,7 +537,7 @@ def submatrix(dmat, indices_col, n_neighbors):
 
     Parameters
     ----------
-    mat: array, shape (n_samples, n_samples)
+    dmat: array, shape (n_samples, n_samples)
         Original matrix.
 
     indices_col: array, shape (n_samples, n_neighbors)
@@ -534,3 +562,38 @@ def submatrix(dmat, indices_col, n_neighbors):
 # Generates a timestamp for use in logging messages when verbose=True
 def ts():
     return time.ctime(time.time())
+
+
+# I'm not enough of a numba ninja to numba this successfully.
+# np.arrays of lists, which are objects...
+def csr_unique(matrix, return_index=True, return_inverse=True, return_counts=True):
+    """Find the unique elements of a sparse csr matrix.
+    We don't explicitly construct the unique matrix leaving that to the user
+    who may not want to duplicate a massive array in memory.
+    Returns the indices of the input array that give the unique values.
+    Returns the indices of the unique array that reconstructs the input array.
+    Returns the number of times each unique row appears in the input matrix.
+
+    matrix: a csr matrix
+    return_index = bool, optional
+        If true, return the row indices of 'matrix'
+    return_inverse: bool, optional
+        If true, return the the indices of the unique array that can be
+           used to reconstruct 'matrix'.
+    return_counts = bool, optional
+        If true, returns the number of times each unique item appears in 'matrix'
+
+    The unique matrix can computed via
+    unique_matrix = matrix[index]
+    and the original matrix reconstructed via
+    unique_matrix[inverse]
+    """
+    lil_matrix = matrix.tolil()
+    rows = [x + y for x, y in zip(lil_matrix.rows, lil_matrix.data)]
+    return_values = return_counts + return_inverse + return_index
+    return np.unique(
+        rows,
+        return_index=return_index,
+        return_inverse=return_inverse,
+        return_counts=return_counts,
+    )[1 : (return_values + 1)]

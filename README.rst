@@ -33,7 +33,7 @@ UMAP
 Uniform Manifold Approximation and Projection (UMAP) is a dimension reduction
 technique that can be used for visualisation similarly to t-SNE, but also for
 general non-linear dimension reduction. The algorithm is founded on three
-assumptions about the data
+assumptions about the data:
 
 1. The data is uniformly distributed on a Riemannian manifold;
 2. The Riemannian metric is locally constant (or can be approximated as such);
@@ -50,11 +50,90 @@ The details for the underlying mathematics can be found in
 McInnes, L, Healy, J, *UMAP: Uniform Manifold Approximation and Projection
 for Dimension Reduction*, ArXiv e-prints 1802.03426, 2018
 
-The important thing is that you don't need to worry about that -- you can use
+The important thing is that you don't need to worry about that—you can use
 UMAP right now for dimension reduction and visualisation as easily as a drop
 in replacement for scikit-learn's t-SNE.
 
-Documentation is `available via ReadTheDocs <https://umap-learn.readthedocs.io/>`_.
+Documentation is `available via Read the Docs <https://umap-learn.readthedocs.io/>`_.
+
+----------
+Installing
+----------
+
+UMAP depends upon ``scikit-learn``, and thus ``scikit-learn``'s dependencies
+such as ``numpy`` and ``scipy``. UMAP adds a requirement for ``numba`` for
+performance reasons. The original version used Cython, but the improved code
+clarity, simplicity and performance of Numba made the transition necessary.
+
+Requirements:
+
+* numpy
+* scipy
+* scikit-learn
+* numba
+
+Recommended packages:
+
+* `pynndescent <https://github.com/lmcinnes/pynndescent>`_
+* For plotting
+   * matplotlib
+   * datashader
+   * holoviews
+
+
+**Install Options**
+
+Conda install, via the excellent work of the conda-forge team:
+
+.. code:: bash
+
+    conda install -c conda-forge umap-learn
+
+The conda-forge packages are available for Linux, OS X, and Windows 64 bit.
+
+PyPI install, presuming you have numba and sklearn and all its requirements
+(numpy and scipy) installed:
+
+.. code:: bash
+
+    pip install umap-learn
+
+If pip is having difficulties pulling the dependencies then we'd suggest installing
+the dependencies manually using anaconda followed by pulling umap from pip:
+
+.. code:: bash
+
+    conda install numpy scipy
+    conda install scikit-learn
+    conda install numba
+    pip install umap-learn
+
+For a manual install get this package:
+
+.. code:: bash
+
+    wget https://github.com/lmcinnes/umap/archive/master.zip
+    unzip master.zip
+    rm master.zip
+    cd umap-master
+
+Install the requirements
+
+.. code:: bash
+
+    sudo pip install -r requirements.txt
+
+or
+
+.. code:: bash
+
+    conda install scikit-learn numba
+
+Install the package
+
+.. code:: bash
+
+    python setup.py install
 
 ---------------
 How to use UMAP
@@ -115,9 +194,10 @@ UMAP has a few signficant wins in its current incarnation.
 
 First of all UMAP is *fast*. It can handle large datasets and high
 dimensional data without too much difficulty, scaling beyond what most t-SNE
-packages can manage.
+packages can manage. This includes very high dimensional sparse datasets. UMAP
+has successfully been used directly on data with over a million dimensions.
 
-Second, UMAP scales well in embedding dimension -- it isn't just for
+Second, UMAP scales well in embedding dimension—it isn't just for
 visualisation! You can use UMAP as a general purpose dimension reduction
 technique as a preliminary step to other machine learning tasks. With a
 little care it partners well with the `hdbscan
@@ -125,9 +205,10 @@ little care it partners well with the `hdbscan
 more details please see `Using UMAP for Clustering
 <https://umap-learn.readthedocs.io/en/latest/clustering.html>`_).
 
-Third, UMAP often performs better at preserving aspects of global structure of
-the data than t-SNE. This means that it can often provide a better "big
-picture" view of your data as well as preserving local neighbor relations.
+Third, UMAP often performs better at preserving some aspects of global structure
+of the data than most implementations of t-SNE. This means that it can often
+provide a better "big picture" view of your data as well as preserving local neighbor
+relations.
 
 Fourth, UMAP supports a wide variety of distance functions, including
 non-metric distance functions such as *cosine distance* and *correlation
@@ -140,14 +221,19 @@ used as a preprocessing transformer in sklearn pipelines.
 Sixth, UMAP supports supervised and semi-supervised dimension reduction.
 This means that if you have label information that you wish to use as
 extra information for dimension reduction (even if it is just partial
-labelling) you can do that -- as simply as providing it as the ``y``
+labelling) you can do that—as simply as providing it as the ``y``
 parameter in the fit method.
 
-Finally UMAP has solid theoretical foundations in manifold learning
+Seventh, UMAP supports a variety of additional experimental features including: an
+"inverse transform" that can approximate a high dimensional sample that would map to
+a given position in the embedding space; the ability to embed into non-euclidean
+spaces including hyperbolic embeddings, and embeddings with uncertainty; very
+preliminary support for embedding dataframes also exists.
+
+Finally, UMAP has solid theoretical foundations in manifold learning
 (see `our paper on ArXiv <https://arxiv.org/abs/1802.03426>`_).
 This both justifies the approach and allows for further
-extensions that will soon be added to the library
-(embedding dataframes etc.).
+extensions that will soon be added to the library.
 
 ------------------------
 Performance and Examples
@@ -155,108 +241,67 @@ Performance and Examples
 
 UMAP is very efficient at embedding large high dimensional datasets. In
 particular it scales well with both input dimension and embedding dimension.
-Thus, for a problem such as the 784-dimensional MNIST digits dataset with
-70000 data samples, UMAP can complete the embedding in around 2.5 minutes (as
-compared with around 45 minutes for most t-SNE implementations). Despite this
-runtime efficiency UMAP still produces high quality embeddings.
+For the best possible performance we recommend installing the nearest neighbor
+computation library `pynndescent <https://github.com/lmcinnes/pynndescent>`_ .
+UMAP will work without it, but if installed it will run faster, particularly on
+multicore machines.
 
-The obligatory MNIST digits dataset, embedded in 2 minutes  and 22
-seconds using a 3.1 GHz Intel Core i7 processor (n_neighbors=10, min_dist=0
-.001):
+For a problem such as the 784-dimensional MNIST digits dataset with
+70000 data samples, UMAP can complete the embedding in under a minute (as
+compared with around 45 minutes for scikit-learn's t-SNE implementation).
+Despite this runtime efficiency, UMAP still produces high quality embeddings.
+
+The obligatory MNIST digits dataset, embedded in 42 
+seconds (with pynndescent installed and after numba jit warmup)
+using a 3.1 GHz Intel Core i7 processor (n_neighbors=10, min_dist=0.001):
 
 .. image:: images/umap_example_mnist1.png
     :alt: UMAP embedding of MNIST digits
 
-The MNIST digits dataset is fairly straightforward however. A better test is
+The MNIST digits dataset is fairly straightforward, however. A better test is
 the more recent "Fashion MNIST" dataset of images of fashion items (again
 70000 data sample in 784 dimensions). UMAP
-produced this embedding in 2 minutes exactly (n_neighbors=5, min_dist=0.1):
+produced this embedding in 49 seconds (n_neighbors=5, min_dist=0.1):
 
 .. image:: images/umap_example_fashion_mnist1.png
     :alt: UMAP embedding of "Fashion MNIST"
 
 The UCI shuttle dataset (43500 sample in 8 dimensions) embeds well under
-*correlation* distance in 2 minutes and 39 seconds (note the longer time
+*correlation* distance in 44 seconds (note the longer time
 required for correlation distance computations):
 
 .. image:: images/umap_example_shuttle.png
     :alt: UMAP embedding the UCI Shuttle dataset
 
-----------
-Installing
-----------
+--------
+Plotting
+--------
 
-UMAP depends upon ``scikit-learn``, and thus ``scikit-learn``'s dependencies
-such as ``numpy`` and ``scipy``. UMAP adds a requirement for ``numba`` for
-performance reasons. The original version used Cython, but the improved code
-clarity, simplicity and performance of Numba made the transition necessary.
+UMAP includes a subpackage ``umap.plot`` for plotting the results of UMAP embeddings.
+This package needs to be imported separately since it has extra requirements
+(matplotlib, datashader and holoviews). It allows for fast and simple plotting and
+attempts to make sensible decisions to avoid overplotting and other pitfalls. An
+example of use:
 
-Requirements:
+.. code:: python
 
-* numpy
-* scipy
-* scikit-learn
-* numba
+    import umap
+    import umap.plot
+    from sklearn.datasets import load_digits
 
-**Install Options**
+    digits = load_digits()
 
-Conda install, via the excellent work of the conda-forge team:
+    mapper = umap.UMAP().fit(digits.data)
+    umap.plot.points(mapper, label=digits.target)
 
-.. code:: bash
-
-    conda install -c conda-forge umap-learn
-
-The conda-forge packages are available for linux, OS X, and Windows 64 bit.
-
-PyPI install, presuming you have numba and sklearn and all its requirements
-(numpy and scipy) installed:
-
-.. code:: bash
-
-    pip install umap-learn
-
-If pip is having difficulties pulling the dependencies then we'd suggest installing
-the dependencies manually using anaconda followed by pulling umap from pip:
-
-.. code:: bash
-
-    conda install numpy scipy
-    conda install scikit-learn
-    conda install numba
-    pip install umap-learn
-
-For a manual install get this package:
-
-.. code:: bash
-
-    wget https://github.com/lmcinnes/umap/archive/master.zip
-    unzip master.zip
-    rm master.zip
-    cd umap-master
-
-Install the requirements
-
-.. code:: bash
-
-    sudo pip install -r requirements.txt
-
-or
-
-.. code:: bash
-
-    conda install scikit-learn numba
-
-Install the package
-
-.. code:: bash
-
-    python setup.py install
+The plotting package offers basic plots, as well as interactive plots with hover
+tools and various diagnostic plotting options. See the documentation for more details.
 
 ----------------
 Help and Support
 ----------------
 
-Documentation is at `ReadTheDocs <https://umap-learn.readthedocs.io/>`_.
+Documentation is at `Read the Docs <https://umap-learn.readthedocs.io/>`_.
 The documentation `includes a FAQ <https://umap-learn.readthedocs.io/en/latest/faq.html>`_ that
 may answer your questions. If you still have questions then please
 `open an issue <https://github.com/lmcinnes/umap/issues/new>`_
