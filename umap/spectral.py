@@ -80,7 +80,7 @@ def component_layout(
                 distance_matrix[c_j, c_i] = dist
     else:
         for label in range(n_components):
-            component_centroids[label] = data[component_labels == label]
+            component_centroids[label] = data[component_labels == label]\
                                          .mean(axis=0)
         if metric in ("hellinger", "ll_dirichlet"):
             distance_matrix = pairwise_special_metric(
@@ -91,15 +91,7 @@ def component_layout(
                 component_centroids, metric=metric, **metric_kwds
             )
 
-
-<<<<<<< HEAD
-        distance_matrix = pairwise_distances(
-            component_centroids, metric=metric, **metric_kwds
-        )
-    affinity_matrix = np.exp(-distance_matrix ** 2)
-=======
     affinity_matrix = np.exp(-(distance_matrix ** 2))
->>>>>>> master
 
     component_embedding = SpectralEmbedding(
         n_components=dim, affinity="precomputed", random_state=random_state
