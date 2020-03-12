@@ -57,31 +57,31 @@ def component_layout(
 
     component_centroids = np.empty((n_components, data.shape[1]), dtype=np.float64)
 
-    if metric == 'precomputed':
+    if metric == "precomputed":
         # cannot compute centroids from precomputed distances
         # instead, compute centroid distances using linkage
-        distance_matrix = np.zeros((n_components, n_components),
-                                    dtype=np.float64)
-        linkage = metric_kwds.get('linkage', 'average')
-        if linkage == 'average':
+        distance_matrix = np.zeros((n_components, n_components), dtype=np.float64)
+        linkage = metric_kwds.get("linkage", "average")
+        if linkage == "average":
             linkage = np.mean
-        elif linkage == 'complete':
+        elif linkage == "complete":
             linkage = np.max
-        elif linkage == 'single':
+        elif linkage == "single":
             linkage = np.min
         else:
-            raise ValueError("Unrecognized linkage '%s'. Please choose from "
-                             "'average', 'complete', or 'single'" % linkage)
+            raise ValueError(
+                "Unrecognized linkage '%s'. Please choose from "
+                "'average', 'complete', or 'single'" % linkage
+            )
         for c_i in range(n_components):
             dm_i = data[component_labels == c_i]
-            for c_j in range(c_i+1, n_components):
+            for c_j in range(c_i + 1, n_components):
                 dist = linkage(dm_i[:, component_labels == c_j])
                 distance_matrix[c_i, c_j] = dist
                 distance_matrix[c_j, c_i] = dist
     else:
         for label in range(n_components):
-            component_centroids[label] = data[component_labels == label]\
-                                         .mean(axis=0)
+            component_centroids[label] = data[component_labels == label].mean(axis=0)
         if metric in ("hellinger", "ll_dirichlet"):
             distance_matrix = pairwise_special_metric(
                 component_centroids, metric=metric
