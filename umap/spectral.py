@@ -51,7 +51,8 @@ def component_layout(
     if metric == 'precomputed':
         # cannot compute centroids from precomputed distances
         # instead, compute centroid distances using linkage
-        distance_matrix = np.zeros((n_components, n_components), dtype=np.float64)
+        distance_matrix = np.zeros((n_components, n_components),
+                                    dtype=np.float64)
         linkage = metric_kwds.get('linkage', 'average')
         if linkage == 'average':
             linkage = np.mean
@@ -65,11 +66,13 @@ def component_layout(
         for c_i in range(n_components):
             dm_i = data[component_labels == c_i]
             for c_j in range(c_i+1, n_components):
-                distance_matrix[c_i, c_j] = linkage(dm_i[:, component_labels == c_j])
-                distance_matrix[c_j, c_i] = distance_matrix[c_i, c_j]
+                dist = linkage(dm_i[:, component_labels == c_j])
+                distance_matrix[c_i, c_j] = dist
+                distance_matrix[c_j, c_i] = dist
     else:
         for label in range(n_components):
-            component_centroids[label] = data[component_labels == label].mean(axis=0)
+            component_centroids[label] = data[component_labels == label]
+                                         .mean(axis=0)
 
         distance_matrix = pairwise_distances(
             component_centroids, metric=metric, **metric_kwds
