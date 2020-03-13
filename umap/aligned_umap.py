@@ -1,5 +1,6 @@
 import numpy as np
 import numba
+from sklearn.base import BaseEstimator
 
 
 def invert_dict(d):
@@ -79,3 +80,16 @@ def build_neighborhood_similarities(graphs, relations):
                     result[i, j, k] = 1.0
 
     return result
+
+
+class AlignedUMAP(BaseEstimator):
+
+    def __init__(
+            self,
+            n_neighbors=15,
+            n_components=2,
+            init="spectral",
+            min_dist=0.1,
+            spread=1.0,
+    ):
+        pass

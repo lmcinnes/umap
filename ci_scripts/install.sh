@@ -47,6 +47,7 @@ if [[ "$DISTRIB" == "conda" ]]; then
   # black requires Python 3.x; don't try to install for Python 2.7 test
   if [[ "$PYTHON_VERSION" != "2.7" ]]; then
     pip install black
+    pip install pynndescent
   fi
 
   if [[ "$COVERAGE" == "true" ]]; then
