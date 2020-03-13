@@ -1853,8 +1853,7 @@ class UMAP(BaseEstimator):
                 if y.shape[0] < 4096:
                     try:
                         ydmat = pairwise_distances(
-                            y_, metric=self.target_metric,
-                            **self._target_metric_kwds
+                            y_, metric=self.target_metric, **self._target_metric_kwds
                         )
                     except (TypeError, ValueError):
                         ydmat = dist.pairwise_special_metric(
