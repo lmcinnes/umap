@@ -557,7 +557,6 @@ def _optimize_layout_aligned_euclidean_single_epoch(
     tail_embeddings,
     heads,
     tails,
-    n_vertices,
     epochs_per_sample,
     a,
     b,
@@ -639,7 +638,7 @@ def _optimize_layout_aligned_euclidean_single_epoch(
                 )
 
                 for p in range(n_neg_samples):
-                    k = tau_rand_int(rng_state) % n_vertices
+                    k = tau_rand_int(rng_state) % tail_embeddings[m].shape[0]
 
                     other = tail_embeddings[m][k]
 
@@ -685,7 +684,6 @@ def optimize_layout_aligned_euclidean(
     heads,
     tails,
     n_epochs,
-    n_vertices,
     epochs_per_sample,
     regularisation_weights,
     relations,
@@ -722,7 +720,6 @@ def optimize_layout_aligned_euclidean(
             tail_embeddings,
             heads,
             tails,
-            n_vertices,
             epochs_per_sample,
             a,
             b,
