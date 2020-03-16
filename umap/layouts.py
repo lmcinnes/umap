@@ -574,7 +574,7 @@ def _optimize_layout_aligned_euclidean_single_epoch(
     n,
 ):
     n_embeddings = len(heads)
-    window_size = ((relations.shape[1] - 1) // 2)
+    window_size = (relations.shape[1] - 1) // 2
 
     max_n_edges = 0
     for e_p_s in epochs_per_sample:
@@ -606,13 +606,23 @@ def _optimize_layout_aligned_euclidean_single_epoch(
 
                     for offset in range(-window_size, window_size):
                         neighbor_m = m + offset
-                        if neighbor_m >= 0 and neighbor_m < n_embeddings and offset != 0:
+                        if (
+                                neighbor_m >= 0
+                                and neighbor_m < n_embeddings
+                                and offset != 0
+                        ):
                             identified_index = relations[m, offset + window_size, j]
                             if identified_index >= 0:
-                                grad_d -= clip((lambda_ * np.exp(-(np.abs(offset) - 1))) *
-                                               regularisation_weights[m, offset + window_size, j] *
-                                               (current[d] - head_embeddings[neighbor_m][
-                                                   identified_index, d]))
+                                grad_d -= clip(
+                                    (lambda_ * np.exp(-(np.abs(offset) - 1)))
+                                    * regularisation_weights[m, offset + window_size, j]
+                                    * (
+                                            current[d]
+                                            - head_embeddings[neighbor_m][
+                                                identified_index, d
+                                            ]
+                                    )
+                                )
 
                     current[d] += clip(grad_d) * alpha
                     if move_other:
@@ -620,21 +630,33 @@ def _optimize_layout_aligned_euclidean_single_epoch(
 
                         for offset in range(-window_size, window_size):
                             neighbor_m = m + offset
-                            if neighbor_m >= 0 and neighbor_m < n_embeddings and offset != 0:
+                            if (
+                                    neighbor_m >= 0
+                                    and neighbor_m < n_embeddings
+                                    and offset != 0
+                            ):
                                 identified_index = relations[m, offset + window_size, k]
                                 if identified_index >= 0:
-                                    grad_d -= clip((lambda_ * np.exp(-(np.abs(offset) - 1))) *
-                                                   regularisation_weights[
-                                                       m, offset + window_size, k] *
-                                                   (other[d] - head_embeddings[neighbor_m][
-                                                       identified_index, d]))
+                                    grad_d -= clip(
+                                        (lambda_ * np.exp(-(np.abs(offset) - 1)))
+                                        * regularisation_weights[
+                                            m, offset + window_size, k
+                                        ]
+                                        * (
+                                                other[d]
+                                                - head_embeddings[neighbor_m][
+                                                    identified_index, d
+                                                ]
+                                        )
+                                    )
 
                         other[d] += clip(other_grad_d) * alpha
 
                 epoch_of_next_sample[m][i] += epochs_per_sample[m][i]
 
                 n_neg_samples = int(
-                    (n - epoch_of_next_negative_sample[m][i]) / epochs_per_negative_sample[m][i]
+                    (n - epoch_of_next_negative_sample[m][i])
+                    / epochs_per_negative_sample[m][i]
                 )
 
                 for p in range(n_neg_samples):
@@ -662,14 +684,25 @@ def _optimize_layout_aligned_euclidean_single_epoch(
 
                         for offset in range(-window_size, window_size):
                             neighbor_m = m + offset
-                            if neighbor_m >= 0 and neighbor_m < n_embeddings and offset != 0:
+                            if (
+                                    neighbor_m >= 0
+                                    and neighbor_m < n_embeddings
+                                    and offset != 0
+                            ):
                                 identified_index = relations[m, offset + window_size, j]
                                 if identified_index >= 0:
-                                    grad_d -= clip((lambda_ * np.exp(-(np.abs(offset) - 1))) *
-                                                   regularisation_weights[
-                                                       m, offset + window_size, j] *
-                                                   (current[d] - head_embeddings[neighbor_m][
-                                                       identified_index, d]))
+                                    grad_d -= clip(
+                                        (lambda_ * np.exp(-(np.abs(offset) - 1)))
+                                        * regularisation_weights[
+                                            m, offset + window_size, j
+                                        ]
+                                        * (
+                                                current[d]
+                                                - head_embeddings[neighbor_m][
+                                                    identified_index, d
+                                                ]
+                                        )
+                                    )
 
                         current[d] += clip(grad_d) * alpha
 
@@ -701,17 +734,25 @@ def optimize_layout_aligned_euclidean(
     move_other = head_embeddings[0].shape[0] == tail_embeddings[0].shape[0]
     alpha = initial_alpha
 
-    epochs_per_negative_sample = [np.zeros_like(epochs_per_sample) for i in range(0)]
-    epoch_of_next_negative_sample = [np.zeros_like(epochs_per_sample) for i in range(0)]
-    epoch_of_next_sample = [np.zeros_like(epochs_per_sample) for i in range(0)]
+    epochs_per_negative_sample = numba.typed.List.empty_list(numba.types.float32[::1])
+    epoch_of_next_negative_sample = numba.typed.List.empty_list(
+        numba.types.float32[::1]
+    )
+    epoch_of_next_sample = numba.typed.List.empty_list(numba.types.float32[::1])
 
     for m in range(len(heads)):
-        epochs_per_negative_sample.append(epochs_per_sample[m].copy() / negative_sample_rate)
-        epoch_of_next_negative_sample.append(epochs_per_negative_sample[m].copy())
-        epoch_of_next_sample.append(epochs_per_sample[m].copy())
+        epochs_per_negative_sample.append(
+            epochs_per_sample[m].astype(np.float32) / negative_sample_rate
+        )
+        epoch_of_next_negative_sample.append(
+            epochs_per_negative_sample[m].astype(np.float32)
+        )
+        epoch_of_next_sample.append(epochs_per_sample[m].astype(np.float32))
 
     optimize_fn = numba.njit(
-        _optimize_layout_aligned_euclidean_single_epoch, fastmath=True, parallel=parallel
+        _optimize_layout_aligned_euclidean_single_epoch,
+        fastmath=True,
+        parallel=parallel,
     )
 
     for n in range(n_epochs):

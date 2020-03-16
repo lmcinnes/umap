@@ -127,6 +127,8 @@ def build_neighborhood_similarities(graphs_indptr, graphs_indices, relations):
 
 
 def get_nth_item_or_val(iterable_or_val, n):
+    if iterable_or_val is None:
+        return None
     if type(iterable_or_val) in (list, tuple, np.ndarray):
         return iterable_or_val[n]
     elif type(iterable_or_val) in (int, float, bool, None):
@@ -283,7 +285,7 @@ class AlignedUMAP(BaseEstimator):
         self.dict_relations_ = fit_params["relations"]
         assert type(self.dict_relations_) in (list, tuple)
         assert type(X) in (list, tuple, np.ndarray)
-        assert len(X) == (len(self.dict_relations_) - 1)
+        assert len(X) == (len(self.dict_relations_))
 
         self.n_models_ = len(X)
 
@@ -303,11 +305,32 @@ class AlignedUMAP(BaseEstimator):
             for n in range(self.n_models_)
         ]
 
+        if self.n_epochs is None:
+            n_epochs = 200
+        else:
+            n_epochs = self.n_epochs
+
         window_size = fit_params.get("window_size", self.alignment_window_size)
         relations = expand_relations(self.dict_relations_, window_size)
+
+        indptr_list = numba.typed.List.empty_list(numba.types.int32[::1])
+        indices_list = numba.typed.List.empty_list(numba.types.int32[::1])
+        heads = numba.typed.List.empty_list(numba.types.int32[::1])
+        tails = numba.typed.List.empty_list(numba.types.int32[::1])
+        epochs_per_samples = numba.typed.List.empty_list(numba.types.float64[::1])
+
+        for mapper in self.mappers_:
+            indptr_list.append(mapper.graph_.indptr)
+            indices_list.append(mapper.graph_.indices)
+            heads.append(mapper.graph_.tocoo().row)
+            tails.append(mapper.graph_.tocoo().col)
+            epochs_per_samples.append(
+                make_epochs_per_sample(mapper.graph_.tocoo().data, n_epochs)
+            )
+
         regularisation_weights = build_neighborhood_similarities(
-            [mapper.graph_.indptr for mapper in self.mappers_],
-            [mapper.graph_.indices for mapper in self.mappers_],
+            indptr_list,
+            indices_list,
             relations,
         )
         first_init = spectral_layout(
@@ -335,21 +358,6 @@ class AlignedUMAP(BaseEstimator):
                 )
             )
 
-        heads = numba.typed.List.empty_list(numba.types.int32[::1]).extend(
-            [mapper.graph_.tocoo().row for mapper in self.mappers_]
-        )
-        tails = numba.typed.List.empty_list(numba.types.int32[::1]).extend(
-            [mapper.graph_.tocoo().col for mapper in self.mappers_]
-        )
-        epochs_per_samples = numba.typed.List.empty_list(
-            numba.types.float64[::1]
-        ).extend(
-            [
-                make_epochs_per_sample(mapper.graph_.tocoo().data, self.n_epochs)
-                for mapper in self.mappers_
-            ]
-        )
-
         random_state = check_random_state(self.random_state)
         rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
@@ -358,7 +366,7 @@ class AlignedUMAP(BaseEstimator):
             embeddings,
             heads,
             tails,
-            self.n_epochs,
+            n_epochs,
             epochs_per_samples,
             regularisation_weights,
             relations,
@@ -418,20 +426,26 @@ class AlignedUMAP(BaseEstimator):
             self.embeddings_[-1], new_mapper.graph_, new_dict_relations
         )
 
-        heads = numba.typed.List.empty_list(numba.types.int32[::1]).extend(
-            [mapper.graph_.tocoo().row for mapper in self.mappers_]
-        )
-        tails = numba.typed.List.empty_list(numba.types.int32[::1]).extend(
-            [mapper.graph_.tocoo().col for mapper in self.mappers_]
-        )
-        epochs_per_samples = numba.typed.List.empty_list(
-            numba.types.float64[::1]
-        ).extend(
-            [np.zeros(self.mappers_[i].embedding_.shape[0], dtype=np.float64) for i
-             in range(len(self.mappers_) - 1)]
-            + [make_epochs_per_sample(new_mapper.graph_.tocoo().data,
-                                      self.n_epochs)]
-        )
+        if self.n_epochs is None:
+            n_epochs = 200
+        else:
+            n_epochs = self.n_epochs
+
+        heads = numba.typed.List.empty_list(numba.types.int32[::1])
+        tails = numba.typed.List.empty_list(numba.types.int32[::1])
+        epochs_per_samples = numba.typed.List.empty_list(numba.types.float64[::1])
+
+        for i, mapper in enumerate(self.mappers_):
+            heads.append(mapper.graph_.tocoo().row)
+            tails.append(mapper.graph_.tocoo().col)
+            if i == len(self.mappers_) - 1:
+                epochs_per_samples.append(
+                    make_epochs_per_sample(mapper.graph_.tocoo().data, n_epochs)
+                )
+            else:
+                epochs_per_samples.append(
+                    np.zeros(mapper.embedding_.shape[0], dtype=np.float64)
+                )
 
         random_state = check_random_state(self.random_state)
         rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
@@ -443,7 +457,7 @@ class AlignedUMAP(BaseEstimator):
             self.embeddings_,
             heads,
             tails,
-            self.n_epochs,
+            n_epochs,
             epochs_per_samples,
             new_regularisation_weights,
             new_relations,
