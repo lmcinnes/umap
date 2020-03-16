@@ -1,7 +1,7 @@
 import numpy as np
 import numba
 from sklearn.base import BaseEstimator
-from sklearn.utils import check_random_state
+from sklearn.utils import check_random_state, check_array
 
 from umap.sparse import arr_intersect as intersect1d
 from umap.sparse import arr_union as union1d
@@ -135,6 +135,78 @@ def get_nth_item_or_val(iterable_or_val, n):
         raise ValueError("Unrecognized parameter type")
 
 
+PARAM_NAMES = (
+    "n_neighbors",
+    "n_components",
+    "metric",
+    "metric_kwds",
+    "n_epochs",
+    "learning_rate",
+    "init",
+    "min_dist",
+    "spread",
+    "set_op_mix_ratio",
+    "local_connectivity",
+    "repulsion_strength",
+    "negative_sample_rate",
+    "transform_queue_size",
+    "angular_rp_forest",
+    "target_n_neighbors",
+    "target_metric",
+    "target_metric_kwds",
+    "target_weight",
+    "unique",
+)
+
+
+def set_aligned_params(new_params, existing_params, n_models, param_names=PARAM_NAMES):
+    for param in param_names:
+        if param in new_params:
+            if type(existing_params[param]) in (list, tuple, np.ndarray):
+                existing_params[param] = existing_params[param] + (new_params[param],)
+            else:
+                if new_params[param] != existing_params[param]:
+                    existing_params[param] = (existing_params[param],) * n_models + (
+                        new_params[param],
+                    )
+
+    return existing_params
+
+
+@numba.njit()
+def init_from_exisiting_internal(
+        previous_embedding, weights_indptr, weights_indices, weights_data, relation_dict
+):
+    n_samples = weights_indptr.shape[0] - 1
+    n_features = previous_embedding.shape[1]
+    result = np.zeros((n_samples, n_features), dtype=np.float32)
+
+    for i in range(n_samples):
+        if i in relation_dict:
+            result[i] = previous_embedding[relation_dict[i]]
+        else:
+            normalisation = 0.0
+            for idx in range(weights_indptr[i], weights_indptr[i + 1]):
+                j = weights_indices[idx]
+                if j in relation_dict:
+                    normalisation += weights_data[idx]
+                    result[i] += (
+                            weights_data[idx] * previous_embedding[relation_dict[j]]
+                    )
+            if normalisation == 0:
+                result[i] = np.random.uniform(-10.0, 10.0, n_features)
+            else:
+                result[i] /= normalisation
+
+    return result
+
+
+def init_from_existing(previous_embedding, graph, relations):
+    return init_from_exisiting_internal(
+        previous_embedding, graph.indptr, graph.indices, graph.data, relations,
+    )
+
+
 class AlignedUMAP(BaseEstimator):
     def __init__(
             self,
@@ -146,6 +218,7 @@ class AlignedUMAP(BaseEstimator):
             learning_rate=1.0,
             init="spectral",
             alignment_regularisation=1.0e-2,
+            alignment_window_size=3,
             min_dist=0.1,
             spread=1.0,
             low_memory=False,
@@ -178,6 +251,7 @@ class AlignedUMAP(BaseEstimator):
         self.repulsion_strength = repulsion_strength
         self.learning_rate = learning_rate
         self.alignment_regularisation = alignment_regularisation
+        self.alignment_window_size = alignment_window_size
 
         self.spread = spread
         self.min_dist = min_dist
@@ -206,12 +280,14 @@ class AlignedUMAP(BaseEstimator):
                 "Aligned UMAP requires relations between data to be " "specified"
             )
 
-        dict_relations = fit_params["relations"]
-        assert type(dict_relations) in (list, tuple)
+        self.dict_relations_ = fit_params["relations"]
+        assert type(self.dict_relations_) in (list, tuple)
         assert type(X) in (list, tuple, np.ndarray)
-        assert len(X) == (len(dict_relations) - 1)
+        assert len(X) == (len(self.dict_relations_) - 1)
 
-        mappers = [
+        self.n_models_ = len(X)
+
+        self.mappers_ = [
             UMAP(
                 n_neighbors=get_nth_item_or_val(self.n_neighbors, n),
                 min_dist=get_nth_item_or_val(self.min_dist, n),
@@ -224,27 +300,27 @@ class AlignedUMAP(BaseEstimator):
                 set_op_mix_ratio=get_nth_item_or_val(self.set_op_mix_ratio, n),
                 unique=get_nth_item_or_val(self.unique, n),
             ).fit(X[n])
-            for n in range(len(X))
+            for n in range(self.n_models_)
         ]
 
-        window_size = fit_params.get("window_size", 3)
-        relations = expand_relations(dict_relations, window_size)
+        window_size = fit_params.get("window_size", self.alignment_window_size)
+        relations = expand_relations(self.dict_relations_, window_size)
         regularisation_weights = build_neighborhood_similarities(
-            [mapper.graph_.indptr for mapper in mappers],
-            [mapper.graph_.indices for mapper in mappers],
+            [mapper.graph_.indptr for mapper in self.mappers_],
+            [mapper.graph_.indices for mapper in self.mappers_],
             relations,
         )
         first_init = spectral_layout(
-            mappers[0]._raw_data, mappers[0].graph_, 2, np.random,
+            self.mappers_[0]._raw_data, self.mappers_[0].graph_, 2, np.random,
         )
         expansion = 10.0 / np.abs(first_init).max()
         first_embedding = (first_init * expansion).astype(np.float32, order="C", )
 
         embeddings = numba.typed.List.empty_list(numba.types.float32[:, ::1])
         embeddings.append(first_embedding)
-        for i in range(1, len(mappers)):
+        for i in range(1, self.n_models_):
             next_init = spectral_layout(
-                mappers[i]._raw_data, mappers[i].graph_, 2, np.random,
+                self.mappers_[i]._raw_data, self.mappers_[i].graph_, 2, np.random,
             )
             expansion = 10.0 / np.abs(next_init).max()
             next_embedding = (next_init * expansion).astype(np.float32, order="C", )
@@ -260,17 +336,17 @@ class AlignedUMAP(BaseEstimator):
             )
 
         heads = numba.typed.List.empty_list(numba.types.int32[::1]).extend(
-            [mapper.graph_.tocoo().row for mapper in mappers]
+            [mapper.graph_.tocoo().row for mapper in self.mappers_]
         )
         tails = numba.typed.List.empty_list(numba.types.int32[::1]).extend(
-            [mapper.graph_.tocoo().col for mapper in mappers]
+            [mapper.graph_.tocoo().col for mapper in self.mappers_]
         )
         epochs_per_samples = numba.typed.List.empty_list(
             numba.types.float64[::1]
         ).extend(
             [
                 make_epochs_per_sample(mapper.graph_.tocoo().data, self.n_epochs)
-                for mapper in mappers
+                for mapper in self.mappers_
             ]
         )
 
@@ -290,5 +366,87 @@ class AlignedUMAP(BaseEstimator):
             lambda_=self.alignment_regularisation,
         )
 
+        return self
+
+    def fit_transform(self, X, y=None, **fit_params):
+        self.fit(X, y, **fit_params)
+        return self.embeddings_
+
     def update(self, X, y=None, **fit_params):
-        pass
+        if "relations" not in fit_params:
+            raise ValueError(
+                "Aligned UMAP requires relations between data to be " "specified"
+            )
+
+        new_dict_relations = fit_params["relations"]
+        X = check_array(X)
+
+        self.__dict__ = set_aligned_params(fit_params, self.__dict__, self.n_models_)
+        self.n_models_ += 1
+
+        new_mapper = UMAP(
+            n_neighbors=get_nth_item_or_val(self.n_neighbors, self.n_models_),
+            min_dist=get_nth_item_or_val(self.min_dist, self.n_models_),
+            n_epochs=get_nth_item_or_val(self.n_epochs, self.n_models_),
+            repulsion_strength=get_nth_item_or_val(
+                self.repulsion_strength, self.n_models_
+            ),
+            learning_rate=get_nth_item_or_val(self.learning_rate, self.n_models_),
+            spread=get_nth_item_or_val(self.spread, self.n_models_),
+            negative_sample_rate=get_nth_item_or_val(
+                self.negative_sample_rate, self.n_models_
+            ),
+            local_connectivity=get_nth_item_or_val(
+                self.local_connectivity, self.n_models_
+            ),
+            set_op_mix_ratio=get_nth_item_or_val(self.set_op_mix_ratio, self.n_models_),
+            unique=get_nth_item_or_val(self.unique, self.n_models_),
+        ).fit(X)
+
+        self.mappers_ += [new_mapper]
+
+        # TODO: We can likely make this more efficient and not recompute each time
+        self.dict_relations_ += [invert_dict(new_dict_relations)]
+        new_relations = expand_relations(self.dict_relations_)
+        new_regularisation_weights = build_neighborhood_similarities(
+            [mapper.graph_.indptr for mapper in self.mappers_],
+            [mapper.graph_.indices for mapper in self.mappers_],
+            new_relations,
+        )
+
+        new_embedding = init_from_existing(
+            self.embeddings_[-1], new_mapper.graph_, new_dict_relations
+        )
+
+        heads = numba.typed.List.empty_list(numba.types.int32[::1]).extend(
+            [mapper.graph_.tocoo().row for mapper in self.mappers_]
+        )
+        tails = numba.typed.List.empty_list(numba.types.int32[::1]).extend(
+            [mapper.graph_.tocoo().col for mapper in self.mappers_]
+        )
+        epochs_per_samples = numba.typed.List.empty_list(
+            numba.types.float64[::1]
+        ).extend(
+            [np.zeros(self.mappers_[i].embedding_.shape[0], dtype=np.float64) for i
+             in range(len(self.mappers_) - 1)]
+            + [make_epochs_per_sample(new_mapper.graph_.tocoo().data,
+                                      self.n_epochs)]
+        )
+
+        random_state = check_random_state(self.random_state)
+        rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
+
+        self.embeddings_ = self.embeddings_ + [new_embedding]
+
+        self.embeddings_ = optimize_layout_aligned_euclidean(
+            self.embeddings_,
+            self.embeddings_,
+            heads,
+            tails,
+            self.n_epochs,
+            epochs_per_samples,
+            new_regularisation_weights,
+            new_relations,
+            rng_state,
+            lambda_=self.alignment_regularisation,
+        )
