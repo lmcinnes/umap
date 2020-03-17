@@ -49,7 +49,8 @@ def expand_relations(relation_dicts, window_size=3):
             + 1
     )
     result = np.full(
-        (len(relation_dicts), 2 * window_size + 1, max_n_samples), -1, dtype=np.int32
+        (len(relation_dicts) + 1, 2 * window_size + 1, max_n_samples), -1,
+        dtype=np.int32
     )
     reverse_relation_dicts = [invert_dict(d) for d in relation_dicts]
     for i in range(result.shape[0]):
@@ -204,8 +205,11 @@ def init_from_exisiting_internal(
 
 
 def init_from_existing(previous_embedding, graph, relations):
+    typed_relations = numba.typed.Dict.empty(numba.types.int32, numba.types.int32)
+    for key, val in relations.items():
+        typed_relations[key] = np.int32(val)
     return init_from_exisiting_internal(
-        previous_embedding, graph.indptr, graph.indices, graph.data, relations,
+        previous_embedding, graph.indptr, graph.indices, graph.data, typed_relations,
     )
 
 
@@ -285,7 +289,7 @@ class AlignedUMAP(BaseEstimator):
         self.dict_relations_ = fit_params["relations"]
         assert type(self.dict_relations_) in (list, tuple)
         assert type(X) in (list, tuple, np.ndarray)
-        assert len(X) == (len(self.dict_relations_))
+        assert (len(X) - 1) == (len(self.dict_relations_))
 
         self.n_models_ = len(X)
 
@@ -415,27 +419,21 @@ class AlignedUMAP(BaseEstimator):
 
         # TODO: We can likely make this more efficient and not recompute each time
         self.dict_relations_ += [invert_dict(new_dict_relations)]
-        new_relations = expand_relations(self.dict_relations_)
-        new_regularisation_weights = build_neighborhood_similarities(
-            [mapper.graph_.indptr for mapper in self.mappers_],
-            [mapper.graph_.indices for mapper in self.mappers_],
-            new_relations,
-        )
-
-        new_embedding = init_from_existing(
-            self.embeddings_[-1], new_mapper.graph_, new_dict_relations
-        )
 
         if self.n_epochs is None:
             n_epochs = 200
         else:
             n_epochs = self.n_epochs
 
+        indptr_list = numba.typed.List.empty_list(numba.types.int32[::1])
+        indices_list = numba.typed.List.empty_list(numba.types.int32[::1])
         heads = numba.typed.List.empty_list(numba.types.int32[::1])
         tails = numba.typed.List.empty_list(numba.types.int32[::1])
         epochs_per_samples = numba.typed.List.empty_list(numba.types.float64[::1])
 
         for i, mapper in enumerate(self.mappers_):
+            indptr_list.append(mapper.graph_.indptr)
+            indices_list.append(mapper.graph_.indices)
             heads.append(mapper.graph_.tocoo().row)
             tails.append(mapper.graph_.tocoo().col)
             if i == len(self.mappers_) - 1:
@@ -444,13 +442,24 @@ class AlignedUMAP(BaseEstimator):
                 )
             else:
                 epochs_per_samples.append(
-                    np.zeros(mapper.embedding_.shape[0], dtype=np.float64)
+                    np.full(mapper.embedding_.shape[0], n_epochs + 1, dtype=np.float64)
                 )
+
+        new_relations = expand_relations(self.dict_relations_)
+        new_regularisation_weights = build_neighborhood_similarities(
+            indptr_list,
+            indices_list,
+            new_relations,
+        )
+
+        new_embedding = init_from_existing(
+            self.embeddings_[-1], new_mapper.graph_, new_dict_relations
+        )
 
         random_state = check_random_state(self.random_state)
         rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
-        self.embeddings_ = self.embeddings_ + [new_embedding]
+        self.embeddings_.append(new_embedding)
 
         self.embeddings_ = optimize_layout_aligned_euclidean(
             self.embeddings_,

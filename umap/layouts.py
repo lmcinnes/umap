@@ -654,10 +654,13 @@ def _optimize_layout_aligned_euclidean_single_epoch(
 
                 epoch_of_next_sample[m][i] += epochs_per_sample[m][i]
 
-                n_neg_samples = int(
-                    (n - epoch_of_next_negative_sample[m][i])
-                    / epochs_per_negative_sample[m][i]
-                )
+                if epochs_per_negative_sample[m][i] > 0:
+                    n_neg_samples = int(
+                        (n - epoch_of_next_negative_sample[m][i])
+                        / epochs_per_negative_sample[m][i]
+                    )
+                else:
+                    n_neg_samples = 0
 
                 for p in range(n_neg_samples):
                     k = tau_rand_int(rng_state) % tail_embeddings[m].shape[0]
