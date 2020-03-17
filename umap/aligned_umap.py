@@ -207,7 +207,7 @@ def init_from_exisiting_internal(
 def init_from_existing(previous_embedding, graph, relations):
     typed_relations = numba.typed.Dict.empty(numba.types.int32, numba.types.int32)
     for key, val in relations.items():
-        typed_relations[key] = np.int32(val)
+        typed_relations[np.int32(key)] = np.int32(val)
     return init_from_exisiting_internal(
         previous_embedding, graph.indptr, graph.indices, graph.data, typed_relations,
     )
