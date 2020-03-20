@@ -462,6 +462,7 @@ def test_sparse_nn_descent_neighbor_accuracy_low_memory():
     )
 
 
+@SkipTest
 def test_sparse_angular_nn_descent_neighbor_accuracy():
     knn_indices, knn_dists, _ = nearest_neighbors(
         sparse_nn_data, 20, "cosine", {}, True, np.random

@@ -8,6 +8,7 @@ def readme():
     except TypeError:
         # Python 2.7 doesn't support encoding argument in builtin open
         import io
+
         with io.open("README.rst", encoding="UTF-8") as readme_file:
             return readme_file.read()
 
@@ -55,12 +56,12 @@ configuration = {
             'seaborn',
         ],
     },
-    'ext_modules': [],
-    'cmdclass': {},
-    'test_suite': 'nose.collector',
-    'tests_require': ['nose'],
-    'data_files': (),
-    'zip_safe': False,
-    }
+    "ext_modules": [],
+    "cmdclass": {},
+    "test_suite": "nose.collector",
+    "tests_require": ["nose"],
+    "data_files": (),
+    "zip_safe": False,
+}
 
 setup(**configuration)

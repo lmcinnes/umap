@@ -4,6 +4,7 @@
 import numba
 import numpy as np
 import scipy.stats
+from sklearn.metrics import pairwise_distances
 
 _mock_identity = np.eye(2, dtype=np.float64)
 _mock_cost = 1.0 - _mock_identity
@@ -746,6 +747,69 @@ def ll_dirichlet(data1, data2):
     )
 
 
+@numba.njit(fastmath=True)
+def symmetric_kl(x, y, z=1e-11):
+    """
+    symmetrized KL divergence between two probability distributions
+
+    ..math::
+        D(x, y) = \frac{D_{KL}\left(x \Vert y\right) + D_{KL}\left(y \Vert x\right)}{2}
+    """
+    n = x.shape[0]
+    x_sum = 0.0
+    y_sum = 0.0
+    kl1 = 0.0
+    kl2 = 0.0
+
+    for i in range(n):
+        x[i] += z
+        x_sum += x[i]
+        y[i] += z
+        y_sum += y[i]
+
+    for i in range(n):
+        x[i] /= x_sum
+        y[i] /= y_sum
+
+    for i in range(n):
+        kl1 += x[i] * np.log(x[i] / y[i])
+        kl2 += y[i] * np.log(y[i] / x[i])
+
+    return (kl1 + kl2) / 2
+
+
+@numba.njit(fastmath=True)
+def symmetric_kl_grad(x, y, z=1e-11):
+    """
+    symmetrized KL divergence and its gradient
+
+    """
+    n = x.shape[0]
+    x_sum = 0.0
+    y_sum = 0.0
+    kl1 = 0.0
+    kl2 = 0.0
+
+    for i in range(n):
+        x[i] += z
+        x_sum += x[i]
+        y[i] += z
+        y_sum += y[i]
+
+    for i in range(n):
+        x[i] /= x_sum
+        y[i] /= y_sum
+
+    for i in range(n):
+        kl1 += x[i] * np.log(x[i] / y[i])
+        kl2 += y[i] * np.log(y[i] / x[i])
+
+    dist = (kl1 + kl2) / 2
+    grad = (np.log(y / x) - (x / y) + 1) / 2
+
+    return dist, grad
+
+
 @numba.njit()
 def correlation_grad(x, y):
     mu_x = 0.0
@@ -1090,6 +1154,7 @@ named_distances = {
     "haversine": haversine,
     "braycurtis": bray_curtis,
     "ll_dirichlet": ll_dirichlet,
+    "symmetric_kl": symmetric_kl,
     # Binary distances
     "hamming": hamming,
     "jaccard": jaccard,
@@ -1134,6 +1199,7 @@ named_distances_with_gradients = {
     "hellinger": hellinger_grad,
     "haversine": haversine_grad,
     "braycurtis": bray_curtis_grad,
+    "symmetric_kl": symmetric_kl_grad,
     # Special embeddings
     "spherical_gaussian_energy": spherical_gaussian_energy_grad,
     "diagonal_gaussian_energy": diagonal_gaussian_energy_grad,
@@ -1169,6 +1235,15 @@ def parallel_special_metric(X, Y=None, metric=hellinger):
     return result
 
 
-def pairwise_special_metric(X, Y=None, metric="hellinger"):
-    special_metric_func = named_distances[metric]
+def pairwise_special_metric(X, Y=None, metric="hellinger", kwds=None):
+    if callable(metric):
+        kwd_vals = tuple(kwds.values())
+
+        @numba.njit(fastmath=True)
+        def _partial_metric(_X, _Y=None):
+            return metric(_X, _Y, *kwd_vals)
+
+        return pairwise_distances(X, Y, metric=_partial_metric)
+    else:
+        special_metric_func = named_distances[metric]
     return parallel_special_metric(X, Y, metric=special_metric_func)

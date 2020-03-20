@@ -507,7 +507,7 @@ def optimize_layout_inverse(
                 )
 
                 w_l = weight[i]
-                grad_coeff = -(1 / (w_l * sigmas[j] + 1e-6))
+                grad_coeff = -(1 / (w_l * sigmas[k] + 1e-6))
 
                 for d in range(dim):
                     grad_d = clip(grad_coeff * grad_dist_output[d])

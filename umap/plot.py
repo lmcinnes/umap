@@ -1,19 +1,37 @@
 import numpy as np
 import pandas as pd
 import numba
+from warnings import warn
 
-import datashader as ds
-import datashader.transfer_functions as tf
-import datashader.bundling as bd
-import matplotlib.pyplot as plt
-import colorcet
-import matplotlib.colors
-import matplotlib.cm
+try:
+    import datashader as ds
+    import datashader.transfer_functions as tf
+    import datashader.bundling as bd
+    import matplotlib.pyplot as plt
+    import colorcet
+    import matplotlib.colors
+    import matplotlib.cm
 
-import bokeh.plotting as bpl
-import bokeh.transform as btr
-import holoviews as hv
-import holoviews.operation.datashader as hd
+    import bokeh.plotting as bpl
+    import bokeh.transform as btr
+    import holoviews as hv
+    import holoviews.operation.datashader as hd
+except ImportError:
+    warn(
+        """The umap.plot package requires extra plotting libraries to be installed.
+    You can install these via pip using
+    
+    pip install umap-learn[plot]
+    
+    or via conda using
+    
+    conda install seaborn datashader bokeh holoviews
+    """
+    )
+    raise ImportError(
+        "umap.plot requires matplotlib, seaborn, datashader and holoviews to be "
+        "installed"
+    ) from None
 
 import sklearn.decomposition
 import sklearn.cluster
@@ -23,7 +41,10 @@ from matplotlib.patches import Patch
 
 from umap.utils import deheap_sort, submatrix
 
-from bokeh.plotting import output_notebook, output_file, show
+from bokeh.plotting import output_notebook, output_file
+from bokeh.plotting import show as show_interactive
+from matplotlib.pyplot import show as show_static
+
 from warnings import warn
 
 fire_cmap = matplotlib.colors.LinearSegmentedColormap.from_list("fire", colorcet.fire)
@@ -389,6 +410,28 @@ def _matplotlib_points(
     return ax
 
 
+def show(plot_to_show):
+    """Display a plot, either interactive or static.
+
+    Parameters
+    ----------
+    plot_to_show: Output of a plotting command (matplotlib axis or bokeh figure)
+        The plot to show
+
+    Returns
+    -------
+    None
+    """
+    if isinstance(plot_to_show, plt.Axes):
+        show_static()
+    elif isinstance(plot_to_show, bpl.Figure):
+        show_interactive(plot_to_show)
+    else:
+        raise ValueError(
+            "The type of ``plot_to_show`` was not valid, or not understood."
+        )
+
+
 def points(
     umap_object,
     labels=None,
@@ -526,6 +569,12 @@ def points(
     points = umap_object.embedding_
 
     if subset_points is not None:
+        if len(subset_points) != points.shape[0]:
+            raise ValueError(
+                "Size of subset points ({}) does not match number of input points ({})".format(
+                    len(subset_points), points.shape[0]
+                )
+            )
         points = points[subset_points]
 
         if labels is not None:
@@ -1226,7 +1275,13 @@ def interactive(
         )
 
     points = umap_object.embedding_
-    if subset_points:
+    if subset_points is not None:
+        if len(subset_points) != points.shape[0]:
+            raise ValueError(
+                "Size of subset points ({}) does not match number of input points ({})".format(
+                    len(subset_points), points.shape[0]
+                )
+            )
         points = points[subset_points]
 
     if points.shape[1] != 2:
@@ -1272,13 +1327,6 @@ def interactive(
         colors = matplotlib.colors.rgb2hex(plt.get_cmap(cmap)(0.5))
 
     if subset_points is not None:
-        if len(subset_points) != points.shape[0]:
-            raise ValueError(
-                "Size of subset points ({}) does not match number of input points ({})".format(
-                    len(subset_points), points.shape[0]
-                )
-            )
-
         data = data[subset_points]
         if hover_data is not None:
             hover_data = hover_data[subset_points]

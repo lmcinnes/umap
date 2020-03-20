@@ -61,17 +61,18 @@ PyPI install, presuming you have numba and sklearn and all its requirements
    supervised
    clustering
    outliers
+   document_embedding
    embedding_space
-   auto_examples/index
+   auto_examples/index'
+   release_notes
    faq
 
 .. toctree::
    :maxdepth: 2
    :caption: Background on UMAP:
 
-   dimension_reduction
    how_umap_works
-   benchmarking
+   performance
 
 .. toctree::
    :maxdepth: 2
