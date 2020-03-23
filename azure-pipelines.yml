@@ -10,8 +10,6 @@ pool:
   vmImage: 'ubuntu-latest'
 strategy:
   matrix:
-    Python35:
-      python.version: '3.5'
     Python36:
       python.version: '3.6'
     Python37:
@@ -30,6 +28,7 @@ steps:
 
 - script: |
     pip install -e .
+    pip install .[plot]
   displayName: 'Install package'
   
 - script: |
