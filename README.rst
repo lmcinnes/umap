@@ -67,6 +67,7 @@ clarity, simplicity and performance of Numba made the transition necessary.
 
 Requirements:
 
+* Python 3.6 or greater
 * numpy
 * scipy
 * scikit-learn
@@ -80,6 +81,9 @@ Recommended packages:
    * datashader
    * holoviews
 
+
+Installing pynndescent can significantly increase performance, and in later versions
+it will become a hard dependency.
 
 **Install Options**
 
@@ -97,6 +101,14 @@ PyPI install, presuming you have numba and sklearn and all its requirements
 .. code:: bash
 
     pip install umap-learn
+
+If you wish to use the plotting functionality you can use
+
+.. code:: bash
+
+    pip install umap-learn[plot]
+
+to install all the plotting dependencies.
 
 If pip is having difficulties pulling the dependencies then we'd suggest installing
 the dependencies manually using anaconda followed by pulling umap from pip:

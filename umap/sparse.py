@@ -618,3 +618,8 @@ sparse_need_n_features = (
     "sokalmichener",
     "correlation",
 )
+
+SPARSE_SPECIAL_METRICS = {
+    sparse_hellinger: "hellinger",
+    sparse_ll_dirichlet: "ll_dirichlet",
+}

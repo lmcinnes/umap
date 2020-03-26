@@ -8,7 +8,8 @@ import scipy.sparse.csgraph
 from sklearn.manifold import SpectralEmbedding
 from sklearn.metrics import pairwise_distances
 
-from umap.distances import pairwise_special_metric
+from umap.distances import pairwise_special_metric, SPECIAL_METRICS
+from umap.sparse import SPARSE_SPECIAL_METRICS
 
 
 def component_layout(
@@ -82,9 +83,14 @@ def component_layout(
     else:
         for label in range(n_components):
             component_centroids[label] = data[component_labels == label].mean(axis=0)
-        if metric in ("hellinger", "ll_dirichlet"):
+
+        if metric in SPECIAL_METRICS:
             distance_matrix = pairwise_special_metric(
                 component_centroids, metric=metric
+            )
+        elif metric in SPARSE_SPECIAL_METRICS:
+            distance_matrix = pairwise_special_metric(
+                component_centroids, metric=SPARSE_SPECIAL_METRICS[metric],
             )
         else:
             distance_matrix = pairwise_distances(

@@ -1215,6 +1215,17 @@ DISCRETE_METRICS = (
     "string",
 )
 
+SPECIAL_METRICS = (
+    "hellinger",
+    "ll_dirichlet",
+    "symmetric_kl",
+    "poincare",
+    hellinger,
+    ll_dirichlet,
+    symmetric_kl,
+    poincare,
+)
+
 
 @numba.njit(parallel=True)
 def parallel_special_metric(X, Y=None, metric=hellinger):
