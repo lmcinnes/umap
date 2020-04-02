@@ -304,7 +304,7 @@ example of use:
     digits = load_digits()
 
     mapper = umap.UMAP().fit(digits.data)
-    umap.plot.points(mapper, label=digits.target)
+    umap.plot.points(mapper, labels=digits.target)
 
 The plotting package offers basic plots, as well as interactive plots with hover
 tools and various diagnostic plotting options. See the documentation for more details.
