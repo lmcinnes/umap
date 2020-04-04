@@ -1,9 +1,9 @@
 import numpy as np
-import pandas as pd
 import numba
 from warnings import warn
 
 try:
+    import pandas as pd
     import datashader as ds
     import datashader.transfer_functions as tf
     import datashader.bundling as bd
@@ -25,11 +25,11 @@ except ImportError:
     
     or via conda using
     
-    conda install seaborn datashader bokeh holoviews
+    conda install pandas seaborn datashader bokeh holoviews
     """
     )
     raise ImportError(
-        "umap.plot requires matplotlib, seaborn, datashader and holoviews to be "
+        "umap.plot requires pandas, matplotlib, seaborn, datashader and holoviews to be "
         "installed"
     ) from None
 
