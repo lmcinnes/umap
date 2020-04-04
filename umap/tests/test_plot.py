@@ -1,10 +1,4 @@
-from nose.tools import assert_less
-from nose.tools import assert_greater_equal
-import os.path
 import numpy as np
-
-from nose import SkipTest
-
 from sklearn import datasets
 
 import umap
