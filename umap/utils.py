@@ -133,7 +133,7 @@ def rejection_sample(n_samples, pool_size, rng_state):
     return result
 
 
-@numba.njit("f8[:, :, :](i4,i4)")
+@numba.njit()
 def make_heap(n_points, size):
     """Constructor for the numba enabled heap objects. The heaps are used
     for approximate nearest neighbor search, maintaining a list of potential
