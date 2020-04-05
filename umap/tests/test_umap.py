@@ -621,70 +621,78 @@ def test_sokalsneath(binary_data, binary_distances):
 def test_yule(binary_data, binary_distances):
     binary_check("yule", binary_data, binary_distances)
 
-#
-# def test_sparse_euclidean():
-#     sparse_spatial_check("euclidean")
-#
-#
-# def test_sparse_manhattan():
-#     sparse_spatial_check("manhattan")
-#
-#
-# def test_sparse_chebyshev():
-#     sparse_spatial_check("chebyshev")
-#
-#
-# def test_sparse_minkowski():
-#     sparse_spatial_check("minkowski")
-#
-#
-# def test_sparse_hamming():
-#     sparse_spatial_check("hamming")
-#
-#
-# def test_sparse_canberra():
-#     sparse_spatial_check("canberra")
-#
-#
-# def test_sparse_cosine():
-#     sparse_spatial_check("cosine")
-#
-#
-# def test_sparse_correlation():
-#     sparse_spatial_check("correlation")
-#
-#
-# def test_sparse_jaccard():
-#     sparse_binary_check("jaccard")
-#
-#
-# def test_sparse_matching():
-#     sparse_binary_check("matching")
-#
-#
-# def test_sparse_dice():
-#     sparse_binary_check("dice")
-#
-#
-# def test_sparse_kulsinski():
-#     sparse_binary_check("kulsinski")
-#
-#
-# def test_sparse_rogerstanimoto():
-#     sparse_binary_check("rogerstanimoto")
-#
-#
-# def test_sparse_russellrao():
-#     sparse_binary_check("russellrao")
-#
-#
-# def test_sparse_sokalmichener():
-#     sparse_binary_check("sokalmichener")
-#
-#
-# def test_sparse_sokalsneath():
-#     sparse_binary_check("sokalsneath")
-#
+
+# ---------------------------
+# Sparse Spatial Metric Tests
+# ---------------------------
+
+def test_sparse_euclidean(sparse_spatial_data):
+    sparse_spatial_check("euclidean", sparse_spatial_data)
+
+
+def test_sparse_manhattan(sparse_spatial_data):
+    sparse_spatial_check("manhattan", sparse_spatial_data)
+
+
+def test_sparse_chebyshev(sparse_spatial_data):
+    sparse_spatial_check("chebyshev", sparse_spatial_data)
+
+
+def test_sparse_minkowski(sparse_spatial_data):
+    sparse_spatial_check("minkowski", sparse_spatial_data)
+
+
+def test_sparse_hamming(sparse_spatial_data):
+    sparse_spatial_check("hamming", sparse_spatial_data)
+
+
+def test_sparse_canberra(sparse_spatial_data):
+    sparse_spatial_check("canberra", sparse_spatial_data)
+
+
+def test_sparse_cosine(sparse_spatial_data):
+    sparse_spatial_check("cosine", sparse_spatial_data)
+
+
+def test_sparse_correlation(sparse_spatial_data):
+    sparse_spatial_check("correlation", sparse_spatial_data)
+
+
+# ---------------------------
+# Sparse Binary Metric Tests
+# ---------------------------
+
+def test_sparse_jaccard(sparse_binary_data):
+    sparse_binary_check("jaccard", sparse_binary_data)
+
+
+def test_sparse_matching(sparse_binary_data):
+    sparse_binary_check("matching", sparse_binary_data)
+
+
+def test_sparse_dice(sparse_binary_data):
+    sparse_binary_check("dice", sparse_binary_data)
+
+
+def test_sparse_kulsinski(sparse_binary_data):
+    sparse_binary_check("kulsinski", sparse_binary_data)
+
+
+def test_sparse_rogerstanimoto(sparse_binary_data):
+    sparse_binary_check("rogerstanimoto", sparse_binary_data)
+
+
+def test_sparse_russellrao(sparse_binary_data):
+    sparse_binary_check("russellrao", sparse_binary_data)
+
+
+def test_sparse_sokalmichener(sparse_binary_data):
+    sparse_binary_check("sokalmichener", sparse_binary_data)
+
+
+def test_sparse_sokalsneath(sparse_binary_data):
+    sparse_binary_check("sokalsneath", sparse_binary_data)
+
 #
 # def test_seuclidean():
 #     v = np.abs(np.random.randn(spatial_data.shape[1]))
