@@ -5,12 +5,10 @@
 import pytest
 import numpy as np
 from scipy import sparse
-import warnings
 from sklearn.datasets import load_iris
 from umap import UMAP
 
 # Globals, used for all the tests
-warnings.filterwarnings("ignore", category=UserWarning)
 np.random.seed(42)
 
 
