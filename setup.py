@@ -46,7 +46,7 @@ configuration = {
         "numpy >= 1.13",
         "scikit-learn >= 0.20",
         "scipy >= 1.0",
-        "numba >= 0.42, != 0.47",
+        "numba >= 0.46, != 0.47",
         "tbb >= 2019.0",
     ],
     "extras_require": {
