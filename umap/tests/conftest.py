@@ -5,6 +5,13 @@
 import pytest
 import numpy as np
 from scipy import sparse
+import warnings
+from sklearn.datasets import load_iris
+from umap import UMAP
+
+# Globals, used for all the tests
+warnings.filterwarnings("ignore", category=UserWarning)
+np.random.seed(42)
 
 
 # Spatial and Binary Data
@@ -117,16 +124,31 @@ def sparse_binary_data_repeats(binary_repeats):
     return sparse.csr_matrix(binary_repeats)
 
 
-# @pytest.fixture(scope='session')
-# def sparse_test_data(nn_data, binary_nn_data):
-#     return sparse.csr_matrix(nn_data * binary_nn_data)
+@pytest.fixture(scope='session')
+def sparse_test_data(nn_data, binary_nn_data):
+    return sparse.csr_matrix(nn_data * binary_nn_data)
 
-# iris = load_iris()
-# iris_selection = np.random.choice([True, False], 150, replace=True, p=[0.75, 0.25])
-# iris_model = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit(iris.data)
-# supervised_iris_model = UMAP(
-#     n_neighbors=10, min_dist=0.01, n_epochs=200, random_state=42
-# ).fit(iris.data, iris.target)
+
+@pytest.fixture(scope='session')
+def iris():
+    return load_iris()
+
+
+@pytest.fixture(scope='session')
+def iris_selection():
+    return np.random.choice([True, False], 150, replace=True, p=[0.75, 0.25])
+
+
+@pytest.fixture(scope='session')
+def iris_model(iris):
+    return UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit(iris.data)
+
+
+@pytest.fixture(scope='session')
+def supervised_iris_model(iris):
+    return UMAP(n_neighbors=10, min_dist=0.01,
+                n_epochs=200, random_state=42).fit(
+        iris.data, iris.target)
 
 
 # UMAP Distance Metrics
