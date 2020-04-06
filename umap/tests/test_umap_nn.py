@@ -1,6 +1,6 @@
 import numpy as np
 from nose import SkipTest
-from nose.tools import assert_greater_equal
+from nose.tools import (assert_greater_equal, assert_raises)
 from numpy.testing import assert_array_almost_equal
 from scipy import sparse
 from sklearn.neighbors import KDTree
@@ -24,6 +24,25 @@ from umap.utils import deheap_sort
 # ===================================================
 #  Nearest Neighbour Test cases
 # ===================================================
+
+# nearest_neighbours metric parameter validation
+# -----------------------------------------------
+def test_nn_bad_metric(nn_data):
+    assert_raises(ValueError, nearest_neighbors, nn_data, 10, 42, {}, False, np.random)
+
+
+def test_nn_bad_metric_sparse_data(sparse_nn_data):
+    assert_raises(
+        ValueError,
+        nearest_neighbors,
+        sparse_nn_data,
+        10,
+        "seuclidean",
+        {},
+        False,
+        np.random,
+    )
+
 
 # -------------------------------------------------
 #  Utility functions for Nearest Neighbour
