@@ -20,11 +20,11 @@ except ImportError:
     warn(
         """The umap.plot package requires extra plotting libraries to be installed.
     You can install these via pip using
-    
+
     pip install umap-learn[plot]
-    
+
     or via conda using
-    
+
     conda install pandas seaborn datashader bokeh holoviews
     """
     )

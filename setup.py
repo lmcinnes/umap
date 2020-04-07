@@ -15,7 +15,7 @@ def readme():
 
 configuration = {
     "name": "umap-learn",
-    "version": "0.4.0.rc3",
+    "version": "0.4.0",
     "description": "Uniform Manifold Approximation and Projection",
     "long_description": readme(),
     "long_description_content_type": "text/x-rst",
@@ -43,10 +43,10 @@ configuration = {
     "license": "BSD",
     "packages": ["umap"],
     "install_requires": [
-        "numpy >= 1.13",
+        "numpy >= 1.15",
         "scikit-learn >= 0.20",
         "scipy >= 1.0",
-        "numba >= 0.42, != 0.47",
+        "numba >= 0.46, != 0.47",
         "tbb >= 2019.0",
     ],
     "extras_require": {
