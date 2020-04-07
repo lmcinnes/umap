@@ -6,13 +6,13 @@ fi
 
 # Get into a temp directory to run test from the installed scikit learn and
 # check if we do not leave artifacts
-mkdir -p $TEST_DIR
+#mkdir -p $TEST_DIR
 
-cd $TEST_DIR
+#cd $TEST_DIR
 
 if [[ "$COVERAGE" == "true" ]]; then
     export NUMBA_DISABLE_JIT=1
-    coverage run -m pytest --disable-warnings -v
+    coverage run -m pytest --show-capture=no -v --basetemp=$TEST_DIR
 else
-    pytest --disable-warnings -v
+    pytest --show-capture=no -v --basetemp=$TEST_DIR
 fi
