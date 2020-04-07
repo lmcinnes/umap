@@ -20,5 +20,5 @@ install:
   - pip install -e .
 
 test_script:
-  - pytest
+  - pytest --show-capture=no -v --disable-warnings
   
