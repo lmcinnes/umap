@@ -50,7 +50,7 @@ configuration = {
         "tbb >= 2019.0",
     ],
     "extras_require": {
-        "plot": ["pandas", "matplotlib", "datashader", "bokeh", "holoviews", "seaborn"],
+        "plot": ["pandas", "matplotlib", "datashader", "bokeh", "holoviews", "colorcet"],
         "performance": ["pynndescent >= 0.4"],
     },
     "ext_modules": [],

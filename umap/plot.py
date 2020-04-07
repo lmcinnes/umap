@@ -25,11 +25,11 @@ except ImportError:
 
     or via conda using
 
-    conda install pandas seaborn datashader bokeh holoviews
+     conda install pandas matplotlib datashader bokeh holoviews colorcet
     """
     )
     raise ImportError(
-        "umap.plot requires pandas, matplotlib, seaborn, datashader and holoviews to be "
+        "umap.plot requires pandas matplotlib datashader bokeh holoviews and colorcet to be "
         "installed"
     ) from None
 
@@ -42,7 +42,6 @@ from matplotlib.patches import Patch
 from umap.nndescent import initialise_search, initialized_nnd_search
 from umap.utils import deheap_sort, submatrix
 
-from bokeh.plotting import output_notebook, output_file
 from bokeh.plotting import show as show_interactive
 from matplotlib.pyplot import show as show_static
 
