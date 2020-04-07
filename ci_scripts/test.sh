@@ -12,7 +12,7 @@ cd $TEST_DIR
 
 if [[ "$COVERAGE" == "true" ]]; then
     export NUMBA_DISABLE_JIT=1
-    pytest -s --cov=$MODULE $MODULE
+    coverage run -m pytest -s $MODULE
 else
     pytest -s $MODULE
 fi
