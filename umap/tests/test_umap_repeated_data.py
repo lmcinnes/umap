@@ -11,6 +11,7 @@ from umap import UMAP
 #  the region of the code that is called for n>4096
 # ---------------------------------------------------
 
+
 def test_repeated_points_large_sparse_spatial(sparse_spatial_data_repeats):
     model = UMAP(n_neighbors=3, unique=True, force_approximation_algorithm=True).fit(
         sparse_spatial_data_repeats
@@ -43,6 +44,7 @@ def test_repeated_points_small_dense_spatial(spatial_repeats):
 # Use force_approximation_algorithm in order to test
 # the region of the code that is called for n>4096
 # ---------------------------------------------------
+
 
 def test_repeated_points_large_sparse_binary(sparse_binary_data_repeats):
     model = UMAP(n_neighbors=3, unique=True, force_approximation_algorithm=True).fit(

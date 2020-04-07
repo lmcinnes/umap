@@ -14,7 +14,7 @@ np.random.seed(42)
 
 # Spatial and Binary Data
 # -----------------------
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def spatial_data():
     # - Spatial Data
     spatial_data = np.random.randn(10, 20)
@@ -22,31 +22,29 @@ def spatial_data():
     return np.vstack([spatial_data, np.zeros((2, 20))])
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def binary_data():
     binary_data = np.random.choice(a=[False, True], size=(10, 20), p=[0.66, 1 - 0.66])
     # Add some all zero data for corner case test
-    binary_data = np.vstack(
-        [binary_data, np.zeros((2, 20), dtype="bool")]
-    )
+    binary_data = np.vstack([binary_data, np.zeros((2, 20), dtype="bool")])
     return binary_data
 
 
 # Sparse Spatial and Binary Data
 # ------------------------------
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def sparse_spatial_data(spatial_data, binary_data):
     return sparse.csr_matrix(spatial_data * binary_data)
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def sparse_binary_data(binary_data):
     return sparse.csr_matrix(binary_data)
 
 
 # Nearest Neighbour Data
 # -----------------------
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def nn_data():
     nn_data = np.random.uniform(0, 1, size=(1000, 5))
     nn_data = np.vstack(
@@ -55,17 +53,18 @@ def nn_data():
     return nn_data
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def binary_nn_data():
-    binary_nn_data = np.random.choice(a=[False, True], size=(1000, 5),
-                                      p=[0.66, 1 - 0.66])
+    binary_nn_data = np.random.choice(
+        a=[False, True], size=(1000, 5), p=[0.66, 1 - 0.66]
+    )
     binary_nn_data = np.vstack(
         [binary_nn_data, np.zeros((2, 5), dtype="bool")]
     )  # Add some all zero data for corner case test
     return binary_nn_data
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def sparse_nn_data():
     return sparse.random(1000, 50, density=0.5, format="csr")
 
@@ -73,7 +72,8 @@ def sparse_nn_data():
 # Data With Repetitions
 # ---------------------
 
-@pytest.fixture(scope='session')
+
+@pytest.fixture(scope="session")
 def repetition_dense():
     # Dense data for testing small n
     return np.array(
@@ -91,7 +91,7 @@ def repetition_dense():
     )
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def spatial_repeats(spatial_data):
     # spatial data repeats
     spatial_repeats = np.vstack(
@@ -102,7 +102,7 @@ def spatial_repeats(spatial_data):
     return spatial_repeats
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def binary_repeats(binary_data):
     binary_repeats = np.vstack(
         [
@@ -115,60 +115,61 @@ def binary_repeats(binary_data):
     return binary_repeats
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def sparse_spatial_data_repeats(spatial_repeats, binary_repeats):
     return sparse.csr_matrix(spatial_repeats * binary_repeats)
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def sparse_binary_data_repeats(binary_repeats):
     return sparse.csr_matrix(binary_repeats)
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def sparse_test_data(nn_data, binary_nn_data):
     return sparse.csr_matrix(nn_data * binary_nn_data)
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def iris():
     return load_iris()
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def iris_selection():
     return np.random.choice([True, False], 150, replace=True, p=[0.75, 0.25])
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def iris_model(iris):
     return UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit(iris.data)
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def supervised_iris_model(iris):
-    return UMAP(n_neighbors=10, min_dist=0.01,
-                n_epochs=200, random_state=42).fit(
-        iris.data, iris.target)
+    return UMAP(n_neighbors=10, min_dist=0.01, n_epochs=200, random_state=42).fit(
+        iris.data, iris.target
+    )
 
 
 # UMAP Distance Metrics
 # ---------------------
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def spatial_distances():
-    return ("euclidean",
-            "manhattan",
-            "chebyshev",
-            "minkowski",
-            "hamming",
-            "canberra",
-            "braycurtis",
-            "cosine",
-            "correlation",
-            )
+    return (
+        "euclidean",
+        "manhattan",
+        "chebyshev",
+        "minkowski",
+        "hamming",
+        "canberra",
+        "braycurtis",
+        "cosine",
+        "correlation",
+    )
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def binary_distances():
     return (
         "jaccard",

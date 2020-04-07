@@ -4,7 +4,7 @@
 
 import warnings
 import numpy as np
-from nose.tools import (assert_equal, assert_raises)
+from nose.tools import assert_equal, assert_raises
 from umap import UMAP
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -121,7 +121,7 @@ def test_umap_haversine_embed_to_highd(nn_data):
 def test_umap_too_many_neighbors_warns(nn_data):
     u = UMAP(a=1.2, b=1.75, n_neighbors=2000, n_epochs=11, init="random")
     u.fit(
-        nn_data[:100, ]
+        nn_data[:100,]
     )
     assert_equal(u._a, 1.2)
     assert_equal(u._b, 1.75)

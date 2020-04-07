@@ -15,6 +15,7 @@ from sklearn.neighbors import BallTree
 # Utility functions for Metric tests
 # ----------------------------------
 
+
 def run_test_metric(metric, test_data, dist_matrix, with_grad=False):
     """Core utility function to test target metric on test data"""
     if with_grad:
@@ -23,10 +24,7 @@ def run_test_metric(metric, test_data, dist_matrix, with_grad=False):
         dist_function = dist.named_distances[metric]
     sample_size = test_data.shape[0]
     test_matrix = [
-        [
-            dist_function(test_data[i], test_data[j])
-            for j in range(sample_size)
-        ]
+        [dist_function(test_data[i], test_data[j]) for j in range(sample_size)]
         for i in range(sample_size)
     ]
     if with_grad:
@@ -43,7 +41,7 @@ def run_test_metric(metric, test_data, dist_matrix, with_grad=False):
 
 def spatial_check(metric, spatial_data, spatial_distances, with_grad=False):
     # Check that metric is supported for this test, otherwise, fail!
-    assert metric in spatial_distances, f'{metric} not valid for spatial data'
+    assert metric in spatial_distances, f"{metric} not valid for spatial data"
     dist_matrix = pairwise_distances(spatial_data, metric=metric)
     # scipy is bad sometimes
     if metric == "braycurtis":
@@ -60,7 +58,7 @@ def spatial_check(metric, spatial_data, spatial_distances, with_grad=False):
 
 def binary_check(metric, binary_data, binary_distances):
     # Check that metric is supported for this test, otherwise, fail!
-    assert metric in binary_distances, f'{metric} not valid for binary data'
+    assert metric in binary_distances, f"{metric} not valid for binary data"
     dist_matrix = pairwise_distances(binary_data, metric=metric)
 
     if metric in ("jaccard", "dice", "sokalsneath", "yule"):
@@ -118,7 +116,9 @@ def run_test_sparse_metric(metric, sparse_test_data, dist_matrix):
 
 def sparse_spatial_check(metric, sparse_spatial_data):
     # Check that metric is supported for this test, otherwise, fail!
-    assert metric in spdist.sparse_named_distances, f'{metric} not supported for sparse data'
+    assert (
+        metric in spdist.sparse_named_distances
+    ), f"{metric} not supported for sparse data"
     dist_matrix = pairwise_distances(sparse_spatial_data.todense(), metric=metric)
 
     if metric in ("braycurtis", "dice", "sokalsneath", "yule"):
@@ -135,7 +135,9 @@ def sparse_spatial_check(metric, sparse_spatial_data):
 
 def sparse_binary_check(metric, sparse_binary_data):
     # Check that metric is supported for this test, otherwise, fail!
-    assert metric in spdist.sparse_named_distances, f'{metric} not supported for sparse data'
+    assert (
+        metric in spdist.sparse_named_distances
+    ), f"{metric} not supported for sparse data"
     dist_matrix = pairwise_distances(sparse_binary_data.todense(), metric=metric)
     if metric in ("jaccard", "dice", "sokalsneath", "yule"):
         dist_matrix[np.where(~np.isfinite(dist_matrix))] = 0.0
@@ -152,6 +154,7 @@ def sparse_binary_check(metric, sparse_binary_data):
 # --------------------
 # Spatial Metric Tests
 # --------------------
+
 
 def test_euclidean(spatial_data, spatial_distances):
     spatial_check("euclidean", spatial_data, spatial_distances)
@@ -193,6 +196,7 @@ def test_correlation(spatial_data, spatial_distances):
 # Binary Metric Tests
 # --------------------
 
+
 def test_jaccard(binary_data, binary_distances):
     binary_check("jaccard", binary_data, binary_distances)
 
@@ -233,6 +237,7 @@ def test_yule(binary_data, binary_distances):
 # Sparse Spatial Metric Tests
 # ---------------------------
 
+
 def test_sparse_euclidean(sparse_spatial_data):
     sparse_spatial_check("euclidean", sparse_spatial_data)
 
@@ -268,6 +273,7 @@ def test_sparse_correlation(sparse_spatial_data):
 # ---------------------------
 # Sparse Binary Metric Tests
 # ---------------------------
+
 
 def test_sparse_jaccard(sparse_binary_data):
     sparse_binary_check("jaccard", sparse_binary_data)
@@ -403,8 +409,9 @@ def test_hellinger(spatial_data):
     test_matrix = dist.pairwise_special_metric(
         np.abs(spatial_data[:-2]), metric="ll_dirichlet"
     )
-    assert test_matrix is not None, \
-        "Pairwise Special Metric with LL Dirichlet metric failed"
+    assert (
+        test_matrix is not None
+    ), "Pairwise Special Metric with LL Dirichlet metric failed"
 
 
 def test_sparse_hellinger(sparse_spatial_data):
@@ -448,8 +455,9 @@ def test_sparse_hellinger(sparse_spatial_data):
             for i in range(sparse_spatial_data.shape[0])
         ]
     )
-    assert test_matrix is not None, \
-        "Pairwise Special Metric with LL Dirichlet metric failed"
+    assert (
+        test_matrix is not None
+    ), "Pairwise Special Metric with LL Dirichlet metric failed"
 
 
 def test_grad_metrics_match_metrics(spatial_data, spatial_distances):

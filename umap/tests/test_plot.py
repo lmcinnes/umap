@@ -6,13 +6,13 @@ from unittest import mock
 np.random.seed(42)
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def mapper(iris):
     return umap.UMAP(n_epochs=100).fit(iris.data)
 
 
 def test_umap_plot_dependency():
-    with mock.patch.dict('sys.modules', pandas=mock.MagicMock()):
+    with mock.patch.dict("sys.modules", pandas=mock.MagicMock()):
         try:
             from umap import plot
         except ImportError:
@@ -26,6 +26,7 @@ def test_umap_plot_dependency():
 def test_umap_plot_testability():
     try:
         from umap import plot
+
         assert True
     except ImportError:
         assert False, "Missing dependencies - unable to test!"
@@ -36,6 +37,7 @@ def test_umap_plot_testability():
 # property verification.
 def test_plot_runs_at_all(mapper, iris):
     from umap import plot as umap_plot
+
     umap_plot.points(mapper)
     umap_plot.points(mapper, labels=iris.target)
     umap_plot.points(mapper, values=iris.data[:, 0])

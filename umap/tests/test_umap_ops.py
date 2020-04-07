@@ -7,7 +7,7 @@ from sklearn.datasets import make_blobs
 from sklearn.cluster import KMeans
 from sklearn.metrics import adjusted_rand_score
 from sklearn.preprocessing import normalize
-from nose.tools import (assert_equal, assert_less, assert_raises)
+from nose.tools import assert_equal, assert_less, assert_raises
 from numpy.testing import assert_array_equal
 from umap import UMAP
 import numpy as np
@@ -68,6 +68,7 @@ def test_multi_component_layout():
 # ---------------
 # Umap Transform
 # --------------
+
 
 def test_bad_transform_data(nn_data):
     u = UMAP().fit([[1, 1, 1, 1]])

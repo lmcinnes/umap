@@ -37,7 +37,7 @@ def test_initialized_umap_trustworthiness_on_iris(iris):
     )
 
 
-def test_umap_trustworthiness_on_sphere_iris(iris, ):
+def test_umap_trustworthiness_on_sphere_iris(iris,):
     data = iris.data
     embedding = UMAP(
         n_neighbors=10,

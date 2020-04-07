@@ -1,6 +1,6 @@
 import numpy as np
 from nose import SkipTest
-from nose.tools import (assert_greater_equal, assert_raises)
+from nose.tools import assert_greater_equal, assert_raises
 from numpy.testing import assert_array_almost_equal
 from scipy import sparse
 from sklearn.neighbors import KDTree
@@ -48,6 +48,7 @@ def test_nn_bad_metric_sparse_data(sparse_nn_data):
 #  Utility functions for Nearest Neighbour
 # -------------------------------------------------
 
+
 def knn(indices, nn_data):
     tree = KDTree(nn_data)
     true_indices = tree.query(nn_data, 10, return_distance=False)
@@ -61,8 +62,9 @@ def smooth_knn(nn_data, local_connectivity=1.0):
     knn_indices, knn_dists, _ = nearest_neighbors(
         nn_data, 10, "euclidean", {}, False, np.random
     )
-    sigmas, rhos = smooth_knn_dist(knn_dists, 10.0,
-                                   local_connectivity=local_connectivity)
+    sigmas, rhos = smooth_knn_dist(
+        knn_dists, 10.0, local_connectivity=local_connectivity
+    )
     shifted_dists = knn_dists - rhos[:, np.newaxis]
     shifted_dists[shifted_dists < 0.0] = 0.0
     vals = np.exp(-(shifted_dists / sigmas[:, np.newaxis]))
@@ -78,7 +80,7 @@ def test_nn_descent_neighbor_accuracy(nn_data):
     assert_greater_equal(
         percent_correct,
         0.89,
-        'NN-descent did not get 89% accuracy on nearest neighbors',
+        "NN-descent did not get 89% accuracy on nearest neighbors",
     )
 
 
@@ -90,7 +92,7 @@ def test_nn_descent_neighbor_accuracy_low_memory(nn_data):
     assert_greater_equal(
         percent_correct,
         0.89,
-        'NN-descent did not get 89% accuracy on nearest neighbors',
+        "NN-descent did not get 89% accuracy on nearest neighbors",
     )
 
 
@@ -103,7 +105,7 @@ def test_angular_nn_descent_neighbor_accuracy(nn_data):
     assert_greater_equal(
         percent_correct,
         0.89,
-        'NN-descent did not get 89% accuracy on nearest neighbors',
+        "NN-descent did not get 89% accuracy on nearest neighbors",
     )
 
 
@@ -115,7 +117,7 @@ def test_sparse_nn_descent_neighbor_accuracy(sparse_nn_data):
     assert_greater_equal(
         percent_correct,
         0.90,
-        'Sparse NN-descent did not get 90% accuracy on nearest neighbors',
+        "Sparse NN-descent did not get 90% accuracy on nearest neighbors",
     )
 
 
@@ -127,7 +129,7 @@ def test_sparse_nn_descent_neighbor_accuracy_low_memory(sparse_nn_data):
     assert_greater_equal(
         percent_correct,
         0.90,
-        'Sparse NN-descent did not get 90% accuracy on nearest neighbors',
+        "Sparse NN-descent did not get 90% accuracy on nearest neighbors",
     )
 
 
@@ -155,7 +157,7 @@ def test_sparse_angular_nn_descent_neighbor_accuracy(sparse_nn_data):
     assert_greater_equal(
         percent_correct,
         0.90,
-        'Sparse NN-descent did not get 90% accuracy on nearest neighbors',
+        "Sparse NN-descent did not get 90% accuracy on nearest neighbors",
     )
 
 
@@ -176,7 +178,7 @@ def test_smooth_knn_dist_l1norms_w_connectivity(nn_data):
         1.0 + np.log2(10) * np.ones(norms.shape[0]),
         decimal=3,
         err_msg="Smooth knn-dists does not give expected"
-                "norms for local_connectivity=1.75",
+        "norms for local_connectivity=1.75",
     )
 
     # sigmas, rhos = smooth_knn_dist(knn_dists, 10, local_connectivity=0.75)
@@ -282,16 +284,31 @@ def test_sparse_nn_search(sparse_nn_data):
     search_graph = setup_search_graph(knn_dists, knn_indices, train)
     rng_state = np.random.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
-    init = sparse_initialise_search(rp_forest,
-                                    train.indices, train.indptr, train.data,
-                                    test.indices, test.indptr, test.data,
-                                    int(10 * 6), rng_state, spdist.sparse_euclidean, )
+    init = sparse_initialise_search(
+        rp_forest,
+        train.indices,
+        train.indptr,
+        train.data,
+        test.indices,
+        test.indptr,
+        test.data,
+        int(10 * 6),
+        rng_state,
+        spdist.sparse_euclidean,
+    )
 
-    result = sparse_initialized_nnd_search(train.indices, train.indptr, train.data,
-                                           search_graph.indptr, search_graph.indices,
-                                           init,
-                                           test.indices, test.indptr, test.data,
-                                           spdist.sparse_euclidean, )
+    result = sparse_initialized_nnd_search(
+        train.indices,
+        train.indptr,
+        train.data,
+        search_graph.indptr,
+        search_graph.indices,
+        init,
+        test.indices,
+        test.indptr,
+        test.data,
+        spdist.sparse_euclidean,
+    )
     indices, dists = deheap_sort(result)
     indices = indices[:, :10]
 
