@@ -1,27 +1,52 @@
 """
-Tests for UMAP to ensure things are working as expected.
+Test Suite for UMAP to ensure things are working as expected.
 
-The test suite has been refactored to support PyTest.
-This allow to prefer test fixtures over global variable.
-All the fixtures are defined in the `conftest.py` module.
+The test suite comprises multiple testing modules,
+including multiple test cases related to a specific
+set of UMAP features under test.
 
-Moreover, test cases have been re-organised in different
-sections (implemented as different modules)
-according to the specific set of UMAP features under test.
+Backend
+-------
+pytest is the reference backend for testing environment and execution,
+also integrating with pre-existent nose-based tests
 
-Each test module/section include a set of utility functions -
-defined on top of each section - which are meant to define the
-core processing instructions required by (most of) the tests
-so to avoid code clones (repetitions) as much as possible.
-This is to make the testing code easier to maintain.
+Shared Testing code
+-------------------
+Whenever needed, each module includes a set of
+_utility_ functions that specify shared (and repeated)
+testing operations.
 
-Moreover, the multiple testing sections/modules are well-integrated
-each other, as data are now pytest fixtures and no more global variables.
+Fixtures
+--------
+All the data dependency for the multiple test cases
+have been defined as test fixtures (preferred to
+shared global variables).
+All the fixtures shared by multiple test cases
+are defined in the `conftest.py` module.
 
-Therefore:
-- easy to run specific (subsets) of tests
-- easy to add additional tests to specific sections
-- avoiding code repetitions and multiple dependencies
-    (pytest will handle fixtures deps auto-magically)
+Fixtures allow the execution of each test module in isolation, as well
+as within the whole test suite.
+
+Modules in Tests (to keep up to date)
+-------------------------------------
+- conftest: pytrest fixtures
+- test_plot: basic tests for umap.plot
+- test_umap_df_validation_params:
+    Tests on parameters validation for DataFrameUMAP
+- test_umap_metrics:
+    Tests for UMAP metrics - spatial, binary, and sparse
+- test_umap_nn:
+    Tests for NearestNeighbours
+- test_umap_on_iris:
+    Tests for UMAP on Iris Dataset
+- test_umap_ops:
+    Tests for general UMAP ops (e.g. clusterability, transform stability)
+- test_umap_repeated_data:
+    UMAP tests on repeated data (sparse|dense; spatial|binary)
+- test_umap_trustworthiness:
+    Tests on UMAP Trustworthiness
+- test_umap_validation_params:
+    Tests for fit parameters validation
+
 
 """
