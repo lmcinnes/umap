@@ -47,5 +47,4 @@ Modules in Tests (to keep up to date)
 - test_umap_validation_params:
     Tests for fit parameters validation
 
-
 """

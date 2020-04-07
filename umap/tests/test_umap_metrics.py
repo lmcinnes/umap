@@ -403,7 +403,8 @@ def test_hellinger(spatial_data):
     test_matrix = dist.pairwise_special_metric(
         np.abs(spatial_data[:-2]), metric="ll_dirichlet"
     )
-    assert test_matrix is not None, "Pairwise Special Metric with LL Dirichlet metric failed"
+    assert test_matrix is not None, \
+        "Pairwise Special Metric with LL Dirichlet metric failed"
 
 
 def test_sparse_hellinger(sparse_spatial_data):
@@ -447,7 +448,8 @@ def test_sparse_hellinger(sparse_spatial_data):
             for i in range(sparse_spatial_data.shape[0])
         ]
     )
-    assert test_matrix is not None, "Pairwise Special Metric with LL Dirichlet metric failed"
+    assert test_matrix is not None, \
+        "Pairwise Special Metric with LL Dirichlet metric failed"
 
 
 def test_grad_metrics_match_metrics(spatial_data, spatial_distances):

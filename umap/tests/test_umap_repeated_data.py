@@ -67,7 +67,7 @@ def test_repeated_points_large_dense_binary(binary_repeats):
 
 def test_repeated_points_small_dense_binary(binary_repeats):
     model = UMAP(n_neighbors=3, unique=True).fit(binary_repeats)
-    assert_equal(np.unique(binary_repeats[0:2], axis=0).shape[0],1)
+    assert_equal(np.unique(binary_repeats[0:2], axis=0).shape[0], 1)
     assert_equal(np.unique(model.embedding_[0:2], axis=0).shape[0], 1)
 
 

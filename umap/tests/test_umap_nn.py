@@ -61,7 +61,8 @@ def smooth_knn(nn_data, local_connectivity=1.0):
     knn_indices, knn_dists, _ = nearest_neighbors(
         nn_data, 10, "euclidean", {}, False, np.random
     )
-    sigmas, rhos = smooth_knn_dist(knn_dists, 10.0, local_connectivity=local_connectivity)
+    sigmas, rhos = smooth_knn_dist(knn_dists, 10.0,
+                                   local_connectivity=local_connectivity)
     shifted_dists = knn_dists - rhos[:, np.newaxis]
     shifted_dists[shifted_dists < 0.0] = 0.0
     vals = np.exp(-(shifted_dists / sigmas[:, np.newaxis]))
@@ -287,7 +288,8 @@ def test_sparse_nn_search(sparse_nn_data):
                                     int(10 * 6), rng_state, spdist.sparse_euclidean, )
 
     result = sparse_initialized_nnd_search(train.indices, train.indptr, train.data,
-                                           search_graph.indptr, search_graph.indices, init,
+                                           search_graph.indptr, search_graph.indices,
+                                           init,
                                            test.indices, test.indptr, test.data,
                                            spdist.sparse_euclidean, )
     indices, dists = deheap_sort(result)

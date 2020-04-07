@@ -57,7 +57,8 @@ def nn_data():
 
 @pytest.fixture(scope='session')
 def binary_nn_data():
-    binary_nn_data = np.random.choice(a=[False, True], size=(1000, 5), p=[0.66, 1 - 0.66])
+    binary_nn_data = np.random.choice(a=[False, True], size=(1000, 5),
+                                      p=[0.66, 1 - 0.66])
     binary_nn_data = np.vstack(
         [binary_nn_data, np.zeros((2, 5), dtype="bool")]
     )  # Add some all zero data for corner case test
@@ -95,7 +96,8 @@ def spatial_repeats(spatial_data):
     # spatial data repeats
     spatial_repeats = np.vstack(
         [np.repeat(spatial_data[0:2], [2, 0], axis=0), spatial_data, np.zeros((2, 20))]
-    )  # Add some all zero data for corner case test.  Make the first three rows identical
+    )
+    # Add some all zero data for corner case test.  Make the first three rows identical
     # binary Data Repeat
     return spatial_repeats
 
@@ -108,7 +110,8 @@ def binary_repeats(binary_data):
             binary_data,
             np.zeros((2, 20), dtype="bool"),
         ]
-    )  # Add some all zero data for corner case test.  Make the first three rows identical
+    )
+    # Add some all zero data for corner case test.  Make the first three rows identical
     return binary_repeats
 
 

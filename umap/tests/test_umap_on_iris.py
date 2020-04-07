@@ -149,4 +149,3 @@ def test_umap_inverse_transform_on_iris(iris, iris_model):
         assert_greater_equal(
             np.intersect1d(near_points, highd_near_points[0]).shape[0], 3
         )
-
