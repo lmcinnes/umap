@@ -18,9 +18,8 @@ testing operations.
 
 Fixtures
 --------
-All the data dependency for the multiple test cases
-have been defined as test fixtures (preferred to
-shared global variables).
+All data dependency has been implemented
+as test fixtures (preferred to shared global variables).
 All the fixtures shared by multiple test cases
 are defined in the `conftest.py` module.
 
