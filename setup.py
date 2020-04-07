@@ -41,10 +41,10 @@ configuration = {
     'maintainer_email': 'leland.mcinnes@gmail.com',
     'license': 'BSD',
     'packages': ['umap'],
-    'install_requires': ['numpy >= 1.13',
-                         'scikit-learn >= 0.20',
+    'install_requires': ['numpy >= 1.16',
+                         'scikit-learn >= 0.22',
                          'scipy >= 1.0',
-                         'numba >= 0.42, != 0.47',
+                         'numba >= 0.49',
                          'pynndescent >= 0.4.5',
                          'tbb >= 2019'],
     'extras_require': {

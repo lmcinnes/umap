@@ -62,7 +62,7 @@ NPY_INFINITY = np.inf
 
 def flatten_iter(container):
     for i in container:
-        if isinstance(i, (list,tuple)):
+        if isinstance(i, (list, tuple)):
             for j in flatten_iter(i):
                 yield j
         else:
@@ -71,6 +71,7 @@ def flatten_iter(container):
 
 def flattened(container):
     return tuple(flatten_iter(container))
+
 
 def breadth_first_search(adjmat, start, min_vertices):
     explored = []
@@ -220,6 +221,7 @@ def nearest_neighbors(
     random_state,
     low_memory=False,
     use_pynndescent=True,
+        n_jobs=-1,
     verbose=False,
 ):
     """Compute the ``n_neighbors`` nearest points for each data point in ``X``
@@ -291,6 +293,7 @@ def nearest_neighbors(
             n_iters=n_iters,
             max_candidates=60,
             low_memory=low_memory,
+            n_jobs=n_jobs,
             verbose=verbose,
         )
         knn_indices, knn_dists = knn_search_index.neighbor_graph
@@ -755,8 +758,9 @@ def discrete_metric_simplicial_set_intersection(
     return reset_local_connectivity(simplicial_set)
 
 
-def general_simplicial_set_intersection(simplicial_set1, simplicial_set2, weight=0.5,
-                                        right_complement=False):
+def general_simplicial_set_intersection(
+        simplicial_set1, simplicial_set2, weight=0.5, right_complement=False
+):
 
     if right_complement:
         result = simplicial_set1.tocoo()
@@ -1278,6 +1282,7 @@ class UMAP(BaseEstimator):
         min_dist=0.1,
         spread=1.0,
         low_memory=False,
+            n_jobs=-1,
         set_op_mix_ratio=1.0,
         local_connectivity=1.0,
         repulsion_strength=1.0,
@@ -1325,6 +1330,8 @@ class UMAP(BaseEstimator):
         self.force_approximation_algorithm = force_approximation_algorithm
         self.verbose = verbose
         self.unique = unique
+
+        self.n_jobs = n_jobs
 
         self.a = a
         self.b = b
@@ -1487,6 +1494,9 @@ class UMAP(BaseEstimator):
         ):
             self.angular_rp_forest = True
 
+        if self.n_jobs < -1 or self.n_jobs == 0:
+            raise ValueError("n_jobs must be a postive integer, or -1 (for all cores)")
+
     def _check_custom_metric(self, metric, kwds, data=None):
         # quickly check to determine whether user-defined
         # self.metric/self.output_metric returns both distance and gradient
@@ -1502,8 +1512,6 @@ class UMAP(BaseEstimator):
         metric_out = metric(x, y, **kwds)
         # True if metric returns iterable of length 2, False otherwise
         return hasattr(metric_out, "__iter__") and len(metric_out) == 2
-
-
 
     def _populate_combined_params(self, *models):
         self.n_neighbors = flattened([m.n_neighbors for m in models])
@@ -1531,8 +1539,9 @@ class UMAP(BaseEstimator):
         self.target_metric_kwds = flattened([m.target_metric_kwds for m in models])
         self.target_weight = flattened([m.target_weight for m in models])
         self.transform_seed = flattened([m.transform_seed for m in models])
-        self.force_approximation_algorithm = flattened([m.force_approximation_algorithm for m in
-                                                        models])
+        self.force_approximation_algorithm = flattened(
+            [m.force_approximation_algorithm for m in models]
+        )
         self.verbose = flattened([m.verbose for m in models])
         self.unique = flattened([m.unique for m in models])
 
@@ -1542,11 +1551,10 @@ class UMAP(BaseEstimator):
         self._a = flattened([m._a for m in models])
         self._b = flattened([m._b for m in models])
 
-
     def __mul__(self, other):
 
-        check_is_fitted(self, ['graph_'], "Only fitted UMAP models can be combined")
-        check_is_fitted(other, ['graph_'], "Only fitted UMAP models can be combined")
+        check_is_fitted(self, ["graph_"], "Only fitted UMAP models can be combined")
+        check_is_fitted(other, ["graph_"], "Only fitted UMAP models can be combined")
 
         if self.graph_.shape[0] != other.graph_.shape[0]:
             raise ValueError("Only models with the equivalent samples can be combined")
@@ -1554,12 +1562,16 @@ class UMAP(BaseEstimator):
         result = UMAP()
         result._populate_combined_params(self, other)
 
-        result.graph_ = general_simplicial_set_intersection(self.graph_, other.graph_, 0.5)
+        result.graph_ = general_simplicial_set_intersection(
+            self.graph_, other.graph_, 0.5
+        )
         result.graph_ = reset_local_connectivity(result.graph_, True)
 
         if scipy.sparse.csgraph.connected_components(result.graph_)[0] > 1:
-            warn("Combined graph is not connected but mult-component layout is unsupported. "
-                 "Falling back to random initialization.")
+            warn(
+                "Combined graph is not connected but mult-component layout is unsupported. "
+                "Falling back to random initialization."
+            )
             result.init = "random"
         else:
             result.ini = "spectral"
@@ -1579,15 +1591,15 @@ class UMAP(BaseEstimator):
             "euclidean",
             {},
             parallel=False,
-            verbose=bool(np.max(result.verbose))
+            verbose=bool(np.max(result.verbose)),
         )
 
         return result
 
     def __add__(self, other):
 
-        check_is_fitted(self, ['graph_'], "Only fitted UMAP models can be combined")
-        check_is_fitted(other, ['graph_'], "Only fitted UMAP models can be combined")
+        check_is_fitted(self, ["graph_"], "Only fitted UMAP models can be combined")
+        check_is_fitted(other, ["graph_"], "Only fitted UMAP models can be combined")
 
         if self.graph_.shape[0] != other.graph_.shape[0]:
             raise ValueError("Only models with the equivalent samples can be combined")
@@ -1601,7 +1613,8 @@ class UMAP(BaseEstimator):
         if scipy.sparse.csgraph.connected_components(result.graph_)[0] > 1:
             warn(
                 "Combined graph is not connected but mult-component layout is unsupported. "
-                "Falling back to random initialization.")
+                "Falling back to random initialization."
+            )
             result.init = "random"
         else:
             result.ini = "spectral"
@@ -1621,16 +1634,15 @@ class UMAP(BaseEstimator):
             "euclidean",
             {},
             parallel=False,
-            verbose=bool(np.max(result.verbose))
+            verbose=bool(np.max(result.verbose)),
         )
 
         return result
 
-
     def __sub__(self, other):
 
-        check_is_fitted(self, ['graph_'], "Only fitted UMAP models can be combined")
-        check_is_fitted(other, ['graph_'], "Only fitted UMAP models can be combined")
+        check_is_fitted(self, ["graph_"], "Only fitted UMAP models can be combined")
+        check_is_fitted(other, ["graph_"], "Only fitted UMAP models can be combined")
 
         if self.graph_.shape[0] != other.graph_.shape[0]:
             raise ValueError("Only models with the equivalent samples can be combined")
@@ -1638,14 +1650,16 @@ class UMAP(BaseEstimator):
         result = UMAP()
         result._populate_combined_params(self, other)
 
-        result.graph_ = general_simplicial_set_intersection(self.graph_, other.graph_, weight=0.5,
-                                                            right_complement=True)
+        result.graph_ = general_simplicial_set_intersection(
+            self.graph_, other.graph_, weight=0.5, right_complement=True
+        )
         result.graph_ = reset_local_connectivity(result.graph_, True)
 
         if scipy.sparse.csgraph.connected_components(result.graph_)[0] > 1:
             warn(
                 "Combined graph is not connected but mult-component layout is unsupported. "
-                "Falling back to random initialization.")
+                "Falling back to random initialization."
+            )
             result.init = "random"
         else:
             result.ini = "spectral"
@@ -1665,11 +1679,10 @@ class UMAP(BaseEstimator):
             "euclidean",
             {},
             parallel=False,
-            verbose=bool(np.max(result.verbose))
+            verbose=bool(np.max(result.verbose)),
         )
 
         return result
-
 
     def fit(self, X, y=None):
         """Fit X into an embedded space.
@@ -1712,6 +1725,11 @@ class UMAP(BaseEstimator):
 
         if self.verbose:
             print(str(self))
+
+        self._original_n_threads = numba.get_num_threads()
+        if self.n_jobs > 0:
+            numba.set_num_threads(self.n_jobs)
+
 
         # Check if we should unique the data
         # We've already ensured that we aren't in the precomputed case
@@ -1834,6 +1852,7 @@ class UMAP(BaseEstimator):
                 random_state,
                 self.low_memory,
                 use_pynndescent=True,
+                n_jobs=self.n_jobs,
                 verbose=self.verbose,
             )
 
@@ -1984,6 +2003,7 @@ class UMAP(BaseEstimator):
         if self.verbose:
             print(ts() + " Finished embedding")
 
+        numba.set_num_threads(self._original_n_threads)
         self._input_hash = joblib.hash(self._raw_data)
 
         return self
