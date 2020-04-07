@@ -34,7 +34,7 @@ steps:
 - script: |
     pip install nose
     pip install pytest
-    pytest umap/tests --junitxml=pytest.xml
+    pytest --disable-warnings -v --junitxml=pytest.xml
   displayName: 'Run tests'
 
 - task: PublishTestResults@2
