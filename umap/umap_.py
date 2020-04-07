@@ -1698,12 +1698,22 @@ class UMAP(BaseEstimator):
             except (ValueError, TypeError) as e:
                 # metric is numba.jit'd or not supported by sklearn,
                 # fallback to pairwise special
+
                 if self._sparse_data:
-                    dmat = dist.pairwise_special_metric(
-                        X[index].toarray(),
-                        metric=self._input_distance_func,
-                        kwds=self._metric_kwds,
-                    )
+                    # Get a fresh metric since we are casting to dense
+                    if not callable(self.metric):
+                        _m = dist.named_distances[self.metric]
+                        dmat = dist.pairwise_special_metric(
+                            X[index].toarray(),
+                            metric=_m,
+                            kwds=self._metric_kwds,
+                        )
+                    else:
+                        dmat = dist.pairwise_special_metric(
+                            X[index],
+                            metric=self._input_distance_func,
+                            kwds=self._metric_kwds,
+                        )
                 else:
                     dmat = dist.pairwise_special_metric(
                         X[index],
