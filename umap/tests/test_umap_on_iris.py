@@ -96,8 +96,8 @@ def test_umap_transform_on_iris_modified_dtype(iris, iris_selection):
     trust = trustworthiness(new_data, embedding, 10)
     assert_greater_equal(
         trust,
-        0.89,
-        "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust),
+        0.87,
+        "Insufficiently trustworthy transform for iris dataset: {}".format(trust),
     )
 
 
