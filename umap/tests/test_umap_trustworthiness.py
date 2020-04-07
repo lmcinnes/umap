@@ -1,9 +1,16 @@
-from sklearn.manifold import trustworthiness
 from umap import UMAP
 from sklearn.datasets import make_blobs
 from nose.tools import assert_greater_equal
 import numpy as np
-
+try:
+    # works for sklearn>=0.22
+    from sklearn.manifold import trustworthiness
+except ImportError:
+    # this is to comply with requirements (scikit-learn>=0.20)
+    # More recent versions of sklearn have exposed trustworthiness
+    # in top level module API
+    # see: https://github.com/scikit-learn/scikit-learn/pull/15337
+    from sklearn.manifold.t_sne import trustworthiness
 
 # ===================================================
 #  UMAP Trustworthiness Test cases

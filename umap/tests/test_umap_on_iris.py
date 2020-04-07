@@ -1,12 +1,19 @@
 from umap import UMAP
-from sklearn.manifold import trustworthiness
 from nose.tools import assert_greater_equal
 from scipy import sparse
 import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.metrics import adjusted_rand_score
 from sklearn.neighbors import KDTree
-
+try:
+    # works for sklearn>=0.22
+    from sklearn.manifold import trustworthiness
+except ImportError:
+    # this is to comply with requirements (scikit-learn>=0.20)
+    # More recent versions of sklearn have exposed trustworthiness
+    # in top level module API
+    # see: https://github.com/scikit-learn/scikit-learn/pull/15337
+    from sklearn.manifold.t_sne import trustworthiness
 
 # ===================================================
 #  UMAP Test cases on IRIS Dataset
