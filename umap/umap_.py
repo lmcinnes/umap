@@ -1704,9 +1704,7 @@ class UMAP(BaseEstimator):
                     if not callable(self.metric):
                         _m = dist.named_distances[self.metric]
                         dmat = dist.pairwise_special_metric(
-                            X[index].toarray(),
-                            metric=_m,
-                            kwds=self._metric_kwds,
+                            X[index].toarray(), metric=_m, kwds=self._metric_kwds,
                         )
                     else:
                         dmat = dist.pairwise_special_metric(
