@@ -33,11 +33,12 @@ steps:
   
 - script: |
     pip install nose
-    nosetests -s -v --with-xunit
+    pip install pytest
+    pytest --show-capture=no -v --disable-warnings --junitxml=pytest.xml
   displayName: 'Run tests'
 
 - task: PublishTestResults@2
   inputs:
-    testResultsFiles: 'nosetests.xml'
+    testResultsFiles: 'pytest.xml'
     testRunTitle: '$(Agent.OS) - $(Build.BuildNumber)[$(Agent.JobName)] - Python $(python.version)'
   condition: succeededOrFailed()

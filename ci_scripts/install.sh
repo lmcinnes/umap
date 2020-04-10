@@ -40,7 +40,7 @@ if [[ "$DISTRIB" == "conda" ]]; then
   # provided versions
   conda create -n testenv --yes python=$PYTHON_VERSION pip nose \
         numpy=$NUMPY_VERSION scipy=$SCIPY_VERSION numba=$NUMBA_VERSION scikit-learn \
-        holoviews datashader bokeh matplotlib pandas
+        holoviews datashader bokeh matplotlib pandas pytest
 
   source activate testenv
 
@@ -51,6 +51,7 @@ if [[ "$DISTRIB" == "conda" ]]; then
 
   if [[ "$COVERAGE" == "true" ]]; then
       pip install coverage coveralls
+      pip install pytest-cov  # pytest coverage plugin
   fi
 
   python --version
