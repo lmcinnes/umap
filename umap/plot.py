@@ -1,9 +1,9 @@
 import numpy as np
-import pandas as pd
 import numba
 from warnings import warn
 
 try:
+    import pandas as pd
     import datashader as ds
     import datashader.transfer_functions as tf
     import datashader.bundling as bd
@@ -20,16 +20,16 @@ except ImportError:
     warn(
         """The umap.plot package requires extra plotting libraries to be installed.
     You can install these via pip using
-    
+
     pip install umap-learn[plot]
-    
+
     or via conda using
-    
-    conda install seaborn datashader bokeh holoviews
+
+     conda install pandas matplotlib datashader bokeh holoviews colorcet
     """
     )
     raise ImportError(
-        "umap.plot requires matplotlib, seaborn, datashader and holoviews to be "
+        "umap.plot requires pandas matplotlib datashader bokeh holoviews and colorcet to be "
         "installed"
     ) from None
 
@@ -41,7 +41,6 @@ from matplotlib.patches import Patch
 
 from umap.utils import deheap_sort, submatrix
 
-from bokeh.plotting import output_notebook, output_file
 from bokeh.plotting import show as show_interactive
 from matplotlib.pyplot import show as show_static
 

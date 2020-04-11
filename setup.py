@@ -49,6 +49,7 @@ configuration = {
                          'tbb >= 2019'],
     'extras_require': {
         'plot': [
+            'pandas',
             'matplotlib',
             'datashader',
             'bokeh',
