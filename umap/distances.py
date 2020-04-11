@@ -274,7 +274,7 @@ def weighted_minkowski_grad(x, y, w=_mock_ones, p=2):
 def mahalanobis(x, y, vinv=_mock_identity):
     result = 0.0
 
-    diff = np.empty(x.shape[0], dtype=np.float64)
+    diff = np.empty(x.shape[0], dtype=np.float32)
 
     for i in range(x.shape[0]):
         diff[i] = x[i] - y[i]
@@ -292,7 +292,7 @@ def mahalanobis(x, y, vinv=_mock_identity):
 def mahalanobis_grad(x, y, vinv=_mock_identity):
     result = 0.0
 
-    diff = np.empty(x.shape[0], dtype=np.float64)
+    diff = np.empty(x.shape[0], dtype=np.float32)
 
     for i in range(x.shape[0]):
         diff[i] = x[i] - y[i]
