@@ -43,9 +43,9 @@ configuration = {
     "license": "BSD",
     "packages": ["umap"],
     "install_requires": [
-        "numpy >= 1.15",
+        "numpy >= 1.17",
         "scikit-learn >= 0.20",
-        "scipy >= 1.0",
+        "scipy >= 1.3.1",
         "numba >= 0.46, != 0.47",
         "tbb >= 2019.0",
     ],
