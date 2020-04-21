@@ -15,7 +15,7 @@ seaborn for plotting.
 .. code:: python3
 
     import numpy as np
-    from mnist import MNIST
+    from mnist.loader import MNIST
     import matplotlib.pyplot as plt
     %matplotlib inline
     import seaborn as sns
