@@ -4,14 +4,14 @@ Using UMAP for Clustering
 UMAP can be used as an effective preprocessing step to boost the
 performance of density based clustering. This is somewhat controversial,
 and should be attempted with care. For a good discussion of some of the
-issues involved in this please see the various answers `in this
+issues involved in this, please see the various answers `in this
 stackoverflow
 thread <https://stats.stackexchange.com/questions/263539/clustering-on-the-output-of-t-sne>`__
 on clustering the results of t-SNE. Many of the points of concern raised
 there are salient for clustering the results of UMAP. The most notable
 is that UMAP, like t-SNE, does not completely preserve density. UMAP,
-like t-SNE, can also create tears in clusters that are not actually
-present, resulting in a finer clustering than is necessarily present in
+like t-SNE, can also create false tears in clusters, resulting in a 
+finer clustering than is necessarily present in
 the data. Despite these concerns there are still valid reasons to use
 UMAP as a preprocessing step for clustering. As with any clustering
 approach one will want to do some exploration and evaluation of the
@@ -136,7 +136,7 @@ of largely spherical clusters -- this is responsible for some of the
 sharp divides that K-Means puts across digit classes. We can potentially
 improve on this by using a smarter density based algorithm. In this case
 we've chosen to try HDBSCAN, which we believe to be among the most
-advanced density based tehcniques. For the sake of performance we'll
+advanced density based techniques. For the sake of performance we'll
 reduce the dimensionality of the data down to 50 dimensions via PCA
 (this recovers most of the variance), since HDBSCAN scales somewhat
 poorly with the dimensionality of the data it will work on.

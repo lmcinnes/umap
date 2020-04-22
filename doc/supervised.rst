@@ -24,7 +24,7 @@ seaborn for plotting.
 Our example dataset for this exploration will be the `Fashion-MNIST
 dataset from Zalando
 Research <https://github.com/zalandoresearch/fashion-mnist>`__. It is
-desgined to be a drop-in replacement for the classic MNIST digits
+designed to be a drop-in replacement for the classic MNIST digits
 dataset, but uses images of fashion items (dresses, coats, shoes, bags,
 etc.) instead of handwritten digits. Since the images are more complex
 it provides a greater challenge than MNIST digits. We can load it in
@@ -86,7 +86,7 @@ a scatterplot.
 That took a little time, but not all that long considering it is 70,000
 data points in 784 dimensional space. We can simply plot the results as
 a scatterplot, colored by the class of the fashion item. We can use
-matplotlibs colorbar with suitable tick-labels to give us the color key.
+matplotlib's colorbar with suitable tick-labels to give us the color key.
 
 .. code:: python3
 
@@ -109,7 +109,7 @@ separate quite so cleanly. In particular T-shirts, shirts, dresses,
 pullovers, and coats are all a little mixed. At the very least the
 dresses are largely separated, and the T-shirts are mostly in one large
 clump, but they are not well distinguished from the others. Worse still
-are the coats, shirts, and pullovers (somewhat unsruprisingly as these
+are the coats, shirts, and pullovers (somewhat unsurprisingly as these
 can certainly look very similar) which all have significant overlap with
 one another. Ideally we would like much better class separation. Since
 we have the label information we can actually give that to UMAP to use!
@@ -169,7 +169,7 @@ distinct banding pattern that was visible in the original unsupervised
 case; the pants, t-shirts and bags both retained their shape and
 internal structure; etc. The second point to note is that we have also
 retained the global structure. While the individual classes have been
-cleanly seprated from one another, the inter-relationships among the
+cleanly separated from one another, the inter-relationships among the
 classes have been preserved: footwear classes are all near one another;
 trousers and bags are at opposite sides of the plot; and the arc of
 pullover, shirts, t-shirts and dresses is still in place.
@@ -177,7 +177,7 @@ pullover, shirts, t-shirts and dresses is still in place.
 The key point is this: the important structural properties of the data
 have been retained while the known classes have been cleanly pulled
 apart and isolated. If you have data with known classes and want to
-seprate them while still having a meaningful embedding of individual
+separate them while still having a meaningful embedding of individual
 points then supervised UMAP can provide exactly what you need.
 
 Using Partial Labelling (Semi-Supervised UMAP)
@@ -198,7 +198,7 @@ the noise points from a DBSCAN clustering).
 
 Now that we have randomly masked some of the labels we can try to
 perform supervised learning again. Everything works as before, but UMAP
-will interpret the -1 label as beingan unlabelled point and learn
+will interpret the -1 label as being an unlabelled point and learn
 accordingly.
 
 .. code:: python3
@@ -338,7 +338,7 @@ including much of the internal structure of the classes. For the most
 part assignment of new points follows the classes well. The greatest
 source of confusion in some t-shirts that ended up in mixed with the
 shirts, and some pullovers which are confused with the coats. Given the
-difficulty of the problemn this is a good result, particularly when
+difficulty of the problem this is a good result, particularly when
 compared with current state-of-the-art approaches such as `siamese and
 triplet
 networks <https://github.com/adambielski/siamese-triplet/blob/master/Experiments_FashionMNIST.ipynb>`__.

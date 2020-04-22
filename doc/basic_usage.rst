@@ -142,7 +142,7 @@ can a dimension reduction technique like UMAP do for us? By reducing the
 dimension in a way that preserves as much of the structure of the data
 as possible we can get a visualisable representation of the data
 allowing us to "see" the data and its structure and begin to get some
-inuitions about the data itself.
+intuition about the data itself.
 
 To use UMAP for this task we need to first construct a UMAP object that
 will do the job for us. That is as simple as instantiating the class. So
@@ -198,7 +198,7 @@ the original).
 This does a useful job of capturing the structure of the data, and as
 can be seen from the matrix of scatterplots this is relatively accurate.
 Of course we learned at least this much just from that matrix of
-scatterplots -- which we could do since we only had four differnt
+scatterplots -- which we could do since we only had four different
 dimensions to analyse. If we had data with a larger number of dimensions
 the scatterplot matrix would quickly become unwieldy to plot, and far
 harder to interpret. So moving on from the Iris dataset, let's consider
@@ -362,7 +362,7 @@ of the reducer object, or call transform on the original data.
 We now have a dataset with 1797 rows (one for each hand-written digit
 sample), but only 2 columns. As with the Iris example we can now plot
 the resulting embedding, coloring the data points by the class that
-theyr belong to (i.e. the digit they represent).
+they belong to (i.e. the digit they represent).
 
 .. code:: python3
 
