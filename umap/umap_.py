@@ -1497,7 +1497,7 @@ class UMAP(BaseEstimator):
                     "a tuple of (distance [float], gradient [np.array])"
                 )
         elif self.metric == "precomputed":
-            if self.unique is False:
+            if self.unique:
                 raise ValueError("unique is poorly defined on a precomputed metric")
             warn(
                 "using precomputed metric; transform will be unavailable for new data and inverse_transform "
