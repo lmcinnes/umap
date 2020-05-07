@@ -221,7 +221,7 @@ def nearest_neighbors(
     random_state,
     low_memory=False,
     use_pynndescent=True,
-        n_jobs=-1,
+    n_jobs=-1,
     verbose=False,
 ):
     """Compute the ``n_neighbors`` nearest points for each data point in ``X``
@@ -759,7 +759,7 @@ def discrete_metric_simplicial_set_intersection(
 
 
 def general_simplicial_set_intersection(
-        simplicial_set1, simplicial_set2, weight=0.5, right_complement=False
+    simplicial_set1, simplicial_set2, weight=0.5, right_complement=False
 ):
 
     if right_complement:
@@ -1282,7 +1282,7 @@ class UMAP(BaseEstimator):
         min_dist=0.1,
         spread=1.0,
         low_memory=False,
-            n_jobs=-1,
+        n_jobs=-1,
         set_op_mix_ratio=1.0,
         local_connectivity=1.0,
         repulsion_strength=1.0,
@@ -1729,7 +1729,6 @@ class UMAP(BaseEstimator):
         self._original_n_threads = numba.get_num_threads()
         if self.n_jobs > 0 and self.njobs is not None:
             numba.set_num_threads(self.n_jobs)
-
 
         # Check if we should unique the data
         # We've already ensured that we aren't in the precomputed case
