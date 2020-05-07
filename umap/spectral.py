@@ -84,6 +84,9 @@ def component_layout(
         for label in range(n_components):
             component_centroids[label] = data[component_labels == label].mean(axis=0)
 
+        if scipy.sparse.isspmatrix(component_centroids):
+            component_centroids = component_centroids.toarray()
+
         if metric in SPECIAL_METRICS:
             distance_matrix = pairwise_special_metric(
                 component_centroids, metric=metric
