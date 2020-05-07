@@ -85,6 +85,10 @@ def component_layout(
             component_centroids[label] = data[component_labels == label].mean(axis=0)
 
         if scipy.sparse.isspmatrix(component_centroids):
+            warn(
+                "Forcing component centroids to dense; if you are running out of "
+                "memory then consider increasing n_neighbors."
+            )
             component_centroids = component_centroids.toarray()
 
         if metric in SPECIAL_METRICS:
