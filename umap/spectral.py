@@ -1,6 +1,7 @@
 from warnings import warn
 
 import numpy as np
+import numba.targets
 
 import scipy.sparse
 import scipy.sparse.csgraph
@@ -9,7 +10,7 @@ from sklearn.manifold import SpectralEmbedding
 from sklearn.metrics import pairwise_distances
 
 from umap.distances import pairwise_special_metric, SPECIAL_METRICS
-from umap.sparse import SPARSE_SPECIAL_METRICS
+from umap.sparse import SPARSE_SPECIAL_METRICS, sparse_named_distances
 
 
 def component_layout(
@@ -100,9 +101,25 @@ def component_layout(
                 component_centroids, metric=SPARSE_SPECIAL_METRICS[metric],
             )
         else:
-            distance_matrix = pairwise_distances(
-                component_centroids, metric=metric, **metric_kwds
-            )
+            if type(
+                metric
+            ) == numba.targets.registry.CPUDispatcher and scipy.sparse.isspmatrix(data):
+                function_to_name_mapping = {v: k for k, v in sparse_named_distances}
+                try:
+                    metric_name = function_to_name_mapping[metric]
+                except KeyError:
+                    raise NotImplementedError(
+                        "Multicomponent layout for custom "
+                        "sparse metrics is not implemented at "
+                        "this time."
+                    )
+                distance_matrix = pairwise_distances(
+                    component_centroids, metric=metric_name, **metric_kwds
+                )
+            else:
+                distance_matrix = pairwise_distances(
+                    component_centroids, metric=metric, **metric_kwds
+                )
 
     affinity_matrix = np.exp(-(distance_matrix ** 2))
 
