@@ -43,6 +43,8 @@ from umap.nndescent import initialise_search, initialized_nnd_search
 from umap.utils import deheap_sort, submatrix
 
 from bokeh.plotting import show as show_interactive
+from bokeh.layouts import column
+from bokeh.models import CustomJS, TextInput
 from matplotlib.pyplot import show as show_static
 
 from warnings import warn
@@ -1183,6 +1185,10 @@ def interactive(
     height=800,
     point_size=None,
     subset_points=None,
+    interactive_text_search=False,
+    interactive_text_search_columns=None,
+    interactive_text_search_alpha_miss=0.05,
+    interactive_text_search_alpha_match=0.8
 ):
     """Create an interactive bokeh plot of a UMAP embedding.
     While static plots are useful, sometimes a plot that
@@ -1289,6 +1295,18 @@ def interactive(
         A way to select a subset of points based on an array of boolean
         values.
 
+    interactive_text_search: bool (optional, default False)
+        Whether to include a text search widget above the interactive plot
+
+    interactive_text_search_columns: list (optional, default None)
+        Columns of data source to search. Searches all columns by default.
+
+    interactive_text_search_alpha_miss: float (optional, default 0.05)
+        Alpha value for points matching text search
+
+    interactive_text_search_alpha_match: float (optional, default 0.8)
+        Alpha value for points matching text search
+
     Returns
     -------
 
@@ -1360,6 +1378,8 @@ def interactive(
         if hover_data is not None:
             hover_data = hover_data[subset_points]
 
+
+
     if points.shape[0] <= width * height // 10:
 
         if hover_data is not None:
@@ -1371,6 +1391,9 @@ def interactive(
         else:
             tooltips = None
 
+        if interactive_text_search:
+            data['alpha'] = 1
+
         # bpl.output_notebook(hide_banner=True) # this doesn't work for non-notebook use
         data_source = bpl.ColumnDataSource(data)
 
@@ -1380,10 +1403,56 @@ def interactive(
             tooltips=tooltips,
             background_fill_color=background,
         )
-        plot.circle(x="x", y="y", source=data_source, color=colors, size=point_size)
+        plot.circle(x="x", y="y", source=data_source, color=colors, size=point_size, alpha="alpha")
 
         plot.grid.visible = False
         plot.axis.visible = False
+        text_input = TextInput(value="", title="Search:")
+
+        callback = CustomJS(args=dict(source=data_source,
+                                      matching_alpha=interactive_text_search_alpha_match,
+                                      non_matching_alpha=interactive_text_search_alpha_miss,
+                                      search_columns=interactive_text_search_columns),
+                            code="""
+            var data = source.data;
+            var text_search = cb_obj.value;
+
+            // If no search columns are provided, search all columns in the data source
+            var search_columns_dict = {}
+            if (search_columns===null){
+                for (var col in data){
+                    search_columns_dict[col] = col
+                }    
+            }else{
+                for (var col in search_columns){
+                    search_columns_dict[col] = search_columns[col]
+                }
+            }
+            
+            console.log(search_columns_dict);
+
+            // Loop over columns and values
+            // If there is no match for any column for a given row, change the alpha value
+            var string_match = false;
+            for (var i = 0; i < data.x.length; i++) {
+                string_match = false
+                for (var j in search_columns_dict) {
+                    if (String(data[search_columns_dict[j]][i]).includes(text_search) ) {
+                        string_match = true
+                    }
+                }
+                if (string_match){
+                    data['alpha'][i] = matching_alpha
+                }else{
+                    data['alpha'][i] = non_matching_alpha
+                }
+            }
+            source.change.emit();
+        """)
+
+        text_input.js_on_change('value', callback)
+
+        plot = column(text_input, plot)
 
         # bpl.show(plot)
     else:
