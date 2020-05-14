@@ -1407,52 +1407,54 @@ def interactive(
 
         plot.grid.visible = False
         plot.axis.visible = False
-        text_input = TextInput(value="", title="Search:")
 
-        callback = CustomJS(args=dict(source=data_source,
-                                      matching_alpha=interactive_text_search_alpha_match,
-                                      non_matching_alpha=interactive_text_search_alpha_miss,
-                                      search_columns=interactive_text_search_columns),
-                            code="""
-            var data = source.data;
-            var text_search = cb_obj.value;
+        if interactive_text_search:
+            text_input = TextInput(value="", title="Search:")
 
-            // If no search columns are provided, search all columns in the data source
-            var search_columns_dict = {}
-            if (search_columns===null){
-                for (var col in data){
-                    search_columns_dict[col] = col
-                }    
-            }else{
-                for (var col in search_columns){
-                    search_columns_dict[col] = search_columns[col]
-                }
-            }
-            
-            console.log(search_columns_dict);
-
-            // Loop over columns and values
-            // If there is no match for any column for a given row, change the alpha value
-            var string_match = false;
-            for (var i = 0; i < data.x.length; i++) {
-                string_match = false
-                for (var j in search_columns_dict) {
-                    if (String(data[search_columns_dict[j]][i]).includes(text_search) ) {
-                        string_match = true
+            callback = CustomJS(args=dict(source=data_source,
+                                          matching_alpha=interactive_text_search_alpha_match,
+                                          non_matching_alpha=interactive_text_search_alpha_miss,
+                                          search_columns=interactive_text_search_columns),
+                                code="""
+                var data = source.data;
+                var text_search = cb_obj.value;
+    
+                // If no search columns are provided, search all columns in the data source
+                var search_columns_dict = {}
+                if (search_columns===null){
+                    for (var col in data){
+                        search_columns_dict[col] = col
+                    }    
+                }else{
+                    for (var col in search_columns){
+                        search_columns_dict[col] = search_columns[col]
                     }
                 }
-                if (string_match){
-                    data['alpha'][i] = matching_alpha
-                }else{
-                    data['alpha'][i] = non_matching_alpha
+                
+                console.log(search_columns_dict);
+    
+                // Loop over columns and values
+                // If there is no match for any column for a given row, change the alpha value
+                var string_match = false;
+                for (var i = 0; i < data.x.length; i++) {
+                    string_match = false
+                    for (var j in search_columns_dict) {
+                        if (String(data[search_columns_dict[j]][i]).includes(text_search) ) {
+                            string_match = true
+                        }
+                    }
+                    if (string_match){
+                        data['alpha'][i] = matching_alpha
+                    }else{
+                        data['alpha'][i] = non_matching_alpha
+                    }
                 }
-            }
-            source.change.emit();
-        """)
+                source.change.emit();
+            """)
 
-        text_input.js_on_change('value', callback)
+            text_input.js_on_change('value', callback)
 
-        plot = column(text_input, plot)
+            plot = column(text_input, plot)
 
         # bpl.show(plot)
     else:
@@ -1497,5 +1499,6 @@ def interactive(
                 width=width,
                 height=height,
             )
+            
 
     return plot
