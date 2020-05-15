@@ -1388,8 +1388,7 @@ def interactive(
         else:
             tooltips = None
 
-        if interactive_text_search:
-            data['alpha'] = 1
+        data['alpha'] = 1
 
         # bpl.output_notebook(hide_banner=True) # this doesn't work for non-notebook use
         data_source = bpl.ColumnDataSource(data)
