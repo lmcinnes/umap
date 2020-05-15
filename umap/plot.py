@@ -1187,8 +1187,7 @@ def interactive(
     subset_points=None,
     interactive_text_search=False,
     interactive_text_search_columns=None,
-    interactive_text_search_alpha_miss=0.05,
-    interactive_text_search_alpha_match=0.8
+    interactive_text_search_alpha_contrast=0.95
 ):
     """Create an interactive bokeh plot of a UMAP embedding.
     While static plots are useful, sometimes a plot that
@@ -1301,11 +1300,9 @@ def interactive(
     interactive_text_search_columns: list (optional, default None)
         Columns of data source to search. Searches all columns by default.
 
-    interactive_text_search_alpha_miss: float (optional, default 0.05)
-        Alpha value for points matching text search
-
-    interactive_text_search_alpha_match: float (optional, default 0.8)
-        Alpha value for points matching text search
+    interactive_text_search_alpha_contrast: float (optional, default 0.95)
+        Alpha value for points matching text search. Alpha value for points
+        not matching text search will be 1 - interactive_text_search_alpha_contrast
 
     Returns
     -------
@@ -1412,12 +1409,14 @@ def interactive(
             text_input = TextInput(value="", title="Search:")
 
             callback = CustomJS(args=dict(source=data_source,
-                                          matching_alpha=interactive_text_search_alpha_match,
-                                          non_matching_alpha=interactive_text_search_alpha_miss,
+                                          matching_alpha=interactive_text_search_alpha_contrast,
+                                          non_matching_alpha=1-interactive_text_search_alpha_contrast,
                                           search_columns=interactive_text_search_columns),
                                 code="""
                 var data = source.data;
                 var text_search = cb_obj.value;
+                
+                console.log(data);
     
                 // If no search columns are provided, search all columns in the data source
                 var search_columns_dict = {}
@@ -1430,9 +1429,7 @@ def interactive(
                         search_columns_dict[col] = search_columns[col]
                     }
                 }
-                
-                console.log(search_columns_dict);
-    
+                   
                 // Loop over columns and values
                 // If there is no match for any column for a given row, change the alpha value
                 var string_match = false;
@@ -1462,6 +1459,11 @@ def interactive(
             warn(
                 "Too many points for hover data -- tooltips will not"
                 "be displayed. Sorry; try subssampling your data."
+            )
+        if interactive_text_search:
+            warn(
+                "Too many points for text search."
+                "Sorry; try subssampling your data."
             )
         hv.extension("bokeh")
         hv.output(size=300)
