@@ -1187,7 +1187,7 @@ def interactive(
     subset_points=None,
     interactive_text_search=False,
     interactive_text_search_columns=None,
-    interactive_text_search_alpha_contrast=0.95
+    interactive_text_search_alpha_contrast=0.95,
 ):
     """Create an interactive bokeh plot of a UMAP embedding.
     While static plots are useful, sometimes a plot that
@@ -1375,8 +1375,6 @@ def interactive(
         if hover_data is not None:
             hover_data = hover_data[subset_points]
 
-
-
     if points.shape[0] <= width * height // 10:
 
         if hover_data is not None:
@@ -1388,7 +1386,7 @@ def interactive(
         else:
             tooltips = None
 
-        data['alpha'] = 1
+        data["alpha"] = 1
 
         # bpl.output_notebook(hide_banner=True) # this doesn't work for non-notebook use
         data_source = bpl.ColumnDataSource(data)
@@ -1399,7 +1397,14 @@ def interactive(
             tooltips=tooltips,
             background_fill_color=background,
         )
-        plot.circle(x="x", y="y", source=data_source, color=colors, size=point_size, alpha="alpha")
+        plot.circle(
+            x="x",
+            y="y",
+            source=data_source,
+            color=colors,
+            size=point_size,
+            alpha="alpha",
+        )
 
         plot.grid.visible = False
         plot.axis.visible = False
@@ -1407,11 +1412,14 @@ def interactive(
         if interactive_text_search:
             text_input = TextInput(value="", title="Search:")
 
-            callback = CustomJS(args=dict(source=data_source,
-                                          matching_alpha=interactive_text_search_alpha_contrast,
-                                          non_matching_alpha=1-interactive_text_search_alpha_contrast,
-                                          search_columns=interactive_text_search_columns),
-                                code="""
+            callback = CustomJS(
+                args=dict(
+                    source=data_source,
+                    matching_alpha=interactive_text_search_alpha_contrast,
+                    non_matching_alpha=1 - interactive_text_search_alpha_contrast,
+                    search_columns=interactive_text_search_columns,
+                ),
+                code="""
                 var data = source.data;
                 var text_search = cb_obj.value;
                 
@@ -1446,9 +1454,10 @@ def interactive(
                     }
                 }
                 source.change.emit();
-            """)
+            """,
+            )
 
-            text_input.js_on_change('value', callback)
+            text_input.js_on_change("value", callback)
 
             plot = column(text_input, plot)
 
@@ -1461,8 +1470,7 @@ def interactive(
             )
         if interactive_text_search:
             warn(
-                "Too many points for text search."
-                "Sorry; try subssampling your data."
+                "Too many points for text search." "Sorry; try subssampling your data."
             )
         hv.extension("bokeh")
         hv.output(size=300)
@@ -1500,6 +1508,5 @@ def interactive(
                 width=width,
                 height=height,
             )
-            
 
     return plot
