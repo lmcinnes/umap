@@ -1298,7 +1298,7 @@ def interactive(
         Whether to include a text search widget above the interactive plot
 
     interactive_text_search_columns: list (optional, default None)
-        Columns of data source to search. Searches all columns by default.
+        Columns of data source to search. Searches labels and hover_data by default.
 
     interactive_text_search_alpha_contrast: float (optional, default 0.95)
         Alpha value for points matching text search. Alpha value for points
@@ -1412,54 +1412,59 @@ def interactive(
         if interactive_text_search:
             text_input = TextInput(value="", title="Search:")
 
-            callback = CustomJS(
-                args=dict(
-                    source=data_source,
-                    matching_alpha=interactive_text_search_alpha_contrast,
-                    non_matching_alpha=1 - interactive_text_search_alpha_contrast,
-                    search_columns=interactive_text_search_columns,
-                ),
-                code="""
-                var data = source.data;
-                var text_search = cb_obj.value;
-                
-                console.log(data);
-    
-                // If no search columns are provided, search all columns in the data source
-                var search_columns_dict = {}
-                if (search_columns===null){
-                    for (var col in data){
-                        search_columns_dict[col] = col
-                    }    
-                }else{
+            if interactive_text_search_columns is None:
+                interactive_text_search_columns = []
+                if hover_data is not None:
+                    interactive_text_search_columns.extend(hover_data.columns)
+                if labels is not None:
+                    interactive_text_search_columns.append("label")
+
+            if len(interactive_text_search_columns) == 0:
+                warn(
+                    "interactive_text_search_columns set to True, but no hover_data or labels provided."
+                    "Please provide hover_data or labels to use interactive text search."
+                )
+
+            else:
+                callback = CustomJS(
+                    args=dict(
+                        source=data_source,
+                        matching_alpha=interactive_text_search_alpha_contrast,
+                        non_matching_alpha=1 - interactive_text_search_alpha_contrast,
+                        search_columns=interactive_text_search_columns,
+                    ),
+                    code="""
+                    var data = source.data;
+                    var text_search = cb_obj.value;
+                    
+                    var search_columns_dict = {}
                     for (var col in search_columns){
                         search_columns_dict[col] = search_columns[col]
                     }
-                }
-                   
-                // Loop over columns and values
-                // If there is no match for any column for a given row, change the alpha value
-                var string_match = false;
-                for (var i = 0; i < data.x.length; i++) {
-                    string_match = false
-                    for (var j in search_columns_dict) {
-                        if (String(data[search_columns_dict[j]][i]).includes(text_search) ) {
-                            string_match = true
+                    
+                    // Loop over columns and values
+                    // If there is no match for any column for a given row, change the alpha value
+                    var string_match = false;
+                    for (var i = 0; i < data.x.length; i++) {
+                        string_match = false
+                        for (var j in search_columns_dict) {
+                            if (String(data[search_columns_dict[j]][i]).includes(text_search) ) {
+                                string_match = true
+                            }
+                        }
+                        if (string_match){
+                            data['alpha'][i] = matching_alpha
+                        }else{
+                            data['alpha'][i] = non_matching_alpha
                         }
                     }
-                    if (string_match){
-                        data['alpha'][i] = matching_alpha
-                    }else{
-                        data['alpha'][i] = non_matching_alpha
-                    }
-                }
-                source.change.emit();
-            """,
-            )
+                    source.change.emit();
+                """,
+                )
 
-            text_input.js_on_change("value", callback)
+                text_input.js_on_change("value", callback)
 
-            plot = column(text_input, plot)
+                plot = column(text_input, plot)
 
         # bpl.show(plot)
     else:
