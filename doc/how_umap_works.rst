@@ -97,7 +97,7 @@ intersections of sets. The key is that the background topological theory
 actually provides guarantees about how well this simple process can
 produce something that represents the topological space itself in a
 meaningful way (the `Nerve
-theorem <https://en.wikipedia.org/wiki/Nerve_theorem>`__ is the relevant
+theorem <https://en.wikipedia.org/wiki/Nerve_of_a_covering>`__ is the relevant
 result for those interested). Obviously the quality of the cover is
 important, and finer covers provide more accuracy, but the reality is
 that despite its simplicity the process captures much of the topology.

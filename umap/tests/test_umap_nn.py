@@ -141,8 +141,8 @@ def test_nn_descent_neighbor_accuracy_callable_metric(nn_data):
     percent_correct = knn(knn_indices, nn_data)
     assert_greater_equal(
         percent_correct,
-        0.99,
-        "NN-descent did not get 99% "
+        0.95,
+        "NN-descent did not get 95% "
         "accuracy on nearest neighbors with callable metric",
     )
 
