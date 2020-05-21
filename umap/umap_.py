@@ -22,6 +22,7 @@ except ImportError:
 
 import numpy as np
 import scipy.sparse
+from scipy.sparse import tril as sparse_tril, triu as sparse_triu
 import scipy.sparse.csgraph
 import numba
 
@@ -1688,8 +1689,47 @@ class UMAP(BaseEstimator):
         if self.verbose:
             print("Construct fuzzy simplicial set")
 
+        if self.metric == "precomputed" and self._sparse_data:
+            # For sparse precomputed distance matrices, we just argsort the rows to find
+            # nearest neighbors. To make this easier, we expect matrices that are
+            # symmetrical (so we can find neighbors by looking at rows in isolation,
+            # rather than also having to consider that sample's column too).
+            print("Computing KNNs for sparse precomputed distances...")
+            if sparse_tril(X).getnnz() != sparse_triu(X).getnnz():
+                raise ValueError(
+                    "Sparse precomputed distance matrices should be symmetrical!"
+                )
+            if not np.all(X.diagonal() == 0):
+                raise ValueError("Non-zero distances from samples to themselves!")
+            self._knn_indices = np.zeros((X.shape[0], self.n_neighbors), dtype=np.int)
+            self._knn_dists = np.zeros(self._knn_indices.shape, dtype=np.float)
+            for row_id in range(X.shape[0]):
+                # Find KNNs row-by-row
+                row_data = X[row_id].data
+                row_indices = X[row_id].indices
+                if len(row_data) < self._n_neighbors:
+                    raise ValueError(
+                        "Some rows contain fewer than n_neighbors distances!"
+                    )
+                row_nn_data_indices = np.argsort(row_data)[: self._n_neighbors]
+                self._knn_indices[row_id] = row_indices[row_nn_data_indices]
+                self._knn_dists[row_id] = row_data[row_nn_data_indices]
+            self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
+                X[index],
+                self.n_neighbors,
+                random_state,
+                "precomputed",
+                self._metric_kwds,
+                self._knn_indices,
+                self._knn_dists,
+                self.angular_rp_forest,
+                self.set_op_mix_ratio,
+                self.local_connectivity,
+                True,
+                self.verbose,
+            )
         # Handle small cases efficiently by computing all distances
-        if X[index].shape[0] < 4096 and not self.force_approximation_algorithm:
+        elif X[index].shape[0] < 4096 and not self.force_approximation_algorithm:
             self._small_data = True
             try:
                 # sklearn pairwise_distances fails for callable metric on sparse data

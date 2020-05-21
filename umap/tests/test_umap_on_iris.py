@@ -5,6 +5,7 @@ import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.metrics import adjusted_rand_score
 from sklearn.neighbors import KDTree
+
 try:
     # works for sklearn>=0.22
     from sklearn.manifold import trustworthiness
