@@ -98,13 +98,15 @@ def component_layout(
             )
         elif metric in SPARSE_SPECIAL_METRICS:
             distance_matrix = pairwise_special_metric(
-                component_centroids, metric=SPARSE_SPECIAL_METRICS[metric],
+                component_centroids, metric=SPARSE_SPECIAL_METRICS[metric]
             )
         else:
             if type(
                 metric
             ) == numba.targets.registry.CPUDispatcher and scipy.sparse.isspmatrix(data):
-                function_to_name_mapping = {v: k for k, v in sparse_named_distances}
+                function_to_name_mapping = {
+                    v: k for k, v in sparse_named_distances.items()
+                }
                 try:
                     metric_name = function_to_name_mapping[metric]
                 except KeyError:
