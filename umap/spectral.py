@@ -104,7 +104,7 @@ def component_layout(
             if type(
                 metric
             ) == numba.targets.registry.CPUDispatcher and scipy.sparse.isspmatrix(data):
-                function_to_name_mapping = {v: k for k, v in sparse_named_distances}
+                function_to_name_mapping = {v: k for k, v in sparse_named_distances.items()}
                 try:
                     metric_name = function_to_name_mapping[metric]
                 except KeyError:
