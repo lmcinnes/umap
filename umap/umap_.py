@@ -1069,6 +1069,21 @@ def init_transform(indices, weights, embedding):
     return result
 
 
+@numba.njit()
+def init_update(current_init, n_original_samples, indices):
+    for i in range(n_original_samples, indices.shape[0]):
+        n = 0
+        for j in range(indices.shape[1]):
+            for d in range(current_init.shape[1]):
+                if indices[i, j] < n_original_samples:
+                    n += 1
+                    current_init[i, d] += current_init[indices[i, j], d]
+        for d in range(current_init.shape[1]):
+            current_init[i, d] /= n
+
+    return
+
+
 def find_ab_params(spread, min_dist):
     """Fit a, b params for the differentiable curve used in lower
     dimensional fuzzy simplicial complex construction. We want the
@@ -2017,6 +2032,9 @@ class UMAP(BaseEstimator):
                     self.graph_, target_graph, self.target_weight
                 )
                 self.graph_ = reset_local_connectivity(self.graph_)
+                self._supervised = True
+        else:
+            self._supervised = False
 
         if self.n_epochs is None:
             n_epochs = 0
@@ -2384,6 +2402,90 @@ class UMAP(BaseEstimator):
         )
 
         return inv_transformed_points
+
+    def update(self, X):
+        X = check_array(X, dtype=np.float32, accept_sparse="csr", order="C")
+        random_state = check_random_state(self.transform_seed)
+        rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
+
+        original_size = self._raw_data.shape[0]
+
+        if self.metric == "precomputed":
+            raise ValueError("Update does not currently support precomputed metrics")
+
+        if self._small_data:
+            if self._sparse_data:
+                self._raw_data = scipy.sparse.vstack([self._raw_data, X])
+            else:
+                self._raw_data = np.vstack([self._raw_data, X])
+
+            if self._raw_data.shape[0] < 4096:
+                # still small data
+                pass
+            else:
+                # now large data
+                pass
+        else:
+            self._knn_search_index.update(X)
+            self._raw_data = self._knn_search_index._raw_data
+            self._knn_indices, self._knn_dists = self._knn_search_index.neighbor_graph
+
+            if self._sparse_data and self.metric in pynn_sparse_named_distances:
+                nn_metric = self.metric
+            elif not self._sparse_data and self.metric in pynn_named_distances:
+                nn_metric = self.metric
+            else:
+                nn_metric = self._input_distance_func
+
+            self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
+                self._raw_data,
+                self.n_neighbors,
+                random_state,
+                nn_metric,
+                self._metric_kwds,
+                self._knn_indices,
+                self._knn_dists,
+                self.angular_rp_forest,
+                self.set_op_mix_ratio,
+                self.local_connectivity,
+                True,
+                self.verbose,
+            )
+
+            if self._supervised:
+                raise ValueError("Updating supervised models is not currently "
+                                 "supported")
+
+            if self.n_epochs is None:
+                n_epochs = 0
+            else:
+                n_epochs = self.n_epochs
+
+            init = np.zeros((self._raw_data.shape[0], self.n_components),
+                            dtype=np.float32)
+            init[:original_size] = self.embedding_
+            init_update(init, original_size, self._knn_indices)
+
+            self.embedding_ = simplicial_set_embedding(
+                self._raw_data,
+                self.graph_,
+                self.n_components,
+                self._initial_alpha,
+                self._a,
+                self._b,
+                self.repulsion_strength,
+                self.negative_sample_rate,
+                n_epochs,
+                init,
+                random_state,
+                self._input_distance_func,
+                self._metric_kwds,
+                self._output_distance_func,
+                self._output_metric_kwds,
+                self.output_metric in ("euclidean", "l2"),
+                self.random_state is None,
+                self.verbose,
+            )
 
 
 class DataFrameUMAP(BaseEstimator):
