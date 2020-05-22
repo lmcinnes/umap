@@ -2412,8 +2412,12 @@ class UMAP(BaseEstimator):
 
         if self.metric == "precomputed":
             raise ValueError("Update does not currently support precomputed metrics")
+        if self._supervised:
+            raise ValueError("Updating supervised models is not currently "
+                             "supported")
 
         if self._small_data:
+
             if self._sparse_data:
                 self._raw_data = scipy.sparse.vstack([self._raw_data, X])
             else:
@@ -2421,10 +2425,123 @@ class UMAP(BaseEstimator):
 
             if self._raw_data.shape[0] < 4096:
                 # still small data
-                pass
+                try:
+                    # sklearn pairwise_distances fails for callable metric on sparse data
+                    _m = self.metric if self._sparse_data else self._input_distance_func
+                    dmat = pairwise_distances(self._raw_data, metric=_m,
+                                              **self._metric_kwds)
+                except (ValueError, TypeError) as e:
+                    # metric is numba.jit'd or not supported by sklearn,
+                    # fallback to pairwise special
+
+                    if self._sparse_data:
+                        # Get a fresh metric since we are casting to dense
+                        if not callable(self.metric):
+                            _m = dist.named_distances[self.metric]
+                            dmat = dist.pairwise_special_metric(
+                                self._raw_data.toarray(), metric=_m,
+                                kwds=self._metric_kwds,
+                            )
+                        else:
+                            dmat = dist.pairwise_special_metric(
+                                self._raw_data,
+                                metric=self._input_distance_func,
+                                kwds=self._metric_kwds,
+                            )
+                    else:
+                        dmat = dist.pairwise_special_metric(
+                            self._raw_data,
+                            metric=self._input_distance_func,
+                            kwds=self._metric_kwds,
+                        )
+                self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
+                    dmat,
+                    self._n_neighbors,
+                    random_state,
+                    "precomputed",
+                    self._metric_kwds,
+                    None,
+                    None,
+                    self.angular_rp_forest,
+                    self.set_op_mix_ratio,
+                    self.local_connectivity,
+                    True,
+                    self.verbose,
+                )
+                knn_indices = np.argsort(dmat)[:, :self.n_neighbors]
             else:
                 # now large data
-                pass
+                if self._sparse_data and self.metric in pynn_sparse_named_distances:
+                    nn_metric = self.metric
+                elif not self._sparse_data and self.metric in pynn_named_distances:
+                    nn_metric = self.metric
+                else:
+                    nn_metric = self._input_distance_func
+
+                (
+                    self._knn_indices,
+                    self._knn_dists,
+                    self._knn_search_index,
+                ) = nearest_neighbors(
+                    self._raw_data,
+                    self._n_neighbors,
+                    nn_metric,
+                    self._metric_kwds,
+                    self.angular_rp_forest,
+                    random_state,
+                    self.low_memory,
+                    use_pynndescent=True,
+                    n_jobs=self.n_jobs,
+                    verbose=self.verbose,
+                )
+
+                self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
+                    self._raw_data,
+                    self.n_neighbors,
+                    random_state,
+                    nn_metric,
+                    self._metric_kwds,
+                    self._knn_indices,
+                    self._knn_dists,
+                    self.angular_rp_forest,
+                    self.set_op_mix_ratio,
+                    self.local_connectivity,
+                    True,
+                    self.verbose,
+                )
+                knn_indices = self._knn_indices
+
+            init = np.zeros((self._raw_data.shape[0], self.n_components),
+                            dtype=np.float32)
+            init[:original_size] = self.embedding_
+
+            init_update(init, original_size, knn_indices)
+            if self.n_epochs is None:
+                n_epochs = 0
+            else:
+                n_epochs = self.n_epochs
+
+            self.embedding_ = simplicial_set_embedding(
+                self._raw_data,
+                self.graph_,
+                self.n_components,
+                self._initial_alpha,
+                self._a,
+                self._b,
+                self.repulsion_strength,
+                self.negative_sample_rate,
+                n_epochs,
+                init,
+                random_state,
+                self._input_distance_func,
+                self._metric_kwds,
+                self._output_distance_func,
+                self._output_metric_kwds,
+                self.output_metric in ("euclidean", "l2"),
+                self.random_state is None,
+                self.verbose,
+            )
+
         else:
             self._knn_search_index.update(X)
             self._raw_data = self._knn_search_index._raw_data
@@ -2452,19 +2569,15 @@ class UMAP(BaseEstimator):
                 self.verbose,
             )
 
-            if self._supervised:
-                raise ValueError("Updating supervised models is not currently "
-                                 "supported")
+            init = np.zeros((self._raw_data.shape[0], self.n_components),
+                            dtype=np.float32)
+            init[:original_size] = self.embedding_
+            init_update(init, original_size, self._knn_indices)
 
             if self.n_epochs is None:
                 n_epochs = 0
             else:
                 n_epochs = self.n_epochs
-
-            init = np.zeros((self._raw_data.shape[0], self.n_components),
-                            dtype=np.float32)
-            init[:original_size] = self.embedding_
-            init_update(init, original_size, self._knn_indices)
 
             self.embedding_ = simplicial_set_embedding(
                 self._raw_data,
