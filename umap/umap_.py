@@ -2471,6 +2471,7 @@ class UMAP(BaseEstimator):
                 knn_indices = np.argsort(dmat)[:, :self.n_neighbors]
             else:
                 # now large data
+                self._small_data = False
                 if self._sparse_data and self.metric in pynn_sparse_named_distances:
                     nn_metric = self.metric
                 elif not self._sparse_data and self.metric in pynn_named_distances:
