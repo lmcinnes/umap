@@ -1582,7 +1582,11 @@ class UMAP(BaseEstimator):
             # if checking the manifold distance metric, simulate some data on a
             # reasonable interval with output dimensionality
             x, y = np.random.uniform(low=-10, high=10, size=(2, self.n_components))
-        metric_out = metric(x, y, **kwds)
+
+        if scipy.sparse.issparse(data):
+            metric_out = metric(x.indices, x.data, y.indices, y.data, **kwds)
+        else:
+            metric_out = metric(x, y, **kwds)
         # True if metric returns iterable of length 2, False otherwise
         return hasattr(metric_out, "__iter__") and len(metric_out) == 2
 
