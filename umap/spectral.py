@@ -1,7 +1,6 @@
 from warnings import warn
 
 import numpy as np
-import numba.targets
 
 import scipy.sparse
 import scipy.sparse.csgraph
@@ -101,9 +100,9 @@ def component_layout(
                 component_centroids, metric=SPARSE_SPECIAL_METRICS[metric]
             )
         else:
-            if type(
+            if callable(
                 metric
-            ) == numba.targets.registry.CPUDispatcher and scipy.sparse.isspmatrix(data):
+            ) and scipy.sparse.isspmatrix(data):
                 function_to_name_mapping = {
                     v: k for k, v in sparse_named_distances.items()
                 }
