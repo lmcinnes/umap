@@ -34,6 +34,10 @@ visualise the results of UMAP, and pandas to make that a little easier.
 Penguin data
 ------------
 
+.. image:: https://github.com/allisonhorst/penguins/raw/master/figures/lter_penguins.png
+   :width: 300px
+   :alt: Penguins
+
 The next step is to get some data to work with. To ease us into things
 we'll start with the `penguin
 dataset <https://github.com/allisonhorst/penguins>`__. It isn't very
@@ -155,6 +159,9 @@ proper handling of missing data.
     Name: species_short, dtype: int64
 
 
+.. image:: https://github.com/allisonhorst/penguins/raw/master/figures/culmen.png
+   :width: 300px
+   :alt: Diagram of culmen measurements on a penguin
 
 See the `github repostiory <https://github.com/allisonhorst/penguins>`__
 for more details about the daataset itself. It consists of measurements
@@ -597,3 +604,4 @@ Anyone interested in publishing the data should contact `Dr. Kristen
 Gorman <https://www.uaf.edu/cfos/people/faculty/detail/kristen-gorman.php>`__
 about analysis and working together on any final products.
 
+Penguin images by Alison Horst.
