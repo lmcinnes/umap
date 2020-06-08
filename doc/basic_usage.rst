@@ -36,6 +36,7 @@ Penguin data
 
 .. image:: https://github.com/allisonhorst/penguins/raw/master/figures/lter_penguins.png
    :width: 300px
+   :align: center
    :alt: Penguins
 
 The next step is to get some data to work with. To ease us into things
@@ -159,8 +160,9 @@ proper handling of missing data.
     Name: species_short, dtype: int64
 
 
-.. image:: https://github.com/allisonhorst/penguins/raw/master/figures/culmen.png
+.. image:: https://github.com/allisonhorst/penguins/raw/master/figures/culmen_depth.png
    :width: 300px
+   :align: center
    :alt: Diagram of culmen measurements on a penguin
 
 See the `github repostiory <https://github.com/allisonhorst/penguins>`__
