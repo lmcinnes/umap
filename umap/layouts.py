@@ -75,6 +75,16 @@ def _optimize_layout_euclidean_single_epoch(
     epoch_of_next_negative_sample,
     epoch_of_next_sample,
     n,
+    densmap_flag,
+    dens_phi_sum,
+    dens_re_sum,
+    dens_re_cov,
+    dens_re_std,
+    dens_re_mean,
+    dens_lambda,
+    dens_R,
+    dens_mu,
+    dens_mu_tot,
 ):
     for i in numba.prange(epochs_per_sample.shape[0]):
         if epoch_of_next_sample[i] <= n:
@@ -86,6 +96,23 @@ def _optimize_layout_euclidean_single_epoch(
 
             dist_squared = rdist(current, other)
 
+            if densmap_flag:
+                phi = 1.0 / (1.0 + a * pow(dist_squared, b))
+                dphi_term = a * b * pow(dist_squared, b-1) / (1.0 + a * pow(dist_squared, b))
+
+                q_jk = phi / dens_phi_sum[k]
+                q_kj = phi / dens_phi_sum[j]
+
+                drk = q_jk * ((1.0 - b * (1 - phi)) / np.exp(dens_re_sum[k]) + dphi_term)
+                drj = q_kj * ((1.0 - b * (1 - phi)) / np.exp(dens_re_sum[j]) + dphi_term)
+
+                re_std_sq = dens_re_std * dens_re_std
+                weight_k = dens_R[k] - dens_re_cov * (dens_re_sum[k] - dens_re_mean) / re_std_sq
+                weight_j = dens_R[j] - dens_re_cov * (dens_re_sum[j] - dens_re_mean) / re_std_sq
+
+                grad_cor_coeff = dens_lambda * dens_mu_tot * (weight_k * drk + weight_j * drj) \
+                                 / (dens_mu[i] * dens_re_std) / n_vertices
+
             if dist_squared > 0.0:
                 grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
                 grad_coeff /= a * pow(dist_squared, b) + 1.0
@@ -94,6 +121,10 @@ def _optimize_layout_euclidean_single_epoch(
 
             for d in range(dim):
                 grad_d = clip(grad_coeff * (current[d] - other[d]))
+
+                if densmap_flag:
+                    grad_d += clip(2 * grad_cor_coeff * (current[d] - other[d]))
+
                 current[d] += grad_d * alpha
                 if move_other:
                     other[d] += -grad_d * alpha
@@ -149,6 +180,8 @@ def optimize_layout_euclidean(
     negative_sample_rate=5.0,
     parallel=False,
     verbose=False,
+    densmap=False,
+    densmap_kwds={},
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
     fuzzy set cross entropy between the 1-skeletons of the high dimensional
@@ -193,6 +226,10 @@ def optimize_layout_euclidean(
         if a random seed has been set, to ensure reproducibility.
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
+    densmap: bool (optional, default False)
+        Whether to use the density-augmented densMAP objective
+    densmap_kwds: dict (optional, default {})
+        Auxiliary data for densMAP
     Returns
     -------
     embedding: array of shape (n_samples, n_components)
@@ -210,7 +247,59 @@ def optimize_layout_euclidean(
     optimize_fn = numba.njit(
         _optimize_layout_euclidean_single_epoch, fastmath=True, parallel=parallel
     )
+
+    if densmap:
+        densmap_kwds['mu_tot'] = np.sum(densmap_kwds['mu_sum']) / 2
+
     for n in range(n_epochs):
+        
+        densmap_flag = densmap and (densmap_kwds['lambda'] > 0) and \
+                       (((n + 1) / float(n_epochs)) > (1 - densmap_kwds['frac']))
+
+        if densmap_flag:
+            phi_sum = np.zeros(n_vertices, dtype=np.float32)
+            re_sum = np.zeros(n_vertices, dtype=np.float32)
+
+            for i in range(epochs_per_sample.shape[0]):
+                j = head[i]
+                k = tail[i]
+                current = head_embedding[j]
+                other = tail_embedding[k]
+                dist_squared = rdist(current, other)
+
+                phi = 1.0 / (1.0 + a * pow(dist_squared, b))
+
+                re_sum[j] += phi * dist_squared
+                re_sum[k] += phi * dist_squared
+                phi_sum[j] += phi
+                phi_sum[k] += phi
+
+            epsilon = 1e-8
+            re_sum = np.log(epsilon + (re_sum / phi_sum))
+            re_std = np.sqrt(np.var(re_sum) + densmap_kwds['var_shift'])
+            re_mean = np.mean(re_sum)
+            re_cov = np.dot(re_sum, densmap_kwds['R']) / (n_vertices - 1)
+
+            dens_phi_sum = phi_sum
+            dens_re_sum = re_sum
+            dens_re_cov = re_cov
+            dens_re_std = re_std
+            dens_re_mean = re_mean
+            dens_lambda = densmap_kwds['lambda']
+            dens_R = densmap_kwds['R']
+            dens_mu = densmap_kwds['mu']
+            dens_mu_tot = densmap_kwds['mu_tot']
+        else:
+            dens_phi_sum = np.zeros(1, dtype=np.float32)
+            dens_re_sum = np.zeros(1, dtype=np.float32)
+            dens_re_cov = 0
+            dens_re_std = 0
+            dens_re_mean = 0
+            dens_lambda = 0
+            dens_R = np.zeros(1, dtype=np.float32)
+            dens_mu = np.zeros(1, dtype=np.float32)
+            dens_mu_tot = 0
+
         optimize_fn(
             head_embedding,
             tail_embedding,
@@ -229,6 +318,16 @@ def optimize_layout_euclidean(
             epoch_of_next_negative_sample,
             epoch_of_next_sample,
             n,
+            densmap_flag,
+            dens_phi_sum,
+            dens_re_sum,
+            dens_re_cov,
+            dens_re_std,
+            dens_re_mean,
+            dens_lambda,
+            dens_R,
+            dens_mu,
+            dens_mu_tot,
         )
 
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
