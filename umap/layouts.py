@@ -163,6 +163,37 @@ def _optimize_layout_euclidean_single_epoch(
                 n_neg_samples * epochs_per_negative_sample[i]
             )
 
+def _optimize_layout_euclidean_densmap_epoch_init(
+    head_embedding,
+    tail_embedding,
+    head,
+    tail,
+    a,
+    b,
+    re_sum,
+    phi_sum,
+):
+    re_sum.fill(0)
+    phi_sum.fill(0)
+
+    for i in numba.prange(head.size):
+        j = head[i]
+        k = tail[i]
+
+        current = head_embedding[j]
+        other = tail_embedding[k]
+        dist_squared = rdist(current, other)
+
+        phi = 1.0 / (1.0 + a * pow(dist_squared, b))
+
+        re_sum[j] += phi * dist_squared
+        re_sum[k] += phi * dist_squared
+        phi_sum[j] += phi
+        phi_sum[k] += phi
+
+    epsilon = 1e-8
+    for i in range(re_sum.size):
+        re_sum[i] = np.log(epsilon + (re_sum[i] / phi_sum[i]))
 
 def optimize_layout_euclidean(
     head_embedding,
@@ -249,7 +280,24 @@ def optimize_layout_euclidean(
     )
 
     if densmap:
-        densmap_kwds['mu_tot'] = np.sum(densmap_kwds['mu_sum']) / 2
+        dens_init_fn = numba.njit(
+            _optimize_layout_euclidean_densmap_epoch_init, fastmath=True, parallel=parallel
+        )
+
+        dens_mu_tot = np.sum(densmap_kwds['mu_sum']) / 2
+        dens_lambda = densmap_kwds['lambda']
+        dens_R = densmap_kwds['R']
+        dens_mu = densmap_kwds['mu']
+        dens_phi_sum = np.zeros(n_vertices, dtype=np.float32)
+        dens_re_sum = np.zeros(n_vertices, dtype=np.float32)
+        dens_var_shift = densmap_kwds['var_shift']
+    else:
+        dens_mu_tot = 0
+        dens_lambda = 0
+        dens_R = np.zeros(1, dtype=np.float32)
+        dens_mu = np.zeros(1, dtype=np.float32)
+        dens_phi_sum = np.zeros(1, dtype=np.float32)
+        dens_re_sum = np.zeros(1, dtype=np.float32)
 
     for n in range(n_epochs):
         
@@ -257,48 +305,16 @@ def optimize_layout_euclidean(
                        (((n + 1) / float(n_epochs)) > (1 - densmap_kwds['frac']))
 
         if densmap_flag:
-            phi_sum = np.zeros(n_vertices, dtype=np.float32)
-            re_sum = np.zeros(n_vertices, dtype=np.float32)
+            dens_init_fn(head_embedding, tail_embedding, head, tail, a, b,
+                         dens_re_sum, dens_phi_sum)
 
-            for i in range(epochs_per_sample.shape[0]):
-                j = head[i]
-                k = tail[i]
-                current = head_embedding[j]
-                other = tail_embedding[k]
-                dist_squared = rdist(current, other)
-
-                phi = 1.0 / (1.0 + a * pow(dist_squared, b))
-
-                re_sum[j] += phi * dist_squared
-                re_sum[k] += phi * dist_squared
-                phi_sum[j] += phi
-                phi_sum[k] += phi
-
-            epsilon = 1e-8
-            re_sum = np.log(epsilon + (re_sum / phi_sum))
-            re_std = np.sqrt(np.var(re_sum) + densmap_kwds['var_shift'])
-            re_mean = np.mean(re_sum)
-            re_cov = np.dot(re_sum, densmap_kwds['R']) / (n_vertices - 1)
-
-            dens_phi_sum = phi_sum
-            dens_re_sum = re_sum
-            dens_re_cov = re_cov
-            dens_re_std = re_std
-            dens_re_mean = re_mean
-            dens_lambda = densmap_kwds['lambda']
-            dens_R = densmap_kwds['R']
-            dens_mu = densmap_kwds['mu']
-            dens_mu_tot = densmap_kwds['mu_tot']
+            dens_re_std = np.sqrt(np.var(dens_re_sum) + dens_var_shift)
+            dens_re_mean = np.mean(dens_re_sum)
+            dens_re_cov = np.dot(dens_re_sum, dens_R) / (n_vertices - 1)
         else:
-            dens_phi_sum = np.zeros(1, dtype=np.float32)
-            dens_re_sum = np.zeros(1, dtype=np.float32)
-            dens_re_cov = 0
             dens_re_std = 0
             dens_re_mean = 0
-            dens_lambda = 0
-            dens_R = np.zeros(1, dtype=np.float32)
-            dens_mu = np.zeros(1, dtype=np.float32)
-            dens_mu_tot = 0
+            dens_re_cov = 0
 
         optimize_fn(
             head_embedding,
