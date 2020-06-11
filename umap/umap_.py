@@ -871,6 +871,7 @@ def simplicial_set_embedding(
     metric_kwds,
     densmap,
     densmap_kwds,
+    output_dens,
     output_metric=dist.named_distances_with_gradients["euclidean"],
     output_metric_kwds={},
     euclidean_output=True,
@@ -942,6 +943,9 @@ def simplicial_set_embedding(
 
     densmap_kwds: dict
         Key word arguments to be used by the densMAP optimization.
+
+    output_dens: bool
+        Whether to output local radii in the original data and the embedding.
 
     output_metric: function
         Function returning the distance between two points in embedding space and
@@ -1035,7 +1039,7 @@ def simplicial_set_embedding(
 
     aux_data = {}
 
-    if densmap:
+    if densmap or output_dens:
         if verbose:
             print(ts() + " Computing original densities")
 
@@ -1057,13 +1061,14 @@ def simplicial_set_embedding(
 
         epsilon = 1e-8
         ro = np.log(epsilon + (ro / mu_sum))
-        R = (ro - np.mean(ro)) / np.std(ro)
 
-        densmap_kwds['mu'] = graph.data
-        densmap_kwds['mu_sum'] = mu_sum
-        densmap_kwds['R'] = R
+        if densmap:
+            R = (ro - np.mean(ro)) / np.std(ro)
+            densmap_kwds['mu'] = graph.data
+            densmap_kwds['mu_sum'] = mu_sum
+            densmap_kwds['R'] = R
 
-        if densmap_kwds['final']:
+        if output_dens:
             aux_data['rad_orig'] = ro
 
     embedding = (
@@ -1112,7 +1117,7 @@ def simplicial_set_embedding(
             verbose=verbose,
         )
 
-    if densmap and densmap_kwds['final']:
+    if output_dens:
         if verbose:
             print(ts() + " Computing embedding densities")
 
@@ -1440,17 +1445,19 @@ class UMAP(BaseEstimator):
         (1 - dens_frac) fraction of epochs optimize the original UMAP objective
         before introducing the density correlation term. 
 
-    dens_final: float (optional, default False)
-        Determines whether the local radii of the final embedding (an inverse
-        measure of local density) are computed and returned in addition to
-        the embedding. If set to True, local radii of the original data
-        are also included in the output for comparison; the output is a tuple
-        (embedding, original local radii, embedding local radii).
-        
     dens_var_shift: float (optional, default 0.1)
         A small constant added to the variance of local radii in the
         embedding when calculating the density correlation objective to
         prevent numerical instability from dividing by a small number
+
+    output_dens: float (optional, default False)
+        Determines whether the local radii of the final embedding (an inverse
+        measure of local density) are computed and returned in addition to
+        the embedding. If set to True, local radii of the original data
+        are also included in the output for comparison; the output is a tuple
+        (embedding, original local radii, embedding local radii). This option
+        can also be used when densmap=False to calculate the densities for
+        UMAP embeddings.
 
     """
 
@@ -1489,8 +1496,8 @@ class UMAP(BaseEstimator):
         densmap=False,
         dens_lambda=2.0,
         dens_frac=0.3,
-        dens_final=False,
         dens_var_shift=0.1,
+        output_dens=False,
     ):
         self.n_neighbors = n_neighbors
         self.metric = metric
@@ -1525,8 +1532,8 @@ class UMAP(BaseEstimator):
         self.densmap = densmap
         self.dens_lambda = dens_lambda if densmap else 0.0
         self.dens_frac = dens_frac if densmap else 0.0
-        self.dens_final = dens_final if densmap else False
         self.dens_var_shift = dens_var_shift
+        self.output_dens = output_dens
 
         self.n_jobs = n_jobs
 
@@ -1700,19 +1707,20 @@ class UMAP(BaseEstimator):
             raise ValueError("dens_frac must be between 0.0 and 1.0")
         if self.dens_var_shift < 0.0:
             raise ValueError("dens_var_shift cannot be negative")
+
+        self._densmap_kwds = {
+            'lambda': self.dens_lambda,
+            'frac': self.dens_frac,
+            'var_shift': self.dens_var_shift,
+            'n_neighbors': self.n_neighbors,
+        }
+
         if self.densmap:
             if self.output_metric not in ('euclidean', 'l2'):
                 raise ValueError("Non-Euclidean output metric not supported for densMAP.")
 
-            self._densmap_kwds = {
-                'lambda': self.dens_lambda,
-                'frac': self.dens_frac,
-                'final': self.dens_final,
-                'var_shift': self.dens_var_shift,
-                'n_neighbors': self.n_neighbors,
-            }
-        else:
-            self._densmap_kwds = {}
+            if self.n_neighbors < 30:
+                warn("For densMAP, setting n_neighbors to 30 or higher is recommended.")
 
     def _check_custom_metric(self, metric, kwds, data=None):
         # quickly check to determine whether user-defined
@@ -1765,8 +1773,8 @@ class UMAP(BaseEstimator):
         self.densmap = flattened([m.densmap for m in models])
         self.dens_lambda = flattened([m.dens_lambda for m in models])
         self.dens_frac = flattened([m.dens_frac for m in models])
-        self.dens_final = flattened([m.dens_final for m in models])
         self.dens_var_shift = flattened([m.dens_var_shift for m in models])
+        self.output_dens = flattened([m.output_dens for m in models])
 
         self.a = flattened([m.a for m in models])
         self.b = flattened([m.b for m in models])
@@ -1799,10 +1807,12 @@ class UMAP(BaseEstimator):
         else:
             result.ini = "spectral"
 
+        result.densmap = np.any(result.densmap)
+        result.output_dens = np.any(result.output_dens)
+
         result._densmap_kwds = {
             'lambda': np.max(result.dens_lambda),
             'frac': np.max(result.dens_frac),
-            'final': np.any(result.dens_final),
             'var_shift': np.max(result.dens_var_shift),
             'n_neighbors': np.max(result.n_neighbors),
         }
@@ -1821,13 +1831,14 @@ class UMAP(BaseEstimator):
             check_random_state(42),
             "euclidean",
             {},
-            np.any(result.densmap),
+            result.densmap,
             result._densmap_kwds,
+            result.output_dens,
             parallel=False,
             verbose=bool(np.max(result.verbose)),
         )
 
-        if result.densmap and result._densmap_kwds['final']:
+        if result.output_dens:
             result.rad_orig_ = aux_data['rad_orig']
             result.rad_emb_ = aux_data['rad_emb']
 
@@ -1856,10 +1867,12 @@ class UMAP(BaseEstimator):
         else:
             result.ini = "spectral"
 
+        result.densmap = np.any(result.densmap)
+        result.output_dens = np.any(result.output_dens)
+
         result._densmap_kwds = {
             'lambda': np.max(result.dens_lambda),
             'frac': np.max(result.dens_frac),
-            'final': np.any(result.dens_final),
             'var_shift': np.max(result.dens_var_shift),
             'n_neighbors': np.max(result.n_neighbors),
         }
@@ -1878,13 +1891,14 @@ class UMAP(BaseEstimator):
             check_random_state(42),
             "euclidean",
             {},
-            np.any(result.densmap),
+            result.densmap,
             result._densmap_kwds,
+            result.output_dens,
             parallel=False,
             verbose=bool(np.max(result.verbose)),
         )
 
-        if result.densmap and result._densmap_kwds['final']:
+        if result.output_dens:
             result.rad_orig_ = aux_data['rad_orig']
             result.rad_emb_ = aux_data['rad_emb']
 
@@ -1915,10 +1929,12 @@ class UMAP(BaseEstimator):
         else:
             result.ini = "spectral"
 
+        result.densmap = np.any(result.densmap)
+        result.output_dens = np.any(result.output_dens)
+
         result._densmap_kwds = {
             'lambda': np.max(result.dens_lambda),
             'frac': np.max(result.dens_frac),
-            'final': np.any(result.dens_final),
             'var_shift': np.max(result.dens_var_shift),
             'n_neighbors': np.max(result.n_neighbors),
         }
@@ -1937,13 +1953,14 @@ class UMAP(BaseEstimator):
             check_random_state(42),
             "euclidean",
             {},
-            np.any(result.densmap),
+            result.densmap,
             result._densmap_kwds,
+            result.output_dens,
             parallel=False,
             verbose=bool(np.max(result.verbose)),
         )
 
-        if result.densmap and result._densmap_kwds['final']:
+        if result.output_dens:
             result.rad_orig_ = aux_data['rad_orig']
             result.rad_emb_ = aux_data['rad_emb']
 
@@ -2096,7 +2113,7 @@ class UMAP(BaseEstimator):
                 self.local_connectivity,
                 True,
                 self.verbose,
-                self.densmap,
+                self.densmap or self.output_dens,
             )
         # Handle small cases efficiently by computing all distances
         elif X[index].shape[0] < 4096 and not self.force_approximation_algorithm:
@@ -2141,7 +2158,7 @@ class UMAP(BaseEstimator):
                 self.local_connectivity,
                 True,
                 self.verbose,
-                self.densmap,
+                self.densmap or self.output_dens,
             )
         else:
             # Standard case
@@ -2184,7 +2201,7 @@ class UMAP(BaseEstimator):
                 self.local_connectivity,
                 True,
                 self.verbose,
-                self.densmap,
+                self.densmap or self.output_dens,
             )
 
         # Currently not checking if any duplicate points have differing labels
@@ -2298,7 +2315,7 @@ class UMAP(BaseEstimator):
         else:
             n_epochs = self.n_epochs
 
-        if self.densmap:
+        if self.densmap or self.output_dens:
             self._densmap_kwds['graph_dists'] = self.graph_dists_
 
         if self.verbose:
@@ -2320,6 +2337,7 @@ class UMAP(BaseEstimator):
             self._metric_kwds,
             self.densmap,
             self._densmap_kwds,
+            self.output_dens,
             self._output_distance_func,
             self._output_metric_kwds,
             self.output_metric in ("euclidean", "l2"),
@@ -2328,7 +2346,7 @@ class UMAP(BaseEstimator):
         )
 
         self.embedding_ = self.embedding_[inverse]
-        if self.densmap and self._densmap_kwds['final']:
+        if self.output_dens:
             self.rad_orig_ = aux_data['rad_orig'][inverse]
             self.rad_emb_ = aux_data['rad_emb'][inverse]
 
@@ -2360,9 +2378,22 @@ class UMAP(BaseEstimator):
         -------
         X_new : array, shape (n_samples, n_components)
             Embedding of the training data in low-dimensional space.
+
+        or a tuple (X_new, r_orig, r_emb) if ``output_dens`` flag is set, 
+        which additionally includes:
+
+        r_orig: array, shape (n_samples)
+            Local radii of data points in the original data space (log-transformed).
+
+        r_emb: array, shape (n_samples)
+            Local radii of data points in the embedding (log-transformed).
         """
         self.fit(X, y)
-        return self.embedding_
+        if self.output_dens:
+            return self.embedding_, self.rad_orig_, self.rad_emb_
+        else:
+            return self.embedding_
+
 
     def transform(self, X):
         """Transform X into the existing embedded space and return that
@@ -2809,6 +2840,7 @@ class UMAP(BaseEstimator):
                 self._metric_kwds,
                 self.densmap,
                 self._densmap_kwds,
+                self.output_dens,
                 self._output_distance_func,
                 self._output_metric_kwds,
                 self.output_metric in ("euclidean", "l2"),
@@ -2869,6 +2901,7 @@ class UMAP(BaseEstimator):
                 self._metric_kwds,
                 self.densmap,
                 self._densmap_kwds,
+                self.output_dens,
                 self._output_distance_func,
                 self._output_metric_kwds,
                 self.output_metric in ("euclidean", "l2"),
@@ -2876,7 +2909,7 @@ class UMAP(BaseEstimator):
                 self.verbose,
             )
 
-        if self.densmap and self._densmap_kwds['final']:
+        if self.output_dens:
             self.rad_orig_ = aux_data['rad_orig']
             self.rad_emb_ = aux_data['rad_emb']
 
@@ -3193,6 +3226,7 @@ class DataFrameUMAP(BaseEstimator):
             {},
             False,
             {},
+            False,
             self._output_distance_func,
             self.output_metric_kwds,
             self.output_metric in ("euclidean", "l2"),
