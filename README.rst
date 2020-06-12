@@ -245,7 +245,7 @@ An example of making use of these options (based on a subsample of the mnist_784
     subsample, subsample_labels = resample(digits.data, digits.target, n_samples=7000,
                                            stratify=digits.target, random_state=1)
 
-    embedding, r_orig, r_emb = umap.UMAP(densmap=True, dens_lambda=2.0, 
+    embedding, r_orig, r_emb = umap.UMAP(densmap=True, dens_lambda=2.0, n_neighbors=30,
                                          output_dens=True).fit_transform(subsample)
 
 Since densMAP is built upon the core framework of UMAP, densMAP shares many of
