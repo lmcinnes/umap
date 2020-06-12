@@ -1719,9 +1719,6 @@ class UMAP(BaseEstimator):
             if self.output_metric not in ('euclidean', 'l2'):
                 raise ValueError("Non-Euclidean output metric not supported for densMAP.")
 
-            if self.n_neighbors < 30:
-                warn("For densMAP, setting n_neighbors to 30 or higher is recommended.")
-
     def _check_custom_metric(self, metric, kwds, data=None):
         # quickly check to determine whether user-defined
         # self.metric/self.output_metric returns both distance and gradient
