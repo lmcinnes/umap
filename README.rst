@@ -231,7 +231,7 @@ parameters that can be set for densMAP:
 
  - ``output_dens``: When this flag is True, the call to ``fit_transform`` returns, in addition to the embedding, the local radii (inverse measure of local density defined in the `densMAP paper <https://doi.org/10.1101/2020.05.12.077776>`_) for the original dataset and for the embedding. The output is a tuple ``(embedding, radii_original, radii_embedding)``. Note that the radii are log-transformed. If False, only the embedding is returned. This flag can also be used with UMAP to explore the local densities of UMAP embeddings. By default this flag is False.
 
-Note: for densMAP we recommend setting ``n_neighbors`` to 30 or higher and ``n_epochs`` to 750 in order to ensure that the density estimates are reliable and enough number of epochs are devoted to density optimization, respectively. 
+For densMAP we recommend larger values of ``n_neighbors`` (e.g. 30) for reliable estimation of local density.
 
 An example of making use of these options (based on a subsample of the mnist_784 dataset):
 
@@ -245,14 +245,13 @@ An example of making use of these options (based on a subsample of the mnist_784
     subsample, subsample_labels = resample(digits.data, digits.target, n_samples=7000,
                                            stratify=digits.target, random_state=1)
 
-    embedding, r_orig, r_emb = umap.UMAP(densmap=True, n_neighbors=30,  
-                                         n_epochs=750, dens_lambda=2.0, 
+    embedding, r_orig, r_emb = umap.UMAP(densmap=True, dens_lambda=2.0, 
                                          output_dens=True).fit_transform(subsample)
 
 Since densMAP is built upon the core framework of UMAP, densMAP shares many of
 the benefits of UMAP discussed in the next section. In particular, densMAP
-adds only a small computational overhead (~20% additional time with default 
-parameters) and thus maintains the efficiency of UMAP for large datasets.
+adds only a small computational overhead (~20% additional time for the same
+number of epochs) and thus maintains the efficiency of UMAP for large datasets.
 
 ----------------
 Benefits of UMAP
@@ -341,10 +340,8 @@ required for correlation distance computations):
 .. image:: images/umap_example_shuttle.png
     :alt: UMAP embedding the UCI Shuttle dataset
 
-The following is a densMAP visualization of the MNIST digits
-dataset based on the example script included in the "How to use densMAP" section.
-Note that here we used a higher-resolution MNIST dataset with 784 features,
-which better showcases density differences in the dataset. densMAP reveals
+The following is a densMAP visualization of the MNIST digits dataset with 784 features
+based on the same parameters as above (n_neighbors=10, min_dist=0.001). densMAP reveals
 that the cluster corresponding to digit 1 is noticeably denser, suggesting that
 there are fewer degrees of freedom in the images of 1 compared to other digits.
 
