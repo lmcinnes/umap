@@ -314,7 +314,7 @@ def nearest_neighbors(
     parallel=True,
     fastmath=True,
 )
-def compute_membership_strengths(knn_indices, knn_dists, sigmas, rhos):
+def compute_membership_strengths(knn_indices, knn_dists, sigmas, rhos, return_dists=False):
     """Construct the membership strength data for the 1-skeleton of each local
     fuzzy simplicial set -- this is formed as a sparse matrix where each row is
     a local fuzzy simplicial set, with a membership strength for the
@@ -334,6 +334,9 @@ def compute_membership_strengths(knn_indices, knn_dists, sigmas, rhos):
     rhos: array of shape(n_samples)
         The local connectivity adjustment.
 
+    return_dists: bool (optional, default False)
+        Whether to return the pairwise distance associated with each edge
+
     Returns
     -------
     rows: array of shape (n_samples * n_neighbors)
@@ -344,6 +347,9 @@ def compute_membership_strengths(knn_indices, knn_dists, sigmas, rhos):
 
     vals: array of shape (n_samples * n_neighbors)
         Entries for the resulting sparse matrix (coo format)
+
+    dists: array of shape (n_samples * n_neighbors)
+        Distance associated with each entry in the resulting sparse matrix
     """
     n_samples = knn_indices.shape[0]
     n_neighbors = knn_indices.shape[1]
@@ -351,6 +357,10 @@ def compute_membership_strengths(knn_indices, knn_dists, sigmas, rhos):
     rows = np.zeros(knn_indices.size, dtype=np.int32)
     cols = np.zeros(knn_indices.size, dtype=np.int32)
     vals = np.zeros(knn_indices.size, dtype=np.float32)
+    if return_dists:
+        dists = np.zeros(knn_indices.size, dtype=np.float32)
+    else:
+        dists = None
 
     for i in range(n_samples):
         for j in range(n_neighbors):
@@ -366,9 +376,10 @@ def compute_membership_strengths(knn_indices, knn_dists, sigmas, rhos):
             rows[i * n_neighbors + j] = i
             cols[i * n_neighbors + j] = knn_indices[i, j]
             vals[i * n_neighbors + j] = val
+            if return_dists:
+                dists[i * n_neighbors + j] = knn_dists[i, j]
 
-    return rows, cols, vals
-
+    return rows, cols, vals, dists
 
 def fuzzy_simplicial_set(
     X,
@@ -383,6 +394,7 @@ def fuzzy_simplicial_set(
     local_connectivity=1.0,
     apply_set_operations=True,
     verbose=False,
+    return_dists=None,
 ):
     """Given a set of data X, a neighborhood size, and a measure of distance
     compute the fuzzy simplicial set (here represented as a fuzzy graph in
@@ -481,6 +493,9 @@ def fuzzy_simplicial_set(
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
 
+    return_dists: bool or None (optional, default None)
+        Whether to return the pairwise distance associated with each edge.
+
     Returns
     -------
     fuzzy_simplicial_set: coo_matrix
@@ -499,8 +514,8 @@ def fuzzy_simplicial_set(
         knn_dists, float(n_neighbors), local_connectivity=float(local_connectivity),
     )
 
-    rows, cols, vals = compute_membership_strengths(
-        knn_indices, knn_dists, sigmas, rhos
+    rows, cols, vals, dists = compute_membership_strengths(
+        knn_indices, knn_dists, sigmas, rhos, return_dists
     )
 
     result = scipy.sparse.coo_matrix(
@@ -520,8 +535,19 @@ def fuzzy_simplicial_set(
 
     result.eliminate_zeros()
 
-    return result, sigmas, rhos
+    if return_dists is None:
+        return result, sigmas, rhos
+    else:
+        if return_dists:
+            dmat = scipy.sparse.coo_matrix(
+                (dists, (rows, cols)), shape=(X.shape[0], X.shape[0])
+            )
 
+            dists = dmat.maximum(dmat.transpose()).todok()
+        else:
+            dists = None
+
+        return result, sigmas, rhos, dists
 
 @numba.njit()
 def fast_intersection(rows, cols, values, target, unknown_dist=1.0, far_dist=5.0):
@@ -843,6 +869,9 @@ def simplicial_set_embedding(
     random_state,
     metric,
     metric_kwds,
+    densmap,
+    densmap_kwds,
+    output_dens,
     output_metric=dist.named_distances_with_gradients["euclidean"],
     output_metric_kwds={},
     euclidean_output=True,
@@ -908,6 +937,16 @@ def simplicial_set_embedding(
         Key word arguments to be passed to the metric function; used if
         multiple connected components need to be layed out.
 
+    densmap: bool
+        Whether to use the density-augmented objective function to optimize
+        the embedding according to the densMAP algorithm.
+
+    densmap_kwds: dict
+        Key word arguments to be used by the densMAP optimization.
+
+    output_dens: bool
+        Whether to output local radii in the original data and the embedding.
+
     output_metric: function
         Function returning the distance between two points in embedding space and
         the gradient of the distance wrt the first argument.
@@ -931,6 +970,11 @@ def simplicial_set_embedding(
     embedding: array of shape (n_samples, n_components)
         The optimized of ``graph`` into an ``n_components`` dimensional
         euclidean space.
+
+    aux_data: dict
+        Auxiliary output returned with the embedding. When densMAP extension
+        is turned on, this dictionary includes local radii in the original
+        data (``rad_orig``) and in the embedding (``rad_emb``).
     """
     graph = graph.tocoo()
     graph.sum_duplicates()
@@ -942,6 +986,10 @@ def simplicial_set_embedding(
             n_epochs = 500
         else:
             n_epochs = 200
+
+        # Use more epochs for densMAP
+        if densmap:
+            n_epochs += 200
 
     graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
     graph.eliminate_zeros()
@@ -989,6 +1037,40 @@ def simplicial_set_embedding(
 
     rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
+    aux_data = {}
+
+    if densmap or output_dens:
+        if verbose:
+            print(ts() + " Computing original densities")
+
+        dists = densmap_kwds['graph_dists']
+
+        mu_sum = np.zeros(n_vertices, dtype=np.float32)
+        ro = np.zeros(n_vertices, dtype=np.float32)
+        for i in range(len(head)):
+            j = head[i]
+            k = tail[i]
+
+            D = dists[j,k] * dists[j,k] # match sq-Euclidean used for embedding
+            mu = graph.data[i]
+
+            ro[j] += mu * D
+            ro[k] += mu * D
+            mu_sum[j] += mu
+            mu_sum[k] += mu
+
+        epsilon = 1e-8
+        ro = np.log(epsilon + (ro / mu_sum))
+
+        if densmap:
+            R = (ro - np.mean(ro)) / np.std(ro)
+            densmap_kwds['mu'] = graph.data
+            densmap_kwds['mu_sum'] = mu_sum
+            densmap_kwds['R'] = R
+
+        if output_dens:
+            aux_data['rad_orig'] = ro
+
     embedding = (
         10.0
         * (embedding - np.min(embedding, 0))
@@ -1012,6 +1094,8 @@ def simplicial_set_embedding(
             negative_sample_rate,
             parallel=parallel,
             verbose=verbose,
+            densmap=densmap,
+            densmap_kwds=densmap_kwds,
         )
     else:
         embedding = optimize_layout_generic(
@@ -1033,7 +1117,66 @@ def simplicial_set_embedding(
             verbose=verbose,
         )
 
-    return embedding
+    if output_dens:
+        if verbose:
+            print(ts() + " Computing embedding densities")
+
+        # Compute graph in embedding
+        (
+            knn_indices,
+            knn_dists,
+            rp_forest,
+        ) = nearest_neighbors(
+            embedding,
+            densmap_kwds['n_neighbors'],
+            "euclidean",
+            {},
+            False,
+            random_state,
+            verbose=verbose,
+        )
+
+        emb_graph, emb_sigmas, emb_rhos, emb_dists = fuzzy_simplicial_set(
+            embedding,
+            densmap_kwds['n_neighbors'],
+            random_state,
+            "euclidean",
+            {},
+            knn_indices,
+            knn_dists,
+            verbose=verbose,
+            return_dists=True,
+        )
+
+        emb_graph = emb_graph.tocoo()
+        emb_graph.sum_duplicates()
+        emb_graph.eliminate_zeros()
+
+        n_vertices = emb_graph.shape[1]
+
+        mu_sum = np.zeros(n_vertices, dtype=np.float32)
+        re = np.zeros(n_vertices, dtype=np.float32)
+
+        head = emb_graph.row
+        tail = emb_graph.col
+        for i in range(len(head)):
+            j = head[i]
+            k = tail[i]
+
+            D = emb_dists[j,k]
+            mu = emb_graph.data[i]
+
+            re[j] += mu * D
+            re[k] += mu * D
+            mu_sum[j] += mu
+            mu_sum[k] += mu
+
+        epsilon = 1e-8
+        re = np.log(epsilon + (re / mu_sum))
+
+        aux_data['rad_emb'] = re
+
+    return embedding, aux_data
 
 
 @numba.njit()
@@ -1282,6 +1425,40 @@ class UMAP(BaseEstimator):
         embedded.  If you have more duplicates than you have n_neighbour
         you can have the identical data points lying in different regions of
         your space.  It also violates the definition of a metric.
+    
+    densmap: bool (optional, default False)
+        Specifies whether the density-augmented objective of densMAP
+        should be used for optimization. Turning on this option generates
+        an embedding where the local densities are encouraged to be correlated
+        with those in the original space. Parameters below with the prefix 'dens'
+        further control the behavior of this extension.
+
+    dens_lambda: float (optional, default 2.0)
+        Controls the regularization weight of the density correlation term
+        in densMAP. Higher values prioritize density preservation over the
+        UMAP objective, and vice versa for values closer to zero. Setting this
+        parameter to zero is equivalent to running the original UMAP algorithm.
+
+    dens_frac: float (optional, default 0.3)
+        Controls the fraction of epochs (between 0 and 1) where the
+        density-augmented objective is used in densMAP. The first
+        (1 - dens_frac) fraction of epochs optimize the original UMAP objective
+        before introducing the density correlation term. 
+
+    dens_var_shift: float (optional, default 0.1)
+        A small constant added to the variance of local radii in the
+        embedding when calculating the density correlation objective to
+        prevent numerical instability from dividing by a small number
+
+    output_dens: float (optional, default False)
+        Determines whether the local radii of the final embedding (an inverse
+        measure of local density) are computed and returned in addition to
+        the embedding. If set to True, local radii of the original data
+        are also included in the output for comparison; the output is a tuple
+        (embedding, original local radii, embedding local radii). This option
+        can also be used when densmap=False to calculate the densities for
+        UMAP embeddings.
+
     """
 
     def __init__(
@@ -1316,6 +1493,11 @@ class UMAP(BaseEstimator):
         force_approximation_algorithm=False,
         verbose=False,
         unique=False,
+        densmap=False,
+        dens_lambda=2.0,
+        dens_frac=0.3,
+        dens_var_shift=0.1,
+        output_dens=False,
     ):
         self.n_neighbors = n_neighbors
         self.metric = metric
@@ -1346,6 +1528,12 @@ class UMAP(BaseEstimator):
         self.force_approximation_algorithm = force_approximation_algorithm
         self.verbose = verbose
         self.unique = unique
+
+        self.densmap = densmap
+        self.dens_lambda = dens_lambda if densmap else 0.0
+        self.dens_frac = dens_frac if densmap else 0.0
+        self.dens_var_shift = dens_var_shift
+        self.output_dens = output_dens
 
         self.n_jobs = n_jobs
 
@@ -1513,6 +1701,24 @@ class UMAP(BaseEstimator):
         if self.n_jobs < -1 or self.n_jobs == 0:
             raise ValueError("n_jobs must be a postive integer, or -1 (for all cores)")
 
+        if self.dens_lambda < 0.0:
+            raise ValueError("dens_lambda cannot be negative")
+        if self.dens_frac < 0.0 or self.dens_frac > 1.0:
+            raise ValueError("dens_frac must be between 0.0 and 1.0")
+        if self.dens_var_shift < 0.0:
+            raise ValueError("dens_var_shift cannot be negative")
+
+        self._densmap_kwds = {
+            'lambda': self.dens_lambda,
+            'frac': self.dens_frac,
+            'var_shift': self.dens_var_shift,
+            'n_neighbors': self.n_neighbors,
+        }
+
+        if self.densmap:
+            if self.output_metric not in ('euclidean', 'l2'):
+                raise ValueError("Non-Euclidean output metric not supported for densMAP.")
+
     def _check_custom_metric(self, metric, kwds, data=None):
         # quickly check to determine whether user-defined
         # self.metric/self.output_metric returns both distance and gradient
@@ -1561,6 +1767,12 @@ class UMAP(BaseEstimator):
         self.verbose = flattened([m.verbose for m in models])
         self.unique = flattened([m.unique for m in models])
 
+        self.densmap = flattened([m.densmap for m in models])
+        self.dens_lambda = flattened([m.dens_lambda for m in models])
+        self.dens_frac = flattened([m.dens_frac for m in models])
+        self.dens_var_shift = flattened([m.dens_var_shift for m in models])
+        self.output_dens = flattened([m.output_dens for m in models])
+
         self.a = flattened([m.a for m in models])
         self.b = flattened([m.b for m in models])
 
@@ -1592,7 +1804,17 @@ class UMAP(BaseEstimator):
         else:
             result.ini = "spectral"
 
-        result.embedding_ = simplicial_set_embedding(
+        result.densmap = np.any(result.densmap)
+        result.output_dens = np.any(result.output_dens)
+
+        result._densmap_kwds = {
+            'lambda': np.max(result.dens_lambda),
+            'frac': np.max(result.dens_frac),
+            'var_shift': np.max(result.dens_var_shift),
+            'n_neighbors': np.max(result.n_neighbors),
+        }
+
+        result.embedding_, aux_data = simplicial_set_embedding(
             None,
             result.graph_,
             np.min(result.n_components),
@@ -1606,9 +1828,16 @@ class UMAP(BaseEstimator):
             check_random_state(42),
             "euclidean",
             {},
+            result.densmap,
+            result._densmap_kwds,
+            result.output_dens,
             parallel=False,
             verbose=bool(np.max(result.verbose)),
         )
+
+        if result.output_dens:
+            result.rad_orig_ = aux_data['rad_orig']
+            result.rad_emb_ = aux_data['rad_emb']
 
         return result
 
@@ -1635,7 +1864,17 @@ class UMAP(BaseEstimator):
         else:
             result.ini = "spectral"
 
-        result.embedding_ = simplicial_set_embedding(
+        result.densmap = np.any(result.densmap)
+        result.output_dens = np.any(result.output_dens)
+
+        result._densmap_kwds = {
+            'lambda': np.max(result.dens_lambda),
+            'frac': np.max(result.dens_frac),
+            'var_shift': np.max(result.dens_var_shift),
+            'n_neighbors': np.max(result.n_neighbors),
+        }
+
+        result.embedding_, aux_data = simplicial_set_embedding(
             None,
             result.graph_,
             np.min(result.n_components),
@@ -1649,9 +1888,16 @@ class UMAP(BaseEstimator):
             check_random_state(42),
             "euclidean",
             {},
+            result.densmap,
+            result._densmap_kwds,
+            result.output_dens,
             parallel=False,
             verbose=bool(np.max(result.verbose)),
         )
+
+        if result.output_dens:
+            result.rad_orig_ = aux_data['rad_orig']
+            result.rad_emb_ = aux_data['rad_emb']
 
         return result
 
@@ -1680,7 +1926,17 @@ class UMAP(BaseEstimator):
         else:
             result.ini = "spectral"
 
-        result.embedding_ = simplicial_set_embedding(
+        result.densmap = np.any(result.densmap)
+        result.output_dens = np.any(result.output_dens)
+
+        result._densmap_kwds = {
+            'lambda': np.max(result.dens_lambda),
+            'frac': np.max(result.dens_frac),
+            'var_shift': np.max(result.dens_var_shift),
+            'n_neighbors': np.max(result.n_neighbors),
+        }
+
+        result.embedding_, aux_data = simplicial_set_embedding(
             None,
             result.graph_,
             np.min(result.n_components),
@@ -1694,9 +1950,16 @@ class UMAP(BaseEstimator):
             check_random_state(42),
             "euclidean",
             {},
+            result.densmap,
+            result._densmap_kwds,
+            result.output_dens,
             parallel=False,
             verbose=bool(np.max(result.verbose)),
         )
+
+        if result.output_dens:
+            result.rad_orig_ = aux_data['rad_orig']
+            result.rad_emb_ = aux_data['rad_emb']
 
         return result
 
@@ -1794,6 +2057,8 @@ class UMAP(BaseEstimator):
                 "X.shape[0] - 1"
             )
             self._n_neighbors = X[index].shape[0] - 1
+            if self.densmap:
+                self._densmap_kwds['n_neighbors'] = self._n_neighbors
         else:
             self._n_neighbors = self.n_neighbors
 
@@ -1832,7 +2097,7 @@ class UMAP(BaseEstimator):
                 row_nn_data_indices = np.argsort(row_data)[: self._n_neighbors]
                 self._knn_indices[row_id] = row_indices[row_nn_data_indices]
                 self._knn_dists[row_id] = row_data[row_nn_data_indices]
-            self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
+            self.graph_, self._sigmas, self._rhos, self.graph_dists_ = fuzzy_simplicial_set(
                 X[index],
                 self.n_neighbors,
                 random_state,
@@ -1845,6 +2110,7 @@ class UMAP(BaseEstimator):
                 self.local_connectivity,
                 True,
                 self.verbose,
+                self.densmap or self.output_dens,
             )
         # Handle small cases efficiently by computing all distances
         elif X[index].shape[0] < 4096 and not self.force_approximation_algorithm:
@@ -1876,7 +2142,7 @@ class UMAP(BaseEstimator):
                         metric=self._input_distance_func,
                         kwds=self._metric_kwds,
                     )
-            self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
+            self.graph_, self._sigmas, self._rhos, self.graph_dists_ = fuzzy_simplicial_set(
                 dmat,
                 self._n_neighbors,
                 random_state,
@@ -1889,6 +2155,7 @@ class UMAP(BaseEstimator):
                 self.local_connectivity,
                 True,
                 self.verbose,
+                self.densmap or self.output_dens,
             )
         else:
             # Standard case
@@ -1918,7 +2185,7 @@ class UMAP(BaseEstimator):
                 verbose=self.verbose,
             )
 
-            self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
+            self.graph_, self._sigmas, self._rhos, self.graph_dists_ = fuzzy_simplicial_set(
                 X[index],
                 self.n_neighbors,
                 random_state,
@@ -1931,11 +2198,15 @@ class UMAP(BaseEstimator):
                 self.local_connectivity,
                 True,
                 self.verbose,
+                self.densmap or self.output_dens,
             )
 
         # Currently not checking if any duplicate points have differing labels
         # Might be worth throwing a warning...
         if y is not None:
+            if self.densmap:
+                raise NotImplementedError("Supervised embedding is not supported with densMAP.")
+
             len_X = len(X) if not self._sparse_data else X.shape[0]
             if len_X != len(y):
                 raise ValueError(
@@ -2041,10 +2312,13 @@ class UMAP(BaseEstimator):
         else:
             n_epochs = self.n_epochs
 
+        if self.densmap or self.output_dens:
+            self._densmap_kwds['graph_dists'] = self.graph_dists_
+
         if self.verbose:
             print(ts(), "Construct embedding")
 
-        self.embedding_ = simplicial_set_embedding(
+        self.embedding_, aux_data = simplicial_set_embedding(
             self._raw_data[index],  # JH why raw data?
             self.graph_,
             self.n_components,
@@ -2058,12 +2332,20 @@ class UMAP(BaseEstimator):
             random_state,
             self._input_distance_func,
             self._metric_kwds,
+            self.densmap,
+            self._densmap_kwds,
+            self.output_dens,
             self._output_distance_func,
             self._output_metric_kwds,
             self.output_metric in ("euclidean", "l2"),
             self.random_state is None,
             self.verbose,
-        )[inverse]
+        )
+
+        self.embedding_ = self.embedding_[inverse]
+        if self.output_dens:
+            self.rad_orig_ = aux_data['rad_orig'][inverse]
+            self.rad_emb_ = aux_data['rad_emb'][inverse]
 
         if self.verbose:
             print(ts() + " Finished embedding")
@@ -2093,9 +2375,22 @@ class UMAP(BaseEstimator):
         -------
         X_new : array, shape (n_samples, n_components)
             Embedding of the training data in low-dimensional space.
+
+        or a tuple (X_new, r_orig, r_emb) if ``output_dens`` flag is set, 
+        which additionally includes:
+
+        r_orig: array, shape (n_samples)
+            Local radii of data points in the original data space (log-transformed).
+
+        r_emb: array, shape (n_samples)
+            Local radii of data points in the embedding (log-transformed).
         """
         self.fit(X, y)
-        return self.embedding_
+        if self.output_dens:
+            return self.embedding_, self.rad_orig_, self.rad_emb_
+        else:
+            return self.embedding_
+
 
     def transform(self, X):
         """Transform X into the existing embedded space and return that
@@ -2121,6 +2416,8 @@ class UMAP(BaseEstimator):
         x_hash = joblib.hash(X)
         if x_hash == self._input_hash:
             return self.embedding_
+        if self.densmap:
+            raise NotImplementedError("Transforming data into an existing embedding not supported for densMAP.")
 
         if self.metric == "precomputed":
             raise ValueError(
@@ -2165,7 +2462,7 @@ class UMAP(BaseEstimator):
             local_connectivity=float(adjusted_local_connectivity),
         )
 
-        rows, cols, vals = compute_membership_strengths(indices, dists, sigmas, rhos)
+        rows, cols, vals, dists = compute_membership_strengths(indices, dists, sigmas, rhos)
 
         graph = scipy.sparse.coo_matrix(
             (vals, (rows, cols)), shape=(X.shape[0], self._raw_data.shape[0])
@@ -2261,6 +2558,8 @@ class UMAP(BaseEstimator):
             raise ValueError("Inverse transform not available for sparse input.")
         elif self._inverse_distance_func is None:
             raise ValueError("Inverse transform not available for given metric.")
+        elif self.densmap:
+            raise ValueError("Inverse transform not available for densMAP.")
         elif self.n_components >= 8:
             warn(
                 "Inverse transform works best with low dimensional embeddings."
@@ -2522,7 +2821,7 @@ class UMAP(BaseEstimator):
             else:
                 n_epochs = self.n_epochs
 
-            self.embedding_ = simplicial_set_embedding(
+            self.embedding_, aux_data = simplicial_set_embedding(
                 self._raw_data,
                 self.graph_,
                 self.n_components,
@@ -2536,6 +2835,9 @@ class UMAP(BaseEstimator):
                 random_state,
                 self._input_distance_func,
                 self._metric_kwds,
+                self.densmap,
+                self._densmap_kwds,
+                self.output_dens,
                 self._output_distance_func,
                 self._output_metric_kwds,
                 self.output_metric in ("euclidean", "l2"),
@@ -2580,7 +2882,7 @@ class UMAP(BaseEstimator):
             else:
                 n_epochs = self.n_epochs
 
-            self.embedding_ = simplicial_set_embedding(
+            self.embedding_, aux_data = simplicial_set_embedding(
                 self._raw_data,
                 self.graph_,
                 self.n_components,
@@ -2594,12 +2896,19 @@ class UMAP(BaseEstimator):
                 random_state,
                 self._input_distance_func,
                 self._metric_kwds,
+                self.densmap,
+                self._densmap_kwds,
+                self.output_dens,
                 self._output_distance_func,
                 self._output_metric_kwds,
                 self.output_metric in ("euclidean", "l2"),
                 self.random_state is None,
                 self.verbose,
             )
+
+        if self.output_dens:
+            self.rad_orig_ = aux_data['rad_orig']
+            self.rad_emb_ = aux_data['rad_emb']
 
 
 class DataFrameUMAP(BaseEstimator):
@@ -2898,7 +3207,7 @@ class DataFrameUMAP(BaseEstimator):
 
         # TODO: Handle connected component issues properly
         # For now we just use manhattan and hope.
-        self.embedding_ = simplicial_set_embedding(
+        self.embedding_, aux_data = simplicial_set_embedding(
             self._raw_data,
             self.graph_,
             self.n_components,
@@ -2912,6 +3221,9 @@ class DataFrameUMAP(BaseEstimator):
             random_state,
             "manhattan",
             {},
+            False,
+            {},
+            False,
             self._output_distance_func,
             self.output_metric_kwds,
             self.output_metric in ("euclidean", "l2"),

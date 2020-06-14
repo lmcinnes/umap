@@ -56,6 +56,13 @@ in replacement for scikit-learn's t-SNE.
 
 Documentation is `available via Read the Docs <https://umap-learn.readthedocs.io/>`_.
 
+**New: this package now also provides support for densMAP.** The densMAP algorithm augments UMAP
+to preserve local density information in addition to the topological structure of the data.
+Details of this method are described in the following `paper <https://doi.org/10.1101/2020.05.12.077776>`_:
+
+Narayan, A, Berger, B, Cho, H, *Density-Preserving Data Visualization Unveils
+Dynamic Patterns of Single-Cell Transcriptomic Variability*, bioRxiv, 2020
+
 ----------
 Installing
 ----------
@@ -198,6 +205,54 @@ An example of making use of these options:
 UMAP also supports fitting to sparse matrix data. For more details
 please see `the UMAP documentation <https://umap-learn.readthedocs.io/>`_
 
+---------------
+How to use densMAP
+---------------
+
+The densMAP algorithm augments UMAP to additionally preserve local density information
+in addition to the topological structure captured by UMAP. One can easily run densMAP
+using the umap package by setting the ``densmap`` input flag:
+
+.. code:: python
+
+    embedding = umap.UMAP(densmap=True).fit_transform(data)
+
+This functionality is built upon the densMAP `implementation <https://github.com/hhcho/densvis>`_ provided by the developers
+of densMAP, who also contributed to integrating densMAP into the umap package.
+
+densMAP inherits all of the parameters of UMAP. The following is a list of additional
+parameters that can be set for densMAP:
+
+ - ``dens_frac``: This determines the fraction of epochs (a value between 0 and 1) that will include the density-preservation term in the optimization objective. This parameter is set to 0.3 by default. Note that densMAP switches density optimization on after an initial phase of optimizing the embedding using UMAP.
+
+ - ``dens_lambda``: This determines the weight of the density-preservation objective. Higher values prioritize density preservation, and lower values (closer to zero) prioritize the UMAP objective. Setting this parameter to zero reduces the algorithm to UMAP. Default value is 2.0.
+
+ - ``dens_var_shift``: Regularization term added to the variance of local densities in the embedding for numerical stability. We recommend setting this parameter to 0.1, which consistently works well in many settings.
+
+ - ``output_dens``: When this flag is True, the call to ``fit_transform`` returns, in addition to the embedding, the local radii (inverse measure of local density defined in the `densMAP paper <https://doi.org/10.1101/2020.05.12.077776>`_) for the original dataset and for the embedding. The output is a tuple ``(embedding, radii_original, radii_embedding)``. Note that the radii are log-transformed. If False, only the embedding is returned. This flag can also be used with UMAP to explore the local densities of UMAP embeddings. By default this flag is False.
+
+For densMAP we recommend larger values of ``n_neighbors`` (e.g. 30) for reliable estimation of local density.
+
+An example of making use of these options (based on a subsample of the mnist_784 dataset):
+
+.. code:: python
+    
+    import umap
+    from sklearn.datasets import fetch_openml
+    from sklearn.utils import resample
+
+    digits = fetch_openml(name='mnist_784')
+    subsample, subsample_labels = resample(digits.data, digits.target, n_samples=7000,
+                                           stratify=digits.target, random_state=1)
+
+    embedding, r_orig, r_emb = umap.UMAP(densmap=True, dens_lambda=2.0, n_neighbors=30,
+                                         output_dens=True).fit_transform(subsample)
+
+Since densMAP is built upon the core framework of UMAP, densMAP shares many of
+the benefits of UMAP discussed in the next section. In particular, densMAP
+adds only a small computational overhead (~20% additional time for the same
+number of epochs) and thus maintains the efficiency of UMAP for large datasets.
+
 ----------------
 Benefits of UMAP
 ----------------
@@ -285,6 +340,14 @@ required for correlation distance computations):
 .. image:: images/umap_example_shuttle.png
     :alt: UMAP embedding the UCI Shuttle dataset
 
+The following is a densMAP visualization of the MNIST digits dataset with 784 features
+based on the same parameters as above (n_neighbors=10, min_dist=0.001). densMAP reveals
+that the cluster corresponding to digit 1 is noticeably denser, suggesting that
+there are fewer degrees of freedom in the images of 1 compared to other digits.
+
+.. image:: images/densmap_example_mnist.png
+    :alt: densMAP embedding of the MNIST dataset
+
 --------
 Plotting
 --------
@@ -357,6 +420,21 @@ current reference:
         year = 2018,
         month = feb,
    }
+
+Additionally, if you use the densMAP algorithm in your work please cite the following reference:
+
+.. code:: bibtex
+
+    @article {NBC2020,
+        author = {Narayan, Ashwin and Berger, Bonnie and Cho, Hyunghoon},
+        title = {Density-Preserving Data Visualization Unveils Dynamic Patterns of Single-Cell Transcriptomic Variability},
+        journal = {bioRxiv},
+        year = {2020},
+        doi = {10.1101/2020.05.12.077776},
+        publisher = {Cold Spring Harbor Laboratory},
+        URL = {https://www.biorxiv.org/content/early/2020/05/14/2020.05.12.077776},
+        eprint = {https://www.biorxiv.org/content/early/2020/05/14/2020.05.12.077776.full.pdf},
+    }
 
 -------
 License
