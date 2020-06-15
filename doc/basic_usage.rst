@@ -388,7 +388,7 @@ In contrast we can try using UMAP again. It works exactly as before:
 construct a model, train the model, and then look at the transformed
 data. TO demonstrate more of UMAP we'll go about it differently this
 time and simply use the ``fit`` method rather than the ``fit_transform``
-approach we used for Iris.
+approach we used for Penguins.
 
 .. code:: python3
 
@@ -433,7 +433,7 @@ of the reducer object, or call transform on the original data.
 
 
 We now have a dataset with 1797 rows (one for each hand-written digit
-sample), but only 2 columns. As with the Iris example we can now plot
+sample), but only 2 columns. As with the Penguins example we can now plot
 the resulting embedding, coloring the data points by the class that
 they belong to (i.e. the digit they represent).
 
