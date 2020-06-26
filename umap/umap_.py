@@ -1824,11 +1824,13 @@ class UMAP(BaseEstimator):
                 _data = []
                 for i in self._knn_indices:
                     _non_neg = i[i >= 0]
-                    _rows.append(_non_neg)
-                    _data.append(np.ones(_non_neg.shape[0], dtype=np.int8))
+                    _rows.append(_non_neg.tolist())
+                    _data.append(np.ones(_non_neg.shape[0], dtype=np.int8).tolist())
 
-                self._search_graph.rows = _rows
-                self._search_graph.data = _data
+                self._search_graph.rows = np.empty(len(_rows), dtype=object)
+                self._search_graph.rows[:] = _rows
+                self._search_graph.data = np.empty(len(_data), dtype=object)
+                self._search_graph.data[:] = _data
                 self._search_graph = self._search_graph.maximum(
                     self._search_graph.transpose()
                 ).tocsr()
