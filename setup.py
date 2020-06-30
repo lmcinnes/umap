@@ -47,7 +47,6 @@ configuration = {
         "scikit-learn >= 0.20",
         "scipy >= 1.3.1",
         "numba >= 0.46, != 0.47",
-        "tbb",
     ],
     "extras_require": {
         "plot": [
@@ -58,7 +57,7 @@ configuration = {
             "holoviews",
             "colorcet",
         ],
-        "performance": ["pynndescent >= 0.4"],
+        "performance": ["pynndescent >= 0.4", "tbb >= 2019.5"],
     },
     "ext_modules": [],
     "cmdclass": {},
