@@ -1,4 +1,3 @@
-
 How to Use UMAP
 ===============
 
@@ -20,8 +19,9 @@ visualise the results of UMAP, and pandas to make that a little easier.
 .. code:: python3
 
     import numpy as np
-    from sklearn.datasets import load_iris, load_digits
+    from sklearn.datasets import load_digits
     from sklearn.model_selection import train_test_split
+    from sklearn.preprocessing import StandardScaler
     import matplotlib.pyplot as plt
     import seaborn as sns
     import pandas as pd
@@ -31,107 +31,157 @@ visualise the results of UMAP, and pandas to make that a little easier.
 
     sns.set(style='white', context='notebook', rc={'figure.figsize':(14,10)})
 
-Iris data
----------
+Penguin data
+------------
+
+.. image:: https://github.com/allisonhorst/palmerpenguins/raw/master/vignettes/articles/img/lter_penguins.png
+   :width: 300px
+   :align: center
+   :alt: Penguins
 
 The next step is to get some data to work with. To ease us into things
-we'll start with the `iris
-dataset <https://en.wikipedia.org/wiki/Iris_flower_data_set>`__. It
-isn't very representative of what real data would look like, but it is
-small both in number of points and number of features, and will let us
-get an idea of what the dimension reduction is doing. We can load the
-iris dataset from sklearn.
+we'll start with the `penguin
+dataset <https://github.com/allisonhorst/penguins>`__. It isn't very
+representative of what real data would look like, but it is small both
+in number of points and number of features, and will let us get an idea
+of what the dimension reduction is doing.
 
 .. code:: python3
 
-    iris = load_iris()
-    print(iris.DESCR)
+    penguins = pd.read_csv("https://raw.githubusercontent.com/allisonhorst/penguins/master/data/penguins_size.csv")
+    penguins.head()
+
+
+
+
+.. raw:: html
+
+    <div>
+    <style scoped>
+        .dataframe tbody tr th:only-of-type {
+            vertical-align: middle;
+        }
+    
+        .dataframe tbody tr th {
+            vertical-align: top;
+        }
+    
+        .dataframe thead th {
+            text-align: right;
+        }
+    </style>
+    <table border="1" class="dataframe">
+      <thead>
+        <tr style="text-align: right;">
+          <th></th>
+          <th>species_short</th>
+          <th>island</th>
+          <th>culmen_length_mm</th>
+          <th>culmen_depth_mm</th>
+          <th>flipper_length_mm</th>
+          <th>body_mass_g</th>
+          <th>sex</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th>0</th>
+          <td>Adelie</td>
+          <td>Torgersen</td>
+          <td>39.1</td>
+          <td>18.7</td>
+          <td>181.0</td>
+          <td>3750.0</td>
+          <td>MALE</td>
+        </tr>
+        <tr>
+          <th>1</th>
+          <td>Adelie</td>
+          <td>Torgersen</td>
+          <td>39.5</td>
+          <td>17.4</td>
+          <td>186.0</td>
+          <td>3800.0</td>
+          <td>FEMALE</td>
+        </tr>
+        <tr>
+          <th>2</th>
+          <td>Adelie</td>
+          <td>Torgersen</td>
+          <td>40.3</td>
+          <td>18.0</td>
+          <td>195.0</td>
+          <td>3250.0</td>
+          <td>FEMALE</td>
+        </tr>
+        <tr>
+          <th>3</th>
+          <td>Adelie</td>
+          <td>Torgersen</td>
+          <td>NaN</td>
+          <td>NaN</td>
+          <td>NaN</td>
+          <td>NaN</td>
+          <td>NaN</td>
+        </tr>
+        <tr>
+          <th>4</th>
+          <td>Adelie</td>
+          <td>Torgersen</td>
+          <td>36.7</td>
+          <td>19.3</td>
+          <td>193.0</td>
+          <td>3450.0</td>
+          <td>FEMALE</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+
+
+
+Since this is for demonstration purposes we will get rid of the NAs in
+the data; in a real world setting one would wish to take more care with
+proper handling of missing data.
+
+.. code:: python3
+
+    penguins = penguins.dropna()
+    penguins.species_short.value_counts()
+
+
 
 
 .. parsed-literal::
 
-    Iris Plants Database
-    ====================
-    
-    Notes
-    -----
-    Data Set Characteristics:
-        :Number of Instances: 150 (50 in each of three classes)
-        :Number of Attributes: 4 numeric, predictive attributes and the class
-        :Attribute Information:
-            - sepal length in cm
-            - sepal width in cm
-            - petal length in cm
-            - petal width in cm
-            - class:
-                    - Iris-Setosa
-                    - Iris-Versicolour
-                    - Iris-Virginica
-        :Summary Statistics:
-    
-        ============== ==== ==== ======= ===== ====================
-                        Min  Max   Mean    SD   Class Correlation
-        ============== ==== ==== ======= ===== ====================
-        sepal length:   4.3  7.9   5.84   0.83    0.7826
-        sepal width:    2.0  4.4   3.05   0.43   -0.4194
-        petal length:   1.0  6.9   3.76   1.76    0.9490  (high!)
-        petal width:    0.1  2.5   1.20  0.76     0.9565  (high!)
-        ============== ==== ==== ======= ===== ====================
-    
-        :Missing Attribute Values: None
-        :Class Distribution: 33.3% for each of 3 classes.
-        :Creator: R.A. Fisher
-        :Donor: Michael Marshall (MARSHALL%PLU@io.arc.nasa.gov)
-        :Date: July, 1988
-    
-    This is a copy of UCI ML iris datasets.
-    http://archive.ics.uci.edu/ml/datasets/Iris
-    
-    The famous Iris database, first used by Sir R.A Fisher
-    
-    This is perhaps the best known database to be found in the
-    pattern recognition literature.  Fisher's paper is a classic in the field and
-    is referenced frequently to this day.  (See Duda & Hart, for example.)  The
-    data set contains 3 classes of 50 instances each, where each class refers to a
-    type of iris plant.  One class is linearly separable from the other 2; the
-    latter are NOT linearly separable from each other.
-    
-    References
-    ----------
-       - Fisher,R.A. "The use of multiple measurements in taxonomic problems"
-         Annual Eugenics, 7, Part II, 179-188 (1936); also in "Contributions to
-         Mathematical Statistics" (John Wiley, NY, 1950).
-       - Duda,R.O., & Hart,P.E. (1973) Pattern Classification and Scene Analysis.
-         (Q327.D83) John Wiley & Sons.  ISBN 0-471-22361-1.  See page 218.
-       - Dasarathy, B.V. (1980) "Nosing Around the Neighborhood: A New System
-         Structure and Classification Rule for Recognition in Partially Exposed
-         Environments".  IEEE Transactions on Pattern Analysis and Machine
-         Intelligence, Vol. PAMI-2, No. 1, 67-71.
-       - Gates, G.W. (1972) "The Reduced Nearest Neighbor Rule".  IEEE Transactions
-         on Information Theory, May 1972, 431-433.
-       - See also: 1988 MLC Proceedings, 54-64.  Cheeseman et al"s AUTOCLASS II
-         conceptual clustering system finds 3 classes in the data.
-       - Many, many more ...
-    
+    Adelie       146
+    Gentoo       120
+    Chinstrap     68
+    Name: species_short, dtype: int64
 
 
-The description tells us a fair amount about the dataset -- it consists
-of measurements of petals and sepals of iris flowers. There are 3
-species of flower represented, each with 50 sets of measurements.
-Visualizing this data is a little bit tricky since we can't plot in 4
-dimensions easily. Fortunately four is not that large a number, so we
-can just to a pairwise feature scatterplot matrix to get an ideas of
-what is going on. Seaborn makes this easy (once we get the data into a
-pandas dataframe).
+.. image:: https://github.com/allisonhorst/palmerpenguins/raw/master/vignettes/articles/img/culmen_depth.png
+   :width: 300px
+   :align: center
+   :alt: Diagram of culmen measurements on a penguin
+
+See the `github repostiory <https://github.com/allisonhorst/penguins>`__
+for more details about the daataset itself. It consists of measurements
+of bill (culmen) and flippers and weights of three species of penguins,
+along with some other metadata about the penguins. In total we have 334
+different penguins measured. Visualizing this data is a little bit
+tricky since we can't plot in 4 dimensions easily. Fortunately four is
+not that large a number, so we can just to a pairwise feature
+scatterplot matrix to get an ideas of what is going on. Seaborn makes
+this easy.
 
 .. code:: python3
 
-    iris_df = pd.DataFrame(iris.data, columns=iris.feature_names)
-    iris_df['species'] = pd.Series(iris.target).map(dict(zip(range(3),iris.target_names)))
-    sns.pairplot(iris_df, hue='species');
+    sns.pairplot(penguins, hue='species_short')
 
 
-.. image:: images/BasicUsage_6_1.png
+
+.. image:: images/basic_usage_8_1.png
 
 
 This gives us some idea of what the data looks like by giving as all the
@@ -156,6 +206,24 @@ let's import the umap library and do that.
 
     reducer = umap.UMAP()
 
+Before we can do any work with the data it will help to clean up it a
+little. We won't need NAs, we just want the measurement columns, and
+since the measurements are on entirely different scales it will be
+helpful to convert each feature into z-scores (number of standard
+deviations from the mean) for comparability.
+
+.. code:: python3
+
+    penguin_data = penguins[
+        [
+            "culmen_length_mm",
+            "culmen_depth_mm",
+            "flipper_length_mm",
+            "body_mass_g",
+        ]
+    ].values
+    scaled_penguin_data = StandardScaler().fit_transform(penguin_data)
+
 Now we need to train our reducer, letting it learn about the manifold.
 For this UMAP follows the sklearn API and has a method ``fit`` which we
 pass the data we want the model to learn from. Since, at the end of the
@@ -165,17 +233,19 @@ then returns the transformed data as a numpy array.
 
 .. code:: python3
 
-    embedding = reducer.fit_transform(iris.data)
+    embedding = reducer.fit_transform(scaled_penguin_data)
     embedding.shape
+
+
 
 
 .. parsed-literal::
 
-    (150, 2)
+    (334, 2)
 
 
 
-The result is an array with 150 samples, but only two feature columns
+The result is an array with 334 samples, but only two feature columns
 (instead of the four we started with). This is because, by default, UMAP
 reduces down to 2D. Each row of the array is a 2-dimensional
 representation of the corresponding flower. Thus we can plot the
@@ -185,14 +255,16 @@ the original).
 
 .. code:: python3
 
-    plt.scatter(embedding[:, 0], embedding[:, 1], c=[sns.color_palette()[x] for x in iris.target])
+    plt.scatter(
+        embedding[:, 0], 
+        embedding[:, 1], 
+        c=[sns.color_palette()[x] for x in penguins.species_short.map({"Adelie":0, "Chinstrap":1, "Gentoo":2})])
     plt.gca().set_aspect('equal', 'datalim')
-    plt.title('UMAP projection of the Iris dataset', fontsize=24);
+    plt.title('UMAP projection of the Penguin dataset', fontsize=24)
 
 
 
-
-.. image:: images/BasicUsage_13_1.png
+.. image:: images/basic_usage_17_1.png
 
 
 This does a useful job of capturing the structure of the data, and as
@@ -201,7 +273,7 @@ Of course we learned at least this much just from that matrix of
 scatterplots -- which we could do since we only had four different
 dimensions to analyse. If we had data with a larger number of dimensions
 the scatterplot matrix would quickly become unwieldy to plot, and far
-harder to interpret. So moving on from the Iris dataset, let's consider
+harder to interpret. So moving on from the Penguin dataset, let's consider
 the digits dataset.
 
 Digits data
@@ -217,12 +289,13 @@ First we will load the dataset from sklearn.
 
 .. parsed-literal::
 
-    Optical Recognition of Handwritten Digits Data Set
-    ===================================================
+    .. _digits_dataset:
     
-    Notes
-    -----
-    Data Set Characteristics:
+    Optical recognition of handwritten digits dataset
+    --------------------------------------------------
+    
+    **Data Set Characteristics:**
+    
         :Number of Instances: 5620
         :Number of Attributes: 64
         :Attribute Information: 8x8 image of integer pixels in the range 0..16.
@@ -231,7 +304,7 @@ First we will load the dataset from sklearn.
         :Date: July; 1998
     
     This is a copy of the test set of the UCI ML hand-written digits datasets
-    http://archive.ics.uci.edu/ml/datasets/Optical+Recognition+of+Handwritten+Digits
+    https://archive.ics.uci.edu/ml/datasets/Optical+Recognition+of+Handwritten+Digits
     
     The data set contains images of hand-written digits: 10 classes where
     each class refers to a digit.
@@ -250,8 +323,8 @@ First we will load the dataset from sklearn.
     L. Wilson, NIST Form-Based Handprint Recognition System, NISTIR 5469,
     1994.
     
-    References
-    ----------
+    .. topic:: References
+    
       - C. Kaynak (1995) Methods of Combining Multiple Classifiers and Their
         Applications to Handwritten Digit Recognition, MSc Thesis, Institute of
         Graduate Studies in Science and Engineering, Bogazici University.
@@ -262,7 +335,6 @@ First we will load the dataset from sklearn.
         2005.
       - Claudio Gentile. A New Approximate Maximal Margin Classification
         Algorithm. NIPS. 2000.
-    
 
 
 We can plot a number of the images to get an idea of what we are looking
@@ -280,7 +352,7 @@ looping through them plotting an image into each one in turn.
 
 
 
-.. image:: images/BasicUsage_18_0.png
+.. image:: images/basic_usage_22_0.png
 
 
 As you can see these are quite low resolution images -- for the most
@@ -304,20 +376,19 @@ is not going to be sufficient for this data.
 
 .. code:: python3
 
-    digits_df = pd.DataFrame(digits.data[:,:10])
+    digits_df = pd.DataFrame(digits.data[:,1:11])
     digits_df['digit'] = pd.Series(digits.target).map(lambda x: 'Digit {}'.format(x))
-    sns.pairplot(digits_df, hue='digit', palette='Spectral');
+    sns.pairplot(digits_df, hue='digit', palette='Spectral')
 
 
-
-.. image:: images/BasicUsage_20_1.png
+.. image:: images/basic_usage_24_2.png
 
 
 In contrast we can try using UMAP again. It works exactly as before:
 construct a model, train the model, and then look at the transformed
 data. TO demonstrate more of UMAP we'll go about it differently this
 time and simply use the ``fit`` method rather than the ``fit_transform``
-approach we used for Iris.
+approach we used for Penguins.
 
 .. code:: python3
 
@@ -327,13 +398,15 @@ approach we used for Iris.
 
 .. parsed-literal::
 
-    UMAP(a=1.576943460405378, alpha=1.0, angular_rp_forest=False,
-       b=0.8950608781227859, bandwidth=1.0, gamma=1.0, init='spectral',
-       local_connectivity=1.0, metric='euclidean', metric_kwds={},
-       min_dist=0.1, n_components=2, n_epochs=None, n_neighbors=15,
-       negative_sample_rate=5, random_state=42, set_op_mix_ratio=1.0,
-       spread=1.0, target_metric='categorical', target_metric_kwds={},
-       transform_queue_size=4.0, transform_seed=42, verbose=False)
+    UMAP(a=None, angular_rp_forest=False, b=None,
+         force_approximation_algorithm=False, init='spectral', learning_rate=1.0,
+         local_connectivity=1.0, low_memory=False, metric='euclidean',
+         metric_kwds=None, min_dist=0.1, n_components=2, n_epochs=None,
+         n_neighbors=15, negative_sample_rate=5, output_metric='euclidean',
+         output_metric_kwds=None, random_state=42, repulsion_strength=1.0,
+         set_op_mix_ratio=1.0, spread=1.0, target_metric='categorical',
+         target_metric_kwds=None, target_n_neighbors=-1, target_weight=0.5,
+         transform_queue_size=4.0, transform_seed=42, unique=False, verbose=False)
 
 
 
@@ -360,7 +433,7 @@ of the reducer object, or call transform on the original data.
 
 
 We now have a dataset with 1797 rows (one for each hand-written digit
-sample), but only 2 columns. As with the Iris example we can now plot
+sample), but only 2 columns. As with the Penguins example we can now plot
 the resulting embedding, coloring the data points by the class that
 they belong to (i.e. the digit they represent).
 
@@ -371,10 +444,7 @@ they belong to (i.e. the digit they represent).
     plt.colorbar(boundaries=np.arange(11)-0.5).set_ticks(np.arange(10))
     plt.title('UMAP projection of the Digits dataset', fontsize=24);
 
-
-
-
-.. image:: images/BasicUsage_26_1.png
+.. image:: images/basic_usage_30_1.png
 
 
 We see that UMAP has successfully captured the digit classes. There are
@@ -395,8 +465,6 @@ First we'll need to encode all the images for inclusion in a dataframe.
     from PIL import Image
     import base64
 
-
-
 .. code:: python3
 
     def embeddable_image(data):
@@ -406,8 +474,6 @@ First we'll need to encode all the images for inclusion in a dataframe.
         image.save(buffer, format='png')
         for_encoding = buffer.getvalue()
         return 'data:image/png;base64,' + base64.b64encode(for_encoding).decode()
-
-
 
 Next we need to load up bokeh and the various tools from it that will be
 needed to generate a suitable interactive plot.
@@ -425,10 +491,10 @@ needed to generate a suitable interactive plot.
 .. raw:: html
 
     
-        <div class="bk-root">
-            <a href="https://bokeh.pydata.org" target="_blank" class="bk-logo bk-logo-small bk-logo-notebook"></a>
-            <span id="0a99b177-0c09-4f23-9312-177e9a03b8be">Loading BokehJS ...</span>
-        </div>
+    <div class="bk-root">
+        <a href="https://bokeh.org" target="_blank" class="bk-logo bk-logo-small bk-logo-notebook"></a>
+        <span id="1001">Loading BokehJS ...</span>
+    </div>
 
 
 
@@ -479,6 +545,7 @@ that are hard even for humans to classify correctly).
     show(plot_figure)
 
 
+
 .. raw:: html
    :file: basic_usage_bokeh_example.html
 
@@ -493,3 +560,50 @@ This concludes our introduction to basic UMAP usage -- hopefully this
 has given you the tools to get started for yourself. Further tutorials,
 covering UMAP parameters and more advanced usage are also available when
 you wish to dive deeper.
+
+--------------
+
+.. raw:: html
+
+   <h3>
+
+Penguin data information
+
+.. raw:: html
+
+   </h3>
+
+Peguin data are from:
+
+**Gorman KB, Williams TD, Fraser WR** (2014) Ecological Sexual
+Dimorphism and Environmental Variability within a Community of Antarctic
+Penguins (Genus *Pygoscelis*). PLoS ONE 9(3): e90081.
+doi:10.1371/journal.pone.0090081
+
+See the full paper
+`HERE <https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0090081>`__.
+
+.. raw:: html
+
+   <h4>
+
+Original data access and use
+
+.. raw:: html
+
+   </h4>
+
+From Gorman et al.: “Data reported here are publicly available within
+the PAL-LTER data system (datasets #219, 220, and 221):
+http://oceaninformatics.ucsd.edu/datazoo/data/pallter/datasets. These
+data are additionally archived within the United States (US) LTER
+Network’s Information System Data Portal: https://portal.lternet.edu/.
+Individuals interested in using these data are therefore expected to
+follow the US LTER Network’s Data Access Policy, Requirements and Use
+Agreement: https://lternet.edu/data-access-policy/.”
+
+Anyone interested in publishing the data should contact `Dr. Kristen
+Gorman <https://www.uaf.edu/cfos/people/faculty/detail/kristen-gorman.php>`__
+about analysis and working together on any final products.
+
+Penguin images by Alison Horst.

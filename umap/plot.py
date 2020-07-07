@@ -43,6 +43,8 @@ from umap.nndescent import initialise_search, initialized_nnd_search
 from umap.utils import deheap_sort, submatrix
 
 from bokeh.plotting import show as show_interactive
+from bokeh.layouts import column
+from bokeh.models import CustomJS, TextInput
 from matplotlib.pyplot import show as show_static
 
 from warnings import warn
@@ -1183,6 +1185,9 @@ def interactive(
     height=800,
     point_size=None,
     subset_points=None,
+    interactive_text_search=False,
+    interactive_text_search_columns=None,
+    interactive_text_search_alpha_contrast=0.95,
 ):
     """Create an interactive bokeh plot of a UMAP embedding.
     While static plots are useful, sometimes a plot that
@@ -1289,6 +1294,16 @@ def interactive(
         A way to select a subset of points based on an array of boolean
         values.
 
+    interactive_text_search: bool (optional, default False)
+        Whether to include a text search widget above the interactive plot
+
+    interactive_text_search_columns: list (optional, default None)
+        Columns of data source to search. Searches labels and hover_data by default.
+
+    interactive_text_search_alpha_contrast: float (optional, default 0.95)
+        Alpha value for points matching text search. Alpha value for points
+        not matching text search will be 1 - interactive_text_search_alpha_contrast
+
     Returns
     -------
 
@@ -1371,6 +1386,8 @@ def interactive(
         else:
             tooltips = None
 
+        data["alpha"] = 1
+
         # bpl.output_notebook(hide_banner=True) # this doesn't work for non-notebook use
         data_source = bpl.ColumnDataSource(data)
 
@@ -1380,10 +1397,74 @@ def interactive(
             tooltips=tooltips,
             background_fill_color=background,
         )
-        plot.circle(x="x", y="y", source=data_source, color=colors, size=point_size)
+        plot.circle(
+            x="x",
+            y="y",
+            source=data_source,
+            color=colors,
+            size=point_size,
+            alpha="alpha",
+        )
 
         plot.grid.visible = False
         plot.axis.visible = False
+
+        if interactive_text_search:
+            text_input = TextInput(value="", title="Search:")
+
+            if interactive_text_search_columns is None:
+                interactive_text_search_columns = []
+                if hover_data is not None:
+                    interactive_text_search_columns.extend(hover_data.columns)
+                if labels is not None:
+                    interactive_text_search_columns.append("label")
+
+            if len(interactive_text_search_columns) == 0:
+                warn(
+                    "interactive_text_search_columns set to True, but no hover_data or labels provided."
+                    "Please provide hover_data or labels to use interactive text search."
+                )
+
+            else:
+                callback = CustomJS(
+                    args=dict(
+                        source=data_source,
+                        matching_alpha=interactive_text_search_alpha_contrast,
+                        non_matching_alpha=1 - interactive_text_search_alpha_contrast,
+                        search_columns=interactive_text_search_columns,
+                    ),
+                    code="""
+                    var data = source.data;
+                    var text_search = cb_obj.value;
+                    
+                    var search_columns_dict = {}
+                    for (var col in search_columns){
+                        search_columns_dict[col] = search_columns[col]
+                    }
+                    
+                    // Loop over columns and values
+                    // If there is no match for any column for a given row, change the alpha value
+                    var string_match = false;
+                    for (var i = 0; i < data.x.length; i++) {
+                        string_match = false
+                        for (var j in search_columns_dict) {
+                            if (String(data[search_columns_dict[j]][i]).includes(text_search) ) {
+                                string_match = true
+                            }
+                        }
+                        if (string_match){
+                            data['alpha'][i] = matching_alpha
+                        }else{
+                            data['alpha'][i] = non_matching_alpha
+                        }
+                    }
+                    source.change.emit();
+                """,
+                )
+
+                text_input.js_on_change("value", callback)
+
+                plot = column(text_input, plot)
 
         # bpl.show(plot)
     else:
@@ -1391,6 +1472,10 @@ def interactive(
             warn(
                 "Too many points for hover data -- tooltips will not"
                 "be displayed. Sorry; try subssampling your data."
+            )
+        if interactive_text_search:
+            warn(
+                "Too many points for text search." "Sorry; try subssampling your data."
             )
         hv.extension("bokeh")
         hv.output(size=300)
