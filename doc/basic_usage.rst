@@ -34,7 +34,7 @@ visualise the results of UMAP, and pandas to make that a little easier.
 Penguin data
 ------------
 
-.. image:: https://github.com/allisonhorst/palmerpenguins/raw/master/vignettes/articles/img/lter_penguins.png
+.. image:: https://github.com/allisonhorst/palmerpenguins/raw/master/man/figures/lter_penguins.png
    :width: 300px
    :align: center
    :alt: Penguins
@@ -160,7 +160,7 @@ proper handling of missing data.
     Name: species_short, dtype: int64
 
 
-.. image:: https://github.com/allisonhorst/palmerpenguins/raw/master/vignettes/articles/img/culmen_depth.png
+.. image:: https://github.com/allisonhorst/palmerpenguins/raw/master/man/figures/culmen_depth.png
    :width: 300px
    :align: center
    :alt: Diagram of culmen measurements on a penguin
