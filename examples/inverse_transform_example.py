@@ -2,11 +2,11 @@
 
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.datasets import fetch_mldata
+from sklearn.datasets import fetch_openml
 
 import umap
 
-mnist = fetch_mldata("MNIST original")
+mnist = fetch_openml('Fashion-MNIST', version=1)
 
 
 trans = umap.UMAP(

@@ -19,7 +19,7 @@ time module so we can perform some basic benchmarking.
 
     import numpy as np
     import pandas as pd
-    from sklearn.datasets import fetch_mldata
+    from sklearn.datasets import fetch_openml
     from sklearn.utils import resample
     import time
 
@@ -57,7 +57,7 @@ scikit-learn's ``fetch_mldata`` to grab it for us.
 
 .. code:: ipython3
 
-    mnist = fetch_mldata('MNIST Original')
+    mnist = fetch_openml('Fashion-MNIST', version=1)
 
 Now it is time to start looking at performance. To start with let's look
 at how performance scales with increasing dataset size.
