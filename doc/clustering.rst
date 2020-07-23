@@ -22,7 +22,7 @@ difficulties that can face clustering approaches and how UMAP can
 provide a powerful tool to help overcome them.
 
 First we'll need a selection of libraries loaded up. Obviously we'll
-need data, and we can use sklearn's ``fetch_mldata`` to get it. We'll
+need data, and we can use sklearn's ``fetch_openml`` to get it. We'll
 also need the usual tools of numpy, and plotting. Next we'll need umap,
 and some clustering options. Finally, since we'll be working with
 labeled data, we can make use of strong cluster evaluation metrics
@@ -33,7 +33,7 @@ Information <https://en.wikipedia.org/wiki/Adjusted_mutual_information>`__.
 
 .. code:: python3
 
-    from sklearn.datasets import fetch_mldata
+    from sklearn.datasets import fetch_openml
     from sklearn.decomposition import PCA
     import numpy as np
     import matplotlib.pyplot as plt
@@ -59,7 +59,7 @@ the clustering to recover the digit structure.
 
 .. code:: python3
 
-    mnist = fetch_mldata('MNIST Original')
+    mnist = fetch_openml('Fashion-MNIST', version=1)
 
 For visualization purposes we can reduce the data to 2-dimensions using
 UMAP. When we cluster the data in high dimensions we can visualize the
