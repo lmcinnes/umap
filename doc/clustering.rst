@@ -60,6 +60,7 @@ the clustering to recover the digit structure.
 .. code:: python3
 
     mnist = fetch_openml('Fashion-MNIST', version=1)
+    mnist.target = mnist.target.astype(int)
 
 For visualization purposes we can reduce the data to 2-dimensions using
 UMAP. When we cluster the data in high dimensions we can visualize the
@@ -70,7 +71,7 @@ color for each digit. This will help frame what follows.
 .. code:: python3
 
     standard_embedding = umap.UMAP(random_state=42).fit_transform(mnist.data)
-    plt.scatter(standard_embedding[:, 0], standard_embedding[:, 1], c=mnist.target, s=0.1, cmap='Spectral');
+    plt.scatter(standard_embedding[:, 0], standard_embedding[:, 1], c=mnist.target.astype(int), s=0.1, cmap='Spectral');
 
 .. image:: images/clustering_6_1.png
 
