@@ -2318,8 +2318,29 @@ class UMAP(BaseEstimator):
         if self.verbose:
             print(ts(), "Construct embedding")
 
-        self.embedding_, aux_data = simplicial_set_embedding(
-            self._raw_data[index],  # JH why raw data?
+        self.embedding_, aux_data = self._fit_embed_data(
+            self._raw_data[index], n_epochs, init, random_state,  # JH why raw data?
+        )
+
+        self.embedding_ = self.embedding_[inverse]
+        if self.output_dens:
+            self.rad_orig_ = aux_data['rad_orig'][inverse]
+            self.rad_emb_ = aux_data['rad_emb'][inverse]
+
+        if self.verbose:
+            print(ts() + " Finished embedding")
+
+        numba.set_num_threads(self._original_n_threads)
+        self._input_hash = joblib.hash(self._raw_data)
+
+        return self
+
+    def _fit_embed_data(self, X, n_epochs, init, random_state):
+        """ A method wrapper for simlicial_set_embedding that can be 
+        replaced by subclasses.
+        """
+        return simplicial_set_embedding(
+            X,
             self.graph_,
             self.n_components,
             self._initial_alpha,
@@ -2341,19 +2362,6 @@ class UMAP(BaseEstimator):
             self.random_state is None,
             self.verbose,
         )
-
-        self.embedding_ = self.embedding_[inverse]
-        if self.output_dens:
-            self.rad_orig_ = aux_data['rad_orig'][inverse]
-            self.rad_emb_ = aux_data['rad_emb'][inverse]
-
-        if self.verbose:
-            print(ts() + " Finished embedding")
-
-        numba.set_num_threads(self._original_n_threads)
-        self._input_hash = joblib.hash(self._raw_data)
-
-        return self
 
     def fit_transform(self, X, y=None):
         """Fit X into an embedded space and return that transformed
