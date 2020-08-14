@@ -48,7 +48,7 @@ of what the dimension reduction is doing.
 
 .. code:: python3
 
-    penguins = pd.read_csv("https://raw.githubusercontent.com/allisonhorst/penguins/master/data/penguins_size.csv")
+    penguins = pd.read_csv("https://github.com/allisonhorst/palmerpenguins/raw/5b5891f01b52ae26ad8cb9755ec93672f49328a8/data/penguins_size.csv")
     penguins.head()
 
 
