@@ -85,3 +85,18 @@ generate the 2D embedding.
 `Audio Explorer <http://doc.gold.ac.uk/~lfedd001/three/demo.html>`__
 
 Thanks to Leon Fedden.
+
+Orion Search
+------------
+Orion is an open source research measurement and knowledge discovery tool that enables you to monitor
+progress in science, visually explore the scientific landscape and search for relevant publications.
+Orion encodes bioRxiv paper abstracts to dense vectors with Sentence Transformers and projects them to
+an interactive 3D visualisation with UMAP. You can filter the UMAP embeddings by topic and country.
+You can also select a subset of the UMAP embeddings and retrieve those papers and their metadata.
+
+.. image:: images/orion_particles.png
+   :width: 400px
+
+`Orion Search <https://www.orion-search.org/>`__
+
+Thanks to Kostas Stathoulopoulos, Zac Ioannidis and Lilia Villafuerte.
