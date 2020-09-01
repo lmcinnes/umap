@@ -87,6 +87,8 @@ Recommended packages:
    * matplotlib
    * datashader
    * holoviews
+* for Parametric UMAP  
+   * tensorflow > 2.0.0
 
 
 Installing pynndescent can significantly increase performance, and in later versions
@@ -116,6 +118,16 @@ If you wish to use the plotting functionality you can use
     pip install umap-learn[plot]
 
 to install all the plotting dependencies.
+
+If you wish to use Parametric UMAP, you need to install Tensorflow, which can be
+installed either using the instructions at https://www.tensorflow.org/install 
+(reccomended) or using 
+
+.. code:: bash
+
+    pip install umap-learn[parametric_umap]
+
+for a CPU-only version of Tensorflow.
 
 If pip is having difficulties pulling the dependencies then we'd suggest installing
 the dependencies manually using anaconda followed by pulling umap from pip:

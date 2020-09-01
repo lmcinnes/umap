@@ -8,7 +8,34 @@ from umap.spectral import spectral_layout
 from sklearn.utils import check_random_state
 import codecs, pickle
 from sklearn.neighbors import KDTree
-import tensorflow as tf
+
+try:
+    import tensorflow as tf
+except ImportError:
+    warn(
+        """The umap.parametric_umap package requires Tensorflow > 2.0 to be installed.
+    You can install Tensorflow at https://www.tensorflow.org/install
+    
+    or you can install the CPU version of Tensorflow using 
+
+    pip install umap-learn[parametric_umap]
+
+    """
+    )
+    raise ImportError("umap.parametric_umap requires Tensorflow >= 2.0") from None
+
+if tf._major_api_version < 2:
+    warn(
+        """The umap.parametric_umap package requires Tensorflow > 2.0 to be installed.
+    You can install Tensorflow at https://www.tensorflow.org/install
+    
+    or you can install the CPU version of Tensorflow using 
+
+    pip install umap-learn[parametric_umap]
+
+    """
+    )
+    raise ImportError("umap.parametric_umap requires Tensorflow >= 2.0") from None
 
 class parametricUMAP(UMAP):
     def __init__(
