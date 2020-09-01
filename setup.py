@@ -58,6 +58,10 @@ configuration = {
             "holoviews",
             "seaborn",
         ],
+        "parametric_umap":
+        [
+            "tensorflow >= 2.0"
+        ]
     },
     "ext_modules": [],
     "cmdclass": {},
