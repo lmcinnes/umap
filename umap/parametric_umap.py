@@ -24,7 +24,8 @@ except ImportError:
     )
     raise ImportError("umap.parametric_umap requires Tensorflow >= 2.0") from None
 
-if tf._major_api_version < 2:
+TF_MAJOR_VERSION = int(tf.__version__.split(".")[0])
+if TF_MAJOR_VERSION < 2:
     warn(
         """The umap.parametric_umap package requires Tensorflow > 2.0 to be installed.
     You can install Tensorflow at https://www.tensorflow.org/install
@@ -36,6 +37,7 @@ if tf._major_api_version < 2:
     """
     )
     raise ImportError("umap.parametric_umap requires Tensorflow >= 2.0") from None
+
 
 class parametricUMAP(UMAP):
     def __init__(
