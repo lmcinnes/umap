@@ -12,12 +12,12 @@ Parametric UMAP replaces the second step, minimizing the same objective function
 
 .. image:: images/pumap-only.png
 
-Parametric UMAP is simply a subclass of UMAP, so it can be used just like nonparametric UMAP, replacing :python:`umap.UMAP` with :python:`parametric_umap.parametricUMAP`. The most basic usage of parametric UMAP would be to simply replace UMAP with parametricUMAP in your code:
+Parametric UMAP is simply a subclass of UMAP, so it can be used just like nonparametric UMAP, replacing :python:`umap.UMAP` with :python:`parametric_umap.ParametricUMAP`. The most basic usage of parametric UMAP would be to simply replace UMAP with ParametricUMAP in your code:
 
 .. code:: python3
 
-    from umap.parametric_umap import parametricUMAP
-    embedder = parametricUMAP()
+    from umap.parametric_umap import ParametricUMAP
+    embedder = ParametricUMAP()
     embedding = embedder.fit_transform(my_data)
 
 In this implementation, we use Keras and Tensorflow as a backend to train that neural network. The added complexity of a learned embedding presents a number of configurable settings available in addition to those in non-parametric UMAP. A set of Jupyter notebooks walking you through these parameters are available on the  `GitHub repository <http://github.com/lmcinnes/umap/notebooks/parametric_umap/>`_
@@ -26,7 +26,7 @@ In this implementation, we use Keras and Tensorflow as a backend to train that n
 Defining your own network
 ---------------------------
 
-By default, parametric UMAP uses 3-layer 100-neuron fully-connected neural network. To extend Parametric UMAP to use a more complex architecture, like a convolutional neural network, we simply need to define the network and pass it in as an argument to parametricUMAP. This can be done easliy, using tf.keras.Sequential. Here's an example for MNIST:
+By default, parametric UMAP uses 3-layer 100-neuron fully-connected neural network. To extend Parametric UMAP to use a more complex architecture, like a convolutional neural network, we simply need to define the network and pass it in as an argument to ParametricUMAP. This can be done easliy, using tf.keras.Sequential. Here's an example for MNIST:
 
 .. code:: python3
     
@@ -49,7 +49,7 @@ By default, parametric UMAP uses 3-layer 100-neuron fully-connected neural netwo
     ])
     encoder.summary()
    
-To load pass the data into parametricUMAP, we first need to flatten it from 28x28x1 images to a 784-dimensional vector. 
+To load pass the data into ParametricUMAP, we first need to flatten it from 28x28x1 images to a 784-dimensional vector.
     
 .. code:: python3    
 
@@ -59,12 +59,12 @@ To load pass the data into parametricUMAP, we first need to flatten it from 28x2
     test_images = test_images.reshape((test_images.shape[0], -1))/255.
 
 
-We can then the network into parametricUMAP and train:
+We can then the network into ParametricUMAP and train:
 
 .. code:: python3 
 
-    # pass encoder network to parametricUMAP
-    embedder = parametricUMAP(encoder=encoder, dims=dims)
+    # pass encoder network to ParametricUMAP
+    embedder = ParametricUMAP(encoder=encoder, dims=dims)
     embedding = embedder.fit_transform(train_images)
 
 If you are unfamilar with Tensorflow/Keras and want to train your own model, we reccomend that you take a look at the `Tensorflow documentation <https://www.tensorflow.org/>`_. 
@@ -83,8 +83,8 @@ You can then load parametric UMAP elsewhere:
 
 .. code:: python3
 
-    from umap.parametric_umap import load_parametricUMAP
-    embedder = load_parametricUMAP('/your/path/here')
+    from umap.parametric_umap import load_ParametricUMAP
+    embedder = load_ParametricUMAP('/your/path/here')
 
 This loads both the UMAP object and the parametric networks it contains.
 
@@ -105,10 +105,10 @@ Parametric UMAP monitors loss during training using Keras. That loss will be pri
 
 Parametric inverse_transform (reconstruction)
 ---------------------------------------------
-To use a second neural network to learn an inverse mapping between data and embeddings, we simply need to pass `parametric_reconstruction= True` to the parametricUMAP. 
+To use a second neural network to learn an inverse mapping between data and embeddings, we simply need to pass `parametric_reconstruction= True` to the ParametricUMAP.
 
 
-Like the encoder, a custom decoder can also be passed to parametricUMAP, e.g. 
+Like the encoder, a custom decoder can also be passed to ParametricUMAP, e.g.
 
 .. code:: python3
 
@@ -134,12 +134,12 @@ In addition, validation data can be used to test reconstruction loss on out-of-d
 
     validation_images = test_images.reshape((test_images.shape[0], -1))/255.
 
-Finally, we can pass the validation data and the networks to parametricUMAP and train:
+Finally, we can pass the validation data and the networks to ParametricUMAP and train:
 
 
 .. code:: python3
 
-            embedder = parametricUMAP(
+            embedder = ParametricUMAP(
                 encoder=encoder,
                 decoder=decoder,
                 dims=dims,
@@ -154,12 +154,12 @@ Autoencoding UMAP
 -----------------
 
 
-In the example above, the encoder is trained to minimize UMAP loss, and the decoder is trained to minimize reconstruction loss. To train the encoder jointly on both UMAP loss and reconstruction loss, pass :python:`autoencoder_loss = True` into the parametricUMAP.  
+In the example above, the encoder is trained to minimize UMAP loss, and the decoder is trained to minimize reconstruction loss. To train the encoder jointly on both UMAP loss and reconstruction loss, pass :python:`autoencoder_loss = True` into the ParametricUMAP.
 
 
 .. code:: python3
 
-            embedder = parametricUMAP(
+            embedder = ParametricUMAP(
                 encoder=encoder,
                 decoder=decoder,
                 dims=dims,
@@ -173,7 +173,7 @@ In the example above, the encoder is trained to minimize UMAP loss, and the deco
 Early stopping and Keras callbacks
 ----------------------------------
 
-It can sometimes be useful to train the embedder until some plateau in training loss is met. In deep learning, early stopping is one way to do this. Keras provides custom `callbacks <https://keras.io/api/callbacks/>`_ that allow you to implement checks during training, such as early stopping. We can use callbacks, such as early stopping, with parametricUMAP to stop training early based on a predefined training threshold, using the :python:`keras_fit_kwargs` argument:
+It can sometimes be useful to train the embedder until some plateau in training loss is met. In deep learning, early stopping is one way to do this. Keras provides custom `callbacks <https://keras.io/api/callbacks/>`_ that allow you to implement checks during training, such as early stopping. We can use callbacks, such as early stopping, with ParametricUMAP to stop training early based on a predefined training threshold, using the :python:`keras_fit_kwargs` argument:
 
 .. code:: python3
 
@@ -186,7 +186,7 @@ It can sometimes be useful to train the embedder until some plateau in training 
         )
     ]}
 
-    embedder = parametricUMAP(
+    embedder = ParametricUMAP(
         verbose=True,
         keras_fit_kwargs = keras_fit_kwargs,
         n_training_epochs=20
@@ -199,9 +199,9 @@ We also passed in :python:`n_training_epochs = 20`, allowing early stopping to e
 Additional important parameters
 -------------------------------
 
-* **batch_size:** parametricUMAP in trained over batches of edges randomly sampled from the UMAP graph, and then trained via gradient descent.  parametricUMAP defaults to a batch size of 1000 edges, but can be adjusted to a value that fits better on your GPU or CPU. 
+* **batch_size:** ParametricUMAP in trained over batches of edges randomly sampled from the UMAP graph, and then trained via gradient descent.  ParametricUMAP defaults to a batch size of 1000 edges, but can be adjusted to a value that fits better on your GPU or CPU.
 * **loss_report_frequency:** If set to 1, an epoch in in the Keras embedding refers to a single iteration over the graph computed in UMAP. Setting :python:`loss_report_frequency` to 10, would split up that epoch into 10 seperate epochs, for more frequent reporting. 
-* **n_training_epochs:** The number of epochs over the UMAP graph to train for (irrespective of :python:`loss_report_frequency`). Training the network for multiple epochs will result in better embeddings, but take longer. This parameter is different than :python:`n_epochs` in the base UMAP class, which corresponds to the maximum number of times an edge is trained in a single parametricUMAP epoch. 
+* **n_training_epochs:** The number of epochs over the UMAP graph to train for (irrespective of :python:`loss_report_frequency`). Training the network for multiple epochs will result in better embeddings, but take longer. This parameter is different than :python:`n_epochs` in the base UMAP class, which corresponds to the maximum number of times an edge is trained in a single ParametricUMAP epoch.
 * **optimizer:** The optimizer used to train the neural network. by default Adam (:python:`tf.keras.optimizers.Adam(1e-3)`) is used. You might be able to speed up or improve training by using a different optimizer.
 * **parametric_embedding:** If set to false, a non-parametric embedding is learned, using the same code as the parametric embedding, which can serve as a direct comparison between parametric and non-parametric embedding using the same optimizer. The parametric embeddings are performed over the entire dataset simultaneously. 
 

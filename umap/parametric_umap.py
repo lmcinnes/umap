@@ -39,7 +39,7 @@ if TF_MAJOR_VERSION < 2:
     raise ImportError("umap.parametric_umap requires Tensorflow >= 2.0") from None
 
 
-class parametricUMAP(UMAP):
+class ParametricUMAP(UMAP):
     def __init__(
         self,
         optimizer=None,
@@ -147,7 +147,7 @@ class parametricUMAP(UMAP):
             )
         else:
             warn(
-                "Embedding new data is not supported by parametricUMAP. \
+                "Embedding new data is not supported by ParametricUMAP. \
                 Using original embedder."
             )
             return super().transform(X)
@@ -407,7 +407,7 @@ class parametricUMAP(UMAP):
             with open(model_output, "wb") as output:
                 pickle.dump(self, output, pickle.HIGHEST_PROTOCOL)
             if verbose:
-                print("Pickle of parametricUMAP model saved to {}".format(model_output))
+                print("Pickle of ParametricUMAP model saved to {}".format(model_output))
 
 
 def get_graph_elements(graph_, n_epochs):
@@ -873,7 +873,7 @@ def should_pickle(key, val):
     return True
 
 
-def load_parametricUMAP(save_location, verbose=True):
+def load_ParametricUMAP(save_location, verbose=True):
     """
     Load a parametric UMAP model consisting of a umap-learn UMAP object 
     and corresponding keras models. 
@@ -887,11 +887,11 @@ def load_parametricUMAP(save_location, verbose=True):
 
     Returns
     -------
-    parametric_umap.parametricUMAP
+    parametric_umap.ParametricUMAP
         Parametric UMAP objects
     """
 
-    ## Loads a parametricUMAP model and its related keras models
+    ## Loads a ParametricUMAP model and its related keras models
 
     model_output = os.path.join(save_location, "model.pkl")
     model = pickle.load((open(model_output, "rb")))

@@ -1,14 +1,14 @@
 from sklearn.datasets import make_moons
 import numpy as np
 import tensorflow as tf
-from umap.parametric_umap import parametricUMAP, load_parametricUMAP
+from umap.parametric_umap import ParametricUMAP, load_ParametricUMAP
 
 
 def test_create_model():
     """ test a simple parametric UMAP network
     """
     X, y = make_moons(100)
-    embedder = parametricUMAP()
+    embedder = ParametricUMAP()
     embedding = embedder.fit_transform(X)
 
 
@@ -21,7 +21,7 @@ def test_inverse_transform():
 
     X, y = make_moons(100)
     X = norm(X)
-    embedder = parametricUMAP(parametric_reconstruction=True)
+    embedder = ParametricUMAP(parametric_reconstruction=True)
     embedding = embedder.fit_transform(X)
     Z = embedder.transform(X)
     X_r = embedder.inverse_transform(Z)
@@ -31,7 +31,7 @@ def test_nonparametric():
     """ test nonparametric embedding
     """
     X, y = make_moons(100)
-    embedder = parametricUMAP(parametric_embedding=False)
+    embedder = ParametricUMAP(parametric_embedding=False)
     embedding = embedder.fit_transform(X)
 
 
@@ -66,7 +66,7 @@ def test_custom_encoder_decoder():
         ]
     )
 
-    embedder = parametricUMAP(
+    embedder = ParametricUMAP(
         encoder=encoder,
         decoder=decoder,
         dims=dims,
@@ -82,7 +82,7 @@ def test_validation():
     X, y = make_moons(100)
 
     X_valid, y = make_moons(100)
-    embedder = parametricUMAP(
+    embedder = ParametricUMAP(
         parametric_reconstruction=True, reconstruction_validation=X_valid, verbose=True,
     )
     embedding = embedder.fit_transform(X)
@@ -92,10 +92,10 @@ def test_save_load():
     """ tests saving and loading
     """
     X, y = make_moons(100)
-    embedder = parametricUMAP()
+    embedder = ParametricUMAP()
     embedding = embedder.fit_transform(X)
 
     embedder.save("/tmp/model")
 
-    embedder = load_parametricUMAP("/tmp/model")
+    embedder = load_ParametricUMAP("/tmp/model")
 
