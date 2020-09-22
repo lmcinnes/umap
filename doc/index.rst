@@ -57,6 +57,7 @@ PyPI install, presuming you have numba and sklearn and all its requirements
    reproducibility
    transform
    inverse_transform
+   parametric_umap
    sparse
    supervised
    clustering
