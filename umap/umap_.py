@@ -224,7 +224,7 @@ def nearest_neighbors(
     metric_kwds,
     angular,
     random_state,
-    low_memory=False,
+    low_memory=True,
     use_pynndescent=True,
     n_jobs=-1,
     verbose=False,
@@ -1492,7 +1492,7 @@ class UMAP(BaseEstimator):
         init="spectral",
         min_dist=0.1,
         spread=1.0,
-        low_memory=False,
+        low_memory=True,
         n_jobs=-1,
         set_op_mix_ratio=1.0,
         local_connectivity=1.0,
@@ -2625,7 +2625,7 @@ class UMAP(BaseEstimator):
             (vals, (rows, cols)), shape=(X.shape[0], self._raw_data.shape[0])
         )
 
-        if self.tranform_mode == "graph":
+        if self.transform_mode == "graph":
             return graph
 
         # This was a very specially constructed graph with constant degree.
