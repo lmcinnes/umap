@@ -19,12 +19,12 @@ matrix:
       os: linux
     - env: DISTRIB="conda" PYTHON_VERSION="3.7" NUMPY_VERSION="1.17" SCIPY_VERSION="1.3.1"
       os: linux
-    - env: DISTRIB="conda" PYTHON_VERSION="3.6" COVERAGE="true" NUMPY_VERSION="1.17" SCIPY_VERSION="1.3.1"
+    - env: DISTRIB="conda" PYTHON_VERSION="3.8" COVERAGE="true" NUMPY_VERSION="1.17" SCIPY_VERSION="1.3.1"
       os: linux
-    - env: DISTRIB="conda" PYTHON_VERSION="3.6" NUMBA_VERSION="0.48"
+    - env: DISTRIB="conda" PYTHON_VERSION="3.7" NUMBA_VERSION="0.51.2"
       os: osx
       language: generic
-    - env: DISTRIB="conda" PYTHON_VERSION="3.6" NUMBA_VERSION="0.46"
+    - env: DISTRIB="conda" PYTHON_VERSION="3.8" NUMBA_VERSION="0.51.2"
       os: osx
       language: generic
 
