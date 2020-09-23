@@ -38,9 +38,11 @@ if [[ "$DISTRIB" == "conda" ]]; then
 
   # Configure the conda environment and put it in the path using the
   # provided versions
-  conda create -n testenv --yes python=$PYTHON_VERSION pip nose \
-        numpy=$NUMPY_VERSION scipy=$SCIPY_VERSION numba=$NUMBA_VERSION scikit-learn \
-        pytest "tensorflow-mkl>=2.2.0"
+#  conda create -n testenv --yes python=$PYTHON_VERSION pip nose \
+#        numpy=$NUMPY_VERSION scipy=$SCIPY_VERSION numba=$NUMBA_VERSION scikit-learn \
+#        pytest "tensorflow-mkl>=2.2.0"
+  conda create -q -n testenv python=$PYTHON_VERSION numpy scipy scikit-learn \
+        numba pandas bokeh holoviews datashader nose pytest tensorflow
 
   source activate testenv
 
