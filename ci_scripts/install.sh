@@ -40,7 +40,7 @@ if [[ "$DISTRIB" == "conda" ]]; then
   # provided versions
   conda create -n testenv --yes python=$PYTHON_VERSION pip nose \
         numpy=$NUMPY_VERSION scipy=$SCIPY_VERSION numba=$NUMBA_VERSION scikit-learn \
-        holoviews datashader bokeh matplotlib pandas pytest "tensorflow-mkl>=2.2.0"
+        pytest "tensorflow-mkl>=2.2.0"
 
   source activate testenv
 
