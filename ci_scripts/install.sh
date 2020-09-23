@@ -40,7 +40,7 @@ if [[ "$DISTRIB" == "conda" ]]; then
   # provided versions
   conda create -n testenv --yes python=$PYTHON_VERSION pip nose \
         numpy=$NUMPY_VERSION scipy=$SCIPY_VERSION numba=$NUMBA_VERSION scikit-learn \
-        holoviews datashader bokeh matplotlib pandas pytest tensorflow
+        holoviews datashader bokeh matplotlib pandas pytest "tensorflow-mkl>=2.2.0"
 
   source activate testenv
 
@@ -69,5 +69,5 @@ else
   pip install datashader
   pip install matplotlib
   pip install holoviews
-  pip install tensorflow
+  pip install "tensorflow>=2.2.0"
 fi
