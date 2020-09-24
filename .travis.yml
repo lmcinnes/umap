@@ -24,9 +24,9 @@ matrix:
     - env: DISTRIB="conda" PYTHON_VERSION="3.7" NUMBA_VERSION="0.51.2"
       os: osx
       language: generic
-    - env: DISTRIB="conda" PYTHON_VERSION="3.8" NUMBA_VERSION="0.51.2"
-      os: osx
-      language: generic
+#    - env: DISTRIB="conda" PYTHON_VERSION="3.8" NUMBA_VERSION="0.51.2"
+#      os: osx
+#      language: generic
 
 install: source ci_scripts/install.sh
 script: travis_wait 90 bash ci_scripts/test.sh
