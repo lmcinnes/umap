@@ -47,7 +47,7 @@ if [[ "$DISTRIB" == "conda" ]]; then
 #    pip install bokeh
 #    pip install datashader
 #    pip install holoviews
-    pip install "tensorflow>=2.2.0"
+    conda install --yes "tensorflow>=2.2.0"
   else
     conda create -q -n testenv --yes python=$PYTHON_VERSION numpy scipy scikit-learn \
           numba pandas bokeh holoviews datashader nose pytest "tensorflow-mkl>=2.2.0"
