@@ -44,9 +44,9 @@ if [[ "$DISTRIB" == "conda" ]]; then
   if [ $TRAVIS_OS_NAME = 'osx' ]; then
     conda create -q -n testenv --yes python=$PYTHON_VERSION numpy scipy scikit-learn \
           numba nose pytest pandas
-    pip install bokeh
-    pip install datashader
-    pip install holoviews
+#    pip install bokeh
+#    pip install datashader
+#    pip install holoviews
     pip install "tensorflow>=2.2.0"
   else
     conda create -q -n testenv --yes python=$PYTHON_VERSION numpy scipy scikit-learn \
