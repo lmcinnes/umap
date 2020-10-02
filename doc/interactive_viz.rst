@@ -100,3 +100,18 @@ You can also select a subset of the UMAP embeddings and retrieve those papers an
 `Orion Search <https://www.orion-search.org/>`__
 
 Thanks to Kostas Stathoulopoulos, Zac Ioannidis and Lilia Villafuerte.
+
+Exploring Fashion MNIST
+-----------------------
+A web based interactive exploration of 3D UMAP embedding ran on the Fashion MNIST dataset. Users can
+freely navigate the 3D space, jumping to a specific image by clicking an image or entering an image id.
+Like Grant Custer's UMAP Explorer, each point is rendered as the the actual image and colored according
+the label. It is also similar to the Tensorflow Embedding Projector, but designed more specifically for
+Fashion MNIST, thus more efficient and capable of showing all the 70k images.
+
+.. image:: images/exploring_fashion_mnist.png
+   :width: 400px
+
+`Exploring Fashion MNIST <https://observablehq.com/@stwind/exploring-fashion-mnist/>`__
+
+Thanks to stwind.
