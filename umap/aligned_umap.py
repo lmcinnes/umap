@@ -42,15 +42,16 @@ def procrustes_align(embedding_base, embedding_to_align, anchors):
 
 def expand_relations(relation_dicts, window_size=3):
     max_n_samples = (
-            max(
-                [max(d.keys()) for d in relation_dicts]
-                + [max(d.values()) for d in relation_dicts]
-            )
-            + 1
+        max(
+            [max(d.keys()) for d in relation_dicts]
+            + [max(d.values()) for d in relation_dicts]
+        )
+        + 1
     )
     result = np.full(
-        (len(relation_dicts) + 1, 2 * window_size + 1, max_n_samples), -1,
-        dtype=np.int32
+        (len(relation_dicts) + 1, 2 * window_size + 1, max_n_samples),
+        -1,
+        dtype=np.int32,
     )
     reverse_relation_dicts = [invert_dict(d) for d in relation_dicts]
     for i in range(result.shape[0]):
@@ -100,16 +101,15 @@ def build_neighborhood_similarities(graphs_indptr, graphs_indices, relations):
                     continue
 
                 raw_base_graph_indices = base_graph_indices[
-                                         base_graph_indptr[k]: base_graph_indptr[k + 1]
-                                         ].copy()
+                    base_graph_indptr[k] : base_graph_indptr[k + 1]
+                ].copy()
                 base_indices = relations[i, j][raw_base_graph_indices]
                 base_indices = base_indices[base_indices >= 0]
                 comparison_indices = comparison_graph_indices[
-                                     comparison_graph_indptr[comparison_index]:
-                                     comparison_graph_indptr[
-                                         comparison_index + 1
-                                         ]
-                                     ]
+                    comparison_graph_indptr[comparison_index] : comparison_graph_indptr[
+                        comparison_index + 1
+                    ]
+                ]
                 comparison_indices = comparison_indices[
                     in1d(comparison_indices, relations[i, j])
                 ]
@@ -177,8 +177,8 @@ def set_aligned_params(new_params, existing_params, n_models, param_names=PARAM_
 
 
 @numba.njit()
-def init_from_exisiting_internal(
-        previous_embedding, weights_indptr, weights_indices, weights_data, relation_dict
+def init_from_existing_internal(
+    previous_embedding, weights_indptr, weights_indices, weights_data, relation_dict
 ):
     n_samples = weights_indptr.shape[0] - 1
     n_features = previous_embedding.shape[1]
@@ -194,7 +194,7 @@ def init_from_exisiting_internal(
                 if j in relation_dict:
                     normalisation += weights_data[idx]
                     result[i] += (
-                            weights_data[idx] * previous_embedding[relation_dict[j]]
+                        weights_data[idx] * previous_embedding[relation_dict[j]]
                     )
             if normalisation == 0:
                 result[i] = np.random.uniform(-10.0, 10.0, n_features)
@@ -208,43 +208,47 @@ def init_from_existing(previous_embedding, graph, relations):
     typed_relations = numba.typed.Dict.empty(numba.types.int32, numba.types.int32)
     for key, val in relations.items():
         typed_relations[np.int32(key)] = np.int32(val)
-    return init_from_exisiting_internal(
-        previous_embedding, graph.indptr, graph.indices, graph.data, typed_relations,
+    return init_from_existing_internal(
+        previous_embedding,
+        graph.indptr,
+        graph.indices,
+        graph.data,
+        typed_relations,
     )
 
 
 class AlignedUMAP(BaseEstimator):
     def __init__(
-            self,
-            n_neighbors=15,
-            n_components=2,
-            metric="euclidean",
-            metric_kwds=None,
-            n_epochs=None,
-            learning_rate=1.0,
-            init="spectral",
-            alignment_regularisation=1.0e-2,
-            alignment_window_size=3,
-            min_dist=0.1,
-            spread=1.0,
-            low_memory=False,
-            set_op_mix_ratio=1.0,
-            local_connectivity=1.0,
-            repulsion_strength=1.0,
-            negative_sample_rate=5,
-            transform_queue_size=4.0,
-            a=None,
-            b=None,
-            random_state=None,
-            angular_rp_forest=False,
-            target_n_neighbors=-1,
-            target_metric="categorical",
-            target_metric_kwds=None,
-            target_weight=0.5,
-            transform_seed=42,
-            force_approximation_algorithm=False,
-            verbose=False,
-            unique=False,
+        self,
+        n_neighbors=15,
+        n_components=2,
+        metric="euclidean",
+        metric_kwds=None,
+        n_epochs=None,
+        learning_rate=1.0,
+        init="spectral",
+        alignment_regularisation=1.0e-2,
+        alignment_window_size=3,
+        min_dist=0.1,
+        spread=1.0,
+        low_memory=False,
+        set_op_mix_ratio=1.0,
+        local_connectivity=1.0,
+        repulsion_strength=1.0,
+        negative_sample_rate=5,
+        transform_queue_size=4.0,
+        a=None,
+        b=None,
+        random_state=None,
+        angular_rp_forest=False,
+        target_n_neighbors=-1,
+        target_metric="categorical",
+        target_metric_kwds=None,
+        target_weight=0.5,
+        transform_seed=42,
+        force_approximation_algorithm=False,
+        verbose=False,
+        unique=False,
     ):
 
         self.n_neighbors = n_neighbors
@@ -338,19 +342,31 @@ class AlignedUMAP(BaseEstimator):
             relations,
         )
         first_init = spectral_layout(
-            self.mappers_[0]._raw_data, self.mappers_[0].graph_, 2, np.random,
+            self.mappers_[0]._raw_data,
+            self.mappers_[0].graph_,
+            2,
+            np.random,
         )
         expansion = 10.0 / np.abs(first_init).max()
-        first_embedding = (first_init * expansion).astype(np.float32, order="C", )
+        first_embedding = (first_init * expansion).astype(
+            np.float32,
+            order="C",
+        )
 
         embeddings = numba.typed.List.empty_list(numba.types.float32[:, ::1])
         embeddings.append(first_embedding)
         for i in range(1, self.n_models_):
             next_init = spectral_layout(
-                self.mappers_[i]._raw_data, self.mappers_[i].graph_, 2, np.random,
+                self.mappers_[i]._raw_data,
+                self.mappers_[i].graph_,
+                2,
+                np.random,
             )
             expansion = 10.0 / np.abs(next_init).max()
-            next_embedding = (next_init * expansion).astype(np.float32, order="C", )
+            next_embedding = (next_init * expansion).astype(
+                np.float32,
+                order="C",
+            )
             anchor_data = relations[i][window_size - 1]
             left_anchors = anchor_data[anchor_data >= 0]
             right_anchors = np.where(anchor_data >= 0)[0]

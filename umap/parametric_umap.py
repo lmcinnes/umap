@@ -58,7 +58,7 @@ class ParametricUMAP(UMAP):
     ):
         """
         Parametric UMAP subclassing UMAP-learn, based on keras/tensorflow.
-        There is also a non-parametric implementation contained within to compare 
+        There is also a non-parametric implementation contained within to compare
         with the base non-parametric implementation.
 
         Parameters
@@ -153,7 +153,7 @@ class ParametricUMAP(UMAP):
             return super().transform(X)
 
     def inverse_transform(self, X):
-        """"Transform X in the existing embedded space back into the input
+        """ "Transform X in the existing embedded space back into the input
         data space and return that transformed output.
         Parameters
         ----------
@@ -172,8 +172,7 @@ class ParametricUMAP(UMAP):
             return super().inverse_transform(X)
 
     def _define_model(self):
-        """ Define the model in keras
-        """
+        """Define the model in keras"""
 
         # network outputs
         outputs = {}
@@ -226,11 +225,14 @@ class ParametricUMAP(UMAP):
         outputs["umap"] = embedding_to_from
 
         # create model
-        self.parametric_model = tf.keras.Model(inputs=inputs, outputs=outputs,)
+        self.parametric_model = tf.keras.Model(
+            inputs=inputs,
+            outputs=outputs,
+        )
 
     def _compile_model(self):
         """
-        Compiles 
+        Compiles
         """
         losses = {}
         loss_weights = {}
@@ -253,7 +255,9 @@ class ParametricUMAP(UMAP):
             loss_weights["reconstruction"] = 1.0
 
         self.parametric_model.compile(
-            optimizer=self.optimizer, loss=losses, loss_weights=loss_weights,
+            optimizer=self.optimizer,
+            loss=losses,
+            loss_weights=loss_weights,
         )
 
     def _fit_embed_data(self, X, n_epochs, init, random_state):
@@ -467,18 +471,18 @@ def get_graph_elements(graph_, n_epochs):
 def init_embedding_from_graph(
     _raw_data, graph, n_components, random_state, metric, _metric_kwds, init="spectral"
 ):
-    """ Initialize embedding using graph. This is for direct embeddings. 
+    """Initialize embedding using graph. This is for direct embeddings.
 
-        Parameters
-        ----------
-        init : str, optional
-            Type of initialization to use. Either random, or spectral, by default "spectral"
+    Parameters
+    ----------
+    init : str, optional
+        Type of initialization to use. Either random, or spectral, by default "spectral"
 
-        Returns
-        -------
-        embedding : np.array
-            the initialized embedding
-        """
+    Returns
+    -------
+    embedding : np.array
+        the initialized embedding
+    """
     if random_state is None:
         random_state = check_random_state(None)
 
@@ -524,7 +528,7 @@ def init_embedding_from_graph(
 
 def convert_distance_to_probability(distances, a=1.0, b=1.0):
     """
-     convert distance representation into probability, 
+     convert distance representation into probability,
         as a function of a, b params
 
     Parameters
@@ -569,7 +573,7 @@ def compute_cross_entropy(
         repellant term for cross entropy loss
     cross_entropy: tf.float32
         cross entropy umap loss
-    
+
     """
     # cross entropy
     attraction_term = -probabilities_graph * tf.math.log(
@@ -655,7 +659,8 @@ def umap_loss(
 
         # set true probabilities based on negative sampling
         probabilities_graph = tf.concat(
-            [tf.ones(batch_size), tf.zeros(batch_size * negative_sample_rate)], axis=0,
+            [tf.ones(batch_size), tf.zeros(batch_size * negative_sample_rate)],
+            axis=0,
         )
 
         # compute cross entropy
@@ -685,7 +690,7 @@ def prepare_networks(
 ):
     """
     Generates a set of keras networks for the encoder and decoder if one has not already
-    been predefined. 
+    been predefined.
 
     Parameters
     ----------
@@ -753,7 +758,12 @@ def prepare_networks(
 
 
 def construct_edge_dataset(
-    X, graph_, n_epochs, batch_size, parametric_embedding, parametric_reconstruction,
+    X,
+    graph_,
+    n_epochs,
+    batch_size,
+    parametric_embedding,
+    parametric_reconstruction,
 ):
     """
     Construct a tf.data.Dataset of edges, sampled by edge weight.
@@ -787,7 +797,7 @@ def construct_edge_dataset(
 
     def make_sham_generator():
         """
-        The sham generator is used to 
+        The sham generator is used to
         """
 
         def sham_generator():
@@ -875,8 +885,8 @@ def should_pickle(key, val):
 
 def load_ParametricUMAP(save_location, verbose=True):
     """
-    Load a parametric UMAP model consisting of a umap-learn UMAP object 
-    and corresponding keras models. 
+    Load a parametric UMAP model consisting of a umap-learn UMAP object
+    and corresponding keras models.
 
     Parameters
     ----------

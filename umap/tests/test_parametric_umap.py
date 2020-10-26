@@ -5,16 +5,14 @@ from umap.parametric_umap import ParametricUMAP, load_ParametricUMAP
 
 
 def test_create_model():
-    """ test a simple parametric UMAP network
-    """
+    """test a simple parametric UMAP network"""
     X, y = make_moons(100)
     embedder = ParametricUMAP()
     embedding = embedder.fit_transform(X)
 
 
 def test_inverse_transform():
-    """ tests inverse_transform
-    """
+    """tests inverse_transform"""
 
     def norm(x):
         return (x - np.min(x)) / (np.max(x) - np.min(x))
@@ -28,16 +26,14 @@ def test_inverse_transform():
 
 
 def test_nonparametric():
-    """ test nonparametric embedding
-    """
+    """test nonparametric embedding"""
     X, y = make_moons(100)
     embedder = ParametricUMAP(parametric_embedding=False)
     embedding = embedder.fit_transform(X)
 
 
 def test_custom_encoder_decoder():
-    """ test using a custom encoder / decoder
-    """
+    """test using a custom encoder / decoder"""
     X, y = make_moons(100)
 
     dims = (2,)
@@ -77,20 +73,20 @@ def test_custom_encoder_decoder():
 
 
 def test_validation():
-    """ tests adding a validation dataset
-    """
+    """tests adding a validation dataset"""
     X, y = make_moons(100)
 
     X_valid, y = make_moons(100)
     embedder = ParametricUMAP(
-        parametric_reconstruction=True, reconstruction_validation=X_valid, verbose=True,
+        parametric_reconstruction=True,
+        reconstruction_validation=X_valid,
+        verbose=True,
     )
     embedding = embedder.fit_transform(X)
 
 
 def test_save_load():
-    """ tests saving and loading
-    """
+    """tests saving and loading"""
     X, y = make_moons(100)
     embedder = ParametricUMAP()
     embedding = embedder.fit_transform(X)
@@ -98,4 +94,3 @@ def test_save_load():
     embedder.save("/tmp/model")
 
     embedder = load_ParametricUMAP("/tmp/model")
-

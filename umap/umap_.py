@@ -111,9 +111,7 @@ def breadth_first_search(adjmat, start, min_vertices):
     },
     fastmath=True,
 )  # benchmarking `parallel=True` shows it to *decrease* performance
-def smooth_knn_dist(
-    distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0
-):
+def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0):
     """Compute a continuous version of the distance to the kth nearest
     neighbor. That is, this is similar to knn-distance but allows continuous
     k values rather than requiring an integral k. In essence we are simply
@@ -566,9 +564,7 @@ def fuzzy_simplicial_set(
 
 
 @numba.njit()
-def fast_intersection(
-    rows, cols, values, target, unknown_dist=1.0, far_dist=5.0
-):
+def fast_intersection(rows, cols, values, target, unknown_dist=1.0, far_dist=5.0):
     """Under the assumption of categorical distance for the intersecting
     simplicial set perform a fast intersection.
 
@@ -689,9 +685,7 @@ def reset_local_metrics(simplicial_set_indptr, simplicial_set_data):
         simplicial_set_data[
             simplicial_set_indptr[i] : simplicial_set_indptr[i + 1]
         ] = reprocess_row(
-            simplicial_set_data[
-                simplicial_set_indptr[i] : simplicial_set_indptr[i + 1]
-            ]
+            simplicial_set_data[simplicial_set_indptr[i] : simplicial_set_indptr[i + 1]]
         )
     return
 
@@ -1071,9 +1065,7 @@ def simplicial_set_embedding(
             j = head[i]
             k = tail[i]
 
-            D = (
-                dists[j, k] * dists[j, k]
-            )  # match sq-Euclidean used for embedding
+            D = dists[j, k] * dists[j, k]  # match sq-Euclidean used for embedding
             mu = graph.data[i]
 
             ro[j] += mu * D
@@ -1569,17 +1561,13 @@ class UMAP(BaseEstimator):
             raise ValueError("min_dist must be less than or equal to spread")
         if self.min_dist < 0.0:
             raise ValueError("min_dist cannot be negative")
-        if not isinstance(self.init, str) and not isinstance(
-            self.init, np.ndarray
-        ):
+        if not isinstance(self.init, str) and not isinstance(self.init, np.ndarray):
             raise ValueError("init must be a string or ndarray")
         if isinstance(self.init, str) and self.init not in (
             "spectral",
             "random",
         ):
-            raise ValueError(
-                'string init values must be "spectral" or "random"'
-            )
+            raise ValueError('string init values must be "spectral" or "random"')
         if (
             isinstance(self.init, np.ndarray)
             and self.init.shape[1] != self.n_components
@@ -1611,9 +1599,7 @@ class UMAP(BaseEstimator):
         if self.n_epochs is not None and (
             self.n_epochs <= 10 or not isinstance(self.n_epochs, int)
         ):
-            raise ValueError(
-                "n_epochs must be a positive integer of at least 10"
-            )
+            raise ValueError("n_epochs must be a positive integer of at least 10")
         if self.metric_kwds is None:
             self._metric_kwds = {}
         else:
@@ -1656,9 +1642,7 @@ class UMAP(BaseEstimator):
                 )
         elif self.metric == "precomputed":
             if self.unique:
-                raise ValueError(
-                    "unique is poorly defined on a precomputed metric"
-                )
+                raise ValueError("unique is poorly defined on a precomputed metric")
             warn(
                 "using precomputed metric; transform will be unavailable for new data and inverse_transform "
                 "will be unavailable for all data"
@@ -1666,9 +1650,7 @@ class UMAP(BaseEstimator):
             self._input_distance_func = self.metric
             self._inverse_distance_func = None
         elif self.metric == "hellinger" and self._raw_data.min() < 0:
-            raise ValueError(
-                "Metric 'hellinger' does not support negative values"
-            )
+            raise ValueError("Metric 'hellinger' does not support negative values")
         elif self.metric in dist.named_distances:
             if self._sparse_data:
                 if self.metric in sparse.sparse_named_distances:
@@ -1677,16 +1659,14 @@ class UMAP(BaseEstimator):
                     ]
                 else:
                     raise ValueError(
-                        "Metric {} is not supported for sparse data".format(
-                            self.metric
-                        )
+                        "Metric {} is not supported for sparse data".format(self.metric)
                     )
             else:
                 self._input_distance_func = dist.named_distances[self.metric]
             try:
-                self._inverse_distance_func = (
-                    dist.named_distances_with_gradients[self.metric]
-                )
+                self._inverse_distance_func = dist.named_distances_with_gradients[
+                    self.metric
+                ]
             except KeyError:
                 warn(
                     "gradient function is not yet implemented for {} distance metric; "
@@ -1694,9 +1674,7 @@ class UMAP(BaseEstimator):
                 )
                 self._inverse_distance_func = None
         else:
-            raise ValueError(
-                "metric is neither callable nor a recognised string"
-            )
+            raise ValueError("metric is neither callable nor a recognised string")
         # set ooutput distance metric
         if callable(self.output_metric):
             out_returns_grad = self._check_custom_metric(
@@ -1736,9 +1714,7 @@ class UMAP(BaseEstimator):
             self.angular_rp_forest = True
 
         if self.n_jobs < -1 or self.n_jobs == 0:
-            raise ValueError(
-                "n_jobs must be a postive integer, or -1 (for all cores)"
-            )
+            raise ValueError("n_jobs must be a postive integer, or -1 (for all cores)")
 
         if self.dens_lambda < 0.0:
             raise ValueError("dens_lambda cannot be negative")
@@ -1771,9 +1747,7 @@ class UMAP(BaseEstimator):
         else:
             # if checking the manifold distance metric, simulate some data on a
             # reasonable interval with output dimensionality
-            x, y = np.random.uniform(
-                low=-10, high=10, size=(2, self.n_components)
-            )
+            x, y = np.random.uniform(low=-10, high=10, size=(2, self.n_components))
         metric_out = metric(x, y, **kwds)
         # True if metric returns iterable of length 2, False otherwise
         return hasattr(metric_out, "__iter__") and len(metric_out) == 2
@@ -1784,38 +1758,29 @@ class UMAP(BaseEstimator):
         self.metric_kwds = flattened([m.metric_kwds for m in models])
         self.output_metric = flattened([m.output_metric for m in models])
 
-        self.n_epochs = flattened([m.n_epochs for m in models])
+        self.n_epochs = flattened(
+            [m.n_epochs if m.n_epochs is not None else -1 for m in models]
+        )
+        if all([x == -1 for x in self.n_epochs]):
+            self.n_epochs = None
+
         self.init = flattened([m.init for m in models])
         self.n_components = flattened([m.n_components for m in models])
-        self.repulsion_strength = flattened(
-            [m.repulsion_strength for m in models]
-        )
+        self.repulsion_strength = flattened([m.repulsion_strength for m in models])
         self.learning_rate = flattened([m.learning_rate for m in models])
 
         self.spread = flattened([m.spread for m in models])
         self.min_dist = flattened([m.min_dist for m in models])
         self.low_memory = flattened([m.low_memory for m in models])
         self.set_op_mix_ratio = flattened([m.set_op_mix_ratio for m in models])
-        self.local_connectivity = flattened(
-            [m.local_connectivity for m in models]
-        )
-        self.negative_sample_rate = flattened(
-            [m.negative_sample_rate for m in models]
-        )
+        self.local_connectivity = flattened([m.local_connectivity for m in models])
+        self.negative_sample_rate = flattened([m.negative_sample_rate for m in models])
         self.random_state = flattened([m.random_state for m in models])
-        self.angular_rp_forest = flattened(
-            [m.angular_rp_forest for m in models]
-        )
-        self.transform_queue_size = flattened(
-            [m.transform_queue_size for m in models]
-        )
-        self.target_n_neighbors = flattened(
-            [m.target_n_neighbors for m in models]
-        )
+        self.angular_rp_forest = flattened([m.angular_rp_forest for m in models])
+        self.transform_queue_size = flattened([m.transform_queue_size for m in models])
+        self.target_n_neighbors = flattened([m.target_n_neighbors for m in models])
         self.target_metric = flattened([m.target_metric for m in models])
-        self.target_metric_kwds = flattened(
-            [m.target_metric_kwds for m in models]
-        )
+        self.target_metric_kwds = flattened([m.target_metric_kwds for m in models])
         self.target_weight = flattened([m.target_weight for m in models])
         self.transform_seed = flattened([m.transform_seed for m in models])
         self.force_approximation_algorithm = flattened(
@@ -1839,16 +1804,14 @@ class UMAP(BaseEstimator):
     def __mul__(self, other):
 
         check_is_fitted(
-            self, ["graph_"], "Only fitted UMAP models can be combined"
+            self, attributes=["graph_"], msg="Only fitted UMAP models can be combined"
         )
         check_is_fitted(
-            other, ["graph_"], "Only fitted UMAP models can be combined"
+            other, attributes=["graph_"], msg="Only fitted UMAP models can be combined"
         )
 
         if self.graph_.shape[0] != other.graph_.shape[0]:
-            raise ValueError(
-                "Only models with the equivalent samples can be combined"
-            )
+            raise ValueError("Only models with the equivalent samples can be combined")
 
         result = UMAP()
         result._populate_combined_params(self, other)
@@ -1860,12 +1823,12 @@ class UMAP(BaseEstimator):
 
         if scipy.sparse.csgraph.connected_components(result.graph_)[0] > 1:
             warn(
-                "Combined graph is not connected but mult-component layout is unsupported. "
+                "Combined graph is not connected but multi-component layout is unsupported. "
                 "Falling back to random initialization."
             )
-            result.init = "random"
+            init = "random"
         else:
-            result.ini = "spectral"
+            init = "spectral"
 
         result.densmap = np.any(result.densmap)
         result.output_dens = np.any(result.output_dens)
@@ -1877,6 +1840,11 @@ class UMAP(BaseEstimator):
             "n_neighbors": np.max(result.n_neighbors),
         }
 
+        if result.n_epochs is None:
+            n_epochs = -1
+        else:
+            n_epochs = np.max(result.n_epochs)
+
         result.embedding_, aux_data = simplicial_set_embedding(
             None,
             result.graph_,
@@ -1886,8 +1854,8 @@ class UMAP(BaseEstimator):
             np.mean(result._b),
             np.mean(result.repulsion_strength),
             np.mean(result.negative_sample_rate),
-            np.max(result.n_epochs),
-            result.init,
+            n_epochs,
+            init,
             check_random_state(42),
             "euclidean",
             {},
@@ -1907,16 +1875,14 @@ class UMAP(BaseEstimator):
     def __add__(self, other):
 
         check_is_fitted(
-            self, ["graph_"], "Only fitted UMAP models can be combined"
+            self, attributes=["graph_"], msg="Only fitted UMAP models can be combined"
         )
         check_is_fitted(
-            other, ["graph_"], "Only fitted UMAP models can be combined"
+            other, attributes=["graph_"], msg="Only fitted UMAP models can be combined"
         )
 
         if self.graph_.shape[0] != other.graph_.shape[0]:
-            raise ValueError(
-                "Only models with the equivalent samples can be combined"
-            )
+            raise ValueError("Only models with the equivalent samples can be combined")
 
         result = UMAP()
         result._populate_combined_params(self, other)
@@ -1929,9 +1895,9 @@ class UMAP(BaseEstimator):
                 "Combined graph is not connected but mult-component layout is unsupported. "
                 "Falling back to random initialization."
             )
-            result.init = "random"
+            init = "random"
         else:
-            result.ini = "spectral"
+            init = "spectral"
 
         result.densmap = np.any(result.densmap)
         result.output_dens = np.any(result.output_dens)
@@ -1943,6 +1909,11 @@ class UMAP(BaseEstimator):
             "n_neighbors": np.max(result.n_neighbors),
         }
 
+        if result.n_epochs is None:
+            n_epochs = -1
+        else:
+            n_epochs = np.max(result.n_epochs)
+
         result.embedding_, aux_data = simplicial_set_embedding(
             None,
             result.graph_,
@@ -1952,8 +1923,8 @@ class UMAP(BaseEstimator):
             np.mean(result._b),
             np.mean(result.repulsion_strength),
             np.mean(result.negative_sample_rate),
-            np.max(result.n_epochs),
-            result.init,
+            n_epochs,
+            init,
             check_random_state(42),
             "euclidean",
             {},
@@ -1973,16 +1944,14 @@ class UMAP(BaseEstimator):
     def __sub__(self, other):
 
         check_is_fitted(
-            self, ["graph_"], "Only fitted UMAP models can be combined"
+            self, attributes=["graph_"], msg="Only fitted UMAP models can be combined"
         )
         check_is_fitted(
-            other, ["graph_"], "Only fitted UMAP models can be combined"
+            other, attributes=["graph_"], msg="Only fitted UMAP models can be combined"
         )
 
         if self.graph_.shape[0] != other.graph_.shape[0]:
-            raise ValueError(
-                "Only models with the equivalent samples can be combined"
-            )
+            raise ValueError("Only models with the equivalent samples can be combined")
 
         result = UMAP()
         result._populate_combined_params(self, other)
@@ -1990,16 +1959,16 @@ class UMAP(BaseEstimator):
         result.graph_ = general_simplicial_set_intersection(
             self.graph_, other.graph_, weight=0.5, right_complement=True
         )
-        result.graph_ = reset_local_connectivity(result.graph_, True)
+        result.graph_ = reset_local_connectivity(result.graph_, False)
 
         if scipy.sparse.csgraph.connected_components(result.graph_)[0] > 1:
             warn(
                 "Combined graph is not connected but mult-component layout is unsupported. "
                 "Falling back to random initialization."
             )
-            result.init = "random"
+            init = "random"
         else:
-            result.ini = "spectral"
+            init = "spectral"
 
         result.densmap = np.any(result.densmap)
         result.output_dens = np.any(result.output_dens)
@@ -2011,6 +1980,11 @@ class UMAP(BaseEstimator):
             "n_neighbors": np.max(result.n_neighbors),
         }
 
+        if result.n_epochs is None:
+            n_epochs = -1
+        else:
+            n_epochs = np.max(result.n_epochs)
+
         result.embedding_, aux_data = simplicial_set_embedding(
             None,
             result.graph_,
@@ -2020,8 +1994,8 @@ class UMAP(BaseEstimator):
             np.mean(result._b),
             np.mean(result.repulsion_strength),
             np.mean(result.negative_sample_rate),
-            np.max(result.n_epochs),
-            result.init,
+            n_epochs,
+            init,
             check_random_state(42),
             "euclidean",
             {},
@@ -2158,12 +2132,8 @@ class UMAP(BaseEstimator):
                     "Sparse precomputed distance matrices should be symmetrical!"
                 )
             if not np.all(X.diagonal() == 0):
-                raise ValueError(
-                    "Non-zero distances from samples to themselves!"
-                )
-            self._knn_indices = np.zeros(
-                (X.shape[0], self.n_neighbors), dtype=np.int
-            )
+                raise ValueError("Non-zero distances from samples to themselves!")
+            self._knn_indices = np.zeros((X.shape[0], self.n_neighbors), dtype=np.int)
             self._knn_dists = np.zeros(self._knn_indices.shape, dtype=np.float)
             for row_id in range(X.shape[0]):
                 # Find KNNs row-by-row
@@ -2197,20 +2167,12 @@ class UMAP(BaseEstimator):
                 self.densmap or self.output_dens,
             )
         # Handle small cases efficiently by computing all distances
-        elif (
-            X[index].shape[0] < 4096 and not self.force_approximation_algorithm
-        ):
+        elif X[index].shape[0] < 4096 and not self.force_approximation_algorithm:
             self._small_data = True
             try:
                 # sklearn pairwise_distances fails for callable metric on sparse data
-                _m = (
-                    self.metric
-                    if self._sparse_data
-                    else self._input_distance_func
-                )
-                dmat = pairwise_distances(
-                    X[index], metric=_m, **self._metric_kwds
-                )
+                _m = self.metric if self._sparse_data else self._input_distance_func
+                dmat = pairwise_distances(X[index], metric=_m, **self._metric_kwds)
             except (ValueError, TypeError) as e:
                 # metric is numba.jit'd or not supported by sklearn,
                 # fallback to pairwise special
@@ -2363,9 +2325,7 @@ class UMAP(BaseEstimator):
                 if y.shape[0] < 4096:
                     try:
                         ydmat = pairwise_distances(
-                            y_,
-                            metric=self.target_metric,
-                            **self._target_metric_kwds
+                            y_, metric=self.target_metric, **self._target_metric_kwds
                         )
                     except (TypeError, ValueError):
                         ydmat = dist.pairwise_special_metric(
@@ -2374,11 +2334,7 @@ class UMAP(BaseEstimator):
                             kwds=self._target_metric_kwds,
                         )
 
-                    (
-                        target_graph,
-                        target_sigmas,
-                        target_rhos,
-                    ) = fuzzy_simplicial_set(
+                    (target_graph, target_sigmas, target_rhos,) = fuzzy_simplicial_set(
                         ydmat,
                         target_n_neighbors,
                         random_state,
@@ -2393,11 +2349,7 @@ class UMAP(BaseEstimator):
                     )
                 else:
                     # Standard case
-                    (
-                        target_graph,
-                        target_sigmas,
-                        target_rhos,
-                    ) = fuzzy_simplicial_set(
+                    (target_graph, target_sigmas, target_rhos,) = fuzzy_simplicial_set(
                         y_,
                         target_n_neighbors,
                         random_state,
@@ -2573,18 +2525,12 @@ class UMAP(BaseEstimator):
 
         # X = check_array(X, dtype=np.float32, order="C", accept_sparse="csr")
         random_state = check_random_state(self.transform_seed)
-        rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(
-            np.int64
-        )
+        rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
         if self._small_data:
             try:
                 # sklearn pairwise_distances fails for callable metric on sparse data
-                _m = (
-                    self.metric
-                    if self._sparse_data
-                    else self._input_distance_func
-                )
+                _m = self.metric if self._sparse_data else self._input_distance_func
                 dmat = pairwise_distances(
                     X, self._raw_data, metric=_m, **self._metric_kwds
                 )
@@ -2595,9 +2541,7 @@ class UMAP(BaseEstimator):
                     metric=self._input_distance_func,
                     kwds=self._metric_kwds,
                 )
-            indices = np.argpartition(dmat, self._n_neighbors)[
-                :, : self._n_neighbors
-            ]
+            indices = np.argpartition(dmat, self._n_neighbors)[:, : self._n_neighbors]
             dmat_shortened = submatrix(dmat, indices, self._n_neighbors)
             indices_sorted = np.argsort(dmat_shortened)
             indices = submatrix(indices, indices_sorted, self._n_neighbors)
@@ -2662,9 +2606,7 @@ class UMAP(BaseEstimator):
         if self.output_metric == "euclidean":
             embedding = optimize_layout_euclidean(
                 embedding,
-                self.embedding_.astype(
-                    np.float32, copy=True
-                ),  # Fixes #179 & #217,
+                self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217,
                 head,
                 tail,
                 n_epochs,
@@ -2682,9 +2624,7 @@ class UMAP(BaseEstimator):
         else:
             embedding = optimize_layout_generic(
                 embedding,
-                self.embedding_.astype(
-                    np.float32, copy=True
-                ),  # Fixes #179 & #217
+                self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217
                 head,
                 tail,
                 n_epochs,
@@ -2719,13 +2659,9 @@ class UMAP(BaseEstimator):
         """
 
         if self._sparse_data:
-            raise ValueError(
-                "Inverse transform not available for sparse input."
-            )
+            raise ValueError("Inverse transform not available for sparse input.")
         elif self._inverse_distance_func is None:
-            raise ValueError(
-                "Inverse transform not available for given metric."
-            )
+            raise ValueError("Inverse transform not available for given metric.")
         elif self.densmap:
             raise ValueError("Inverse transform not available for densMAP.")
         elif self.n_components >= 8:
@@ -2743,9 +2679,7 @@ class UMAP(BaseEstimator):
 
         X = check_array(X, dtype=np.float32, order="C")
         random_state = check_random_state(self.transform_seed)
-        rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(
-            np.int64
-        )
+        rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
         # build Delaunay complex (Does this not assume a roughly euclidean output metric)?
         deltri = scipy.spatial.Delaunay(
@@ -2807,9 +2741,7 @@ class UMAP(BaseEstimator):
         dists_output_space = np.array(
             [distances[i][idx[i]] for i in range(len(distances))]
         )
-        indices = np.array(
-            [neighborhood[i][idx[i]] for i in range(len(neighborhood))]
-        )
+        indices = np.array([neighborhood[i][idx[i]] for i in range(len(neighborhood))])
 
         rows, cols, distances = np.array(
             [
@@ -2881,20 +2813,14 @@ class UMAP(BaseEstimator):
     def update(self, X):
         X = check_array(X, dtype=np.float32, accept_sparse="csr", order="C")
         random_state = check_random_state(self.transform_seed)
-        rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(
-            np.int64
-        )
+        rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
         original_size = self._raw_data.shape[0]
 
         if self.metric == "precomputed":
-            raise ValueError(
-                "Update does not currently support precomputed metrics"
-            )
+            raise ValueError("Update does not currently support precomputed metrics")
         if self._supervised:
-            raise ValueError(
-                "Updating supervised models is not currently " "supported"
-            )
+            raise ValueError("Updating supervised models is not currently " "supported")
 
         if self._small_data:
 
@@ -2907,11 +2833,7 @@ class UMAP(BaseEstimator):
                 # still small data
                 try:
                     # sklearn pairwise_distances fails for callable metric on sparse data
-                    _m = (
-                        self.metric
-                        if self._sparse_data
-                        else self._input_distance_func
-                    )
+                    _m = self.metric if self._sparse_data else self._input_distance_func
                     dmat = pairwise_distances(
                         self._raw_data, metric=_m, **self._metric_kwds
                     )
@@ -2958,15 +2880,9 @@ class UMAP(BaseEstimator):
             else:
                 # now large data
                 self._small_data = False
-                if (
-                    self._sparse_data
-                    and self.metric in pynn_sparse_named_distances
-                ):
+                if self._sparse_data and self.metric in pynn_sparse_named_distances:
                     nn_metric = self.metric
-                elif (
-                    not self._sparse_data
-                    and self.metric in pynn_named_distances
-                ):
+                elif not self._sparse_data and self.metric in pynn_named_distances:
                     nn_metric = self.metric
                 else:
                     nn_metric = self._input_distance_func
@@ -3175,17 +3091,13 @@ class DataFrameUMAP(BaseEstimator):
             raise ValueError("min_dist must be less than or equal to spread")
         if self.min_dist < 0.0:
             raise ValueError("min_dist must be greater than 0.0")
-        if not isinstance(self.init, str) and not isinstance(
-            self.init, np.ndarray
-        ):
+        if not isinstance(self.init, str) and not isinstance(self.init, np.ndarray):
             raise ValueError("init must be a string or ndarray")
         if isinstance(self.init, str) and self.init not in (
             "spectral",
             "random",
         ):
-            raise ValueError(
-                'string init values must be "spectral" or "random"'
-            )
+            raise ValueError('string init values must be "spectral" or "random"')
         if (
             isinstance(self.init, np.ndarray)
             and self.init.shape[1] != self.n_components
@@ -3206,9 +3118,7 @@ class DataFrameUMAP(BaseEstimator):
         if self.n_epochs is not None and (
             self.n_epochs <= 10 or not isinstance(self.n_epochs, int)
         ):
-            raise ValueError(
-                "n_epochs must be a positive integer " "larger than 10"
-            )
+            raise ValueError("n_epochs must be a positive integer " "larger than 10")
         if self.output_metric_kwds is None:
             self._output_metric_kwds = {}
         else:
@@ -3234,8 +3144,7 @@ class DataFrameUMAP(BaseEstimator):
                 )
             else:
                 raise ValueError(
-                    "output_metric is neither callable, "
-                    + "nor a recognised string"
+                    "output_metric is neither callable, " + "nor a recognised string"
                 )
 
         # validate metrics argument
@@ -3313,9 +3222,7 @@ class DataFrameUMAP(BaseEstimator):
                 for col in columns:
 
                     discrete_space = X[col].values
-                    metric_kws = dist.get_discrete_params(
-                        discrete_space, metric
-                    )
+                    metric_kws = dist.get_discrete_params(discrete_space, metric)
 
                     self.graph_ = discrete_metric_simplicial_set_intersection(
                         self.graph_,
@@ -3334,9 +3241,7 @@ class DataFrameUMAP(BaseEstimator):
                     self._small_data = True
                     # TODO: metric keywords not supported yet!
                     if metric in ("ll_dirichlet", "hellinger"):
-                        dmat = dist.pairwise_special_metric(
-                            sub_data, metric=metric
-                        )
+                        dmat = dist.pairwise_special_metric(sub_data, metric=metric)
                     else:
                         dmat = pairwise_distances(sub_data, metric=metric)
 

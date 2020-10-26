@@ -167,7 +167,8 @@ def _nhood_search(umap_object, nhood_size):
         rng_state = np.empty(3, dtype=np.int64)
 
         indices, dists = umap_object._knn_search_index.query(
-            umap_object._raw_data, k=nhood_size,
+            umap_object._raw_data,
+            k=nhood_size,
         )
 
     return indices, dists
@@ -379,7 +380,10 @@ def _matplotlib_points(
                     "Color key must have enough colors for the number of labels"
                 )
 
-            new_color_key = {k: color_key[i] for i, k in enumerate(unique_labels)}
+            new_color_key = {
+                k: matplotlib.colors.to_hex(color_key[i])
+                for i, k in enumerate(unique_labels)
+            }
             legend_elements = [
                 Patch(facecolor=color_key[i], label=k)
                 for i, k in enumerate(unique_labels)
