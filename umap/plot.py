@@ -450,6 +450,7 @@ def points(
     height=800,
     show_legend=True,
     subset_points=None,
+    ax=None,
 ):
     """Plot an embedding as points. Currently this only works
     for 2D embeddings. While there are many optional parameters
@@ -549,11 +550,15 @@ def points(
         A way to select a subset of points based on an array of boolean
         values.
 
+    ax: matplotlib axis (optional, default None)
+        The matplotlib axis to draw the plot to, or if None, which is
+        the default, a new axis will be created and returned.
+
     Returns
     -------
     result: matplotlib axis
         The result is a matplotlib axis with the relevant plot displayed.
-        If you are using a notbooks and have ``%matplotlib inline`` set
+        If you are using a notebooks and have ``%matplotlib inline`` set
         then this will simply display inline.
     """
     if not hasattr(umap_object, "embedding_"):
@@ -592,9 +597,10 @@ def points(
 
     font_color = _select_font_color(background)
 
-    dpi = plt.rcParams["figure.dpi"]
-    fig = plt.figure(figsize=(width / dpi, height / dpi))
-    ax = fig.add_subplot(111)
+    if ax is None:
+        dpi = plt.rcParams["figure.dpi"]
+        fig = plt.figure(figsize=(width / dpi, height / dpi))
+        ax = fig.add_subplot(111)
 
     if points.shape[0] <= width * height // 10:
         ax = _matplotlib_points(
