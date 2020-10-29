@@ -3,6 +3,16 @@ Release Notes
 
 Some notes on new features in various releases
 
+What's new in 0.5
+-----------------
+
+* ParametricUMAP learns embeddings with neural networks
+* AlignedUMAP can align multiple embeddings using relations between datasets
+* DensMAP can preserve local density information in embeddings
+* UMAP now depends on PyNNDescent, but has faster more parallel performance as a result
+* Various performance improvements and bug fixes
+* Additional plotting support, including text searching in interactive plots
+
 What's new in 0.4
 -----------------
 
