@@ -1,3 +1,5 @@
+.. _how_umap_works:
+
 How UMAP Works
 ==============
 

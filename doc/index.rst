@@ -66,7 +66,6 @@ PyPI install, presuming you have numba and sklearn and all its requirements
    document_embedding
    embedding_space
    aligned_umap_politics_demo
-   auto_examples/index'
    release_notes
    faq
 
