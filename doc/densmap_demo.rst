@@ -17,7 +17,7 @@ is a low dimensional representation that preserves information about the
 relative local density of the data. To see what this means in practice
 let’s load some modules and try it out on some familiar data.
 
-..code:: python3
+.. code:: python3
 
     import sklearn.datasets
     import umap
@@ -28,7 +28,7 @@ sections) MNIST and Fashion-MNIST datasets. MNIST is a collection of
 70,000 gray-scale images of hand-written digits. Fashion-MNIST is a
 collection of 70,000 gray-scale images of fashion items.
 
-..code:: python3
+.. code:: python3
 
     mnist = sklearn.datasets.fetch_openml("mnist_784")
     fmnist = sklearn.datasets.fetch_openml("Fashion-MNIST")
@@ -36,7 +36,7 @@ collection of 70,000 gray-scale images of fashion items.
 Before we try out DensMAP let’s run standard UMAP so we have a baseline
 to compare to. We’ll start with MNIST digits.
 
-..code:: python3
+.. code:: python3
 
     %%time
     mapper = umap.UMAP(random_state=42).fit(mnist.data)
@@ -48,7 +48,7 @@ to compare to. We’ll start with MNIST digits.
     Wall time: 1min 43s
 
 
-..code:: python3
+.. code:: python3
 
     umap.plot.points(mapper, labels=mnist.target, width=500, height=500)
 
@@ -60,7 +60,7 @@ adding the parameter ``densmap=True`` to the UMAP constructor – this
 will cause UMAP use use DensMAP regularization with the default DensMAP
 parameters.
 
-..code:: python3
+.. code:: python3
 
     %%time
     dens_mapper = umap.UMAP(densmap=True, random_state=42).fit(mnist.data)
@@ -79,7 +79,7 @@ increase much as you scale out DensMAP to larger datasets.
 
 Now let’s see what sort of results we get:
 
-..code:: python3
+.. code:: python3
 
     umap.plot.points(dens_mapper, labels=mnist.target, width=500, height=500)
 
@@ -102,7 +102,7 @@ density has been preserved by DensMAP.
 Let’s no look at the Fashion-MNIST dataset; as before we’ll start by
 reminding ourselves what the default UMAP results look like:
 
-..code:: python3
+.. code:: python3
 
     %%time
     mapper = umap.UMAP(random_state=42).fit(fmnist.data)
@@ -114,7 +114,7 @@ reminding ourselves what the default UMAP results look like:
     Wall time: 49.8 s
 
 
-..code:: python3
+.. code:: python3
 
     umap.plot.points(mapper, labels=fmnist.target, width=500, height=500)
 
@@ -124,7 +124,7 @@ reminding ourselves what the default UMAP results look like:
 Now let’s try running DensMAP. As before that is as simple as setting
 the ``densmap=True`` flag.
 
-..code:: python3
+.. code:: python3
 
     %%time
     dens_mapper = umap.UMAP(densmap=True, random_state=42).fit(fmnist.data)
@@ -136,7 +136,7 @@ the ``densmap=True`` flag.
     Wall time: 2min 21s
 
 
-..code:: python3
+.. code:: python3
 
     umap.plot.points(dens_mapper, labels=fmnist.target, width=500, height=500)
 
@@ -163,7 +163,7 @@ more towards classical UMAP. The default value is 2.0. Let’s play with
 it a little so we can see the effects of varying it. To start we’ll use
 a higher ``dens_lambda`` of 5.0:
 
-..code:: python3
+.. code:: python3
 
     %%time
     dens_mapper = umap.UMAP(densmap=True, dens_lambda=5.0, random_state=42).fit(fmnist.data)
@@ -175,7 +175,7 @@ a higher ``dens_lambda`` of 5.0:
     Wall time: 2min 18s
 
 
-..code:: python3
+.. code:: python3
 
     umap.plot.points(dens_mapper, labels=fmnist.target, width=500, height=500)
 
@@ -190,7 +190,7 @@ sparse regions of the high dimensional space and are thus pushed well
 away from everything else. We can see this better if we use raw
 matplotlib and a scatter plot with larger point size:
 
-..code:: python3
+.. code:: python3
 
     fig, ax = umap.plot.plt.subplots(figsize=(7,7))
     ax.scatter(*dens_mapper.embedding_.T, c=fmnist.target.astype('int8'), cmap="Spectral", s=1)
@@ -207,7 +207,7 @@ value, so that in principle we can recover something quite close to the
 default UMAP plot, with just a hint of local density information
 encoded.
 
-..code:: python3
+.. code:: python3
 
     %%time
     dens_mapper = umap.UMAP(densmap=True, dens_lambda=0.1, random_state=42).fit(fmnist.data)
@@ -219,7 +219,7 @@ encoded.
     Wall time: 2min 16s
 
 
-..code:: python3
+.. code:: python3
 
     umap.plot.points(dens_mapper, labels=fmnist.target, width=500, height=500)
 
