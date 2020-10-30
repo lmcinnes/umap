@@ -1074,7 +1074,9 @@ angles.
 
 
 
-.. raw::
+.. raw:: html
    :file: aligned_umap_plotly_plot.html
+
+This concludes our exploration for now.
 
 
