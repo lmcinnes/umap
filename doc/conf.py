@@ -219,3 +219,7 @@ sphinx_gallery_conf = {
         "bokeh": "http://bokeh.pydata.org/en/latest/",
     },
 }
+
+
+def setup(app):
+    app.add_javascript('https://cdnjs.cloudflare.com/ajax/libs/require.js/2.1.10/require.min.js')
