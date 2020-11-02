@@ -1026,6 +1026,10 @@ through the trace as the election margins vary. Since this is a plotly
 plot it is interactive, so you can rotate it around and view it from all
 angles.
 
+Unfortunately the interactive plotly plot does not embed into the documentation
+well, so we present here a static image. If you run this yourself, however,
+you will get the interactive version.
+
 .. code:: python3
 
     traces = []
@@ -1073,9 +1077,11 @@ angles.
     fig_widget
 
 
+.. image:: images/aligned_umap_politics_demo_spaghetti.png
 
-.. raw:: html
-   :file: aligned_umap_plotly_plot.html
+..
+    .. raw:: html
+       :file: aligned_umap_plotly_plot.html
 
 This concludes our exploration for now.
 
