@@ -51,8 +51,8 @@ class ParametricUMAP(UMAP):
         parametric_reconstruction=False,
         autoencoder_loss=False,
         reconstruction_validation=None,
-        loss_report_frequency=10,
-        n_training_epochs=1,
+        loss_report_frequency=1,
+        n_training_epochs=2,
         keras_fit_kwargs={},
         **kwargs
     ):
@@ -250,6 +250,7 @@ class ParametricUMAP(UMAP):
             losses["reconstruction"] = tf.keras.losses.BinaryCrossentropy(
                 from_logits=True
             )
+            # losses["reconstruction"] = tf.keras.losses.MeanSquaredError()
             loss_weights["reconstruction"] = 1.0
 
         self.parametric_model.compile(
@@ -379,25 +380,40 @@ class ParametricUMAP(UMAP):
         # this function supports pickling, making sure that objects can be pickled
         return dict((k, v) for (k, v) in self.__dict__.items() if should_pickle(k, v))
 
-    def save(self, save_location, verbose=True):
+    def save(self, save_location, verbose=True, useH5=False):
 
         # save encoder
         if self.encoder is not None:
             encoder_output = os.path.join(save_location, "encoder")
+            if useH5:
+                encoder_output += '.h5'
             self.encoder.save(encoder_output)
+            self.encoder.save_weights(os.path.join(encoder_output, 'encoder_weights.h5'))
+            with open(os.path.join(encoder_output, 'encoder_json.json'), 'w') as f:
+                f.write(self.encoder.to_json())
             if verbose:
                 print("Keras encoder model saved to {}".format(encoder_output))
 
         # save decoder
         if self.decoder is not None:
             decoder_output = os.path.join(save_location, "decoder")
+            if useH5:
+                decoder_output += '.h5'
             self.decoder.save(decoder_output)
+            self.decoder.save_weights(os.path.join(decoder_output, 'decoder_weights.h5'))
+            with open(os.path.join(decoder_output, 'decoder_json.json'), 'w') as f:
+                f.write(self.decoder.to_json())
             print("Keras decoder model saved to {}".format(decoder_output))
 
         # save parametric_model
         if self.parametric_model is not None:
             parametric_model_output = os.path.join(save_location, "parametric_model")
+            if useH5:
+                parametric_model_output += '.h5'
             self.parametric_model.save(parametric_model_output)
+            self.parametric_model.save_weights(os.path.join(parametric_model_output, 'parametric_model_weights.h5'))
+            with open(os.path.join(parametric_model_output, 'parametric_model_json.json'), 'w') as f:
+                f.write(self.parametric_model.to_json())
             print("Keras full model saved to {}".format(parametric_model_output))
 
         # save model.pkl (ignoring unpickleable warnings)
@@ -445,6 +461,7 @@ def get_graph_elements(graph_, n_epochs):
     # number of vertices in dataset
     n_vertices = graph.shape[1]
     # get the number of epochs based on the size of the dataset
+    print('graph.shape = {}'.format(graph.shape))
     if n_epochs is None:
         # For smaller datasets we can use more epochs
         if graph.shape[0] <= 10000:
@@ -594,7 +611,7 @@ def umap_loss(
     edge_weights,
     parametric_embedding,
     repulsion_strength=1.0,
-):
+    ):
     """
     Generate a keras-ccompatible loss function for UMAP loss
 
@@ -635,6 +652,10 @@ def umap_loss(
         # get negative samples
         embedding_neg_to = tf.repeat(embedding_to, negative_sample_rate, axis=0)
         repeat_neg = tf.repeat(embedding_from, negative_sample_rate, axis=0)
+        # fix for tf 2.0
+        # embedding_neg_to = tf.keras.backend.repeat_elements(embedding_to, negative_sample_rate, axis=0)
+        # repeat_neg = tf.keras.backend.repeat_elements(embedding_from, negative_sample_rate, axis=0)
+        #
         embedding_neg_from = tf.gather(
             repeat_neg, tf.random.shuffle(tf.range(tf.shape(repeat_neg)[0]))
         )
@@ -873,7 +894,8 @@ def should_pickle(key, val):
     return True
 
 
-def load_ParametricUMAP(save_location, verbose=True):
+def load_ParametricUMAP(
+    save_location, verbose=True, useH5=False, compileModel=True, useConfigAndWeights=False):
     """
     Load a parametric UMAP model consisting of a umap-learn UMAP object 
     and corresponding keras models. 
@@ -900,33 +922,66 @@ def load_ParametricUMAP(save_location, verbose=True):
 
     # load encoder
     encoder_output = os.path.join(save_location, "encoder")
+    if useH5:
+        encoder_output += '.h5'
     if os.path.exists(encoder_output):
-        model.encoder = tf.keras.models.load_model(encoder_output)
+        if not useConfigAndWeights:
+            model.encoder = tf.keras.models.load_model(encoder_output)
+        else:
+            with open(os.path.join(encoder_output, 'encoder_json.json'), 'r') as f:
+                json_config = f.read()
+                model.encoder = tf.keras.models.model_from_json(json_config)
+            model.encoder.load_weights(os.path.join(encoder_output, 'encoder_weights.h5'))
         if verbose:
             print("Keras encoder model loaded from {}".format(encoder_output))
 
     # save decoder
     decoder_output = os.path.join(save_location, "decoder")
+    if useH5:
+        decoder_output += '.h5'
     if os.path.exists(decoder_output):
-        model.decoder = tf.keras.models.load_model(decoder_output)
-        print("Keras decoder model loaded from {}".format(decoder_output))
-
-    # get the custom loss function
-    umap_loss_fn = umap_loss(
-        model.batch_size,
-        model.negative_sample_rate,
-        model._a,
-        model._b,
-        model.edge_weight,
-        model.parametric_embedding,
-    )
-
-    # save parametric_model
+        if not useConfigAndWeights:
+            model.decoder = tf.keras.models.load_model(decoder_output)
+        else:
+            with open(os.path.join(decoder_output, 'decoder_json.json'), 'r') as f:
+                json_config = f.read()
+                model.decoder = tf.keras.models.model_from_json(json_config)
+            model.decoder.load_weights(os.path.join(decoder_output, 'decoder_weights.h5'))
+        if verbose:
+            print("Keras decoder model loaded from {}".format(decoder_output))
+    
     parametric_model_output = os.path.join(save_location, "parametric_model")
-    if os.path.exists(parametric_model_output):
-        model.parametric_model = tf.keras.models.load_model(
-            parametric_model_output, custom_objects={"loss": umap_loss_fn}
+    if useH5:
+        parametric_model_output += '.h5'
+        if os.path.exists(parametric_model_output):
+            model.parametric_model = tf.keras.models.load_model(parametric_model_output)
+            if verbose:
+                print("Keras full model loaded from {}".format(parametric_model_output))
+    else:
+        # get the custom loss function
+        umap_loss_fn = umap_loss(
+            model.batch_size,
+            model.negative_sample_rate,
+            model._a,
+            model._b,
+            model.edge_weight,
+            model.parametric_embedding,
         )
-        print("Keras full model loaded from {}".format(parametric_model_output))
-
+        if verbose:
+            print("Calculated umap_loss_fn")
+        # save parametric_model
+        if os.path.exists(parametric_model_output):
+            if not useConfigAndWeights:
+                model.parametric_model = tf.keras.models.load_model(
+                    parametric_model_output,
+                    custom_objects={"loss": umap_loss_fn},
+                    compile=compileModel,
+                ) 
+            else:
+                with open(os.path.join(parametric_model_output, 'parametric_model_json.json'), 'r') as f:
+                    json_config = f.read()
+                    model.parametric_model = tf.keras.models.model_from_json(json_config)
+                model.parametric_model.load_weights(os.path.join(parametric_model_output, 'parametric_model_weights.h5'))
+            if verbose:
+                print("Keras full model loaded from {}".format(parametric_model_output))
     return model
