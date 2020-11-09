@@ -280,7 +280,7 @@ We'll grab both the training set, and the test set for later use.
     news_test = sklearn.datasets.fetch_20newsgroups_vectorized(subset='test')
 
 If we look at the actual data we have pulled back, we'll see that
-sklearn has run a ``CountVectorizer`` and produced the data is sparse
+sklearn has run a ``CountVectorizer`` and produced the data in the sparse
 matrix format.
 
 .. code:: python3
@@ -301,11 +301,11 @@ The value of the sparse matrix format is immediately obvious in this
 case; while there are only 11,000 samples there are 130,000 features! If
 the data were stored in a standard ``numpy`` array we would be using up
 10GB of memory! And most of that memory would simply be storing the
-number zero, over and over again. In sparse matrix format it easily fits
+number zero, over and over again. In the sparse matrix format it easily fits
 in memory on most machines. This sort of dimensionality of data is very
 common with text workloads.
 
-The raw counts are, however, not ideal since common words the "the" and
+The raw counts are, however, not ideal since common words such as "the" and
 "and" will dominate the counts for most documents, while contributing
 very little information about the actual content of the document. We can
 correct for this by using a ``TfidfTransformer`` from sklearn, which

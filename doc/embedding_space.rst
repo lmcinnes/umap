@@ -95,7 +95,7 @@ since that will wrap all the way around the equator. You'll note that
 the scales on the x and y axes of the above plot go well outside the
 ranges :math:`(-\pi, \pi)` and :math:`(0, 2\pi)`, so this isn't the
 right representation of the data. We can, however, use straightforward
-formulas to map this data onto a sphere embedded in 3-space.
+formulas to map this data onto a sphere embedded in 3d-space.
 
 .. code:: python3
 
@@ -104,7 +104,7 @@ formulas to map this data onto a sphere embedded in 3-space.
     z = np.cos(sphere_mapper.embedding_[:, 0])
 
 Now ``x``, ``y``, and ``z`` give 3d coordinates for each embedding point
-that lie on the surface of a sphere. We can visualize this using
+that lies on the surface of a sphere. We can visualize this using
 matplotlib's 3d plotting capabilities, and see that we have in fact
 induced a quite reasonable embedding of the data onto the surface of a
 sphere.
@@ -303,8 +303,8 @@ to devise a means to display some of the extra information contained in
 the extra 3 dimensions providing covariance data. To do this it will be
 helpful to be able to draw ellipses corresponding to super-level sets of
 the PDF of the 2d Gaussian. We can start on this by writing a simple
-function to draw ellipses on a plot accoriding to a position, a with, a
-height, and and angle (since this is the format the embedding computed
+function to draw ellipses on a plot accoriding to a position, a width, a
+height, and an angle (since this is the format the embedding computed
 the data).
 
 .. code:: python3
@@ -387,19 +387,19 @@ translucent.
 
 This lets us see the variation of density of clusters with respect to
 the covariance structure -- some clusters have consistently very tight
-covariance,while others are more spread out (and hence have, in a sense,
+covariance, while others are more spread out (and hence have, in a sense,
 greater associated uncertainty. Of course we still have a degree of
 overplotting even here, and it will become increasingly difficult to
 tune alpha channels to make things visible. Instead what we would want
 is an actual density plot, showing the the density of the sum over all
 of these Gaussians.
 
-To do this we'll need to some functions (which we'll use numba to
-accelerate): the evaluation of the density of a 2d Gaussian at a given
-point; an evaluation of the density of a given point summing over a set
-of several Gaussians; and a function to generate the density for each
-point in some grid (summing only over nearby Gaussians to make this
-naive approach more computable).
+To do this we'll need to define some functions, whose execution will be
+accelerated using numba: the evaluation of the density of a 2d Gaussian
+at a given point; an evaluation of the density of a given point summing
+over a set of several Gaussians; and a function to generate the density
+for each point in some grid (summing only over nearby Gaussians to make
+this naive approach more computable).
 
 .. code:: python3
 
@@ -576,4 +576,4 @@ embedding into non-euclidean spaces. This last example ideally
 highlights the limitations of this approach (we really need a suitable
 parameterisation), and some potential approaches to get around this: we
 can use an alternative parameterisation for the embedding, and then
-transform the data into the the desired representation.
+transform the data into the desired representation.

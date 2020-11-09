@@ -52,7 +52,7 @@ up the train and test sets into one large dataset, normalise the values
         'Bag',
         'Ankle boot']
 
-Next we'll load the ``umap`` library so we can do dimension reduction on
+Next we'll load the ``umap`` library so we can perform dimension reduction on
 this dataset.
 
 .. code:: python3
@@ -64,7 +64,7 @@ UMAP on Fashion MNIST
 
 First we'll just do standard unsupervised dimension reduction using UMAP
 so we have a baseline of what the results look like for later
-comparison. This is simply a matter of instiantiating a :class:`~umap.umap_.UMAP` object (in
+comparison. This is simply a matter of instantiating a :class:`~umap.umap_.UMAP` object (in
 this case setting the :attr:`~umap.umap_.UMAP.n_neighbors` parameter to be 5 -- we are
 interested mostly in very local information), then calling the
 :meth:`~umap.umap_.UMAP.fit_transform` method with the data we wish to reduce. By default
@@ -186,9 +186,9 @@ Using Partial Labelling (Semi-Supervised UMAP)
 What if we only have some of our data labelled, however, and a number of
 items are without labels. Can we still make use of the label information
 we do have? This is now a semi-supervised learning problem, and yes, we
-can work with those cases to. To set up the example we'll mask some of
+can work with those cases too. To set up the example we'll mask some of
 the target information -- we'll do this by using the sklearn standard of
-having unlabelled point be given the label of -1 (such as, for example,
+giving unlabelled points a label of -1 (such as, for example,
 the noise points from a DBSCAN clustering).
 
 .. code:: python3
@@ -336,7 +336,7 @@ the :meth:`~umap.umap_.UMAP.transform` method.
 As you can see we have replicated the layout of the training data,
 including much of the internal structure of the classes. For the most
 part assignment of new points follows the classes well. The greatest
-source of confusion in some t-shirts that ended up in mixed with the
+source of confusion are some t-shirts that ended up mixed with the
 shirts, and some pullovers which are confused with the coats. Given the
 difficulty of the problem this is a good result, particularly when
 compared with current state-of-the-art approaches such as `siamese and

@@ -53,7 +53,7 @@ data for testing, which seems suitable in this case.
 
 Now to get a benchmark idea of what we are looking at let's train a
 couple of different classifiers and then see how well they score on the
-test set. For this example lets try a support vector classifier and a
+test set. For this example let's try a support vector classifier and a
 KNN classifier. Ideally we should be tuning hyper-parameters (perhaps a
 grid search using k-fold cross validation), but for the purposes of this
 simple demo we will simply use default parameters for both classifiers.
@@ -82,7 +82,7 @@ accuracy on the test set.
 
 The result is that the support vector classifier apparently had poor
 hyper-parameters for this case (I expect with some tuning we could build
-a much more accurate mode) and the KNN classifier is doing very well.
+a much more accurate model) and the KNN classifier is doing very well.
 
 The goal now is to make use of UMAP as a preprocessing step that one
 could potentially fit into a pipeline. We will therefore obviously need
@@ -182,7 +182,7 @@ before will suffice.
 The results look like what we should expect; the test data has been
 embedded into two dimensions in exactly the locations we should expect
 (by class) given the embedding of the training data visualised above.
-This means we can now try out of models that were trained on the
+This means we can now try out models that were trained on the
 embedded training data by handing them the newly transformed test set.
 
 .. code:: python3
@@ -209,7 +209,7 @@ part of an sklearn machine learning pipeline.
 Just for fun we can run the same experiments, but this time reduce to
 ten dimensions (where we can no longer visualise). In practice this will
 have little gain in this case -- for the digits dataset two dimensions
-is plenty for UMAP and more dimensions won't help. On the other had for
+is plenty for UMAP and more dimensions won't help. On the other hand for
 more complex datasets where more dimensions may allow for a much more
 faithful embedding it is worth noting that we are not restricted to only
 two dimension.
@@ -239,6 +239,6 @@ two dimension.
 
 And we see that in this case we actually marginally lowered our accuracy
 scores (within the potential noise in such scoring mind you). However
-for more interesting datasets the larger dimensional embedding may have
+for more interesting datasets the larger dimensional embedding might have
 been a significant gain -- it is certainly worth exploring as one of the
 parameters in a grid search across a pipeline that includes UMAP.

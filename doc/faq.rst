@@ -23,7 +23,7 @@ this is to use
 `pre-processing tools from scikit-learn <http://scikit-learn.org/stable/modules/preprocessing.html>`_.
 All the advice given there applies as sensible preprocessing
 for UMAP, and since UMAP is scikit-learn compatible you
-can put all of this together into a `scikit-learn pipeline <http://scikit-learn.org/stable/modules/generated/sklearn.pipeline.Pipeline.html>`_
+can put all of this together into a `scikit-learn pipeline <http://scikit-learn.org/stable/modules/generated/sklearn.pipeline.Pipeline.html>`_.
 
 
 Can I cluster the results of UMAP?
@@ -210,7 +210,7 @@ By definition:
 - VAE is a kind of encoder-decoder neural network,
   trained with KLD loss and BCE (or MSE) loss
   to enforce the resulting embedding to be continuous.
-  VAE is and extension of auto-encoder network,
+  VAE is an extension of auto-encoder networks,
   which by design should produce embeddings that are
   not only relevant to actually encoding the data, but are
   also smooth.
@@ -244,7 +244,7 @@ Where can I learn more?
 Successful use-cases
 --------------------
 
-UMAP can be / has been Successfully applied to the following domains:
+UMAP can be / has been successfully applied to the following domains:
 
 - Single cell data visualization in biology;
 - Mapping malware based on behavioural data;

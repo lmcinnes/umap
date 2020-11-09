@@ -43,7 +43,7 @@ viewer Maximilian built for it.
 
 `Structure of Recent Philosophy <https://homepage.univie.ac.at/noichlm94/full/zoom_final/index.html>`__
 
-Thanks to Maximilian Noichl
+Thanks to Maximilian Noichl.
 
 Language, Context, and Geometry in Neural Networks
 --------------------------------------------------
@@ -75,14 +75,14 @@ Google and OpenAI built the activation atlas -- analysing the space of activatio
 of a neural network. Here UMAP provides a means to compress the activation landscape
 down to 2 dimensions for visualization. The result was an impressive interactive paper
 in the Distill journal, providing rich visualizations and new insights into
-thw working of convolutional neural networks.
+the working of convolutional neural networks.
 
 .. image:: images/activation_atlas.png
    :width: 400px
 
 `The Activation Atlas <https://distill.pub/2019/activation-atlas/>`__
 
-Thanks to Shan Carter, Zan Armstrong, Ludwig Schubert, Ian Johnson, and Chris Olah
+Thanks to Shan Carter, Zan Armstrong, Ludwig Schubert, Ian Johnson, and Chris Olah.
 
 Open Syllabus Galaxy
 --------------------
