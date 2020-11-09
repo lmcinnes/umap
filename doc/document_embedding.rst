@@ -245,7 +245,7 @@ Now we have an embedding of 18846x2.
 
 
 Let’s plot the embedding. If you are running this in a notebook, you should use the
-interactive plotting method as it let's you hover over your points and see what
+interactive plotting method as it lets you hover over your points and see what
 category they belong to.
 
 .. code:: python3
