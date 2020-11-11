@@ -479,13 +479,15 @@ comparing share the same 0-simplices, we can imagine that we are
 comparing the two vectors of probabilities indexed by the 1-simplices.
 Given that these are Bernoulli variables (ultimately the simplex either
 exists or it doesn't, and the probability is the parameter of a
-Bernoulli distribution), the right choice here is the cross entropy.
+Bernoulli distribution), the right choice here is the `KL divergence 
+<https://en.wikipedia.org/wiki/Kullback%E2%80%93Leibler_divergence>`__.
 
 Explicitly, if the set of all possible 1-simplices is :math:`E`, and we
 have weight functions such that :math:`w_h(e)` is the weight of the
 1-simplex :math:`e` in the high dimensional case and :math:`w_l(e)` is
-the weight of :math:`e` in the low dimensional case, then the cross
-entropy will be
+the weight of :math:`e` in the low dimensional case. Using these two 
+distributions of weights we can find KL divergence 
+for the binomial distributions of the simplex existing or not existing:
 
 .. math::
 
@@ -493,7 +495,7 @@ entropy will be
    \sum_{e\in E} w_h(e) \log\left(\frac{w_h(e)}{w_l(e)}\right) + (1 - w_h(e)) \log\left(\frac{1 - w_h(e)}{1 - w_l(e)}\right)
 
 This might look complicated, but if we go back to thinking in terms of a
-graph we can view minimizing the cross entropy as a kind of force
+graph we can view minimizing the KL divergence as a kind of force
 directed graph layout algorithm.
 
 The first term, :math:`w_h(e) \log\left(\frac{w_h(e)}{w_l(e)}\right)`,
@@ -522,8 +524,7 @@ Putting all these pieces together we can construct the UMAP algorithm.
 The first phase consists of constructing a fuzzy topological
 representation, essentially as described above. The second phase is
 simply optimizing the low dimensional representation to have as close
-a fuzzy topological representation as possible as measured by cross
-entropy.
+a fuzzy topological representation as possible as measured by KL divergence.
 
 When constructing the initial fuzzy topological representation we can
 take a few shortcuts. In practice, since fuzzy set membership strengths
