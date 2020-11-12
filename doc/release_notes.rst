@@ -10,6 +10,7 @@ What's new in 0.5
 * AlignedUMAP can align multiple embeddings using relations between datasets
 * DensMAP can preserve local density information in embeddings
 * UMAP now depends on PyNNDescent, but has faster more parallel performance as a result
+* UMAP now supports an ``update`` method to add new data and retrain.
 * Various performance improvements and bug fixes
 * Additional plotting support, including text searching in interactive plots
 
