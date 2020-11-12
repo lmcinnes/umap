@@ -63,7 +63,7 @@ to existing techniques like LOF.
 
 Now that we have a set of outlier scores we can find the actual outlying
 digit images -- these are the ones with scores equal to -1. Let's
-extract out that data, and check that we got 100 different digit images.
+extract that data, and check that we got 100 different digit images.
 
 .. code:: python3
 
@@ -173,7 +173,7 @@ images this approach found to be particularly strange.
 .. image:: images/outliers_19_0.png
 
 
-In many way this looks to be a *better* result than the original LOF in
+In many ways this looks to be a *better* result than the original LOF in
 the high dimensional space. While the digit images that the high
 dimensional LOF found to be strange were indeed somewhat odd looking,
 many of these digit images are considerably stranger -- significantly
@@ -187,15 +187,15 @@ set: what else might lurk in the dataset?
 
 We can, in fact, potentially improve on this result by tuning the UMAP
 embedding a little for the task of finding outliers. When UMAP combines
-together the different local simplicial sets (see :ref:`how_umap_works`
+together the different local simplicial sets (see :doc:`how_umap_works`
 for more details) the standard approach uses a union, but we could
 instead take an intersection. An intersection ensures that outliers
 remain disconnected, which is certainly beneficial when seeking to find
 outliers. A downside of the intersection is that it tends to break up
 the resulting simplicial set into many disconnected components and a lot
 of the more non-local and global structure is lost, resulting in a lot
-lower quality of embedding. We can, however, interpolate between the
-union and intersection. In UMAP this is given by the
+lower quality of the resulting embedding. We can, however, interpolate 
+between the union and intersection. In UMAP this is given by the
 ``set_op_mix_ratio``, where a value of 0.0 represents an intersection,
 and a value of 1.0 represents a union (the default value is 1.0). By
 setting this to a lower value, say 0.25, we can encourage the embedding

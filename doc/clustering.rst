@@ -104,8 +104,8 @@ out UMAP embedded data by cluster membership.
 This is not really the result we were looking for (though it does expose
 interesting properties of how K-Means chooses clusters in high
 dimensional space, and how UMAP unwraps manifolds by finding manifold
-boundaries). While K-Means gets some cases correct -- the two clusters
-are the far right are mostly correct, most of the rest of the data looks
+boundaries). While K-Means gets some cases correct, such as the two clusters
+on the right side which are mostly correct, most of the rest of the data looks
 somewhat arbitrarily carved up among the remaining clusters. We can put
 this impression to the test by evaluating the adjusted Rand score and
 adjusted mutual information for this clustering as compared with the
@@ -149,7 +149,7 @@ poorly with the dimensionality of the data it will work on.
 
 We can now inspect the results. Before we do, however, it should be
 noted that one of the features of HDBSCAN is that it can refuse to
-cluster some points and classify the as "noise". To visualize this
+cluster some points and classify them as "noise". To visualize this
 aspect we will color points that were classified as noise gray, and then
 color the remaining points according to the cluster membership.
 
@@ -173,7 +173,7 @@ color the remaining points according to the cluster membership.
 
 
 This looks somewhat underwhelming. It meets HDBSCAN's approach of "not
-being wrong" by simply refusing the classify the majority of the data.
+being wrong" by simply refusing to classify the majority of the data.
 The result is a clustering that almost certainly fails to recover all
 the labels. We can verify this by looking at the clustering validation
 scores.
@@ -356,7 +356,7 @@ quality measures as before.
 
 
 
-Where before HDBSCAN performed very poorly, we now have score of 0.9 or
+Where before HDBSCAN performed very poorly, we now have scores of 0.9 or
 better. This is because we actually clustered far more of the data. As
 before we can also look at how the clustering did on just the data that
 HDBSCAN was confident in clustering.
@@ -403,6 +403,6 @@ techniques. That's not bad for an approach that is simply viewing the
 data as arbitrary 784 dimensional vectors.
 
 Hopefully this has outlined how UMAP can be beneficial for clustering.
-As with all thing care must be taken, but clearly UMAP can provide
+As with all things care must be taken, but clearly UMAP can provide
 significantly better clustering results when used judiciously.
 
