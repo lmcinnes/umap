@@ -96,12 +96,13 @@ def component_layout(
 
         if metric in SPECIAL_METRICS:
             distance_matrix = pairwise_special_metric(
-                component_centroids, metric=metric
+                component_centroids, metric=metric, kwds=metric_kwds,
             )
         elif metric in SPARSE_SPECIAL_METRICS:
             distance_matrix = pairwise_special_metric(
                 component_centroids,
                 metric=SPARSE_SPECIAL_METRICS[metric],
+                kwds=metric_kwds,
             )
         else:
             if callable(metric) and scipy.sparse.isspmatrix(data):

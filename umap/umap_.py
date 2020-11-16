@@ -62,6 +62,12 @@ SMOOTH_K_TOLERANCE = 1e-5
 MIN_K_DIST_SCALE = 1e-3
 NPY_INFINITY = np.inf
 
+DISCONNECTION_DISTANCES = {'correlation': 1,
+                           'cosine': 1,
+                           'hellinger': 1,
+                           'jaccard': 1,
+                           'dice': 1,
+                           }
 
 def flatten_iter(container):
     for i in container:
@@ -1509,6 +1515,7 @@ class UMAP(BaseEstimator):
         dens_frac=0.3,
         dens_var_shift=0.1,
         output_dens=False,
+        disconnection_distance=None,
     ):
         self.n_neighbors = n_neighbors
         self.metric = metric
@@ -1546,6 +1553,7 @@ class UMAP(BaseEstimator):
         self.dens_frac = dens_frac if densmap else 0.0
         self.dens_var_shift = dens_var_shift
         self.output_dens = output_dens
+        self.disconnection_distance = disconnection_distance
 
         self.n_jobs = n_jobs
 
@@ -1675,7 +1683,7 @@ class UMAP(BaseEstimator):
                 self._inverse_distance_func = None
         else:
             raise ValueError("metric is neither callable nor a recognised string")
-        # set ooutput distance metric
+        # set output distance metric
         if callable(self.output_metric):
             out_returns_grad = self._check_custom_metric(
                 self.output_metric, self._output_metric_kwds
@@ -2087,6 +2095,8 @@ class UMAP(BaseEstimator):
                     " with a count of ",
                     counts[most_common],
                 )
+            # We'll expose an inverse map when unique=True for users to map from our internal structures to their data
+            self._inverse = inverse
         # If we aren't asking for unique use the full index.
         # This will save special cases later.
         else:
@@ -2116,6 +2126,14 @@ class UMAP(BaseEstimator):
         if self._sparse_data and not X.has_sorted_indices:
             X.sort_indices()
 
+        # This will be used to prune all edges of greater than a fixed value from our knn graph.
+        # We have preset defaults described in DISCONNECTION_DISTANCES for our bounded measures.
+        # Otherwise a user can pass in their own value.
+        if self.disconnection_distance is None:
+            self._disconnection_distance = DISCONNECTION_DISTANCES.get(self.metric, np.inf)
+        else:
+            self._disconnection_distance = self.disconnection_distance
+
         random_state = check_random_state(self.random_state)
 
         if self.verbose:
@@ -2135,6 +2153,8 @@ class UMAP(BaseEstimator):
                 raise ValueError("Non-zero distances from samples to themselves!")
             self._knn_indices = np.zeros((X.shape[0], self.n_neighbors), dtype=np.int)
             self._knn_dists = np.zeros(self._knn_indices.shape, dtype=np.float)
+            #TODO: allow disconnection_distance on precomputed so that a user can upper bound connectivity.
+            # Code goes here
             for row_id in range(X.shape[0]):
                 # Find KNNs row-by-row
                 row_data = X[row_id].data
@@ -2198,6 +2218,7 @@ class UMAP(BaseEstimator):
                         metric=self._input_distance_func,
                         kwds=self._metric_kwds,
                     )
+            #TODO: Iterate through dmat and set any values greater than disconnection_distance to be np.inf
             (
                 self.graph_,
                 self._sigmas,
@@ -2246,6 +2267,19 @@ class UMAP(BaseEstimator):
                 verbose=self.verbose,
             )
 
+            # Disconnect any vertices farther apart than _disconnection_distance
+            if np.isfinite(self._disconnection_distance):
+                    disconnected_index = self._knn_dists >= self._disconnection_distance
+                    self._knn_indices[disconnected_index] = -1
+                    self._knn_dists[disconnected_index] = np.inf
+                    edges_removed = disconnected_index.sum()
+                    vertices_disconnected = np.sum(disconnected_index.sum(axis=1) > 0)
+                    warn(f'It seems that a number of your nearest neighbour distances where greater than your '
+                         f'disconnection distance.  These edges have been pruned from your nearest neighbour graph.\n'
+                         f'See disconnected vertices in the UMAP read the docs FAQ for more details on this problem.\n'
+                         f'Disconnection_distance = {self._disconnection_distance} has removed {edges_removed} edges.\n'
+                         f'It has fully disconnected {vertices_disconnected} vertices.\n'
+                         )
             (
                 self.graph_,
                 self._sigmas,
@@ -2408,7 +2442,7 @@ class UMAP(BaseEstimator):
         return self
 
     def _fit_embed_data(self, X, n_epochs, init, random_state):
-        """A method wrapper for simlicial_set_embedding that can be
+        """A method wrapper for simplicial_set_embedding that can be
         replaced by subclasses.
         """
         return simplicial_set_embedding(
@@ -2553,6 +2587,8 @@ class UMAP(BaseEstimator):
             )
 
         dists = dists.astype(np.float32, order="C")
+        #TODO: filter dists
+
 
         adjusted_local_connectivity = max(0.0, self.local_connectivity - 1.0)
         sigmas, rhos = smooth_knn_dist(
