@@ -291,8 +291,8 @@ class ParametricUMAP(UMAP):
             self.parametric_embedding,
             self.parametric_reconstruction,
         )
-        self.head = tf.constant(tf.expand_dims(head, 0))
-        self.tail = tf.constant(tf.expand_dims(tail, 0))
+        self.head = tf.constant(tf.expand_dims(head.astype(np.int64), 0))
+        self.tail = tf.constant(tf.expand_dims(tail.astype(np.int64), 0))
 
         a, b = next(iter(edge_dataset))
         # breakme
