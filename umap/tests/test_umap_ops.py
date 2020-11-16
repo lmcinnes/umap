@@ -11,6 +11,8 @@ from nose.tools import assert_equal, assert_less, assert_raises
 from numpy.testing import assert_array_equal
 from umap import UMAP
 import numpy as np
+import pytest
+import warnings
 
 # Transform isn't stable under batching; hard to opt out of this.
 # @SkipTest
@@ -63,6 +65,32 @@ def test_multi_component_layout():
     error = np.sum((true_centroids - embed_centroids) ** 2)
 
     assert_less(error, 15.0, msg="Multi component embedding to far astray")
+
+
+@pytest.mark.parametrize("num_isolates", [1, 5])
+@pytest.mark.parametrize('metric', ['dice', 'jaccard', 'hellinger', 'cosine', 'correlation'])
+def test_disconnected_data(num_isolates, metric):
+    disconnected_data = np.random.choice(a=[False, True], size=(10, 20), p=[0.66, 1 - 0.66])
+    # Add some disconnected data for the corner case test
+    disconnected_data = np.vstack([disconnected_data, np.zeros((num_isolates, 20), dtype="bool")])
+    new_columns = np.zeros((num_isolates + 10, num_isolates), dtype='bool')
+    for i in range(num_isolates):
+        new_columns[10 + i, i] = True
+    disconnected_data = np.hstack([disconnected_data, new_columns])
+
+    with warnings.catch_warnings(record=True) as w:
+        UMAP(n_neighbors=3, metric=metric, force_approximation_algorithm=True).fit(disconnected_data)
+        assert(len(w) >= 1)  # at least one warning should be raised here
+        #we can't guarantee the order that the warnings will be raised in so check them all.
+        flag = 0
+        if num_isolates == 1:
+            warning_contains = 'A few of your vertices'
+        elif num_isolates > 1:
+            warning_contains = 'A large number of your vertices'
+        for i in range(len(w)):
+            flag += warning_contains in str(w[i].message)
+        assert(flag == 1)
+
 
 
 # ---------------
