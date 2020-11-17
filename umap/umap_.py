@@ -116,14 +116,12 @@ def raise_disconnected_warning(edges_removed, vertices_disconnected, disconnecti
         warn(f"A few of your vertices were disconnected from the manifold.  This shouldn't cause problems.\n"
              f'Disconnection_distance = {disconnection_distance} has removed {edges_removed} edges.\n'
              f'It has only fully disconnected {vertices_disconnected} vertices.\n',
-             UserWarning
              )
     elif (vertices_disconnected > threshold * total_rows):
         warn(f'A large number of your vertices were disconnected from the manifold.\n'
              f'Disconnection_distance = {disconnection_distance} has removed {edges_removed} edges.\n'
              f'It has fully disconnected {vertices_disconnected} vertices.\n'
              f'You might consider using find_disconnected_points() to find and remove these points from your data.\n',
-             UserWarning
              )
 
 
@@ -304,6 +302,9 @@ def nearest_neighbors(
         # Compute the nearest neighbor distances
         #   (equivalent to np.sort(X)[:,:n_neighbors])
         knn_dists = X[np.arange(X.shape[0])[:, None], knn_indices].copy()
+        # Prune any nearest neighbours that are infinite distance apart.
+        disconnected_index = knn_dists == np.inf
+        knn_indices[disconnected_index] = -1
 
         knn_search_index = None
     else:
@@ -1494,6 +1495,12 @@ class UMAP(BaseEstimator):
         can also be used when densmap=False to calculate the densities for
         UMAP embeddings.
 
+    disconnection_distance: float (optional, default np.inf or maximal value for bounded distances)
+        Disconnect any vertices of distance greater than or equal to disconnection_distance when approximating the
+        manifold via our k-nn graph. This is particularly useful in the case that you have a bounded metric.  The
+        UMAP assumption that we have a connected manifold can be problematic when you have points that are maximally
+        different from all the rest of your data.  The connected manifold assumption will make such points have perfect
+        similarity to a random set of other points.  Too many such points will artificially connect your space.
     """
 
     def __init__(

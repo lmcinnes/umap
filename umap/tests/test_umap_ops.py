@@ -80,7 +80,7 @@ def test_disconnected_data(num_isolates, metric, force_approximation):
     disconnected_data = np.hstack([disconnected_data, new_columns])
 
     with warnings.catch_warnings(record=True) as w:
-        UMAP(n_neighbors=3, metric=metric, force_approximation_algorithm=force_approximation).fit(disconnected_data)
+        model = UMAP(n_neighbors=3, metric=metric, force_approximation_algorithm=force_approximation).fit(disconnected_data)
         assert(len(w) >= 1)  # at least one warning should be raised here
         #we can't guarantee the order that the warnings will be raised in so check them all.
         flag = 0
@@ -91,7 +91,9 @@ def test_disconnected_data(num_isolates, metric, force_approximation):
         for i in range(len(w)):
             flag += warning_contains in str(w[i].message)
         assert(flag == 1)
-
+        # Check that the first isolate has no edges in our umap.graph_
+        isolate_degree = model.graph_.sum(axis=1)[10][0, 0]
+        assert(isolate_degree == 0)
 
 
 # ---------------
