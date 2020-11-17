@@ -2,6 +2,8 @@ from sklearn.datasets import make_moons
 import numpy as np
 import tensorflow as tf
 from umap.parametric_umap import ParametricUMAP, load_ParametricUMAP
+import os.path
+import tempfile
 
 
 def test_create_model():
@@ -91,6 +93,8 @@ def test_save_load():
     embedder = ParametricUMAP()
     embedding = embedder.fit_transform(X)
 
-    embedder.save("/tmp/model")
+    # Portable tempfile
+    model_filename = os.path.join(tempfile.gettempdir(), "model")
 
-    embedder = load_ParametricUMAP("/tmp/model")
+    embedder.save(model_filename)
+    embedder = load_ParametricUMAP(model_filename)
