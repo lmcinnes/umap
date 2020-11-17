@@ -68,8 +68,9 @@ def test_multi_component_layout():
 
 
 @pytest.mark.parametrize("num_isolates", [1, 5])
-@pytest.mark.parametrize('metric', ['dice', 'jaccard', 'hellinger', 'cosine', 'correlation'])
-def test_disconnected_data(num_isolates, metric):
+@pytest.mark.parametrize('metric', ['jaccard', 'hellinger', 'cosine'])
+@pytest.mark.parametrize('force_approximation', [True, False])
+def test_disconnected_data(num_isolates, metric, force_approximation):
     disconnected_data = np.random.choice(a=[False, True], size=(10, 20), p=[0.66, 1 - 0.66])
     # Add some disconnected data for the corner case test
     disconnected_data = np.vstack([disconnected_data, np.zeros((num_isolates, 20), dtype="bool")])
@@ -79,7 +80,7 @@ def test_disconnected_data(num_isolates, metric):
     disconnected_data = np.hstack([disconnected_data, new_columns])
 
     with warnings.catch_warnings(record=True) as w:
-        UMAP(n_neighbors=3, metric=metric, force_approximation_algorithm=True).fit(disconnected_data)
+        UMAP(n_neighbors=3, metric=metric, force_approximation_algorithm=force_approximation).fit(disconnected_data)
         assert(len(w) >= 1)  # at least one warning should be raised here
         #we can't guarantee the order that the warnings will be raised in so check them all.
         flag = 0
