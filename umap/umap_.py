@@ -128,14 +128,16 @@ def raise_disconnected_warning(
         warn(
             f"A few of your vertices were disconnected from the manifold.  This shouldn't cause problems.\n"
             f"Disconnection_distance = {disconnection_distance} has removed {edges_removed} edges.\n"
-            f"It has only fully disconnected {vertices_disconnected} vertices.\n",
+            f"It has only fully disconnected {vertices_disconnected} vertices.\n"
+            f"Use umap.utils.disconnected_vertices() to identify them.",
         )
     elif vertices_disconnected > threshold * total_rows:
         warn(
             f"A large number of your vertices were disconnected from the manifold.\n"
             f"Disconnection_distance = {disconnection_distance} has removed {edges_removed} edges.\n"
             f"It has fully disconnected {vertices_disconnected} vertices.\n"
-            f"You might consider using find_disconnected_points() to find and remove these points from your data.\n",
+            f"You might consider using find_disconnected_points() to find and remove these points from your data.\n"
+            f"Use umap.utils.disconnected_vertices() to identify them.",
         )
 
 
@@ -1467,6 +1469,8 @@ class UMAP(BaseEstimator):
         embedded.  If you have more duplicates than you have n_neighbour
         you can have the identical data points lying in different regions of
         your space.  It also violates the definition of a metric.
+        For to map from internal structures back to your data use the variable
+        _unique_inverse_.
 
     densmap: bool (optional, default False)
         Specifies whether the density-augmented objective of densMAP
@@ -2125,7 +2129,7 @@ class UMAP(BaseEstimator):
                     counts[most_common],
                 )
             # We'll expose an inverse map when unique=True for users to map from our internal structures to their data
-            self._inverse = inverse
+            self._unique_inverse_ = inverse
         # If we aren't asking for unique use the full index.
         # This will save special cases later.
         else:

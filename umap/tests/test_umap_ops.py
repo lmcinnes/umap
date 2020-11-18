@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 import warnings
 from umap.distances import pairwise_special_metric
+from umap.utils import disconnected_vertices
 from scipy.sparse import csr_matrix
 
 # Transform isn't stable under batching; hard to opt out of this.
@@ -102,8 +103,8 @@ def test_disconnected_data(num_isolates, metric, force_approximation):
             flag += warning_contains in str(w[i].message)
         assert flag == 1
         # Check that the first isolate has no edges in our umap.graph_
-        isolate_degree = model.graph_.sum(axis=1)[10][0, 0]
-        assert isolate_degree == 0
+        isolated_vertices = disconnected_vertices(model)
+        assert isolated_vertices[10] == True
 
 
 @pytest.mark.parametrize("num_isolates", [1])
@@ -128,8 +129,8 @@ def test_disconnected_data_precomputed(num_isolates, sparse):
     )
 
     # Check that the first isolate has no edges in our umap.graph_
-    isolate_degree = model.graph_.sum(axis=1)[10][0, 0]
-    assert isolate_degree == 0
+    isolated_vertices = disconnected_vertices(model)
+    assert isolated_vertices[10] == True
 
 
 # ---------------
