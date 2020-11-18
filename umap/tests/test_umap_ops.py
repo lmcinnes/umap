@@ -13,6 +13,8 @@ from umap import UMAP
 import numpy as np
 import pytest
 import warnings
+from umap.distances import  pairwise_special_metric
+from scipy.sparse import csr_matrix
 
 # Transform isn't stable under batching; hard to opt out of this.
 # @SkipTest
@@ -95,6 +97,24 @@ def test_disconnected_data(num_isolates, metric, force_approximation):
         isolate_degree = model.graph_.sum(axis=1)[10][0, 0]
         assert(isolate_degree == 0)
 
+@pytest.mark.parametrize("num_isolates", [1])
+@pytest.mark.parametrize('sparse', [True, False])
+def test_disconnected_data_precomputed(num_isolates, sparse):
+    disconnected_data = np.random.choice(a=[False, True], size=(10, 20), p=[0.66, 1 - 0.66])
+    # Add some disconnected data for the corner case test
+    disconnected_data = np.vstack([disconnected_data, np.zeros((num_isolates, 20), dtype="bool")])
+    new_columns = np.zeros((num_isolates + 10, num_isolates), dtype='bool')
+    for i in range(num_isolates):
+        new_columns[10 + i, i] = True
+    disconnected_data = np.hstack([disconnected_data, new_columns])
+    dmat = pairwise_special_metric(disconnected_data)
+    if sparse:
+        dmat = csr_matrix(dmat)
+    model = UMAP(n_neighbors=3, metric='precomputed', disconnection_distance=1).fit(dmat)
+
+    # Check that the first isolate has no edges in our umap.graph_
+    isolate_degree = model.graph_.sum(axis=1)[10][0, 0]
+    assert (isolate_degree == 0)
 
 # ---------------
 # Umap Transform

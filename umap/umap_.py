@@ -2179,8 +2179,7 @@ class UMAP(BaseEstimator):
                 raise ValueError("Non-zero distances from samples to themselves!")
             self._knn_indices = np.zeros((X.shape[0], self.n_neighbors), dtype=np.int)
             self._knn_dists = np.zeros(self._knn_indices.shape, dtype=np.float)
-            #TODO: allow disconnection_distance on precomputed so that a user can upper bound connectivity.
-            # Code goes here
+
             for row_id in range(X.shape[0]):
                 # Find KNNs row-by-row
                 row_data = X[row_id].data
@@ -2192,6 +2191,13 @@ class UMAP(BaseEstimator):
                 row_nn_data_indices = np.argsort(row_data)[: self._n_neighbors]
                 self._knn_indices[row_id] = row_indices[row_nn_data_indices]
                 self._knn_dists[row_id] = row_data[row_nn_data_indices]
+
+            # Disconnect any vertices farther apart than _disconnection_distance
+            disconnected_index = self._knn_dists >= self._disconnection_distance
+            self._knn_indices[disconnected_index] = -1
+            self._knn_dists[disconnected_index] = np.inf
+            edges_removed = disconnected_index.sum()
+
             (
                 self.graph_,
                 self._sigmas,
@@ -2212,6 +2218,11 @@ class UMAP(BaseEstimator):
                 self.verbose,
                 self.densmap or self.output_dens,
             )
+            # Report the number of vertices with degree 0 in our our umap.graph_
+            # This ensures that they were properly disconnected.
+            vertices_disconnected = np.sum(np.array(self.graph_.sum(axis=1)).flatten() == 0)
+            raise_disconnected_warning(edges_removed, vertices_disconnected, self._disconnection_distance,
+                                               self._raw_data.shape[0], verbose=self.verbose)
         # Handle small cases efficiently by computing all distances
         elif X[index].shape[0] < 4096 and not self.force_approximation_algorithm:
             self._small_data = True
@@ -2247,9 +2258,6 @@ class UMAP(BaseEstimator):
             # set any values greater than disconnection_distance to be np.inf.
             # This will have no effect when _disconnection_distance is not set since it defaults to np.inf.
             edges_removed = np.sum(dmat >= self._disconnection_distance)
-            vertices_disconnected = np.sum(dmat.sum(axis=1) == dmat.shape[0]-1)
-            raise_disconnected_warning(edges_removed, vertices_disconnected, self._disconnection_distance,
-                                               self._raw_data.shape[0], verbose=self.verbose)
             dmat[dmat >= self._disconnection_distance] = np.inf
             (
                 self.graph_,
@@ -2271,6 +2279,11 @@ class UMAP(BaseEstimator):
                 self.verbose,
                 self.densmap or self.output_dens,
             )
+            # Report the number of vertices with degree 0 in our our umap.graph_
+            # This ensures that they were properly disconnected.
+            vertices_disconnected = np.sum(np.array(self.graph_.sum(axis=1)).flatten() == 0)
+            raise_disconnected_warning(edges_removed, vertices_disconnected, self._disconnection_distance,
+                                               self._raw_data.shape[0], verbose=self.verbose)
         else:
             # Standard case
             self._small_data = False
@@ -2300,14 +2313,10 @@ class UMAP(BaseEstimator):
             )
 
             # Disconnect any vertices farther apart than _disconnection_distance
-            if np.isfinite(self._disconnection_distance):
-                    disconnected_index = self._knn_dists >= self._disconnection_distance
-                    self._knn_indices[disconnected_index] = -1
-                    self._knn_dists[disconnected_index] = np.inf
-                    edges_removed = disconnected_index.sum()
-                    vertices_disconnected = np.sum(disconnected_index.sum(axis=1) > 0)
-                    raise_disconnected_warning(edges_removed, vertices_disconnected, self._disconnection_distance,
-                                               self._raw_data.shape[0], verbose=self.verbose)
+            disconnected_index = self._knn_dists >= self._disconnection_distance
+            self._knn_indices[disconnected_index] = -1
+            self._knn_dists[disconnected_index] = np.inf
+            edges_removed = disconnected_index.sum()
 
             (
                 self.graph_,
@@ -2329,6 +2338,11 @@ class UMAP(BaseEstimator):
                 self.verbose,
                 self.densmap or self.output_dens,
             )
+            # Report the number of vertices with degree 0 in our our umap.graph_
+            # This ensures that they were properly disconnected.
+            vertices_disconnected = np.sum(np.array(self.graph_.sum(axis=1)).flatten() == 0)
+            raise_disconnected_warning(edges_removed, vertices_disconnected, self._disconnection_distance,
+                                               self._raw_data.shape[0], verbose=self.verbose)
 
         # Currently not checking if any duplicate points have differing labels
         # Might be worth throwing a warning...
