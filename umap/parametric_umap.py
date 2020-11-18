@@ -291,8 +291,8 @@ class ParametricUMAP(UMAP):
             self.parametric_embedding,
             self.parametric_reconstruction,
         )
-        self.head = tf.constant(tf.expand_dims(head, 0))
-        self.tail = tf.constant(tf.expand_dims(tail, 0))
+        self.head = tf.constant(tf.expand_dims(head.astype(np.int64), 0))
+        self.tail = tf.constant(tf.expand_dims(tail.astype(np.int64), 0))
 
         a, b = next(iter(edge_dataset))
         # breakme
@@ -826,8 +826,8 @@ def construct_edge_dataset(
 
     # shuffle edges
     shuffle_mask = np.random.permutation(range(len(edges_to_exp)))
-    edges_to_exp = edges_to_exp[shuffle_mask]
-    edges_from_exp = edges_from_exp[shuffle_mask]
+    edges_to_exp = edges_to_exp[shuffle_mask].astype(np.int64)
+    edges_from_exp = edges_from_exp[shuffle_mask].astype(np.int64)
 
     # create edge iterator
     if parametric_embedding:
