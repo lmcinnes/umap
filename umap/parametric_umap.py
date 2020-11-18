@@ -208,12 +208,16 @@ class ParametricUMAP(UMAP):
             )
 
             # gather all of the edges (so keras model is happy)
-            to_x = tf.expand_dims(tf.squeeze(tf.gather(self.head, batch_sample[0])), 2)
-            from_x = tf.expand_dims(tf.squeeze(tf.gather(self.tail, batch_sample[0])), 2)
+            to_x = tf.squeeze(tf.gather(self.head, batch_sample[0]))
+            from_x = tf.squeeze(tf.gather(self.tail, batch_sample[0]))
 
             # grab relevant embeddings
-            embedding_to = self.encoder(to_x)[:, -1, :]
-            embedding_from = self.encoder(from_x)[:, -1, :]
+            try:
+                embedding_to = self.encoder(to_x)[:, -1, :]
+                embedding_from = self.encoder(from_x)[:, -1, :]
+            except ValueError:
+                embedding_to = self.encoder(tf.expand_dims(to_x, 2))[:, -1, :]
+                embedding_from = self.encoder(tf.expand_dims(from_x, 2))[:, -1, :]
 
             inputs = [batch_sample]
 
@@ -396,13 +400,15 @@ class ParametricUMAP(UMAP):
         if self.decoder is not None:
             decoder_output = os.path.join(save_location, "decoder")
             self.decoder.save(decoder_output)
-            print("Keras decoder model saved to {}".format(decoder_output))
+            if verbose:
+                print("Keras decoder model saved to {}".format(decoder_output))
 
         # save parametric_model
         if self.parametric_model is not None:
             parametric_model_output = os.path.join(save_location, "parametric_model")
             self.parametric_model.save(parametric_model_output)
-            print("Keras full model saved to {}".format(parametric_model_output))
+            if verbose:
+                print("Keras full model saved to {}".format(parametric_model_output))
 
         # save model.pkl (ignoring unpickleable warnings)
         with catch_warnings():

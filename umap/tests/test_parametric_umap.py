@@ -94,7 +94,7 @@ def test_save_load():
     embedding = embedder.fit_transform(X)
 
     # Portable tempfile
-    model_filename = "test_save_load_model"
+    model_path = tempfile.mkdtemp(suffix="_umap_model")
 
-    embedder.save(model_filename)
-    embedder = load_ParametricUMAP(model_filename)
+    embedder.save(model_path)
+    embedder = load_ParametricUMAP(model_path)
