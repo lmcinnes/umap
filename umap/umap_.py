@@ -2170,7 +2170,7 @@ class UMAP(BaseEstimator):
             # nearest neighbors. To make this easier, we expect matrices that are
             # symmetrical (so we can find neighbors by looking at rows in isolation,
             # rather than also having to consider that sample's column too).
-            print("Computing KNNs for sparse precomputed distances...")
+            #print("Computing KNNs for sparse precomputed distances...")
             if sparse_tril(X).getnnz() != sparse_triu(X).getnnz():
                 raise ValueError(
                     "Sparse precomputed distance matrices should be symmetrical!"
