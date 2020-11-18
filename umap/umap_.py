@@ -1777,6 +1777,20 @@ class UMAP(BaseEstimator):
                     "Non-Euclidean output metric not supported for densMAP."
                 )
 
+        # This will be used to prune all edges of greater than a fixed value from our knn graph.
+        # We have preset defaults described in DISCONNECTION_DISTANCES for our bounded measures.
+        # Otherwise a user can pass in their own value.
+        if self.disconnection_distance is None:
+            self._disconnection_distance = DISCONNECTION_DISTANCES.get(
+                self.metric, np.inf
+            )
+        elif isinstance(self.disconnection_distance, int) or isinstance(
+            self.disconnection_distance, float
+        ):
+            self._disconnection_distance = self.disconnection_distance
+        else:
+            raise ValueError("disconnection_distance must either be None or a numeric.")
+
     def _check_custom_metric(self, metric, kwds, data=None):
         # quickly check to determine whether user-defined
         # self.metric/self.output_metric returns both distance and gradient
@@ -2158,16 +2172,6 @@ class UMAP(BaseEstimator):
         # initial sparsity check above
         if self._sparse_data and not X.has_sorted_indices:
             X.sort_indices()
-
-        # This will be used to prune all edges of greater than a fixed value from our knn graph.
-        # We have preset defaults described in DISCONNECTION_DISTANCES for our bounded measures.
-        # Otherwise a user can pass in their own value.
-        if self.disconnection_distance is None:
-            self._disconnection_distance = DISCONNECTION_DISTANCES.get(
-                self.metric, np.inf
-            )
-        else:
-            self._disconnection_distance = self.disconnection_distance
 
         random_state = check_random_state(self.random_state)
 
