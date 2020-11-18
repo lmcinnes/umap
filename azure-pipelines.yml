@@ -29,6 +29,7 @@ steps:
 - script: |
     pip install -e .
     pip install .[plot]
+    pip install .[parametric_umap]
   displayName: 'Install package'
   
 - script: |

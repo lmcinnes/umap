@@ -208,8 +208,8 @@ class ParametricUMAP(UMAP):
             )
 
             # gather all of the edges (so keras model is happy)
-            to_x = tf.squeeze(tf.gather(self.head, batch_sample[0]))
-            from_x = tf.squeeze(tf.gather(self.tail, batch_sample[0]))
+            to_x = tf.expand_dims(tf.squeeze(tf.gather(self.head, batch_sample[0])), 2)
+            from_x = tf.expand_dims(tf.squeeze(tf.gather(self.tail, batch_sample[0])), 2)
 
             # grab relevant embeddings
             embedding_to = self.encoder(to_x)[:, -1, :]
