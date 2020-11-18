@@ -49,9 +49,7 @@ from umap.layouts import (
 
 from pynndescent import NNDescent
 from pynndescent.distances import named_distances as pynn_named_distances
-from pynndescent.sparse import (
-    sparse_named_distances as pynn_sparse_named_distances,
-)
+from pynndescent.sparse import sparse_named_distances as pynn_sparse_named_distances
 
 locale.setlocale(locale.LC_NUMERIC, "C")
 
@@ -62,12 +60,14 @@ SMOOTH_K_TOLERANCE = 1e-5
 MIN_K_DIST_SCALE = 1e-3
 NPY_INFINITY = np.inf
 
-DISCONNECTION_DISTANCES = {'correlation': 1,
-                           'cosine': 1,
-                           'hellinger': 1,
-                           'jaccard': 1,
-                           'dice': 1,
-                           }
+DISCONNECTION_DISTANCES = {
+    "correlation": 1,
+    "cosine": 1,
+    "hellinger": 1,
+    "jaccard": 1,
+    "dice": 1,
+}
+
 
 def flatten_iter(container):
     for i in container:
@@ -107,22 +107,36 @@ def breadth_first_search(adjmat, start, min_vertices):
 
     return np.array(explored)
 
-def raise_disconnected_warning(edges_removed, vertices_disconnected, disconnection_distance, total_rows, threshold= 0.1, verbose=False):
+
+def raise_disconnected_warning(
+    edges_removed,
+    vertices_disconnected,
+    disconnection_distance,
+    total_rows,
+    threshold=0.1,
+    verbose=False,
+):
     """A simple wrapper function to avoid large amounts of code repetition."""
     if verbose & (vertices_disconnected == 0) & (edges_removed > 0):
-        print(f'Disconnection_distance = {disconnection_distance} has removed {edges_removed} edges.  '
-              f'This is not a problem as no vertices were disconnected.')
-    elif (vertices_disconnected > 0) & (vertices_disconnected <= threshold * total_rows):
-        warn(f"A few of your vertices were disconnected from the manifold.  This shouldn't cause problems.\n"
-             f'Disconnection_distance = {disconnection_distance} has removed {edges_removed} edges.\n'
-             f'It has only fully disconnected {vertices_disconnected} vertices.\n',
-             )
-    elif (vertices_disconnected > threshold * total_rows):
-        warn(f'A large number of your vertices were disconnected from the manifold.\n'
-             f'Disconnection_distance = {disconnection_distance} has removed {edges_removed} edges.\n'
-             f'It has fully disconnected {vertices_disconnected} vertices.\n'
-             f'You might consider using find_disconnected_points() to find and remove these points from your data.\n',
-             )
+        print(
+            f"Disconnection_distance = {disconnection_distance} has removed {edges_removed} edges.  "
+            f"This is not a problem as no vertices were disconnected."
+        )
+    elif (vertices_disconnected > 0) & (
+        vertices_disconnected <= threshold * total_rows
+    ):
+        warn(
+            f"A few of your vertices were disconnected from the manifold.  This shouldn't cause problems.\n"
+            f"Disconnection_distance = {disconnection_distance} has removed {edges_removed} edges.\n"
+            f"It has only fully disconnected {vertices_disconnected} vertices.\n",
+        )
+    elif vertices_disconnected > threshold * total_rows:
+        warn(
+            f"A large number of your vertices were disconnected from the manifold.\n"
+            f"Disconnection_distance = {disconnection_distance} has removed {edges_removed} edges.\n"
+            f"It has fully disconnected {vertices_disconnected} vertices.\n"
+            f"You might consider using find_disconnected_points() to find and remove these points from your data.\n",
+        )
 
 
 @numba.njit(
@@ -536,21 +550,13 @@ def fuzzy_simplicial_set(
     """
     if knn_indices is None or knn_dists is None:
         knn_indices, knn_dists, _ = nearest_neighbors(
-            X,
-            n_neighbors,
-            metric,
-            metric_kwds,
-            angular,
-            random_state,
-            verbose=verbose,
+            X, n_neighbors, metric, metric_kwds, angular, random_state, verbose=verbose,
         )
 
     knn_dists = knn_dists.astype(np.float32)
 
     sigmas, rhos = smooth_knn_dist(
-        knn_dists,
-        float(n_neighbors),
-        local_connectivity=float(local_connectivity),
+        knn_dists, float(n_neighbors), local_connectivity=float(local_connectivity),
     )
 
     rows, cols, vals, dists = compute_membership_strengths(
@@ -1597,10 +1603,7 @@ class UMAP(BaseEstimator):
             raise ValueError("min_dist cannot be negative")
         if not isinstance(self.init, str) and not isinstance(self.init, np.ndarray):
             raise ValueError("init must be a string or ndarray")
-        if isinstance(self.init, str) and self.init not in (
-            "spectral",
-            "random",
-        ):
+        if isinstance(self.init, str) and self.init not in ("spectral", "random",):
             raise ValueError('string init values must be "spectral" or "random"')
         if (
             isinstance(self.init, np.ndarray)
@@ -2156,7 +2159,9 @@ class UMAP(BaseEstimator):
         # We have preset defaults described in DISCONNECTION_DISTANCES for our bounded measures.
         # Otherwise a user can pass in their own value.
         if self.disconnection_distance is None:
-            self._disconnection_distance = DISCONNECTION_DISTANCES.get(self.metric, np.inf)
+            self._disconnection_distance = DISCONNECTION_DISTANCES.get(
+                self.metric, np.inf
+            )
         else:
             self._disconnection_distance = self.disconnection_distance
 
@@ -2170,7 +2175,7 @@ class UMAP(BaseEstimator):
             # nearest neighbors. To make this easier, we expect matrices that are
             # symmetrical (so we can find neighbors by looking at rows in isolation,
             # rather than also having to consider that sample's column too).
-            #print("Computing KNNs for sparse precomputed distances...")
+            # print("Computing KNNs for sparse precomputed distances...")
             if sparse_tril(X).getnnz() != sparse_triu(X).getnnz():
                 raise ValueError(
                     "Sparse precomputed distance matrices should be symmetrical!"
@@ -2220,9 +2225,16 @@ class UMAP(BaseEstimator):
             )
             # Report the number of vertices with degree 0 in our our umap.graph_
             # This ensures that they were properly disconnected.
-            vertices_disconnected = np.sum(np.array(self.graph_.sum(axis=1)).flatten() == 0)
-            raise_disconnected_warning(edges_removed, vertices_disconnected, self._disconnection_distance,
-                                               self._raw_data.shape[0], verbose=self.verbose)
+            vertices_disconnected = np.sum(
+                np.array(self.graph_.sum(axis=1)).flatten() == 0
+            )
+            raise_disconnected_warning(
+                edges_removed,
+                vertices_disconnected,
+                self._disconnection_distance,
+                self._raw_data.shape[0],
+                verbose=self.verbose,
+            )
         # Handle small cases efficiently by computing all distances
         elif X[index].shape[0] < 4096 and not self.force_approximation_algorithm:
             self._small_data = True
@@ -2239,9 +2251,7 @@ class UMAP(BaseEstimator):
                     if not callable(self.metric):
                         _m = dist.named_distances[self.metric]
                         dmat = dist.pairwise_special_metric(
-                            X[index].toarray(),
-                            metric=_m,
-                            kwds=self._metric_kwds,
+                            X[index].toarray(), metric=_m, kwds=self._metric_kwds,
                         )
                     else:
                         dmat = dist.pairwise_special_metric(
@@ -2281,9 +2291,16 @@ class UMAP(BaseEstimator):
             )
             # Report the number of vertices with degree 0 in our our umap.graph_
             # This ensures that they were properly disconnected.
-            vertices_disconnected = np.sum(np.array(self.graph_.sum(axis=1)).flatten() == 0)
-            raise_disconnected_warning(edges_removed, vertices_disconnected, self._disconnection_distance,
-                                               self._raw_data.shape[0], verbose=self.verbose)
+            vertices_disconnected = np.sum(
+                np.array(self.graph_.sum(axis=1)).flatten() == 0
+            )
+            raise_disconnected_warning(
+                edges_removed,
+                vertices_disconnected,
+                self._disconnection_distance,
+                self._raw_data.shape[0],
+                verbose=self.verbose,
+            )
         else:
             # Standard case
             self._small_data = False
@@ -2340,9 +2357,16 @@ class UMAP(BaseEstimator):
             )
             # Report the number of vertices with degree 0 in our our umap.graph_
             # This ensures that they were properly disconnected.
-            vertices_disconnected = np.sum(np.array(self.graph_.sum(axis=1)).flatten() == 0)
-            raise_disconnected_warning(edges_removed, vertices_disconnected, self._disconnection_distance,
-                                               self._raw_data.shape[0], verbose=self.verbose)
+            vertices_disconnected = np.sum(
+                np.array(self.graph_.sum(axis=1)).flatten() == 0
+            )
+            raise_disconnected_warning(
+                edges_removed,
+                vertices_disconnected,
+                self._disconnection_distance,
+                self._raw_data.shape[0],
+                verbose=self.verbose,
+            )
 
         # Currently not checking if any duplicate points have differing labels
         # Might be worth throwing a warning...
@@ -2465,10 +2489,7 @@ class UMAP(BaseEstimator):
 
         if self.transform_mode == "embedding":
             self.embedding_, aux_data = self._fit_embed_data(
-                self._raw_data[index],
-                n_epochs,
-                init,
-                random_state,  # JH why raw data?
+                self._raw_data[index], n_epochs, init, random_state,  # JH why raw data?
             )
 
             self.embedding_ = self.embedding_[inverse]
@@ -2630,8 +2651,7 @@ class UMAP(BaseEstimator):
             )
 
         dists = dists.astype(np.float32, order="C")
-        #TODO: filter dists
-
+        # TODO: filter dists
 
         adjusted_local_connectivity = max(0.0, self.local_connectivity - 1.0)
         sigmas, rhos = smooth_knn_dist(
@@ -3172,10 +3192,7 @@ class DataFrameUMAP(BaseEstimator):
             raise ValueError("min_dist must be greater than 0.0")
         if not isinstance(self.init, str) and not isinstance(self.init, np.ndarray):
             raise ValueError("init must be a string or ndarray")
-        if isinstance(self.init, str) and self.init not in (
-            "spectral",
-            "random",
-        ):
+        if isinstance(self.init, str) and self.init not in ("spectral", "random",):
             raise ValueError('string init values must be "spectral" or "random"')
         if (
             isinstance(self.init, np.ndarray)
