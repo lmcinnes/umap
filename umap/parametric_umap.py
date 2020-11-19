@@ -216,8 +216,8 @@ class ParametricUMAP(UMAP):
                 embedding_to = self.encoder(to_x)[:, -1, :]
                 embedding_from = self.encoder(from_x)[:, -1, :]
             except ValueError:
-                embedding_to = self.encoder(tf.expand_dims(to_x, 2))[:, -1, :]
-                embedding_from = self.encoder(tf.expand_dims(from_x, 2))[:, -1, :]
+                embedding_to = self.encoder(tf.expand_dims(to_x, 1))[:, -1, :]
+                embedding_from = self.encoder(tf.expand_dims(from_x, 1))[:, -1, :]
 
             inputs = [batch_sample]
 

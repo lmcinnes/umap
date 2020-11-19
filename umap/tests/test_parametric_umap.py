@@ -2,7 +2,7 @@ from sklearn.datasets import make_moons
 import numpy as np
 import tensorflow as tf
 from umap.parametric_umap import ParametricUMAP, load_ParametricUMAP
-import os.path
+import platform
 import tempfile
 
 
@@ -87,14 +87,15 @@ def test_validation():
     embedding = embedder.fit_transform(X)
 
 
-# def test_save_load():
-#     """tests saving and loading"""
-#     X, y = make_moons(100)
-#     embedder = ParametricUMAP()
-#     embedding = embedder.fit_transform(X)
-#
-#     # Portable tempfile
-#     model_path = tempfile.mkdtemp(suffix="_umap_model")
-#
-#     embedder.save(model_path)
-#     embedder = load_ParametricUMAP(model_path)
+def test_save_load():
+    """tests saving and loading"""
+    X, y = make_moons(100)
+    embedder = ParametricUMAP()
+    embedding = embedder.fit_transform(X)
+
+    if platform.system() != "Windows":
+        # Portable tempfile
+        model_path = tempfile.mkdtemp(suffix="_umap_model")
+
+        embedder.save(model_path)
+        embedder = load_ParametricUMAP(model_path)
