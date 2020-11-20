@@ -61,8 +61,8 @@ configuration = {
     },
     "ext_modules": [],
     "cmdclass": {},
-    "test_suite": "nose.collector",
-    "tests_require": ["nose"],
+    "test_suite": "pytest",
+    "tests_require": ["pytest"],
     "data_files": (),
     "zip_safe": False,
 }
