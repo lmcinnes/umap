@@ -1425,7 +1425,7 @@ class UMAP(BaseEstimator):
         embedded.  If you have more duplicates than you have n_neighbour
         you can have the identical data points lying in different regions of
         your space.  It also violates the definition of a metric.
-    
+
     densmap: bool (optional, default False)
         Specifies whether the density-augmented objective of densMAP
         should be used for optimization. Turning on this option generates
@@ -1443,7 +1443,7 @@ class UMAP(BaseEstimator):
         Controls the fraction of epochs (between 0 and 1) where the
         density-augmented objective is used in densMAP. The first
         (1 - dens_frac) fraction of epochs optimize the original UMAP objective
-        before introducing the density correlation term. 
+        before introducing the density correlation term.
 
     dens_var_shift: float (optional, default 0.1)
         A small constant added to the variance of local radii in the
@@ -1731,7 +1731,11 @@ class UMAP(BaseEstimator):
             # if checking the manifold distance metric, simulate some data on a
             # reasonable interval with output dimensionality
             x, y = np.random.uniform(low=-10, high=10, size=(2, self.n_components))
-        metric_out = metric(x, y, **kwds)
+
+        if scipy.sparse.issparse(data):
+            metric_out = metric(x.indices, x.data, y.indices, y.data, **kwds)
+        else:
+            metric_out = metric(x, y, **kwds)
         # True if metric returns iterable of length 2, False otherwise
         return hasattr(metric_out, "__iter__") and len(metric_out) == 2
 
@@ -2336,7 +2340,7 @@ class UMAP(BaseEstimator):
         return self
 
     def _fit_embed_data(self, X, n_epochs, init, random_state):
-        """ A method wrapper for simlicial_set_embedding that can be 
+        """ A method wrapper for simlicial_set_embedding that can be
         replaced by subclasses.
         """
         return simplicial_set_embedding(
@@ -2384,7 +2388,7 @@ class UMAP(BaseEstimator):
         X_new : array, shape (n_samples, n_components)
             Embedding of the training data in low-dimensional space.
 
-        or a tuple (X_new, r_orig, r_emb) if ``output_dens`` flag is set, 
+        or a tuple (X_new, r_orig, r_emb) if ``output_dens`` flag is set,
         which additionally includes:
 
         r_orig: array, shape (n_samples)

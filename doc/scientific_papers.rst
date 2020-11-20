@@ -65,7 +65,7 @@ outliers.
 Dimensionality reduction for visualizing single-cell data using UMAP
 --------------------------------------------------------------------
 An early paper on applying UMAP to single-cell biology data. It looks at
-both gene-expression data and flow-cytometry data, and compares UMAP to
+both, gene-expression data and flow-cytometry data, and compares UMAP to
 t-SNE both in terms of performance and quality of results. This is a good
 introduction to using UMAP for single-cell biology data.
 
@@ -82,8 +82,8 @@ to visualise population structures. This produced some intriguing
 visualizations, and was one of the first of several papers taking
 this visualization approach. It also includes some novel visualizations
 using UMAP projections to 3D as RGB color specifications for
-data points, allowing the UMAP structure ot be visualized in
-geographic maps based on where the samples where drawn from.
+data points, allowing the UMAP structure to be visualized in
+geographic maps based on where the samples were drawn from.
 
 .. image:: images/population_umap.jpg
    :width: 400px

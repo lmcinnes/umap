@@ -26,7 +26,7 @@ Tensorflow Embedding Projector
 If you just want to explore UMAP embeddings of datasets then the Embedding Projector
 from Tensorflow is a great way to do that. As well as having a good interactive 3D view
 it also has facilities for inspecting and searching labels and tags on the data. By default
-it loads up word2vec vectors, but you can uplod any data you wish. You can then select
+it loads up word2vec vectors, but you can upload any data you wish. You can then select
 the UMAP option among the tabs for embeddings choices (alongside PCA and t-SNE).
 
 .. image:: images/embedding_projector.png
@@ -58,7 +58,7 @@ UMAP Explorer
 -------------
 A great demonstration of building a web based app for interactively exploring a UMAP embedding.
 In this case it provides an exploration of UMAP run on the MNIST digits dataset. Each point in
-the embeddijng is rendered as the digit image, and coloured according to the digit class. Mousing
+the embedding is rendered as the digit image, and coloured according to the digit class. Mousing
 over the images will make them larger and provide a view of the digit in the upper left. You can also pan
 and zoom around the emebdding to get a better understanding of how UMAP has mapped the different styles of
 handwritten digits down to 2 dimensions.
@@ -85,3 +85,33 @@ generate the 2D embedding.
 `Audio Explorer <http://doc.gold.ac.uk/~lfedd001/three/demo.html>`__
 
 Thanks to Leon Fedden.
+
+Orion Search
+------------
+Orion is an open source research measurement and knowledge discovery tool that enables you to monitor
+progress in science, visually explore the scientific landscape and search for relevant publications.
+Orion encodes bioRxiv paper abstracts to dense vectors with Sentence Transformers and projects them to
+an interactive 3D visualisation with UMAP. You can filter the UMAP embeddings by topic and country.
+You can also select a subset of the UMAP embeddings and retrieve those papers and their metadata.
+
+.. image:: images/orion_particles.png
+   :width: 400px
+
+`Orion Search <https://www.orion-search.org/>`__
+
+Thanks to Kostas Stathoulopoulos, Zac Ioannidis and Lilia Villafuerte.
+
+Exploring Fashion MNIST
+-----------------------
+A web based interactive exploration of a 3D UMAP embedding ran on the Fashion MNIST dataset. Users can
+freely navigate the 3D space, jumping to a specific image by clicking an image or entering an image id.
+Like Grant Custer's UMAP Explorer, each point is rendered as the actual image and colored according to
+the label. It is also similar to the Tensorflow Embedding Projector, but designed more specifically for
+Fashion MNIST, thus more efficient and capable of showing all the 70k images.
+
+.. image:: images/exploring_fashion_mnist.png
+   :width: 400px
+
+`Exploring Fashion MNIST <https://observablehq.com/@stwind/exploring-fashion-mnist/>`__
+
+Thanks to stwind.

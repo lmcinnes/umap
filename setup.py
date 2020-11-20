@@ -18,6 +18,7 @@ configuration = {
     "version": "0.5.0",
     "description": "Uniform Manifold Approximation and Projection",
     "long_description": readme(),
+    "long_description_content_type": "text/x-rst",
     "classifiers": [
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Science/Research",
@@ -42,12 +43,11 @@ configuration = {
     "license": "BSD",
     "packages": ["umap"],
     "install_requires": [
-        "numpy >= 1.16",
+        "numpy >= 1.17",
         "scikit-learn >= 0.22",
         "scipy >= 1.0",
         "numba >= 0.49",
-        "pynndescent >= 0.4.5",
-        "tbb >= 2019",
+        "pynndescent >= 0.5",
     ],
     "extras_require": {
         "plot": [
@@ -56,13 +56,14 @@ configuration = {
             "datashader",
             "bokeh",
             "holoviews",
+            "colorcet",
             "seaborn",
         ],
     },
     "ext_modules": [],
     "cmdclass": {},
-    "test_suite": "nose.collector",
-    "tests_require": ["nose"],
+    "test_suite": "pytest",
+    "tests_require": ["pytest"],
     "data_files": (),
     "zip_safe": False,
 }

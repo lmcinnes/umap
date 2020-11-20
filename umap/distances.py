@@ -1248,7 +1248,10 @@ def parallel_special_metric(X, Y=None, metric=hellinger):
 
 def pairwise_special_metric(X, Y=None, metric="hellinger", kwds=None):
     if callable(metric):
-        kwd_vals = tuple(kwds.values())
+        if kwds is not None:
+            kwd_vals = tuple(kwds.values())
+        else:
+            kwd_vals = ()
 
         @numba.njit(fastmath=True)
         def _partial_metric(_X, _Y=None):
