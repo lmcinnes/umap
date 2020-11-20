@@ -87,6 +87,8 @@ Recommended packages:
    * matplotlib
    * datashader
    * holoviews
+* for Parametric UMAP  
+   * tensorflow > 2.0.0
 
 
 Installing pynndescent can significantly increase performance, and in later versions
@@ -116,6 +118,16 @@ If you wish to use the plotting functionality you can use
     pip install umap-learn[plot]
 
 to install all the plotting dependencies.
+
+If you wish to use Parametric UMAP, you need to install Tensorflow, which can be
+installed either using the instructions at https://www.tensorflow.org/install 
+(reccomended) or using 
+
+.. code:: bash
+
+    pip install umap-learn[parametric_umap]
+
+for a CPU-only version of Tensorflow.
 
 If pip is having difficulties pulling the dependencies then we'd suggest installing
 the dependencies manually using anaconda followed by pulling umap from pip:
@@ -435,6 +447,24 @@ Additionally, if you use the densMAP algorithm in your work please cite the foll
         URL = {https://www.biorxiv.org/content/early/2020/05/14/2020.05.12.077776},
         eprint = {https://www.biorxiv.org/content/early/2020/05/14/2020.05.12.077776.full.pdf},
     }
+
+If you use the Parametric UMAP algorithm in your work please cite the following reference:
+
+.. code:: bibtex
+
+    @article {NBC2020,
+        author = {Sainburg, Tim and McInnes, Leland and Gentner, Timothy Q.},
+        title = {Parametric UMAP: learning embeddings with deep neural networks for representation and semi-supervised learning},
+        journal = {ArXiv e-prints},
+        archivePrefix = "arXiv",
+        eprint = {},
+        primaryClass = "stat.ML",
+        keywords = {Statistics - Machine Learning,
+                    Computer Science - Computational Geometry,
+                    Computer Science - Learning},
+        year = 2020,
+        }
+
 
 -------
 License

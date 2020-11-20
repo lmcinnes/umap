@@ -55,6 +55,9 @@ def component_layout(
         The ``dim``-dimensional embedding of the ``n_components``-many
         connected components.
     """
+    if data is None:
+        # We don't have data to work with; just guess
+        return np.random.random(size=(n_components, dim)) * 10.0
 
     component_centroids = np.empty((n_components, data.shape[1]), dtype=np.float64)
 
@@ -97,7 +100,8 @@ def component_layout(
             )
         elif metric in SPARSE_SPECIAL_METRICS:
             distance_matrix = pairwise_special_metric(
-                component_centroids, metric=SPARSE_SPECIAL_METRICS[metric]
+                component_centroids,
+                metric=SPARSE_SPECIAL_METRICS[metric],
             )
         else:
             if callable(

@@ -166,9 +166,13 @@ def general_sset_intersection(
 
     left_min = max(data1.min() / 2.0, 1.0e-8)
     if right_complement:
-        right_min = max((1.0 - data2).min() / 2.0, 1.0e-8)
+        right_min = min(
+            max((1.0 - data2).min() / 2.0, 1.0e-8), 1e-4
+        )  # All right vals may be large!
     else:
-        right_min = max(data2.min() / 2.0, 1.0e-8)
+        right_min = min(
+            max(data2.min() / 2.0, 1.0e-8), 1e-4
+        )  # All right vals may be large!
 
     for idx in range(result_row.shape[0]):
         i = result_row[idx]
@@ -202,15 +206,15 @@ def general_sset_intersection(
 
 @numba.njit()
 def general_sset_union(
-        indptr1,
-        indices1,
-        data1,
-        indptr2,
-        indices2,
-        data2,
-        result_row,
-        result_col,
-        result_val,
+    indptr1,
+    indices1,
+    data1,
+    indptr2,
+    indices2,
+    data2,
+    result_row,
+    result_col,
+    result_val,
 ):
     left_min = max(data1.min() / 2.0, 1.0e-8)
     right_min = max(data2.min() / 2.0, 1.0e-8)

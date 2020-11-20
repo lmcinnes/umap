@@ -519,15 +519,25 @@ def haversine_grad(x, y):
 
     d = 2.0 * np.arcsin(np.sqrt(min(max(abs(a_1), 0), 1)))
     denom = np.sqrt(abs(a_1 - 1)) * np.sqrt(abs(a_1))
-    grad = np.array(
-        [
-            (
-                sin_lat * cos_lat
-                - np.sin(x[0] + np.pi / 2) * np.cos(y[0] + np.pi / 2) * sin_long ** 2
-            ),
-            (np.cos(x[0] + np.pi / 2) * np.cos(y[0] + np.pi / 2) * sin_long * cos_long),
-        ]
-    ) / (denom + 1e-6)
+    grad = (
+        np.array(
+            [
+                (
+                    sin_lat * cos_lat
+                    - np.sin(x[0] + np.pi / 2)
+                    * np.cos(y[0] + np.pi / 2)
+                    * sin_long ** 2
+                ),
+                (
+                    np.cos(x[0] + np.pi / 2)
+                    * np.cos(y[0] + np.pi / 2)
+                    * sin_long
+                    * cos_long
+                ),
+            ]
+        )
+        / (denom + 1e-6)
+    )
     return d, grad
 
 
@@ -714,11 +724,11 @@ def log_single_beta(x):
 
 @numba.njit()
 def ll_dirichlet(data1, data2):
-    """ The symmetric relative log likelihood of rolling data2 vs data1
+    """The symmetric relative log likelihood of rolling data2 vs data1
     in n trials on a die that rolled data1 in sum(data1) trials.
-    
+
     ..math::
-        D(data1, data2) = DirichletMultinomail(data2 | data1)  
+        D(data1, data2) = DirichletMultinomail(data2 | data1)
     """
 
     n1 = np.sum(data1)

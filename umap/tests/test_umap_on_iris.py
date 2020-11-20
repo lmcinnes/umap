@@ -35,7 +35,11 @@ def test_umap_trustworthiness_on_iris(iris, iris_model):
 def test_initialized_umap_trustworthiness_on_iris(iris):
     data = iris.data
     embedding = UMAP(
-        n_neighbors=10, min_dist=0.01, init=data[:, 2:], n_epochs=200, random_state=42
+        n_neighbors=10,
+        min_dist=0.01,
+        init=data[:, 2:],
+        n_epochs=200,
+        random_state=42,
     ).fit_transform(data)
     trust = trustworthiness(iris.data, embedding, 10)
     assert_greater_equal(
@@ -45,7 +49,9 @@ def test_initialized_umap_trustworthiness_on_iris(iris):
     )
 
 
-def test_umap_trustworthiness_on_sphere_iris(iris,):
+def test_umap_trustworthiness_on_sphere_iris(
+    iris,
+):
     data = iris.data
     embedding = UMAP(
         n_neighbors=10,
@@ -81,6 +87,27 @@ def test_umap_transform_on_iris(iris, iris_selection):
     fitter = UMAP(n_neighbors=10, min_dist=0.01, n_epochs=200, random_state=42).fit(
         data
     )
+
+    new_data = iris.data[~iris_selection]
+    embedding = fitter.transform(new_data)
+
+    trust = trustworthiness(new_data, embedding, 10)
+    assert_greater_equal(
+        trust,
+        0.85,
+        "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust),
+    )
+
+
+def test_umap_transform_on_iris_w_pynndescent(iris, iris_selection):
+    data = iris.data[iris_selection]
+    fitter = UMAP(
+        n_neighbors=10,
+        min_dist=0.01,
+        n_epochs=200,
+        random_state=42,
+        force_approximation_algorithm=True,
+    ).fit(data)
 
     new_data = iris.data[~iris_selection]
     embedding = fitter.transform(new_data)

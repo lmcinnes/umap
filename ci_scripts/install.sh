@@ -38,9 +38,20 @@ if [[ "$DISTRIB" == "conda" ]]; then
 
   # Configure the conda environment and put it in the path using the
   # provided versions
-  conda create -n testenv --yes python=$PYTHON_VERSION pip nose \
-        numpy=$NUMPY_VERSION scipy=$SCIPY_VERSION numba=$NUMBA_VERSION scikit-learn \
-        holoviews datashader bokeh matplotlib pandas pytest
+#  conda create -n testenv --yes python=$PYTHON_VERSION pip nose \
+#        numpy=$NUMPY_VERSION scipy=$SCIPY_VERSION numba=$NUMBA_VERSION scikit-learn \
+#        pytest "tensorflow-mkl>=2.2.0"
+  if [ $TRAVIS_OS_NAME = 'osx' ]; then
+    conda create -q -n testenv --yes python=$PYTHON_VERSION numpy scipy scikit-learn \
+          numba nose pytest pandas
+#    pip install bokeh
+#    pip install datashader
+#    pip install holoviews
+    conda install --yes "tensorflow>=2.0.0"
+  else
+    conda create -q -n testenv --yes python=$PYTHON_VERSION numpy scipy scikit-learn \
+          numba pandas bokeh holoviews datashader nose pytest "tensorflow-mkl>=2.2.0"
+  fi
 
   source activate testenv
 
@@ -62,11 +73,12 @@ if [[ "$DISTRIB" == "conda" ]]; then
   python -c "import sklearn; print('scikit-learn %s' % sklearn.__version__)"
   python setup.py develop
 else
-  pip install -e .
   pip install pynndescent # test with optional pynndescent dependency
   pip install pandas
   pip install bokeh
   pip install datashader
   pip install matplotlib
   pip install holoviews
+  pip install "tensorflow>=2.2.0"
+  pip install -e .
 fi

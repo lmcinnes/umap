@@ -46,7 +46,6 @@ PyPI install, presuming you have numba and sklearn and all its requirements
     pip install umap-learn
 
 
-
 .. toctree::
    :maxdepth: 2
    :caption: User Guide / Tutorial:
@@ -57,13 +56,17 @@ PyPI install, presuming you have numba and sklearn and all its requirements
    reproducibility
    transform
    inverse_transform
+   parametric_umap
    sparse
    supervised
    clustering
    outliers
+   composing_models
+   densmap_demo
    document_embedding
    embedding_space
-   auto_examples/index'
+   aligned_umap_basic_usage
+   aligned_umap_politics_demo
    release_notes
    faq
 

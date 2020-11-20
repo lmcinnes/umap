@@ -98,20 +98,37 @@ def _optimize_layout_euclidean_single_epoch(
 
             if densmap_flag:
                 phi = 1.0 / (1.0 + a * pow(dist_squared, b))
-                dphi_term = a * b * pow(dist_squared, b-1) / (1.0 + a * pow(dist_squared, b))
+                dphi_term = (
+                    a * b * pow(dist_squared, b - 1) / (1.0 + a * pow(dist_squared, b))
+                )
 
                 q_jk = phi / dens_phi_sum[k]
                 q_kj = phi / dens_phi_sum[j]
 
-                drk = q_jk * ((1.0 - b * (1 - phi)) / np.exp(dens_re_sum[k]) + dphi_term)
-                drj = q_kj * ((1.0 - b * (1 - phi)) / np.exp(dens_re_sum[j]) + dphi_term)
+                drk = q_jk * (
+                    (1.0 - b * (1 - phi)) / np.exp(dens_re_sum[k]) + dphi_term
+                )
+                drj = q_kj * (
+                    (1.0 - b * (1 - phi)) / np.exp(dens_re_sum[j]) + dphi_term
+                )
 
                 re_std_sq = dens_re_std * dens_re_std
-                weight_k = dens_R[k] - dens_re_cov * (dens_re_sum[k] - dens_re_mean) / re_std_sq
-                weight_j = dens_R[j] - dens_re_cov * (dens_re_sum[j] - dens_re_mean) / re_std_sq
+                weight_k = (
+                    dens_R[k]
+                    - dens_re_cov * (dens_re_sum[k] - dens_re_mean) / re_std_sq
+                )
+                weight_j = (
+                    dens_R[j]
+                    - dens_re_cov * (dens_re_sum[j] - dens_re_mean) / re_std_sq
+                )
 
-                grad_cor_coeff = dens_lambda * dens_mu_tot * (weight_k * drk + weight_j * drj) \
-                                 / (dens_mu[i] * dens_re_std) / n_vertices
+                grad_cor_coeff = (
+                    dens_lambda
+                    * dens_mu_tot
+                    * (weight_k * drk + weight_j * drj)
+                    / (dens_mu[i] * dens_re_std)
+                    / n_vertices
+                )
 
             if dist_squared > 0.0:
                 grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
@@ -163,6 +180,7 @@ def _optimize_layout_euclidean_single_epoch(
                 n_neg_samples * epochs_per_negative_sample[i]
             )
 
+
 def _optimize_layout_euclidean_densmap_epoch_init(
     head_embedding,
     tail_embedding,
@@ -194,6 +212,7 @@ def _optimize_layout_euclidean_densmap_epoch_init(
     epsilon = 1e-8
     for i in range(re_sum.size):
         re_sum[i] = np.log(epsilon + (re_sum[i] / phi_sum[i]))
+
 
 def optimize_layout_euclidean(
     head_embedding,
@@ -281,16 +300,18 @@ def optimize_layout_euclidean(
 
     if densmap:
         dens_init_fn = numba.njit(
-            _optimize_layout_euclidean_densmap_epoch_init, fastmath=True, parallel=parallel
+            _optimize_layout_euclidean_densmap_epoch_init,
+            fastmath=True,
+            parallel=parallel,
         )
 
-        dens_mu_tot = np.sum(densmap_kwds['mu_sum']) / 2
-        dens_lambda = densmap_kwds['lambda']
-        dens_R = densmap_kwds['R']
-        dens_mu = densmap_kwds['mu']
+        dens_mu_tot = np.sum(densmap_kwds["mu_sum"]) / 2
+        dens_lambda = densmap_kwds["lambda"]
+        dens_R = densmap_kwds["R"]
+        dens_mu = densmap_kwds["mu"]
         dens_phi_sum = np.zeros(n_vertices, dtype=np.float32)
         dens_re_sum = np.zeros(n_vertices, dtype=np.float32)
-        dens_var_shift = densmap_kwds['var_shift']
+        dens_var_shift = densmap_kwds["var_shift"]
     else:
         dens_mu_tot = 0
         dens_lambda = 0
@@ -300,13 +321,24 @@ def optimize_layout_euclidean(
         dens_re_sum = np.zeros(1, dtype=np.float32)
 
     for n in range(n_epochs):
-        
-        densmap_flag = densmap and (densmap_kwds['lambda'] > 0) and \
-                       (((n + 1) / float(n_epochs)) > (1 - densmap_kwds['frac']))
+
+        densmap_flag = (
+            densmap
+            and (densmap_kwds["lambda"] > 0)
+            and (((n + 1) / float(n_epochs)) > (1 - densmap_kwds["frac"]))
+        )
 
         if densmap_flag:
-            dens_init_fn(head_embedding, tail_embedding, head, tail, a, b,
-                         dens_re_sum, dens_phi_sum)
+            dens_init_fn(
+                head_embedding,
+                tail_embedding,
+                head,
+                tail,
+                a,
+                b,
+                dens_re_sum,
+                dens_phi_sum,
+            )
 
             dens_re_std = np.sqrt(np.var(dens_re_sum) + dens_var_shift)
             dens_re_mean = np.mean(dens_re_sum)
@@ -722,9 +754,9 @@ def _optimize_layout_aligned_euclidean_single_epoch(
                     for offset in range(-window_size, window_size):
                         neighbor_m = m + offset
                         if (
-                                neighbor_m >= 0
-                                and neighbor_m < n_embeddings
-                                and offset != 0
+                            neighbor_m >= 0
+                            and neighbor_m < n_embeddings
+                            and offset != 0
                         ):
                             identified_index = relations[m, offset + window_size, j]
                             if identified_index >= 0:
@@ -732,10 +764,10 @@ def _optimize_layout_aligned_euclidean_single_epoch(
                                     (lambda_ * np.exp(-(np.abs(offset) - 1)))
                                     * regularisation_weights[m, offset + window_size, j]
                                     * (
-                                            current[d]
-                                            - head_embeddings[neighbor_m][
-                                                identified_index, d
-                                            ]
+                                        current[d]
+                                        - head_embeddings[neighbor_m][
+                                            identified_index, d
+                                        ]
                                     )
                                 )
 
@@ -746,9 +778,9 @@ def _optimize_layout_aligned_euclidean_single_epoch(
                         for offset in range(-window_size, window_size):
                             neighbor_m = m + offset
                             if (
-                                    neighbor_m >= 0
-                                    and neighbor_m < n_embeddings
-                                    and offset != 0
+                                neighbor_m >= 0
+                                and neighbor_m < n_embeddings
+                                and offset != 0
                             ):
                                 identified_index = relations[m, offset + window_size, k]
                                 if identified_index >= 0:
@@ -758,10 +790,10 @@ def _optimize_layout_aligned_euclidean_single_epoch(
                                             m, offset + window_size, k
                                         ]
                                         * (
-                                                other[d]
-                                                - head_embeddings[neighbor_m][
-                                                    identified_index, d
-                                                ]
+                                            other[d]
+                                            - head_embeddings[neighbor_m][
+                                                identified_index, d
+                                            ]
                                         )
                                     )
 
@@ -803,9 +835,9 @@ def _optimize_layout_aligned_euclidean_single_epoch(
                         for offset in range(-window_size, window_size):
                             neighbor_m = m + offset
                             if (
-                                    neighbor_m >= 0
-                                    and neighbor_m < n_embeddings
-                                    and offset != 0
+                                neighbor_m >= 0
+                                and neighbor_m < n_embeddings
+                                and offset != 0
                             ):
                                 identified_index = relations[m, offset + window_size, j]
                                 if identified_index >= 0:
@@ -815,10 +847,10 @@ def _optimize_layout_aligned_euclidean_single_epoch(
                                             m, offset + window_size, j
                                         ]
                                         * (
-                                                current[d]
-                                                - head_embeddings[neighbor_m][
-                                                    identified_index, d
-                                                ]
+                                            current[d]
+                                            - head_embeddings[neighbor_m][
+                                                identified_index, d
+                                            ]
                                         )
                                     )
 

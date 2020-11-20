@@ -15,7 +15,7 @@ def test_umap_plot_dependency():
     with mock.patch.dict("sys.modules", pandas=mock.MagicMock()):
         try:
             from umap import plot
-        except ImportError:
+        except:
             assert True
         else:
             assert False, "Exception not raised for missing dependency"
