@@ -13,7 +13,7 @@
 .. image:: https://img.shields.io/pypi/l/umap-learn.svg
     :target: https://github.com/lmcinnes/umap/blob/master/LICENSE.txt
     :alt: License
-.. image:: https://dev.azure.com/lelandmcinnes/umap/_apis/build/status/lmcinnes.umap?branchName=master
+.. image:: https://dev.azure.com/lelandmcinnes/umap/_apis/build/status/lmcinnes.umap?branchName=0.5dev
     :target: https://dev.azure.com/lelandmcinnes/umap/_build/latest?definitionId=2&branchName=master
     :alt: Azure Pipelines build status
 ..
