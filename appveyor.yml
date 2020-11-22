@@ -15,8 +15,9 @@ install:
   - conda config --set always_yes yes --set changeps1 no
   - conda update -q conda
   - conda info -a
-  - "conda create -q -n test-environment python=%PYTHON_VERSION% numpy scipy scikit-learn numba pandas bokeh holoviews datashader nose pytest 'tensorflow>=2.3'"
+  - "conda create -q -n test-environment python=%PYTHON_VERSION% numpy scipy scikit-learn numba pandas bokeh holoviews datashader nose pytest"
   - activate test-environment
+  - conda install "tensorflow>=2.1"
   - pip install -e .
 
 test_script:
