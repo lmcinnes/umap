@@ -93,9 +93,9 @@ def test_save_load():
     embedder = ParametricUMAP()
     embedding = embedder.fit_transform(X)
 
-    if platform.system() != "Windows":
-        # Portable tempfile
-        model_path = tempfile.mkdtemp(suffix="_umap_model")
+    # if platform.system() != "Windows":
+    # Portable tempfile
+    model_path = tempfile.mkdtemp(suffix="_umap_model")
 
-        embedder.save(model_path)
-        embedder = load_ParametricUMAP(model_path)
+    embedder.save(model_path)
+    embedder = load_ParametricUMAP(model_path)
