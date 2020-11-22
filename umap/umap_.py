@@ -2012,7 +2012,7 @@ class UMAP(BaseEstimator):
             Embedding of the training data in low-dimensional space.
         """
         self.fit(X, y)
-        return self.embedding_
+        return self.embedding_, []
 
     def transform(self, X):
         """Transform X into the existing embedded space and return that
@@ -2037,7 +2037,7 @@ class UMAP(BaseEstimator):
         X = check_array(X, dtype=np.float32, accept_sparse="csr", order="C")
         x_hash = joblib.hash(X)
         if x_hash == self._input_hash:
-            return self.embedding_
+            return self.embedding_, []
 
         if self.metric == "precomputed":
             raise ValueError(
@@ -2127,6 +2127,17 @@ class UMAP(BaseEstimator):
             indices = indices[:, : self._n_neighbors]
             dists = dists[:, : self._n_neighbors]
 
+        # Guard as recommended per:
+        # https://github.com/lmcinnes/umap/issues/442#issuecomment-642967020
+
+        # Construct mask of indices that failed to find _n_neighbors nearest neighbors
+        index_check = np.array([len(np.unique(x)) for x in indices])
+        bad_indices_mask = (index_check < self._n_neighbors)
+        bad_indices_list = np.where(bad_indices_mask)[0].tolist()
+        dists[bad_indices_mask] = np.max(dists)
+        # Assign bad indices random points as their nearest neighbors
+        indices[bad_indices_mask] = np.random.randint(self._raw_data.shape[0], size=(np.sum(bad_indices_mask),self._n_neighbors))
+
         dists = dists.astype(np.float32, order="C")
 
         adjusted_local_connectivity = max(0.0, self.local_connectivity - 1.0)
@@ -2211,7 +2222,7 @@ class UMAP(BaseEstimator):
                 verbose=self.verbose,
             )
 
-        return embedding
+        return embedding, bad_indices_list
 
     def inverse_transform(self, X):
         """Transform X in the existing embedded space back into the input
