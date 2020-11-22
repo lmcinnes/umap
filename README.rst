@@ -1,37 +1,39 @@
-.. image:: https://img.shields.io/pypi/v/umap-learn.svg
-    :target: https://pypi.python.org/pypi/umap-learn/
-    :alt: PyPI Version
-.. image:: https://pepy.tech/badge/umap-learn/month
-    :target: https://pepy.tech/project/umap-learn
-    :alt: PyPI downloads per month
-.. image:: https://anaconda.org/conda-forge/umap-learn/badges/version.svg
-    :target: https://anaconda.org/conda-forge/umap-learn
-    :alt: Conda-forge Version
-.. image:: https://anaconda.org/conda-forge/umap-learn/badges/downloads.svg
-    :target: https://anaconda.org/conda-forge/umap-learn
-    :alt: Downloads from conda-forge
-.. image:: https://img.shields.io/pypi/l/umap-learn.svg
-    :target: https://github.com/lmcinnes/umap/blob/master/LICENSE.txt
-    :alt: License
-.. image:: https://dev.azure.com/lelandmcinnes/umap/_apis/build/status/lmcinnes.umap?branchName=0.5dev
-    :target: https://dev.azure.com/lelandmcinnes/umap/_build/latest?definitionId=2&branchName=master
-    :alt: Azure Pipelines build status
-..
-   .. image:: https://travis-ci.org/lmcinnes/umap.svg
-       :target: https://travis-ci.org/lmcinnes/umap
-       :alt: Travis Build Status
-   .. image:: https://ci.appveyor.com/api/projects/status/github/lmcinnes/umap?branch=master&svg=true
-       :target: https://ci.appveyor.com/project/lmcinnes/umap
-       :alt: AppVeyor Build Status
-.. image:: https://coveralls.io/repos/github/lmcinnes/umap/badge.svg
-    :target: https://coveralls.io/github/lmcinnes/umap
-    :alt: Test Coverage Status
-.. image:: https://readthedocs.org/projects/umap-learn/badge/?version=latest
-    :target: https://umap-learn.readthedocs.io/en/latest/?badge=latest
-    :alt: Documentation Status
-.. image:: http://joss.theoj.org/papers/10.21105/joss.00861/status.svg
-    :target: https://doi.org/10.21105/joss.00861
-    :alt: JOSS article for this repository
+.. -*- mode: rst -*-
+
+|pypi_version|_ |pypi_downloads|_
+
+|conda_version|_ |conda_downloads|_
+
+|License|_ |build_status|_ |Coverage|_
+
+|Docs|_ |joss_paper|_
+
+.. |pypi_version| image:: https://img.shields.io/pypi/v/umap-learn.svg
+.. _pypi_version: https://pypi.python.org/pypi/umap-learn/
+
+.. |pypi_downloads| image:: https://pepy.tech/badge/umap-learn/month
+.. _pypi_downloads: https://pepy.tech/project/umap-learn
+
+.. |conda_version| image:: https://anaconda.org/conda-forge/umap-learn/badges/version.svg
+.. _conda_version: https://anaconda.org/conda-forge/umap-learn
+
+.. |conda_downloads| image:: https://anaconda.org/conda-forge/umap-learn/badges/downloads.svg
+.. _conda_downloads: https://anaconda.org/conda-forge/umap-learn
+
+.. |License| image:: https://img.shields.io/pypi/l/umap-learn.svg
+.. _License: https://github.com/lmcinnes/umap/blob/master/LICENSE.txt
+
+.. |build_status| image:: https://dev.azure.com/lelandmcinnes/umap/_apis/build/status/lmcinnes.umap?branchName=master
+.. _build_status: https://dev.azure.com/lelandmcinnes/umap/_build/latest?definitionId=2&branchName=master
+
+.. |Coverage| image:: https://coveralls.io/repos/github/lmcinnes/umap/badge.svg
+.. _Coverage: https://coveralls.io/github/lmcinnes/umap
+
+.. |Docs| image:: https://readthedocs.org/projects/umap-learn/badge/?version=latest
+.. _Docs: https://umap-learn.readthedocs.io/en/latest/?badge=latest
+
+.. |joss_paper| image:: http://joss.theoj.org/papers/10.21105/joss.00861/status.svg
+.. _joss_paper: https://doi.org/10.21105/joss.00861
 
 ====
 UMAP
