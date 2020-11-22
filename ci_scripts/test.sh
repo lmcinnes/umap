@@ -12,7 +12,8 @@ fi
 
 if [[ "$COVERAGE" == "true" ]]; then
     export NUMBA_DISABLE_JIT=1
-    coverage run -m pytest --show-capture=no -v --disable-warnings --basetemp=$TEST_DIR
+    coverage run -m pytest --cov umap/ --show-capture=no -v --disable-warnings
+    # --basetemp=$TEST_DIR
 else
     pytest --show-capture=no -v --disable-warnings --basetemp=$TEST_DIR
 fi
