@@ -35,11 +35,7 @@ def test_umap_trustworthiness_on_iris(iris, iris_model):
 def test_initialized_umap_trustworthiness_on_iris(iris):
     data = iris.data
     embedding = UMAP(
-        n_neighbors=10,
-        min_dist=0.01,
-        init=data[:, 2:],
-        n_epochs=200,
-        random_state=42,
+        n_neighbors=10, min_dist=0.01, init=data[:, 2:], n_epochs=200, random_state=42,
     ).fit_transform(data)
     trust = trustworthiness(iris.data, embedding, 10)
     assert_greater_equal(
@@ -49,9 +45,7 @@ def test_initialized_umap_trustworthiness_on_iris(iris):
     )
 
 
-def test_umap_trustworthiness_on_sphere_iris(
-    iris,
-):
+def test_umap_trustworthiness_on_sphere_iris(iris, ):
     data = iris.data
     embedding = UMAP(
         n_neighbors=10,

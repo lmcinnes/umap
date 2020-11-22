@@ -225,10 +225,7 @@ class ParametricUMAP(UMAP):
         outputs["umap"] = embedding_to_from
 
         # create model
-        self.parametric_model = tf.keras.Model(
-            inputs=inputs,
-            outputs=outputs,
-        )
+        self.parametric_model = tf.keras.Model(inputs=inputs, outputs=outputs, )
 
     def _compile_model(self):
         """
@@ -255,9 +252,7 @@ class ParametricUMAP(UMAP):
             loss_weights["reconstruction"] = 1.0
 
         self.parametric_model.compile(
-            optimizer=self.optimizer,
-            loss=losses,
-            loss_weights=loss_weights,
+            optimizer=self.optimizer, loss=losses, loss_weights=loss_weights,
         )
 
     def _fit_embed_data(self, X, n_epochs, init, random_state):
@@ -661,8 +656,7 @@ def umap_loss(
 
         # set true probabilities based on negative sampling
         probabilities_graph = tf.concat(
-            [tf.ones(batch_size), tf.zeros(batch_size * negative_sample_rate)],
-            axis=0,
+            [tf.ones(batch_size), tf.zeros(batch_size * negative_sample_rate)], axis=0,
         )
 
         # compute cross entropy
@@ -760,12 +754,7 @@ def prepare_networks(
 
 
 def construct_edge_dataset(
-    X,
-    graph_,
-    n_epochs,
-    batch_size,
-    parametric_embedding,
-    parametric_reconstruction,
+    X, graph_, n_epochs, batch_size, parametric_embedding, parametric_reconstruction,
 ):
     """
     Construct a tf.data.Dataset of edges, sampled by edge weight.
@@ -846,10 +835,11 @@ def construct_edge_dataset(
     else:
         # nonparametric embedding uses a sham dataset
         gen = make_sham_generator()
-        edge_dataset = tf.data.Dataset.from_generator(gen, (tf.int32, tf.int32),
-                                                      output_shapes=(
-                                                      tf.TensorShape(1, ),
-                                                      tf.TensorShape((1,))))
+        edge_dataset = tf.data.Dataset.from_generator(
+            gen,
+            (tf.int32, tf.int32),
+            output_shapes=(tf.TensorShape(1, ), tf.TensorShape((1,))),
+        )
     return edge_dataset, batch_size, len(edges_to_exp), head, tail, weight
 
 

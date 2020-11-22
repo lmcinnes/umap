@@ -49,9 +49,7 @@ from umap.layouts import (
 
 from pynndescent import NNDescent
 from pynndescent.distances import named_distances as pynn_named_distances
-from pynndescent.sparse import (
-    sparse_named_distances as pynn_sparse_named_distances,
-)
+from pynndescent.sparse import sparse_named_distances as pynn_sparse_named_distances
 
 locale.setlocale(locale.LC_NUMERIC, "C")
 
@@ -510,21 +508,13 @@ def fuzzy_simplicial_set(
     """
     if knn_indices is None or knn_dists is None:
         knn_indices, knn_dists, _ = nearest_neighbors(
-            X,
-            n_neighbors,
-            metric,
-            metric_kwds,
-            angular,
-            random_state,
-            verbose=verbose,
+            X, n_neighbors, metric, metric_kwds, angular, random_state, verbose=verbose,
         )
 
     knn_dists = knn_dists.astype(np.float32)
 
     sigmas, rhos = smooth_knn_dist(
-        knn_dists,
-        float(n_neighbors),
-        local_connectivity=float(local_connectivity),
+        knn_dists, float(n_neighbors), local_connectivity=float(local_connectivity),
     )
 
     rows, cols, vals, dists = compute_membership_strengths(
@@ -1563,10 +1553,7 @@ class UMAP(BaseEstimator):
             raise ValueError("min_dist cannot be negative")
         if not isinstance(self.init, str) and not isinstance(self.init, np.ndarray):
             raise ValueError("init must be a string or ndarray")
-        if isinstance(self.init, str) and self.init not in (
-            "spectral",
-            "random",
-        ):
+        if isinstance(self.init, str) and self.init not in ("spectral", "random",):
             raise ValueError('string init values must be "spectral" or "random"')
         if (
             isinstance(self.init, np.ndarray)
@@ -2186,9 +2173,7 @@ class UMAP(BaseEstimator):
                     if not callable(self.metric):
                         _m = dist.named_distances[self.metric]
                         dmat = dist.pairwise_special_metric(
-                            X[index].toarray(),
-                            metric=_m,
-                            kwds=self._metric_kwds,
+                            X[index].toarray(), metric=_m, kwds=self._metric_kwds,
                         )
                     else:
                         dmat = dist.pairwise_special_metric(
@@ -2392,10 +2377,7 @@ class UMAP(BaseEstimator):
 
         if self.transform_mode == "embedding":
             self.embedding_, aux_data = self._fit_embed_data(
-                self._raw_data[index],
-                n_epochs,
-                init,
-                random_state,  # JH why raw data?
+                self._raw_data[index], n_epochs, init, random_state,  # JH why raw data?
             )
 
             self.embedding_ = self.embedding_[inverse]
@@ -3097,10 +3079,7 @@ class DataFrameUMAP(BaseEstimator):
             raise ValueError("min_dist must be greater than 0.0")
         if not isinstance(self.init, str) and not isinstance(self.init, np.ndarray):
             raise ValueError("init must be a string or ndarray")
-        if isinstance(self.init, str) and self.init not in (
-            "spectral",
-            "random",
-        ):
+        if isinstance(self.init, str) and self.init not in ("spectral", "random",):
             raise ValueError('string init values must be "spectral" or "random"')
         if (
             isinstance(self.init, np.ndarray)

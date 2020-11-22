@@ -100,13 +100,10 @@ def component_layout(
             )
         elif metric in SPARSE_SPECIAL_METRICS:
             distance_matrix = pairwise_special_metric(
-                component_centroids,
-                metric=SPARSE_SPECIAL_METRICS[metric],
+                component_centroids, metric=SPARSE_SPECIAL_METRICS[metric],
             )
         else:
-            if callable(
-                metric
-            ) and scipy.sparse.isspmatrix(data):
+            if callable(metric) and scipy.sparse.isspmatrix(data):
                 function_to_name_mapping = {
                     v: k for k, v in sparse_named_distances.items()
                 }

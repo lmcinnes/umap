@@ -192,8 +192,7 @@ def _nhood_search(umap_object, nhood_size):
         rng_state = np.empty(3, dtype=np.int64)
 
         indices, dists = umap_object._knn_search_index.query(
-            umap_object._raw_data,
-            k=nhood_size,
+            umap_object._raw_data, k=nhood_size,
         )
 
     return indices, dists

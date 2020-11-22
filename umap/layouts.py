@@ -182,14 +182,7 @@ def _optimize_layout_euclidean_single_epoch(
 
 
 def _optimize_layout_euclidean_densmap_epoch_init(
-    head_embedding,
-    tail_embedding,
-    head,
-    tail,
-    a,
-    b,
-    re_sum,
-    phi_sum,
+    head_embedding, tail_embedding, head, tail, a, b, re_sum, phi_sum,
 ):
     re_sum.fill(0)
     phi_sum.fill(0)

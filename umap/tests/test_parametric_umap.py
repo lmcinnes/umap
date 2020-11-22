@@ -80,9 +80,7 @@ def test_validation():
 
     X_valid, y = make_moons(100)
     embedder = ParametricUMAP(
-        parametric_reconstruction=True,
-        reconstruction_validation=X_valid,
-        verbose=True,
+        parametric_reconstruction=True, reconstruction_validation=X_valid, verbose=True,
     )
     embedding = embedder.fit_transform(X)
 

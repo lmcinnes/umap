@@ -519,25 +519,15 @@ def haversine_grad(x, y):
 
     d = 2.0 * np.arcsin(np.sqrt(min(max(abs(a_1), 0), 1)))
     denom = np.sqrt(abs(a_1 - 1)) * np.sqrt(abs(a_1))
-    grad = (
-        np.array(
-            [
-                (
-                    sin_lat * cos_lat
-                    - np.sin(x[0] + np.pi / 2)
-                    * np.cos(y[0] + np.pi / 2)
-                    * sin_long ** 2
-                ),
-                (
-                    np.cos(x[0] + np.pi / 2)
-                    * np.cos(y[0] + np.pi / 2)
-                    * sin_long
-                    * cos_long
-                ),
-            ]
-        )
-        / (denom + 1e-6)
-    )
+    grad = np.array(
+        [
+            (
+                sin_lat * cos_lat
+                - np.sin(x[0] + np.pi / 2) * np.cos(y[0] + np.pi / 2) * sin_long ** 2
+            ),
+            (np.cos(x[0] + np.pi / 2) * np.cos(y[0] + np.pi / 2) * sin_long * cos_long),
+        ]
+    ) / (denom + 1e-6)
     return d, grad
 
 
