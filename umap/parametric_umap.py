@@ -212,12 +212,8 @@ class ParametricUMAP(UMAP):
             from_x = tf.squeeze(tf.gather(self.tail, batch_sample[0]))
 
             # grab relevant embeddings
-            try:
-                embedding_to = self.encoder(to_x)[:, -1, :]
-                embedding_from = self.encoder(from_x)[:, -1, :]
-            except ValueError:
-                embedding_to = self.encoder(tf.expand_dims(to_x, 1))[:, -1, :]
-                embedding_from = self.encoder(tf.expand_dims(from_x, 1))[:, -1, :]
+            embedding_to = self.encoder(to_x)[:, -1, :]
+            embedding_from = self.encoder(from_x)[:, -1, :]
 
             inputs = [batch_sample]
 
@@ -850,7 +846,10 @@ def construct_edge_dataset(
     else:
         # nonparametric embedding uses a sham dataset
         gen = make_sham_generator()
-        edge_dataset = tf.data.Dataset.from_generator(gen, (tf.int32, tf.int32))
+        edge_dataset = tf.data.Dataset.from_generator(gen, (tf.int32, tf.int32),
+                                                      output_shapes=(
+                                                      tf.TensorShape(1, ),
+                                                      tf.TensorShape((1,))))
     return edge_dataset, batch_size, len(edges_to_exp), head, tail, weight
 
 
