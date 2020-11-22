@@ -9,6 +9,8 @@ trigger:
 
 pool:
   vmImage: 'ubuntu-latest'
+  vmImage: 'windows-latest'
+  vmImage: 'macOS-latest'
 strategy:
   matrix:
     Python36:
