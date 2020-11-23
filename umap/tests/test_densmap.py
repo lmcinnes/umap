@@ -45,7 +45,7 @@ def test_densmap_trustworthiness_random_init(nn_data):
     )
 
 
-def test_umap_trustworthiness_on_iris(iris):
+def test_densmap_trustworthiness_on_iris(iris):
     densmap_iris_model = UMAP(
         n_neighbors=10, min_dist=0.01, random_state=42, densmap=True
     ).fit(iris.data)
