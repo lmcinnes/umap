@@ -39,7 +39,7 @@ import sklearn.neighbors
 
 from matplotlib.patches import Patch
 
-from umap.utils import deheap_sort, submatrix
+from umap.utils import submatrix
 
 from bokeh.plotting import show as show_interactive
 from bokeh.layouts import column

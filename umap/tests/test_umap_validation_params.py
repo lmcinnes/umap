@@ -7,6 +7,9 @@ import numpy as np
 from nose.tools import assert_equal, assert_raises
 from umap import UMAP
 
+# verify that we can import this; potentially for later use
+import umap.validation
+
 warnings.filterwarnings("ignore", category=UserWarning)
 
 

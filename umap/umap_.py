@@ -32,15 +32,12 @@ import umap.distances as dist
 import umap.sparse as sparse
 
 from umap.utils import (
-    tau_rand_int,
-    deheap_sort,
     submatrix,
     ts,
     csr_unique,
     fast_knn_indices,
 )
 from umap.spectral import spectral_layout
-from umap.utils import deheap_sort, submatrix
 from umap.layouts import (
     optimize_layout_euclidean,
     optimize_layout_generic,

@@ -13,7 +13,6 @@ from umap.umap_ import (
     nearest_neighbors,
     smooth_knn_dist,
 )
-from umap.utils import deheap_sort
 
 
 # ===================================================
