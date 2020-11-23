@@ -225,7 +225,7 @@ class ParametricUMAP(UMAP):
         outputs["umap"] = embedding_to_from
 
         # create model
-        self.parametric_model = tf.keras.Model(inputs=inputs, outputs=outputs, )
+        self.parametric_model = tf.keras.Model(inputs=inputs, outputs=outputs,)
 
     def _compile_model(self):
         """
@@ -838,7 +838,7 @@ def construct_edge_dataset(
         edge_dataset = tf.data.Dataset.from_generator(
             gen,
             (tf.int32, tf.int32),
-            output_shapes=(tf.TensorShape(1, ), tf.TensorShape((1,))),
+            output_shapes=(tf.TensorShape(1,), tf.TensorShape((1,))),
         )
     return edge_dataset, batch_size, len(edges_to_exp), head, tail, weight
 

@@ -339,7 +339,7 @@ class AlignedUMAP(BaseEstimator):
             self.mappers_[0]._raw_data, self.mappers_[0].graph_, 2, np.random,
         )
         expansion = 10.0 / np.abs(first_init).max()
-        first_embedding = (first_init * expansion).astype(np.float32, order="C", )
+        first_embedding = (first_init * expansion).astype(np.float32, order="C",)
 
         embeddings = numba.typed.List.empty_list(numba.types.float32[:, ::1])
         embeddings.append(first_embedding)
@@ -348,7 +348,7 @@ class AlignedUMAP(BaseEstimator):
                 self.mappers_[i]._raw_data, self.mappers_[i].graph_, 2, np.random,
             )
             expansion = 10.0 / np.abs(next_init).max()
-            next_embedding = (next_init * expansion).astype(np.float32, order="C", )
+            next_embedding = (next_init * expansion).astype(np.float32, order="C",)
             anchor_data = relations[i][window_size - 1]
             left_anchors = anchor_data[anchor_data >= 0]
             right_anchors = np.where(anchor_data >= 0)[0]
