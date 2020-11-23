@@ -1,8 +1,8 @@
 set -e
 
-if [[ "$COVERAGE" == "true" ]]; then
-    black --check $MODULE
-fi
+#if [[ "$COVERAGE" == "true" ]]; then
+#    black --check $MODULE
+#fi
 
 if [[ "$COVERAGE" == "true" ]]; then
     export NUMBA_DISABLE_JIT=1
