@@ -26,14 +26,14 @@ def test_composite_trustworthiness(nn_data):
     trust = trustworthiness(data, model3.embedding_, 10)
     assert_greater_equal(
         trust,
-        0.9,
+        0.85,
         "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust),
     )
     model4 = model1 + model2
     trust = trustworthiness(data, model4.embedding_, 10)
     assert_greater_equal(
         trust,
-        0.9,
+        0.85,
         "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust),
     )
 
@@ -50,14 +50,14 @@ def test_composite_trustworthiness_random_init(nn_data):
     trust = trustworthiness(data, model3.embedding_, 10)
     assert_greater_equal(
         trust,
-        0.9,
+        0.85,
         "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust),
     )
     model4 = model1 + model2
     trust = trustworthiness(data, model4.embedding_, 10)
     assert_greater_equal(
         trust,
-        0.9,
+        0.85,
         "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust),
     )
 
