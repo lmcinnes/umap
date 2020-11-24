@@ -2499,6 +2499,12 @@ class UMAP(BaseEstimator):
             self.embedding_, aux_data = self._fit_embed_data(
                 self._raw_data[index], n_epochs, init, random_state,  # JH why raw data?
             )
+            # Assign any points that are fully disconnected from our manifold(s) to have embedding
+            # coordinates of np.nan.  These will be filtered by our plotting functions automatically.
+            # They also prevent users from being deceived a distance query to one of these points.
+            # Might be worth moving this into simplicial_set_embedding or _fit_embed_data
+            disconnected_vertices = np.array(self.graph_.sum(axis=1)).flatten() == 0
+            self.embedding_[disconnected_vertices] = np.full(self.n_components, np.nan)
 
             self.embedding_ = self.embedding_[inverse]
             if self.output_dens:
