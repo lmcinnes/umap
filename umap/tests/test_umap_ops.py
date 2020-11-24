@@ -77,7 +77,7 @@ def test_bad_transform_data(nn_data):
 
 # Transform Stability
 # -------------------
-def test_umap_transform_embedding_stability(iris, iris_selection):
+def test_umap_transform_embedding_stability(iris, iris_subset_model, iris_selection):
     """Test that transforming data does not alter the learned embeddings
 
     Issue #217 describes how using transform to embed new data using a
@@ -87,7 +87,7 @@ def test_umap_transform_embedding_stability(iris, iris_selection):
     """
 
     data = iris.data[iris_selection]
-    fitter = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit(data)
+    fitter = iris_subset_model
     original_embedding = fitter.embedding_.copy()
 
     # The important point is that the new data has the same number of rows
