@@ -148,15 +148,15 @@ jobs:
           pip install -e .
           pip install .[plot]
           pip install .[parametric_umap]
-        displayName: 'Install package'
-
-      - script: |
           pip install nose
           pip install pytest
           pip install pytest-cov
           pip install coveralls
+        displayName: 'Install package'
+
+      - script: |
           export NUMBA_DISABLE_JIT=1
-          pytest --doctest-modules --junitxml=junit/test-results.xml --cov=umap/ --cov-report=xml --cov-report=html
+          pytest umap/tests --junitxml=junit/test-results.xml --cov=umap/ --cov-report=xml --cov-report=html
         displayName: 'Run tests'
 
       - script: |
