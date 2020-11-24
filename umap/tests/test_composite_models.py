@@ -28,14 +28,14 @@ def test_composite_trustworthiness(nn_data):
     trust = trustworthiness(data, model3.embedding_, 10)
     assert_greater_equal(
         trust,
-        0.85,
+        0.82,
         "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust),
     )
     model4 = model1 + model2
     trust = trustworthiness(data, model4.embedding_, 10)
     assert_greater_equal(
         trust,
-        0.85,
+        0.82,
         "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust),
     )
 
@@ -52,14 +52,14 @@ def test_composite_trustworthiness_random_init(nn_data):
     trust = trustworthiness(data, model3.embedding_, 10)
     assert_greater_equal(
         trust,
-        0.85,
+        0.82,
         "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust),
     )
     model4 = model1 + model2
     trust = trustworthiness(data, model4.embedding_, 10)
     assert_greater_equal(
         trust,
-        0.85,
+        0.82,
         "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust),
     )
 
@@ -76,13 +76,13 @@ def test_composite_trustworthiness_on_iris(iris):
     trust = trustworthiness(iris.data, embedding, 10)
     assert_greater_equal(
         trust,
-        0.85,
+        0.82,
         "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
     )
     embedding = (iris_model1 * iris_model2).embedding_
     trust = trustworthiness(iris.data, embedding, 10)
     assert_greater_equal(
         trust,
-        0.85,
+        0.82,
         "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
     )

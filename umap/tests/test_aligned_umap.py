@@ -39,4 +39,4 @@ def test_local_clustering(aligned_iris, aligned_iris_model):
     embd = aligned_iris_model.embeddings_[3]
     clusters = KMeans(n_clusters=2).fit_predict(embd)
     ari = adjusted_rand_score(target[3], clusters)
-    assert_greater_equal(ari, 0.5)
+    assert_greater_equal(ari, 0.40)
