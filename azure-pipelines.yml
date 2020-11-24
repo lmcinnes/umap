@@ -124,3 +124,48 @@ jobs:
           testResultsFiles: 'pytest.xml'
           testRunTitle: '$(Agent.OS) - $(Build.BuildNumber)[$(Agent.JobName)] - Python $(python.version)'
         condition: succeededOrFailed()
+
+  - job: Coverage
+    pool:
+      vmImage: 'ubuntu-latest'
+    strategy:
+      matrix:
+        Python37:
+          python.version: '3.7'
+
+    steps:
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '$(python.version)'
+        displayName: 'Use Python $(python.version)'
+
+      - script: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+        displayName: 'Install dependencies'
+
+      - script: |
+          pip install -e .
+          pip install .[plot]
+          pip install .[parametric_umap]
+        displayName: 'Install package'
+
+      - script: |
+          pip install nose
+          pip install pytest
+          pip install pytest-cov
+          pip install coveralls
+          export NUMBA_DISABLE_JIT=1
+          pytest --cov=umap/ --show-capture=no -v --disable-warnings --junitxml=pytest.xml
+        displayName: 'Run tests'
+
+      - script: |
+          coveralls
+        displayName: 'Publish to coveralls'
+
+      - task: PublishTestResults@2
+        inputs:
+          testResultsFiles: 'pytest.xml'
+          testRunTitle: '$(Agent.OS) - $(Build.BuildNumber)[$(Agent.JobName)] - Python $(python.version)'
+        condition: succeededOrFailed()
+
