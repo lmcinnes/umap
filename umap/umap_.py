@@ -359,7 +359,7 @@ def nearest_neighbors(
     fastmath=True,
 )
 def compute_membership_strengths(
-    knn_indices, knn_dists, sigmas, rhos, return_dists=False
+    knn_indices, knn_dists, sigmas, rhos, return_dists=False, bipartite=False,
 ):
     """Construct the membership strength data for the 1-skeleton of each local
     fuzzy simplicial set -- this is formed as a sparse matrix where each row is
@@ -382,6 +382,10 @@ def compute_membership_strengths(
 
     return_dists: bool (optional, default False)
         Whether to return the pairwise distance associated with each edge
+
+    bipartite: bool (optional, default False)
+        Does the nearest neighbour set represent a bipartite graph?  That is are the
+        nearest neighbour indices from the same point set as the row indices?
 
     Returns
     -------
@@ -412,7 +416,9 @@ def compute_membership_strengths(
         for j in range(n_neighbors):
             if knn_indices[i, j] == -1:
                 continue  # We didn't get the full knn for i
-            if knn_indices[i, j] == i:
+            # If applied to an adjacency matrix points shouldn't be similar to themselves.
+            # If applied to an incidence matrix (or bipartite) then the row and column indices are different.
+            if (bipartite==False) & (knn_indices[i, j] == i):
                 val = 0.0
             elif knn_dists[i, j] - rhos[i] <= 0.0 or sigmas[i] == 0.0:
                 val = 1.0
