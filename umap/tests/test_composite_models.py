@@ -40,7 +40,7 @@ def test_composite_trustworthiness(nn_data):
     )
 
 @SkipTest
-def test_composite_trustworthiness_random_init(nn_data):
+def test_composite_trustworthiness_random_init(nn_data): # pragma: no cover
     data = nn_data[:50]
     model1 = UMAP(
         n_neighbors=10, min_dist=0.01, random_state=42, n_epochs=50, init="random",
@@ -84,5 +84,21 @@ def test_composite_trustworthiness_on_iris(iris):
     assert_greater_equal(
         trust,
         0.82,
+        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
+    )
+
+
+def test_contrastive_trustworthiness_on_iris(iris):
+    iris_model1 = UMAP(
+        n_neighbors=10, min_dist=0.01, random_state=42, n_epochs=100,
+    ).fit(iris.data[:, :2])
+    iris_model2 = UMAP(
+        n_neighbors=10, min_dist=0.01, random_state=42, n_epochs=100,
+    ).fit(iris.data[:, 2:])
+    embedding = (iris_model1 - iris_model2).embedding_
+    trust = trustworthiness(iris.data, embedding, 10)
+    assert_greater_equal(
+        trust,
+        0.75,
         "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
     )

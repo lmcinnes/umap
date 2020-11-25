@@ -17,12 +17,13 @@ except ImportError:
 
 def test_densmap_trustworthiness(nn_data):
     data = nn_data[:50]
-    embedding = UMAP(
+    embedding, rad_h, rad_l = UMAP(
         n_neighbors=10,
         min_dist=0.01,
         random_state=42,
         n_epochs=100,
         densmap=True,
+        output_dens=True,
     ).fit_transform(data)
     trust = trustworthiness(data, embedding, 10)
     assert_greater_equal(
@@ -32,7 +33,7 @@ def test_densmap_trustworthiness(nn_data):
     )
 
 @SkipTest
-def test_densmap_trustworthiness_random_init(nn_data):
+def test_densmap_trustworthiness_random_init(nn_data):  # pragma: no cover
     data = nn_data[:50]
     embedding = UMAP(
         n_neighbors=10, min_dist=0.01, random_state=42, init="random", densmap=True,
