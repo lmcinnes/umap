@@ -36,7 +36,7 @@ import scipy.sparse
 # Umap Clusterability
 def test_blobs_cluster():
     data, labels = make_blobs(n_samples=500, n_features=10, centers=5)
-    embedding = UMAP().fit_transform(data)
+    embedding = UMAP(n_epochs=100).fit_transform(data)
     assert_equal(adjusted_rand_score(labels, KMeans(5).fit_predict(embedding)), 1.0)
 
 
@@ -163,6 +163,22 @@ def test_umap_update(iris, iris_subset_model, iris_selection, iris_model):
     error = np.sum(np.abs((new_model.graph_ - comparison_graph).data))
 
     assert_less(error, 1.0)
+
+# -----------------
+# UMAP Graph output
+# -----------------
+def test_umap_graph_layout():
+    data, labels = make_blobs(n_samples=500, n_features=10, centers=5)
+    model = UMAP(n_epochs=100, transform_mode="graph")
+    graph = model.fit_transform(data)
+    assert scipy.sparse.issparse(graph)
+    nc, cl = scipy.sparse.csgraph.connected_components(graph)
+    assert_equal(nc, 5)
+
+    new_graph = model.transform(data[:10] + np.random.normal(0.0, 0.1, size=(10, 10)))
+    assert scipy.sparse.issparse(graph)
+    assert new_graph.shape[0] == 10
+
 
 # ------------------------
 # Component layout options

@@ -2357,7 +2357,7 @@ class UMAP(BaseEstimator):
                     self.graph_, target_graph, self.target_weight
                 )
                 self.graph_ = reset_local_connectivity(self.graph_)
-                self._supervised = True
+            self._supervised = True
         else:
             self._supervised = False
 
@@ -2486,7 +2486,7 @@ class UMAP(BaseEstimator):
         X = check_array(X, dtype=np.float32, accept_sparse="csr", order="C")
         x_hash = joblib.hash(X)
         if x_hash == self._input_hash:
-            if self.tranform_mode == "embedding":
+            if self.transform_mode == "embedding":
                 return self.embedding_
             elif self.transform_mode == "graph":
                 return self.graph_

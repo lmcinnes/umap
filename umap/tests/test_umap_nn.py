@@ -43,7 +43,7 @@ def test_nn_bad_metric_sparse_data(sparse_nn_data):
 # -------------------------------------------------
 
 
-def knn(indices, nn_data):
+def knn(indices, nn_data): # pragma: no cover
     tree = KDTree(nn_data)
     true_indices = tree.query(nn_data, 10, return_distance=False)
     num_correct = 0.0
@@ -66,7 +66,7 @@ def smooth_knn(nn_data, local_connectivity=1.0):
     return norms
 
 @SkipTest
-def test_nn_descent_neighbor_accuracy(nn_data):
+def test_nn_descent_neighbor_accuracy(nn_data): # pragma: no cover
     knn_indices, knn_dists, _ = nearest_neighbors(
         nn_data, 10, "euclidean", {}, False, np.random
     )
@@ -78,7 +78,7 @@ def test_nn_descent_neighbor_accuracy(nn_data):
     )
 
 @SkipTest
-def test_nn_descent_neighbor_accuracy_low_memory(nn_data):
+def test_nn_descent_neighbor_accuracy_low_memory(nn_data): # pragma: no cover
     knn_indices, knn_dists, _ = nearest_neighbors(
         nn_data, 10, "euclidean", {}, False, np.random, low_memory=True
     )
@@ -90,7 +90,7 @@ def test_nn_descent_neighbor_accuracy_low_memory(nn_data):
     )
 
 @SkipTest
-def test_angular_nn_descent_neighbor_accuracy(nn_data):
+def test_angular_nn_descent_neighbor_accuracy(nn_data): # pragma: no cover
     knn_indices, knn_dists, _ = nearest_neighbors(
         nn_data, 10, "cosine", {}, True, np.random
     )
@@ -103,7 +103,7 @@ def test_angular_nn_descent_neighbor_accuracy(nn_data):
     )
 
 @SkipTest
-def test_sparse_nn_descent_neighbor_accuracy(sparse_nn_data):
+def test_sparse_nn_descent_neighbor_accuracy(sparse_nn_data): # pragma: no cover
     knn_indices, knn_dists, _ = nearest_neighbors(
         sparse_nn_data, 20, "euclidean", {}, False, np.random
     )
@@ -115,7 +115,7 @@ def test_sparse_nn_descent_neighbor_accuracy(sparse_nn_data):
     )
 
 @SkipTest
-def test_sparse_nn_descent_neighbor_accuracy_low_memory(sparse_nn_data):
+def test_sparse_nn_descent_neighbor_accuracy_low_memory(sparse_nn_data): # pragma: no cover
     knn_indices, knn_dists, _ = nearest_neighbors(
         sparse_nn_data, 20, "euclidean", {}, False, np.random, low_memory=True
     )
@@ -127,7 +127,7 @@ def test_sparse_nn_descent_neighbor_accuracy_low_memory(sparse_nn_data):
     )
 
 @SkipTest
-def test_nn_descent_neighbor_accuracy_callable_metric(nn_data):
+def test_nn_descent_neighbor_accuracy_callable_metric(nn_data): # pragma: no cover
     knn_indices, knn_dists, _ = nearest_neighbors(
         nn_data, 10, dist.euclidean, {}, False, np.random
     )
@@ -142,7 +142,7 @@ def test_nn_descent_neighbor_accuracy_callable_metric(nn_data):
 
 
 @SkipTest
-def test_sparse_angular_nn_descent_neighbor_accuracy(sparse_nn_data):
+def test_sparse_angular_nn_descent_neighbor_accuracy(sparse_nn_data): # pragma: no cover
     knn_indices, knn_dists, _ = nearest_neighbors(
         sparse_nn_data, 20, "cosine", {}, True, np.random
     )

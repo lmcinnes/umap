@@ -1,6 +1,6 @@
 from umap import UMAP
 from sklearn.datasets import make_blobs
-from nose.tools import assert_greater_equal
+from nose.tools import assert_greater_equal, assert_raises
 from nose import SkipTest
 import numpy as np
 
@@ -57,3 +57,6 @@ def test_densmap_trustworthiness_on_iris(iris):
         0.97,
         "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
     )
+
+    assert_raises(NotImplementedError, densmap_iris_model.transform, iris.data[:10])
+    assert_raises(ValueError, densmap_iris_model.inverse_transform, embedding[:10])

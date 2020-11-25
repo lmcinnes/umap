@@ -5,6 +5,7 @@
 import warnings
 import numpy as np
 from nose.tools import assert_equal, assert_raises
+from sklearn.metrics import pairwise_distances
 import pytest
 import numba
 from umap import UMAP
@@ -192,6 +193,16 @@ def test_umap_bad_output_metric_no_grad(nn_data):
 def test_umap_bad_hellinger_data(nn_data):
     u = UMAP(metric="hellinger")
     assert_raises(ValueError, u.fit, -nn_data)
+
+def test_umap_update_bad_params(nn_data):
+    dmat = pairwise_distances(nn_data[:100])
+    u = UMAP(metric="precomputed", n_epochs=11)
+    u.fit(dmat)
+    assert_raises(ValueError, u.update, dmat)
+
+    u = UMAP(n_epochs=11)
+    u.fit(nn_data[:100], y=np.repeat(np.arange(5), 20))
+    assert_raises(ValueError, u.update, nn_data[100:200])
 
 def test_umap_fit_data_and_targets_compliant():
     # x and y are required to be the same length
