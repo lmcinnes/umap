@@ -2681,7 +2681,7 @@ class UMAP(BaseEstimator):
         )
 
         rows, cols, vals, dists = compute_membership_strengths(
-            indices, dists, sigmas, rhos
+            indices, dists, sigmas, rhos, bipartite=True
         )
 
         graph = scipy.sparse.coo_matrix(
