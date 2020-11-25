@@ -1261,6 +1261,46 @@ def init_transform(indices, weights, embedding):
 
     return result
 
+def init_graph_transform(graph, embedding):
+    """Given a bipartite graph representing the 1-simplices and strengths between the
+     new points and the original data set along with an embedding of the original points
+    initialize the positions of new points relative to the strengths (of their neighbors in the source data).
+
+    If a point is in our original data set it embeds at the original points coordinates.
+    If a point has no neighbours in our original dataset it embeds as the np.nan vector.
+    Otherwise a point is the weighted average of it's neighbours embedding locations.
+
+    Parameters
+    ----------
+    graph: csr_matrix (n_new_samples, n_samples)
+        A matrix indicating the the 1-simplices and their associated strengths.  These strengths should
+        be values between zero and one and not normalized.  One indicating that the new point was identical
+        to one of our original points.
+
+    embedding: array of shape (n_samples, dim)
+        The original embedding of the source data.
+
+    Returns
+    -------
+    new_embedding: array of shape (n_new_samples, dim)
+        An initial embedding of the new sample points.
+    """
+    print("inside function\n", graph)
+    result = np.zeros((graph.shape[0], embedding.shape[1]), dtype=np.float32)
+
+    for row_index in range(graph.shape[0]):
+        num_neighbours = len(graph[row_index].indices)
+        if num_neighbours == 0:
+            result[row_index] = np.nan
+            continue
+        for col_index in graph[row_index].indices:
+            if graph[row_index, col_index] == 1:
+                result[row_index, :] = embedding[col_index, :]
+                break
+            for d in range(embedding.shape[1]):
+                result[row_index, d] += graph[row_index, col_index] / num_neighbours * embedding[col_index, d]
+
+    return result
 
 @numba.njit()
 def init_update(current_init, n_original_samples, indices):
@@ -2671,8 +2711,8 @@ class UMAP(BaseEstimator):
             )
 
         dists = dists.astype(np.float32, order="C")
-        # TODO: filter dists
-
+        # Remove any nearest neighbours who's distances are greater than our disconnection_distance
+        indices[dists >= self._disconnection_distance] = -1
         adjusted_local_connectivity = max(0.0, self.local_connectivity - 1.0)
         sigmas, rhos = smooth_knn_dist(
             dists,
@@ -2694,10 +2734,15 @@ class UMAP(BaseEstimator):
         # This was a very specially constructed graph with constant degree.
         # That lets us do fancy unpacking by reshaping the csr matrix indices
         # and data. Doing so relies on the constant degree assumption!
-        csr_graph = normalize(graph.tocsr(), norm="l1")
-        inds = csr_graph.indices.reshape(X.shape[0], self._n_neighbors)
-        weights = csr_graph.data.reshape(X.shape[0], self._n_neighbors)
-        embedding = init_transform(inds, weights, self.embedding_)
+        #csr_graph = normalize(graph.tocsr(), norm="l1")
+        #inds = csr_graph.indices.reshape(X.shape[0], self._n_neighbors)
+        #weights = csr_graph.data.reshape(X.shape[0], self._n_neighbors)
+        #embedding = init_transform(inds, weights, self.embedding_)
+        # This is less fast code than the above numba.jit'd code.
+        # It handles the fact that our nearest neighbour graph can now contain variable numbers of vertices.
+        csr_graph = graph.tocsr()
+        csr_graph.eliminate_zeros()
+        embedding = init_graph_transform(csr_graph, self.embedding_)
 
         if self.n_epochs is None:
             # For smaller datasets we can use more epochs
