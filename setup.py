@@ -58,10 +58,11 @@ configuration = {
             "holoviews",
             "colorcet",
             "seaborn",
+            "scikit-image",
         ],
         "parametric_umap":
         [
-            "tensorflow >= 2.0"
+            "tensorflow >= 2.1"
         ]
     },
     "ext_modules": [],
