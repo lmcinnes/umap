@@ -2,6 +2,7 @@ from umap import UMAP
 from sklearn.datasets import make_blobs
 from nose.tools import assert_greater_equal
 from nose import SkipTest
+import pytest
 import numpy as np
 
 try:
@@ -15,7 +16,7 @@ except ImportError:
     from sklearn.manifold.t_sne import trustworthiness
 
 
-def test_composite_trustworthiness(nn_data):
+def test_composite_trustworthiness(nn_data, iris_model):
     data = nn_data[:50]
     model1 = UMAP(
         n_neighbors=10, min_dist=0.01, random_state=42, n_epochs=50
@@ -38,6 +39,15 @@ def test_composite_trustworthiness(nn_data):
         0.82,
         "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust),
     )
+
+    with pytest.raises(ValueError):
+        model5 = model1 + iris_model
+
+    with pytest.raises(ValueError):
+        model5 = model1 * iris_model
+
+    with pytest.raises(ValueError):
+        model5 = model1 - iris_model
 
 @SkipTest
 def test_composite_trustworthiness_random_init(nn_data): # pragma: no cover

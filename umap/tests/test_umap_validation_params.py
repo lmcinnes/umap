@@ -163,6 +163,26 @@ def test_umap_bad_n_components(nn_data):
     u = UMAP(n_components=np.float64(2.3))
     assert_raises(ValueError, u.fit, nn_data)
 
+def test_umap_bad_metrics(nn_data):
+    u = UMAP(metric="foobar")
+    assert_raises(ValueError, u.fit, nn_data)
+    u = UMAP(metric=2.75)
+    assert_raises(ValueError, u.fit, nn_data)
+    u = UMAP(output_metric="foobar")
+    assert_raises(ValueError, u.fit, nn_data)
+    u = UMAP(output_metric=2.75)
+    assert_raises(ValueError, u.fit, nn_data)
+    # u = UMAP(target_metric="foobar")
+    # assert_raises(ValueError, u.fit, nn_data)
+    # u = UMAP(target_metric=2.75)
+    # assert_raises(ValueError, u.fit, nn_data)
+
+def test_umap_bad_n_jobs(nn_data):
+    u = UMAP(n_jobs=-2)
+    assert_raises(ValueError, u.fit, nn_data)
+    u = UMAP(n_jobs=0)
+    assert_raises(ValueError, u.fit, nn_data)
+
 def test_umap_custom_distance_w_grad(nn_data):
     @numba.njit()
     def dist1(x, y):
@@ -236,3 +256,11 @@ def test_umap_fit_instance_returned():
     x = np.random.uniform(0, 1, (256, 10))
     res = u.fit(x)
     assert isinstance(res, UMAP)
+
+def test_umap_inverse_transform_fails_expectedly(sparse_spatial_data, nn_data):
+    u = UMAP(n_epochs=11)
+    u.fit(sparse_spatial_data[:100])
+    assert_raises(ValueError, u.inverse_transform, u.embedding_[:10])
+    u = UMAP(metric="dice", n_epochs=11)
+    u.fit(nn_data[:100])
+    assert_raises(ValueError, u.inverse_transform, u.embedding_[:10])

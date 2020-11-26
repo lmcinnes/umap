@@ -2,6 +2,7 @@ from umap import UMAP
 from sklearn.datasets import make_blobs
 from nose.tools import assert_greater_equal, assert_raises
 from nose import SkipTest
+import pytest
 import numpy as np
 
 try:
@@ -48,7 +49,7 @@ def test_densmap_trustworthiness_random_init(nn_data):  # pragma: no cover
 
 def test_densmap_trustworthiness_on_iris(iris):
     densmap_iris_model = UMAP(
-        n_neighbors=10, min_dist=0.01, random_state=42, densmap=True
+        n_neighbors=10, min_dist=0.01, random_state=42, densmap=True, verbose=True,
     ).fit(iris.data)
     embedding = densmap_iris_model.embedding_
     trust = trustworthiness(iris.data, embedding, 10)
@@ -60,3 +61,8 @@ def test_densmap_trustworthiness_on_iris(iris):
 
     assert_raises(NotImplementedError, densmap_iris_model.transform, iris.data[:10])
     assert_raises(ValueError, densmap_iris_model.inverse_transform, embedding[:10])
+
+    with pytest.raises(NotImplementedError):
+        supervised_densmap_iris_model = UMAP(
+            n_neighbors=10, min_dist=0.01, random_state=42, densmap=True, verbose=True,
+        ).fit(iris.data, y=iris.target)
