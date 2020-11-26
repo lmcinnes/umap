@@ -66,6 +66,7 @@ def test_multi_component_layout():
 
     assert_less(error, 15.0, msg="Multi component embedding to far astray")
 
+
 # Multi-components Layout
 def test_multi_component_layout_precomputed():
     data, labels = make_blobs(
@@ -81,7 +82,8 @@ def test_multi_component_layout_precomputed():
     true_centroids = normalize(true_centroids, norm="l2")
 
     embedding = UMAP(n_neighbors=4, metric="precomputed", n_epochs=100).fit_transform(
-        dmat)
+        dmat
+    )
     embed_centroids = np.empty((labels.max() + 1, data.shape[1]), dtype=np.float64)
     embed_labels = KMeans(n_clusters=5).fit_predict(embedding)
 
@@ -93,6 +95,7 @@ def test_multi_component_layout_precomputed():
     error = np.sum((true_centroids - embed_centroids) ** 2)
 
     assert_less(error, 15.0, msg="Multi component embedding to far astray")
+
 
 # ---------------
 # Umap Transform
@@ -142,6 +145,7 @@ def test_umap_transform_embedding_stability(iris, iris_subset_model, iris_select
     _ = umap.transform(b)
     assert_array_equal(u1_orig, umap.embedding_)
 
+
 # -----------
 # UMAP Update
 # -----------
@@ -151,18 +155,17 @@ def test_umap_update(iris, iris_subset_model, iris_selection, iris_model):
     new_model = iris_subset_model
     new_model.update(new_data)
 
-    comparison_graph = scipy.sparse.vstack([
-        iris_model.graph_[iris_selection],
-        iris_model.graph_[~iris_selection]
-    ])
-    comparison_graph = scipy.sparse.hstack([
-        comparison_graph[:, iris_selection],
-        comparison_graph[:, ~iris_selection]
-    ])
+    comparison_graph = scipy.sparse.vstack(
+        [iris_model.graph_[iris_selection], iris_model.graph_[~iris_selection]]
+    )
+    comparison_graph = scipy.sparse.hstack(
+        [comparison_graph[:, iris_selection], comparison_graph[:, ~iris_selection]]
+    )
 
     error = np.sum(np.abs((new_model.graph_ - comparison_graph).data))
 
     assert_less(error, 1.0)
+
 
 # -----------------
 # UMAP Graph output
@@ -184,16 +187,38 @@ def test_umap_graph_layout():
 # Component layout options
 # ------------------------
 
+
 def test_component_layout_options(nn_data):
     dmat = pairwise_distances(nn_data[:1000])
     n_components = 5
     component_labels = np.repeat(np.arange(5), dmat.shape[0] // 5)
-    single = component_layout(dmat, n_components, component_labels, 2, np.random,
-                     metric="precomputed", metric_kwds={"linkage": "single"})
-    average = component_layout(dmat, n_components, component_labels, 2, np.random,
-                     metric="precomputed", metric_kwds={"linkage": "average"})
-    complete = component_layout(dmat, n_components, component_labels, 2, np.random,
-                     metric="precomputed", metric_kwds={"linkage": "complete"})
+    single = component_layout(
+        dmat,
+        n_components,
+        component_labels,
+        2,
+        np.random,
+        metric="precomputed",
+        metric_kwds={"linkage": "single"},
+    )
+    average = component_layout(
+        dmat,
+        n_components,
+        component_labels,
+        2,
+        np.random,
+        metric="precomputed",
+        metric_kwds={"linkage": "average"},
+    )
+    complete = component_layout(
+        dmat,
+        n_components,
+        component_labels,
+        2,
+        np.random,
+        metric="precomputed",
+        metric_kwds={"linkage": "complete"},
+    )
 
     assert single.shape[0] == 5
     assert average.shape[0] == 5

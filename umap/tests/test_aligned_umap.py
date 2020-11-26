@@ -41,6 +41,7 @@ def test_local_clustering(aligned_iris, aligned_iris_model):
     ari = adjusted_rand_score(target[3], clusters)
     assert_greater_equal(ari, 0.40)
 
+
 def test_aligned_update(aligned_iris, aligned_iris_relations):
     data, target = aligned_iris
     small_aligned_model = AlignedUMAP()

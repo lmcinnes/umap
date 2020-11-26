@@ -156,9 +156,13 @@ def aligned_iris_relations():
 def iris_model(iris):
     return UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit(iris.data)
 
+
 @pytest.fixture(scope="session")
 def iris_subset_model(iris, iris_selection):
-    return UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit(iris.data[iris_selection])
+    return UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit(
+        iris.data[iris_selection]
+    )
+
 
 @pytest.fixture(scope="session")
 def supervised_iris_model(iris):

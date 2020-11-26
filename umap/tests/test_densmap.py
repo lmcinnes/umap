@@ -33,6 +33,7 @@ def test_densmap_trustworthiness(nn_data):
         "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust),
     )
 
+
 @SkipTest
 def test_densmap_trustworthiness_random_init(nn_data):  # pragma: no cover
     data = nn_data[:50]
