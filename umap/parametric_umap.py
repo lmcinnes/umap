@@ -51,7 +51,7 @@ class ParametricUMAP(UMAP):
         parametric_reconstruction=False,
         autoencoder_loss=False,
         reconstruction_validation=None,
-        loss_report_frequency=10,
+        loss_report_frequency=1,
         n_training_epochs=1,
         keras_fit_kwargs={},
         **kwargs
