@@ -7,6 +7,7 @@ import scipy.sparse.csgraph
 
 from sklearn.manifold import SpectralEmbedding
 from sklearn.metrics import pairwise_distances
+from sklearn.metrics.pairwise import _VALID_METRICS as SKLEARN_PAIRWISE_VALID_METRICS
 
 from umap.distances import pairwise_special_metric, SPECIAL_METRICS
 from umap.sparse import SPARSE_SPECIAL_METRICS, sparse_named_distances
@@ -104,8 +105,9 @@ def component_layout(
             )
         else:
             if callable(metric) and scipy.sparse.isspmatrix(data):
+                
                 function_to_name_mapping = {
-                    v: k for k, v in sparse_named_distances.items()
+                    sparse_named_distances[k] : k for k in SKLEARN_PAIRWISE_VALID_METRICS
                 }
                 try:
                     metric_name = function_to_name_mapping[metric]
