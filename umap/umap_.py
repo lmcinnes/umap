@@ -2043,7 +2043,7 @@ class UMAP(BaseEstimator):
             print(str(self))
 
         self._original_n_threads = numba.get_num_threads()
-        if self.n_jobs > 0 and self.njobs is not None:
+        if self.n_jobs > 0 and self.n_jobs is not None:
             numba.set_num_threads(self.n_jobs)
 
         # Check if we should unique the data
