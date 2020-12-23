@@ -383,10 +383,10 @@ generate smooth curves in three dimensions.
 .. code:: python3
 
     fx = scipy.interpolate.interp1d(
-        embedding_df.z[embedding_df.id == 0], embedding_df.x.values.reshape(n_embeddings, 1797).T, kind="cubic"
+        embedding_df.z[embedding_df.id == 0], embedding_df.x.values.reshape(n_embeddings, digits.data.shape[0]).T, kind="cubic"
     )
     fy = scipy.interpolate.interp1d(
-        embedding_df.z[embedding_df.id == 0], embedding_df.y.values.reshape(n_embeddings, 1797).T, kind="cubic"
+        embedding_df.z[embedding_df.id == 0], embedding_df.y.values.reshape(n_embeddings, digits.data.shape[0]).T, kind="cubic"
     )
     z = np.linspace(0, 1.0, 100)
 
