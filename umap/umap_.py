@@ -2268,7 +2268,10 @@ class UMAP(BaseEstimator):
                         len_x=len_X, len_y=len(y)
                     )
                 )
-            y_ = check_array(y, ensure_2d=False)[index]
+            if self.target_metric == "string":
+                y_ = y[index]
+            else:
+                y_ = check_array(y, ensure_2d=False)[index]
             if self.target_metric == "categorical":
                 if self.target_weight < 1.0:
                     far_dist = 2.5 * (1.0 / (1.0 - self.target_weight))
