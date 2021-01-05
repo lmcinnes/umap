@@ -874,6 +874,7 @@ def should_pickle(key, val):
         tf.errors.InternalError,
         OverflowError,
         TypingError,
+        AttributeError,
     ) as e:
         warn("Did not pickle {}: {}".format(key, e))
         return False
