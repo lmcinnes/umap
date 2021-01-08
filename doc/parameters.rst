@@ -34,7 +34,7 @@ representation. To make the 4-dimensional data "visualisable" we will
 generate data uniformly at random from a 4-dimensional cube such that we
 can interpret a sample as a tuple of (R,G,B,a) values specifying a color
 (and translucency). Thus when we plot low dimensional representations
-each point can colored according to its 4-dimensional value. For this we
+each point can be colored according to its 4-dimensional value. For this we
 can use ``numpy``. We will fix a random seed for the sake of
 consistency.
 
@@ -73,7 +73,7 @@ associated 4-dimensional color from the source data.
 
 
 As you can see the result is that the data is placed in 2-dimensional
-space such that points that were nearby in in 4-dimensional space (i.e.
+space such that points that were nearby in 4-dimensional space (i.e.
 are similar colors) are kept close together. Since we drew a random
 selection of points in the color cube there is a certain amount of
 induced structure from where the random points happened to clump up in
@@ -185,7 +185,7 @@ As ``n_neighbors`` increases further more and more focus in placed on
 the overall structure of the data. This results in, with
 ``n_neighbors=200`` a plot where the overall structure (blues, greens,
 and reds; high luminance versus low) is well captured, but at the loss
-of some of the finer local sturcture (individual colors are no longer
+of some of the finer local structure (individual colors are no longer
 necessarily immediately near their closest color match).
 
 This effect well exemplifies the local/global tradeoff provided by
@@ -200,8 +200,8 @@ apart that points are allowed to be in the low dimensional
 representation. This means that low values of ``min_dist`` will result
 in clumpier embeddings. This can be useful if you are interested in
 clustering, or in finer topological structure. Larger values of
-``min_dist`` will prevent UMAP from packing point together and will
-focus instead on the preservation of the broad topological structure
+``min_dist`` will prevent UMAP from packing points together and will
+focus on the preservation of the broad topological structure
 instead.
 
 The default value for ``min_dist`` (as used above) is 0.1. We will look
@@ -250,7 +250,7 @@ As is standard for many ``scikit-learn`` dimension reduction algorithms
 UMAP provides a ``n_components`` parameter option that allows the user
 to determine the dimensionality of the reduced dimension space we will
 be embedding the data into. Unlike some other visualisation algorithms
-such as t-SNE UMAP scales well in embedding dimension, so you can use it
+such as t-SNE, UMAP scales well in the embedding dimension, so you can use it
 for more than just visualisation in 2- or 3-dimensions.
 
 For the purposes of this demonstration (so that we can see the effects
@@ -292,8 +292,7 @@ Here we can see that with more dimensions in which to work UMAP has an
 easier time separating out the colors in a way that respects the
 topological structure of the data.
 
-As mentioned, there is really no requirement to stop at ``n_components``
-at 3. If you are interested in (density based) clustering, or other
+As mentioned, there is really no requirement to stop at ``n_components=3``. If you are interested in (density based) clustering, or other
 machine learning techniques, it can be beneficial to pick a larger
 embedding dimension (say 10, or 50) closer to the the dimension of the
 underlying manifold on which your data lies.
@@ -433,7 +432,7 @@ measures distance in the full HSL space.
         return (a_sat - b_sat)**2 + (a_light - b_light)**2 + (((a_hue - b_hue) % 6) / 6.0)
 
 With such custom metrics in hand we can get UMAP to embed the data using
-those metrics to measure distance between our input data points. Note
+those metrics to measure the distance between our input data points. Note
 that ``numba`` provides significant flexibility in what we can do in
 defining distance functions. Despite this we retain the high performance
 we expect from UMAP even using such custom functions.
@@ -465,7 +464,7 @@ we expect from UMAP even using such custom functions.
 
 
 And here we can see the effects of the metrics quite clearly. The pure
-red channel correctly see the data as living on a one dimensional
+red channel correctly sees the data as living on a one dimensional
 manifold, the hue metric interprets the data as living in a circle, and
 the HSL metric fattens out the circle according to the saturation and
 lightness. This provides a reasonable demonstration of the power and

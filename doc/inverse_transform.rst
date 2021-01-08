@@ -4,7 +4,7 @@ Inverse transforms
 
 UMAP has some support for inverse transforms -- generating a high
 dimensional data sample given a location in the low dimensional
-embedding space. To start let's load all the relavent libraries.
+embedding space. To start let's load all the relevant libraries.
 
 .. code:: python3
 
@@ -28,7 +28,7 @@ the MNIST dataset we'll make use of sklearn's ``fetch_openml`` function.
     data, labels = sklearn.datasets.fetch_openml('mnist_784', version=1, return_X_y=True)
 
 Now we need to generate a reduced dimension representation of this data.
-This is straightforward with umap, but in this case rather than using
+This is straightforward with UMAP, but in this case rather than using
 ``fit_transform`` we'll use the fit method so that we can retain the
 trained model for later generating new digits based on samples from the
 embedding space.
@@ -52,9 +52,9 @@ to do this.
 
 This looks much like we would expect. The different digit classes have
 been decently separated. Now we need to create a set of samples in the
-emebdding space to apply the ``inverse_transform`` operation to. To do
+embedding space to apply the ``inverse_transform`` operation to. To do
 this we'll generate a grid of samples linearly interpolating between
-four corner points. To make out selection interesting we'll carefully
+four corner points. To make our selection interesting we'll carefully
 choose the corners to span over the dataset, and sample different digits
 so that we can better see the transitions.
 
@@ -77,7 +77,7 @@ so that we can better see the transitions.
 Now we can apply the ``inverse_transform`` method to this set of test
 points. Each test point is a two dimensional point lying somewhere in
 the embedding space. The ``inverse_transform`` method will convert this
-in to an approximation of the high dimensional representation that would
+into an approximation of the high dimensional representation that would
 have been embedded into such a location. Following the sklearn API this
 is as simple to use as calling the ``inverse_transform`` method of the
 trained model and passing it the set of test points that we want to
@@ -175,8 +175,8 @@ Let's plot the embedding to see what we got as a result:
 
 Again we'll generate a set of test points by making a grid interpolating
 between four corners. As before we'll select the corners so that we can
-stay within the convex hull of the embedding points and ensure nothign
-to strange happens with the inverse transforms.
+stay within the convex hull of the embedding points and ensure nothing
+too strange happens with the inverse transforms.
 
 .. code:: python3
 
@@ -202,7 +202,7 @@ to complete.
 
     inv_transformed_points = mapper.inverse_transform(test_pts)
 
-And now we can use similar code as above to set up out plot of the
+And now we can use similar code as above to set up our plot of the
 embedding with test points overlaid, and the generated images.
 
 .. code:: python3

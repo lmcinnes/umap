@@ -35,11 +35,7 @@ def test_umap_trustworthiness_on_iris(iris, iris_model):
 def test_initialized_umap_trustworthiness_on_iris(iris):
     data = iris.data
     embedding = UMAP(
-        n_neighbors=10,
-        min_dist=0.01,
-        init=data[:, 2:],
-        n_epochs=200,
-        random_state=42,
+        n_neighbors=10, min_dist=0.01, init=data[:, 2:], n_epochs=200, random_state=42,
     ).fit_transform(data)
     trust = trustworthiness(iris.data, embedding, 10)
     assert_greater_equal(
@@ -49,9 +45,7 @@ def test_initialized_umap_trustworthiness_on_iris(iris):
     )
 
 
-def test_umap_trustworthiness_on_sphere_iris(
-    iris,
-):
+def test_umap_trustworthiness_on_sphere_iris(iris,):
     data = iris.data
     embedding = UMAP(
         n_neighbors=10,
@@ -82,11 +76,8 @@ def test_umap_trustworthiness_on_sphere_iris(
 
 # UMAP Transform on iris
 # ----------------------
-def test_umap_transform_on_iris(iris, iris_selection):
-    data = iris.data[iris_selection]
-    fitter = UMAP(n_neighbors=10, min_dist=0.01, n_epochs=200, random_state=42).fit(
-        data
-    )
+def test_umap_transform_on_iris(iris, iris_subset_model, iris_selection):
+    fitter = iris_subset_model
 
     new_data = iris.data[~iris_selection]
     embedding = fitter.transform(new_data)
@@ -104,7 +95,7 @@ def test_umap_transform_on_iris_w_pynndescent(iris, iris_selection):
     fitter = UMAP(
         n_neighbors=10,
         min_dist=0.01,
-        n_epochs=200,
+        n_epochs=100,
         random_state=42,
         force_approximation_algorithm=True,
     ).fit(data)
@@ -120,9 +111,8 @@ def test_umap_transform_on_iris_w_pynndescent(iris, iris_selection):
     )
 
 
-def test_umap_transform_on_iris_modified_dtype(iris, iris_selection):
-    data = iris.data[iris_selection]
-    fitter = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit(data)
+def test_umap_transform_on_iris_modified_dtype(iris, iris_subset_model, iris_selection):
+    fitter = iris_subset_model
     fitter.embedding_ = fitter.embedding_.astype(np.float64)
 
     new_data = iris.data[~iris_selection]
@@ -144,7 +134,7 @@ def test_umap_sparse_transform_on_iris(iris, iris_selection):
         min_dist=0.01,
         random_state=42,
         n_epochs=100,
-        force_approximation_algorithm=True,
+        # force_approximation_algorithm=True,
     ).fit(data)
 
     new_data = sparse.csr_matrix(iris.data[~iris_selection])

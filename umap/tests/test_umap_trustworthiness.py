@@ -1,7 +1,9 @@
 from umap import UMAP
 from sklearn.datasets import make_blobs
+from sklearn.metrics import pairwise_distances
 from nose.tools import assert_greater_equal
 import numpy as np
+import scipy.sparse
 
 try:
     # works for sklearn>=0.22
@@ -19,11 +21,11 @@ except ImportError:
 
 
 def test_umap_sparse_trustworthiness(sparse_test_data):
-    embedding = UMAP(n_neighbors=10).fit_transform(sparse_test_data[:100])
+    embedding = UMAP(n_neighbors=10, n_epochs=100).fit_transform(sparse_test_data[:100])
     trust = trustworthiness(sparse_test_data[:100].toarray(), embedding, 10)
     assert_greater_equal(
         trust,
-        0.89,
+        0.85,
         "Insufficiently trustworthy embedding for"
         "sparse test dataset: {}".format(trust),
     )
@@ -49,7 +51,7 @@ def test_umap_trustworthiness_fast_approx(nn_data):
 def test_umap_trustworthiness_random_init(nn_data):
     data = nn_data[:50]
     embedding = UMAP(
-        n_neighbors=10, min_dist=0.01, random_state=42, init="random"
+        n_neighbors=10, min_dist=0.01, random_state=42, n_epochs=100, init="random"
     ).fit_transform(data)
     trust = trustworthiness(data, embedding, 10)
     assert_greater_equal(
@@ -61,13 +63,14 @@ def test_umap_trustworthiness_random_init(nn_data):
 
 def test_supervised_umap_trustworthiness():
     data, labels = make_blobs(50, cluster_std=0.5, random_state=42)
-    embedding = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit_transform(
+    embedding = UMAP(n_neighbors=10, min_dist=0.01, random_state=42,
+                     n_epochs=100).fit_transform(
         data, labels
     )
     trust = trustworthiness(data, embedding, 10)
     assert_greater_equal(
         trust,
-        0.97,
+        0.95,
         "Insufficiently trustworthy embedding for" "blobs dataset: {}".format(trust),
     )
 
@@ -75,13 +78,14 @@ def test_supervised_umap_trustworthiness():
 def test_semisupervised_umap_trustworthiness():
     data, labels = make_blobs(50, cluster_std=0.5, random_state=42)
     labels[10:30] = -1
-    embedding = UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit_transform(
+    embedding = UMAP(n_neighbors=10, min_dist=0.01, random_state=42,
+                     n_epochs=100).fit_transform(
         data, labels
     )
     trust = trustworthiness(data, embedding, 10)
     assert_greater_equal(
         trust,
-        0.97,
+        0.95,
         "Insufficiently trustworthy embedding for" "blobs dataset: {}".format(trust),
     )
 
@@ -157,4 +161,18 @@ def test_count_metric_supervised_umap_trustworthiness():
         trust,
         0.95,
         "Insufficiently trustworthy embedding for" "blobs dataset: {}".format(trust),
+    )
+
+def test_sparse_precomputed_metric_umap_trustworthiness():
+    data, labels = make_blobs(50, cluster_std=0.5, random_state=42)
+    dmat = scipy.sparse.csr_matrix(pairwise_distances(data))
+    embedding = UMAP(
+        n_neighbors=10, min_dist=0.01, random_state=42, n_epochs=100,
+        metric="precomputed",
+    ).fit_transform(dmat)
+    trust = trustworthiness(data, embedding, 10)
+    assert_greater_equal(
+        trust,
+        0.75,
+        "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust),
     )

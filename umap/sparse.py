@@ -9,15 +9,7 @@ import locale
 import numba
 import numpy as np
 
-from umap.utils import (
-    tau_rand,
-    norm,
-    make_heap,
-    heap_push,
-    rejection_sample,
-    build_candidates,
-    deheap_sort,
-)
+from umap.utils import norm
 
 locale.setlocale(locale.LC_NUMERIC, "C")
 

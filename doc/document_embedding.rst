@@ -7,12 +7,12 @@ dataset <http://qwone.com/~jason/20Newsgroups/>`__ which is a collection
 of forum posts labelled by topic. We are going to embed these documents
 and see that similar documents (i.e. posts in the same subforum) will
 end up close together. You can use this embedding for other downstream
-tasks such as visualizing your corpus or run a clustering algorithm
+tasks, such as visualizing your corpus, or run a clustering algorithm
 (e.g. HDBSCAN). We will use a bag of words model and use UMAP on the
 count vectors as well as the TF-IDF vectors.
 
 
-To start with let's load the relevant libraries. **This requires UMAP version >= 0.4.0**
+To start with let's load the relevant libraries. **This requires UMAP version >= 0.4.0.**
 
 .. code:: python3
 
@@ -232,7 +232,7 @@ distributions.
     Wall time: 2min 3s
 
 
-Now we have an embedding of 18846x2
+Now we have an embedding of 18846x2.
 
 .. code:: python3
 
@@ -244,8 +244,9 @@ Now we have an embedding of 18846x2
     (18846, 2)
 
 
-Let’s plot the embedding. If running this in a notebook, you should use the interactive plotting method as it let's you hover over
-your points and see what category they belong to.
+Let’s plot the embedding. If you are running this in a notebook, you should use the
+interactive plotting method as it lets you hover over your points and see what
+category they belong to.
 
 .. code:: python3
 
@@ -268,9 +269,9 @@ Using TF-IDF
 We will now do the same pipeline with the only change being the use of
 `TF-IDF <https://en.wikipedia.org/wiki/Tf%E2%80%93idf>`__ weighting.
 TF-IDF gives less weight to words that appear frequently across a large
-number of documents since they are more popular in general. It higher
-weight to words that appear frequently in a smaller subset of documents
-since they are probably important words for those documents.
+number of documents since they are more popular in general. It asserts
+a higher weight to words that appear frequently in a smaller subset of
+documents since they are probably important words for those documents.
 
 To do the TF-IDF weighting we will use sklearns TfidfVectorizer with the
 same parameters as CountVectorizer above.
@@ -280,7 +281,7 @@ same parameters as CountVectorizer above.
     tfidf_vectorizer = TfidfVectorizer(min_df=5, stop_words='english')
     tfidf_word_doc_matrix = tfidf_vectorizer.fit_transform(dataset.data)
 
-We get a matrix of the same size as before
+We get a matrix of the same size as before:
 
 .. code:: python3
 

@@ -14,8 +14,8 @@ Since version 0.4 UMAP also support multi-threading for faster
 performance; when performing optimization this exploits the fact that
 race conditions between the threads are acceptable within certain
 optimization phases. Unfortunately this means that the randomness in
-UMAP output for the multi-threaded case depends not only on the random
-seed input, but also on race conditions between thereads during
+UMAP outputs for the multi-threaded case depends not only on the random
+seed input, but also on race conditions between threads during
 optimization, over which no control can be had. This means that
 multi-threaded UMAP results cannot be explicitly reproduced.
 
@@ -60,7 +60,7 @@ PyNNDescent for nearest neighbor search (UMAP will use it if you have it
 installed) which supports multi-threading as well. The result is a very
 fast fitting to the data that does an effective job of using several
 cores. If you are on a large server with many cores available and don't
-wish to use them *all* (which is the default situtation) you can
+wish to use them *all* (which is the default situation) you can
 currently control the number of cores used by setting the numba
 environment variable ``NUMBA_NUM_THREADS``; see the `numba
 documentation <https://numba.pydata.org/numba-doc/dev/reference/envvars.html#threading-control>`__
@@ -111,7 +111,7 @@ Qualitatively this looks very similar, but a little closer inspection
 will quickly show that the results are actually different between the
 runs. Note that even in versions of UMAP prior to 0.4 this would have
 been the case -- since we fixed no specific random seed, and were thus
-using the current random state of the system which will ntaurally differ
+using the current random state of the system which will naturally differ
 between runs. This is the default behaviour, as is standard with sklearn
 estimators that are stochastic. Rather than having a default random seed
 the user is required to explicitly provide one should they want a
@@ -120,7 +120,7 @@ reproducible result. As noted by Vito Zanotelli
     ... setting a random seed is like signing a waiver "I am aware that
     this is a stochastic algorithm and I have done sufficient tests to
     confirm that my main conclusions are not affected by this
-    randomess".
+    randomness".
 
 With that in mind, let's see what happens if we set an explicit
 ``random_state`` value:
@@ -137,10 +137,10 @@ With that in mind, let's see what happens if we set an explicit
     Wall time: 1min 56s
 
 
-The first thing to note that that this run took signifcantly longer
+The first thing to note that that this run took significantly longer
 (despite having all the functions JIT compiled by numba already). Then
 note that the Wall time and CPU times are now much closer to each other
--- we are not longer exploiting multiple cores to anywhere near the same
+-- we are no longer exploiting multiple cores to anywhere near the same
 degree. This is because by setting a ``random_state`` we are effectively
 turning off any of the multi-threading that does not support explicit
 reproducibility. Let's plot the results:

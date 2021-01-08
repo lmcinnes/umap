@@ -15,7 +15,7 @@ Should I normalise my features?
 
 The default answer is yes, but, of course, the real answer is
 "it depends". If your features have meaningful relationships
-with one another (say, latitude and longitude vales) then
+with one another (say, latitude and longitude values) then
 normalising per feature is not a good idea. For features that
 are essentially independent it does make sense to get all the
 features on (relatively) the same scale. The best way to do
@@ -23,7 +23,7 @@ this is to use
 `pre-processing tools from scikit-learn <http://scikit-learn.org/stable/modules/preprocessing.html>`_.
 All the advice given there applies as sensible preprocessing
 for UMAP, and since UMAP is scikit-learn compatible you
-can put all of this together into a `scikit-learn pipeline <http://scikit-learn.org/stable/modules/generated/sklearn.pipeline.Pipeline.html>`_
+can put all of this together into a `scikit-learn pipeline <http://scikit-learn.org/stable/modules/generated/sklearn.pipeline.Pipeline.html>`_.
 
 
 Can I cluster the results of UMAP?
@@ -73,7 +73,7 @@ bokeh is similarly useful (but does not need to be quite so small).
 
 More generally the real solution, particular with large datasets,
 is to use `datashader <http://datashader.org/>`_ for plotting.
-Datashader is a plotting llibrary that handles aggregation
+Datashader is a plotting library that handles aggregation
 of large scale data in scatter plots in a way that can better
 show the underlying detail that can otherwise be lost. We
 highly recommend investing the time to learn datashader for
@@ -113,7 +113,7 @@ be added.
 
 There is a UMAP implementation for GPU available in
 the NVIDIA RAPIDS cuML library, so if you need GPU
-support that is currently the best palce to go.
+support that is currently the best place to go.
 
 Can I add a custom loss function?
 ---------------------------------
@@ -122,7 +122,7 @@ To allow for fast performance the SGD phase of UMAP has
 been hand-coded for the specific needs of UMAP. This makes
 custom loss functions a little difficult to handle. Now
 that Numba (as of version 0.38) supports passing functions
-it is posisble that future versions of UMAP may support
+it is possible that future versions of UMAP may support
 such functionality. In the meantime you should definitely
 look into `smallvis <https://github.com/jlmelville/smallvis>`_,
 a library for t-SNE, LargeVis, UMAP, and related algorithms.
@@ -198,7 +198,7 @@ This is an example of an embedding for a popular Fashion MNIST dataset.
 
 Note that FMNIST is mostly a toy dataset (MNIST on steroids).
 On such a simplistic case UMAP shows distillation results
-(i.e. if we use its embedding in a downsteam task like classification)
+(i.e. if we use its embedding in a downstream task like classification)
 comparable to VAEs, which are more computationally expensive.
 
 By definition:
@@ -210,7 +210,7 @@ By definition:
 - VAE is a kind of encoder-decoder neural network,
   trained with KLD loss and BCE (or MSE) loss
   to enforce the resulting embedding to be continuous.
-  VAE is and extension of auto-encoder network,
+  VAE is an extension of auto-encoder networks,
   which by design should produce embeddings that are
   not only relevant to actually encoding the data, but are
   also smooth.
@@ -238,7 +238,7 @@ Which tool should I use?
 
 Where can I learn more?
 
-- While PCA is ubiqutous, you may `look <https://github.com/snakers4/playing_with_vae>`_
+- While PCA is ubiquitous, you may `look <https://github.com/snakers4/playing_with_vae>`_
   at this example comparing PCA / UMAP / VAEs;
 
 How UMAP can go wrong
@@ -283,7 +283,7 @@ filter for visualization purposes as seen below.
 Successful use-cases
 --------------------
 
-UMAP can be / has been Successfully applied to the following domains:
+UMAP can be / has been successfully applied to the following domains:
 
 - Single cell data visualization in biology;
 - Mapping malware based on behavioural data;

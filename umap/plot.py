@@ -39,7 +39,7 @@ import sklearn.neighbors
 
 from matplotlib.patches import Patch
 
-from umap.utils import deheap_sort, submatrix
+from umap.utils import submatrix
 
 from bokeh.plotting import show as show_interactive
 from bokeh.layouts import column
@@ -148,6 +148,31 @@ _themes = {
 _diagnostic_types = np.array(["pca", "ica", "vq", "local_dim", "neighborhood"])
 
 
+def _get_embedding(umap_object):
+    if hasattr(umap_object, "embedding_"):
+        return umap_object.embedding_
+    elif hasattr(umap_object, "embedding"):
+        return umap_object.embedding
+    else:
+        raise ValueError("Could not find embedding attribute of umap_object")
+
+
+def _get_metric(umap_object):
+    if hasattr(umap_object, "metric"):
+        return umap_object.metric
+    else:
+        # Assume euclidean if no attribute per cuML.UMAP
+        return "euclidean"
+
+
+def _get_metric_kwds(umap_object):
+    if hasattr(umap_object, "_metric_kwds"):
+        return umap_object._metric_kwds
+    else:
+        # Assume no keywords exist
+        return {}
+
+
 def _embed_datashader_in_an_axis(datashader_image, ax):
     img_rev = datashader_image.data[::-1]
     mpl_img = np.dstack([_blue(img_rev), _green(img_rev), _red(img_rev)])
@@ -156,7 +181,7 @@ def _embed_datashader_in_an_axis(datashader_image, ax):
 
 
 def _nhood_search(umap_object, nhood_size):
-    if umap_object._small_data:
+    if hasattr(umap_object, "_small_data") and umap_object._small_data:
         dmat = sklearn.metrics.pairwise_distances(umap_object._raw_data)
         indices = np.argpartition(dmat, nhood_size)[:, :nhood_size]
         dmat_shortened = submatrix(dmat, indices, nhood_size)
@@ -167,8 +192,7 @@ def _nhood_search(umap_object, nhood_size):
         rng_state = np.empty(3, dtype=np.int64)
 
         indices, dists = umap_object._knn_search_index.query(
-            umap_object._raw_data,
-            k=nhood_size,
+            umap_object._raw_data, k=nhood_size,
         )
 
     return indices, dists
@@ -561,10 +585,10 @@ def points(
         If you are using a notebooks and have ``%matplotlib inline`` set
         then this will simply display inline.
     """
-    if not hasattr(umap_object, "embedding_"):
-        raise ValueError(
-            "UMAP object must perform fit on data before it can be visualized"
-        )
+    # if not hasattr(umap_object, "embedding_"):
+    #     raise ValueError(
+    #         "UMAP object must perform fit on data before it can be visualized"
+    #     )
 
     if theme is not None:
         cmap = _themes[theme]["cmap"]
@@ -576,7 +600,7 @@ def points(
             "Conflicting options; only one of labels or values should be set"
         )
 
-    points = umap_object.embedding_
+    points = _get_embedding(umap_object)
 
     if subset_points is not None:
         if len(subset_points) != points.shape[0]:
@@ -632,12 +656,12 @@ def points(
         )
 
     ax.set(xticks=[], yticks=[])
-    if umap_object.metric != "euclidean":
+    if _get_metric(umap_object) != "euclidean":
         ax.text(
             0.99,
             0.01,
             "UMAP: metric={}, n_neighbors={}, min_dist={}".format(
-                umap_object.metric, umap_object.n_neighbors, umap_object.min_dist
+                _get_metric(umap_object), umap_object.n_neighbors, umap_object.min_dist
             ),
             transform=ax.transAxes,
             horizontalalignment="right",
@@ -793,7 +817,7 @@ def connectivity(
         edge_cmap = _themes[theme]["edge_cmap"]
         background = _themes[theme]["background"]
 
-    points = umap_object.embedding_
+    points = _get_embedding(umap_object)
     point_df = pd.DataFrame(points, columns=("x", "y"))
 
     point_size = 100.0 / np.sqrt(points.shape[0])
@@ -967,7 +991,7 @@ def diagnostic(
         then this will simply display inline.
     """
 
-    points = umap_object.embedding_
+    points = _get_embedding(umap_object)
 
     if points.shape[1] != 2:
         raise ValueError("Plotting is currently only implemented for 2D embeddings")
@@ -1298,7 +1322,7 @@ def interactive(
             "Conflicting options; only one of labels or values should be set"
         )
 
-    points = umap_object.embedding_
+    points = _get_embedding(umap_object)
     if subset_points is not None:
         if len(subset_points) != points.shape[0]:
             raise ValueError(
@@ -1314,7 +1338,7 @@ def interactive(
     if point_size is None:
         point_size = 100.0 / np.sqrt(points.shape[0])
 
-    data = pd.DataFrame(umap_object.embedding_, columns=("x", "y"))
+    data = pd.DataFrame(_get_embedding(umap_object), columns=("x", "y"))
 
     if labels is not None:
         data["label"] = labels

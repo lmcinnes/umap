@@ -65,19 +65,19 @@ form you can simply pass the trained UMAP model to ``umap.plot.points``:
 
 
 As you can see we immediately get a scatterplot of the UMAP embedding.
-Of note the function automatically selects a point-size based on the
+Note that the function automatically selects a point-size based on the
 data density, and watermarks the image with the UMAP parameters that
 were used (this will include the metric if it is non-standard). The
 function also returns the matplotlib axes object associated to the plot,
 so further matplotlib functions, such as adding titles, axis labels etc.
-can be done by the user if required.
+can be applied by the user if required.
 
 It is common for data passed to UMAP to have an associated set of
 labels, which may have been derived from ground-truth, from clustering,
 or via other means. In such cases it is desirable to be able to color
 the scatterplot according to the labelling. We can do this by simply
 passing the array of label information in with the ``labels`` keyword.
-The ``umap.plot.points`` function will the color the data with a
+The ``umap.plot.points`` function will color the data with a
 categorical colormap according to the labels provided.
 
 .. code:: python3
@@ -183,7 +183,7 @@ actual rendering. Thus, regardless of how much data you have
 interface. You, as a user, don't need to worry about switching to
 plotting with datashader, or how to convert your plotting to its
 slightly different API -- you can just use the same API and trust the
-resuts you get.
+results you get.
 
 .. code:: python3
 
@@ -457,7 +457,7 @@ neighborhood has been more accurately preserved.
 As one might expect the local neighborhood preservation tends to be a
 lot better for those points that had a lower local dimension (as seen in
 the last plot). There is also a tendency for the edges of clusters
-(where there were clear boundaries to be followed) have a better
+(where there were clear boundaries to be followed) to have a better
 preservation of neighborhoods than the centers of the clusters that had
 higher local dimension. Again, this provides a view on which areas of
 the embedding you can have greater trust in, and which regions had to

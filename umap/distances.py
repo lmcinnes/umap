@@ -519,25 +519,15 @@ def haversine_grad(x, y):
 
     d = 2.0 * np.arcsin(np.sqrt(min(max(abs(a_1), 0), 1)))
     denom = np.sqrt(abs(a_1 - 1)) * np.sqrt(abs(a_1))
-    grad = (
-        np.array(
-            [
-                (
-                    sin_lat * cos_lat
-                    - np.sin(x[0] + np.pi / 2)
-                    * np.cos(y[0] + np.pi / 2)
-                    * sin_long ** 2
-                ),
-                (
-                    np.cos(x[0] + np.pi / 2)
-                    * np.cos(y[0] + np.pi / 2)
-                    * sin_long
-                    * cos_long
-                ),
-            ]
-        )
-        / (denom + 1e-6)
-    )
+    grad = np.array(
+        [
+            (
+                sin_lat * cos_lat
+                - np.sin(x[0] + np.pi / 2) * np.cos(y[0] + np.pi / 2) * sin_long ** 2
+            ),
+            (np.cos(x[0] + np.pi / 2) * np.cos(y[0] + np.pi / 2) * sin_long * cos_long),
+        ]
+    ) / (denom + 1e-6)
     return d, grad
 
 
@@ -758,7 +748,7 @@ def ll_dirichlet(data1, data2):
 
 
 @numba.njit(fastmath=True)
-def symmetric_kl(x, y, z=1e-11):
+def symmetric_kl(x, y, z=1e-11): # pragma: no cover
     """
     symmetrized KL divergence between two probability distributions
 
@@ -789,7 +779,7 @@ def symmetric_kl(x, y, z=1e-11):
 
 
 @numba.njit(fastmath=True)
-def symmetric_kl_grad(x, y, z=1e-11):
+def symmetric_kl_grad(x, y, z=1e-11): # pragma: no cover
     """
     symmetrized KL divergence and its gradient
 
@@ -856,7 +846,9 @@ def correlation_grad(x, y):
 
 
 @numba.njit(fastmath=True)
-def sinkhorn_distance(x, y, M=_mock_identity, cost=_mock_cost, maxiter=64):
+def sinkhorn_distance(
+    x, y, M=_mock_identity, cost=_mock_cost, maxiter=64
+): # pragma: no cover
     p = (x / x.sum()).astype(np.float32)
     q = (y / y.sum()).astype(np.float32)
 
@@ -880,7 +872,7 @@ def sinkhorn_distance(x, y, M=_mock_identity, cost=_mock_cost, maxiter=64):
 
 
 @numba.njit(fastmath=True)
-def spherical_gaussian_energy_grad(x, y):
+def spherical_gaussian_energy_grad(x, y): # pragma: no cover
     mu_1 = x[0] - y[0]
     mu_2 = x[1] - y[1]
 
@@ -898,7 +890,7 @@ def spherical_gaussian_energy_grad(x, y):
 
 
 @numba.njit(fastmath=True)
-def diagonal_gaussian_energy_grad(x, y):
+def diagonal_gaussian_energy_grad(x, y): # pragma: no cover
     mu_1 = x[0] - y[0]
     mu_2 = x[1] - y[1]
 
@@ -933,7 +925,7 @@ def diagonal_gaussian_energy_grad(x, y):
 
 
 @numba.njit(fastmath=True)
-def gaussian_energy_grad(x, y):
+def gaussian_energy_grad(x, y): # pragma: no cover
     mu_1 = x[0] - y[0]
     mu_2 = x[1] - y[1]
 
@@ -1006,7 +998,7 @@ def gaussian_energy_grad(x, y):
 
 
 @numba.njit(fastmath=True)
-def spherical_gaussian_grad(x, y):
+def spherical_gaussian_grad(x, y): # pragma: no cover
     mu_1 = x[0] - y[0]
     mu_2 = x[1] - y[1]
 
@@ -1258,7 +1250,10 @@ def parallel_special_metric(X, Y=None, metric=hellinger):
 
 def pairwise_special_metric(X, Y=None, metric="hellinger", kwds=None):
     if callable(metric):
-        kwd_vals = tuple(kwds.values())
+        if kwds is not None:
+            kwd_vals = tuple(kwds.values())
+        else:
+            kwd_vals = ()
 
         @numba.njit(fastmath=True)
         def _partial_metric(_X, _Y=None):

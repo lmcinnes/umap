@@ -1,30 +1,39 @@
-.. image:: https://img.shields.io/pypi/v/umap-learn.svg
-    :target: https://pypi.python.org/pypi/umap-learn/
-    :alt: PyPI Version
-.. image:: https://anaconda.org/conda-forge/umap-learn/badges/version.svg
-    :target: https://anaconda.org/conda-forge/umap-learn
-    :alt: Conda-forge Version
-.. image:: https://anaconda.org/conda-forge/umap-learn/badges/downloads.svg
-    :target: https://anaconda.org/conda-forge/umap-learn
-    :alt: Downloads from conda-forge
-.. image:: https://img.shields.io/pypi/l/umap-learn.svg
-    :target: https://github.com/lmcinnes/umap/blob/master/LICENSE.txt
-    :alt: License
-.. image:: https://travis-ci.org/lmcinnes/umap.svg
-    :target: https://travis-ci.org/lmcinnes/umap
-    :alt: Travis Build Status
-.. image:: https://ci.appveyor.com/api/projects/status/github/lmcinnes/umap?branch=master&svg=true
-    :target: https://ci.appveyor.com/project/lmcinnes/umap
-    :alt: AppVeyor Build Status
-.. image:: https://coveralls.io/repos/github/lmcinnes/umap/badge.svg
-    :target: https://coveralls.io/github/lmcinnes/umap
-    :alt: Test Coverage Status
-.. image:: https://readthedocs.org/projects/umap-learn/badge/?version=latest
-    :target: https://umap-learn.readthedocs.io/en/latest/?badge=latest
-    :alt: Documentation Status
-.. image:: http://joss.theoj.org/papers/10.21105/joss.00861/status.svg
-    :target: https://doi.org/10.21105/joss.00861
-    :alt: JOSS article for this repository
+.. -*- mode: rst -*-
+
+|pypi_version|_ |pypi_downloads|_
+
+|conda_version|_ |conda_downloads|_
+
+|License|_ |build_status|_ |Coverage|_
+
+|Docs|_ |joss_paper|_
+
+.. |pypi_version| image:: https://img.shields.io/pypi/v/umap-learn.svg
+.. _pypi_version: https://pypi.python.org/pypi/umap-learn/
+
+.. |pypi_downloads| image:: https://pepy.tech/badge/umap-learn/month
+.. _pypi_downloads: https://pepy.tech/project/umap-learn
+
+.. |conda_version| image:: https://anaconda.org/conda-forge/umap-learn/badges/version.svg
+.. _conda_version: https://anaconda.org/conda-forge/umap-learn
+
+.. |conda_downloads| image:: https://anaconda.org/conda-forge/umap-learn/badges/downloads.svg
+.. _conda_downloads: https://anaconda.org/conda-forge/umap-learn
+
+.. |License| image:: https://img.shields.io/pypi/l/umap-learn.svg
+.. _License: https://github.com/lmcinnes/umap/blob/master/LICENSE.txt
+
+.. |build_status| image:: https://dev.azure.com/lelandmcinnes/UMAP%20project%20builds/_apis/build/status/lmcinnes.umap?branchName=master
+.. _build_status: https://dev.azure.com/lelandmcinnes/UMAP%20project%20builds/_build/latest?definitionId=2&branchName=master
+
+.. |Coverage| image:: https://coveralls.io/repos/github/lmcinnes/umap/badge.svg
+.. _Coverage: https://coveralls.io/github/lmcinnes/umap
+
+.. |Docs| image:: https://readthedocs.org/projects/umap-learn/badge/?version=latest
+.. _Docs: https://umap-learn.readthedocs.io/en/latest/?badge=latest
+
+.. |joss_paper| image:: http://joss.theoj.org/papers/10.21105/joss.00861/status.svg
+.. _joss_paper: https://doi.org/10.21105/joss.00861
 
 ====
 UMAP
@@ -217,54 +226,6 @@ An example of making use of these options:
 UMAP also supports fitting to sparse matrix data. For more details
 please see `the UMAP documentation <https://umap-learn.readthedocs.io/>`_
 
----------------
-How to use densMAP
----------------
-
-The densMAP algorithm augments UMAP to additionally preserve local density information
-in addition to the topological structure captured by UMAP. One can easily run densMAP
-using the umap package by setting the ``densmap`` input flag:
-
-.. code:: python
-
-    embedding = umap.UMAP(densmap=True).fit_transform(data)
-
-This functionality is built upon the densMAP `implementation <https://github.com/hhcho/densvis>`_ provided by the developers
-of densMAP, who also contributed to integrating densMAP into the umap package.
-
-densMAP inherits all of the parameters of UMAP. The following is a list of additional
-parameters that can be set for densMAP:
-
- - ``dens_frac``: This determines the fraction of epochs (a value between 0 and 1) that will include the density-preservation term in the optimization objective. This parameter is set to 0.3 by default. Note that densMAP switches density optimization on after an initial phase of optimizing the embedding using UMAP.
-
- - ``dens_lambda``: This determines the weight of the density-preservation objective. Higher values prioritize density preservation, and lower values (closer to zero) prioritize the UMAP objective. Setting this parameter to zero reduces the algorithm to UMAP. Default value is 2.0.
-
- - ``dens_var_shift``: Regularization term added to the variance of local densities in the embedding for numerical stability. We recommend setting this parameter to 0.1, which consistently works well in many settings.
-
- - ``output_dens``: When this flag is True, the call to ``fit_transform`` returns, in addition to the embedding, the local radii (inverse measure of local density defined in the `densMAP paper <https://doi.org/10.1101/2020.05.12.077776>`_) for the original dataset and for the embedding. The output is a tuple ``(embedding, radii_original, radii_embedding)``. Note that the radii are log-transformed. If False, only the embedding is returned. This flag can also be used with UMAP to explore the local densities of UMAP embeddings. By default this flag is False.
-
-For densMAP we recommend larger values of ``n_neighbors`` (e.g. 30) for reliable estimation of local density.
-
-An example of making use of these options (based on a subsample of the mnist_784 dataset):
-
-.. code:: python
-    
-    import umap
-    from sklearn.datasets import fetch_openml
-    from sklearn.utils import resample
-
-    digits = fetch_openml(name='mnist_784')
-    subsample, subsample_labels = resample(digits.data, digits.target, n_samples=7000,
-                                           stratify=digits.target, random_state=1)
-
-    embedding, r_orig, r_emb = umap.UMAP(densmap=True, dens_lambda=2.0, n_neighbors=30,
-                                         output_dens=True).fit_transform(subsample)
-
-Since densMAP is built upon the core framework of UMAP, densMAP shares many of
-the benefits of UMAP discussed in the next section. In particular, densMAP
-adds only a small computational overhead (~20% additional time for the same
-number of epochs) and thus maintains the efficiency of UMAP for large datasets.
-
 ----------------
 Benefits of UMAP
 ----------------
@@ -383,6 +344,66 @@ example of use:
 
 The plotting package offers basic plots, as well as interactive plots with hover
 tools and various diagnostic plotting options. See the documentation for more details.
+
+---------------
+Parametric UMAP
+---------------
+
+Parametric UMAP provides support for training a neural network to learn a UMAP based
+transformation of data. This can be used to support faster inference of new unseen
+data, more robust inverse transforms, autoencoder versions of UMAP and
+semi-supervised classification (particularly for data well separated by UMAP and very
+limited amounts of labelled data). See the
+`documentation of Parametric UMAP <https://umap-learn.readthedocs.io/en/0.5dev/parametric_umap.html>`_
+or the
+`example notebooks <https://github.com/lmcinnes/umap/tree/master/notebooks/Parametric_UMAP>`_
+for more.
+
+
+-------
+densMAP
+-------
+
+The densMAP algorithm augments UMAP to additionally preserve local density information
+in addition to the topological structure captured by UMAP. One can easily run densMAP
+using the umap package by setting the ``densmap`` input flag:
+
+.. code:: python
+
+    embedding = umap.UMAP(densmap=True).fit_transform(data)
+
+This functionality is built upon the densMAP `implementation <https://github.com/hhcho/densvis>`_ provided by the developers
+of densMAP, who also contributed to integrating densMAP into the umap package.
+
+densMAP inherits all of the parameters of UMAP. The following is a list of additional
+parameters that can be set for densMAP:
+
+ - ``dens_frac``: This determines the fraction of epochs (a value between 0 and 1) that will include the density-preservation term in the optimization objective. This parameter is set to 0.3 by default. Note that densMAP switches density optimization on after an initial phase of optimizing the embedding using UMAP.
+
+ - ``dens_lambda``: This determines the weight of the density-preservation objective. Higher values prioritize density preservation, and lower values (closer to zero) prioritize the UMAP objective. Setting this parameter to zero reduces the algorithm to UMAP. Default value is 2.0.
+
+ - ``dens_var_shift``: Regularization term added to the variance of local densities in the embedding for numerical stability. We recommend setting this parameter to 0.1, which consistently works well in many settings.
+
+ - ``output_dens``: When this flag is True, the call to ``fit_transform`` returns, in addition to the embedding, the local radii (inverse measure of local density defined in the `densMAP paper <https://doi.org/10.1101/2020.05.12.077776>`_) for the original dataset and for the embedding. The output is a tuple ``(embedding, radii_original, radii_embedding)``. Note that the radii are log-transformed. If False, only the embedding is returned. This flag can also be used with UMAP to explore the local densities of UMAP embeddings. By default this flag is False.
+
+For densMAP we recommend larger values of ``n_neighbors`` (e.g. 30) for reliable estimation of local density.
+
+An example of making use of these options (based on a subsample of the mnist_784 dataset):
+
+.. code:: python
+
+    import umap
+    from sklearn.datasets import fetch_openml
+    from sklearn.utils import resample
+
+    digits = fetch_openml(name='mnist_784')
+    subsample, subsample_labels = resample(digits.data, digits.target, n_samples=7000,
+                                           stratify=digits.target, random_state=1)
+
+    embedding, r_orig, r_emb = umap.UMAP(densmap=True, dens_lambda=2.0, n_neighbors=30,
+                                         output_dens=True).fit_transform(subsample)
+
+See `the documentation <https://umap-learn.readthedocs.io/en/0.5dev/densmap_demo.html>`_ for more details.
 
 ----------------
 Help and Support

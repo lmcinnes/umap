@@ -44,7 +44,7 @@ performance).
 Next we’ll need out plotting tools, and, of course, some data to work
 with. For this performance comparison we’ll default to the now standard
 benchmark of manifold learning: the MNIST digits dataset. We can use
-scikit-learn’s ``fetch_mldata`` to grab it for us.
+scikit-learn’s ``fetch_openml`` to grab it for us.
 
 .. code:: python
 

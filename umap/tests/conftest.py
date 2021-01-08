@@ -6,7 +6,7 @@ import pytest
 import numpy as np
 from scipy import sparse
 from sklearn.datasets import load_iris
-from umap import UMAP
+from umap import UMAP, AlignedUMAP
 
 # Globals, used for all the tests
 np.random.seed(42)
@@ -141,15 +141,38 @@ def iris_selection():
 
 
 @pytest.fixture(scope="session")
+def aligned_iris(iris):
+    slices = [iris.data[i : i + 50] for i in range(0, 125, 25)]
+    target = [iris.target[i : i + 50] for i in range(0, 125, 25)]
+    return slices, target
+
+
+@pytest.fixture(scope="session")
+def aligned_iris_relations():
+    return [{a: a + 25 for a in range(25)} for i in range(4)]
+
+
+@pytest.fixture(scope="session")
 def iris_model(iris):
     return UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit(iris.data)
 
+@pytest.fixture(scope="session")
+def iris_subset_model(iris, iris_selection):
+    return UMAP(n_neighbors=10, min_dist=0.01, random_state=42).fit(iris.data[iris_selection])
 
 @pytest.fixture(scope="session")
 def supervised_iris_model(iris):
     return UMAP(n_neighbors=10, min_dist=0.01, n_epochs=200, random_state=42).fit(
         iris.data, iris.target
     )
+
+
+@pytest.fixture(scope="session")
+def aligned_iris_model(aligned_iris, aligned_iris_relations):
+    data, target = aligned_iris
+    model = AlignedUMAP()
+    model.fit(data, relations=aligned_iris_relations)
+    return model
 
 
 # UMAP Distance Metrics
