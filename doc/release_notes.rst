@@ -13,6 +13,8 @@ What's new in 0.5
 * UMAP now supports an ``update`` method to add new data and retrain.
 * Various performance improvements and bug fixes
 * Additional plotting support, including text searching in interactive plots
+* disconnection_distance allows disconnecting points beyond a certain distance from our manifold. (Thanks to John Healy)
+
 
 What's new in 0.4
 -----------------

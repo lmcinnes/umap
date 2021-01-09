@@ -57,6 +57,14 @@ SMOOTH_K_TOLERANCE = 1e-5
 MIN_K_DIST_SCALE = 1e-3
 NPY_INFINITY = np.inf
 
+DISCONNECTION_DISTANCES = {
+    "correlation": 1,
+    "cosine": 1,
+    "hellinger": 1,
+    "jaccard": 1,
+    "dice": 1,
+}
+
 
 def flatten_iter(container):
     for i in container:
@@ -95,6 +103,39 @@ def breadth_first_search(adjmat, start, min_vertices):
                     levels[neighbour] = levels[node] + 1
 
     return np.array(explored)
+
+
+def raise_disconnected_warning(
+    edges_removed,
+    vertices_disconnected,
+    disconnection_distance,
+    total_rows,
+    threshold=0.1,
+    verbose=False,
+):
+    """A simple wrapper function to avoid large amounts of code repetition."""
+    if verbose & (vertices_disconnected == 0) & (edges_removed > 0):
+        print(
+            f"Disconnection_distance = {disconnection_distance} has removed {edges_removed} edges.  "
+            f"This is not a problem as no vertices were disconnected."
+        )
+    elif (vertices_disconnected > 0) & (
+        vertices_disconnected <= threshold * total_rows
+    ):
+        warn(
+            f"A few of your vertices were disconnected from the manifold.  This shouldn't cause problems.\n"
+            f"Disconnection_distance = {disconnection_distance} has removed {edges_removed} edges.\n"
+            f"It has only fully disconnected {vertices_disconnected} vertices.\n"
+            f"Use umap.utils.disconnected_vertices() to identify them.",
+        )
+    elif vertices_disconnected > threshold * total_rows:
+        warn(
+            f"A large number of your vertices were disconnected from the manifold.\n"
+            f"Disconnection_distance = {disconnection_distance} has removed {edges_removed} edges.\n"
+            f"It has fully disconnected {vertices_disconnected} vertices.\n"
+            f"You might consider using find_disconnected_points() to find and remove these points from your data.\n"
+            f"Use umap.utils.disconnected_vertices() to identify them.",
+        )
 
 
 @numba.njit(
@@ -274,6 +315,9 @@ def nearest_neighbors(
         # Compute the nearest neighbor distances
         #   (equivalent to np.sort(X)[:,:n_neighbors])
         knn_dists = X[np.arange(X.shape[0])[:, None], knn_indices].copy()
+        # Prune any nearest neighbours that are infinite distance apart.
+        disconnected_index = knn_dists == np.inf
+        knn_indices[disconnected_index] = -1
 
         knn_search_index = None
     else:
@@ -312,7 +356,7 @@ def nearest_neighbors(
     fastmath=True,
 )
 def compute_membership_strengths(
-    knn_indices, knn_dists, sigmas, rhos, return_dists=False
+    knn_indices, knn_dists, sigmas, rhos, return_dists=False, bipartite=False,
 ):
     """Construct the membership strength data for the 1-skeleton of each local
     fuzzy simplicial set -- this is formed as a sparse matrix where each row is
@@ -335,6 +379,10 @@ def compute_membership_strengths(
 
     return_dists: bool (optional, default False)
         Whether to return the pairwise distance associated with each edge
+
+    bipartite: bool (optional, default False)
+        Does the nearest neighbour set represent a bipartite graph?  That is are the
+        nearest neighbour indices from the same point set as the row indices?
 
     Returns
     -------
@@ -365,7 +413,9 @@ def compute_membership_strengths(
         for j in range(n_neighbors):
             if knn_indices[i, j] == -1:
                 continue  # We didn't get the full knn for i
-            if knn_indices[i, j] == i:
+            # If applied to an adjacency matrix points shouldn't be similar to themselves.
+            # If applied to an incidence matrix (or bipartite) then the row and column indices are different.
+            if (bipartite==False) & (knn_indices[i, j] == i):
                 val = 0.0
             elif knn_dists[i, j] - rhos[i] <= 0.0 or sigmas[i] == 0.0:
                 val = 1.0
@@ -1208,6 +1258,46 @@ def init_transform(indices, weights, embedding):
 
     return result
 
+def init_graph_transform(graph, embedding):
+    """Given a bipartite graph representing the 1-simplices and strengths between the
+     new points and the original data set along with an embedding of the original points
+    initialize the positions of new points relative to the strengths (of their neighbors in the source data).
+
+    If a point is in our original data set it embeds at the original points coordinates.
+    If a point has no neighbours in our original dataset it embeds as the np.nan vector.
+    Otherwise a point is the weighted average of it's neighbours embedding locations.
+
+    Parameters
+    ----------
+    graph: csr_matrix (n_new_samples, n_samples)
+        A matrix indicating the the 1-simplices and their associated strengths.  These strengths should
+        be values between zero and one and not normalized.  One indicating that the new point was identical
+        to one of our original points.
+
+    embedding: array of shape (n_samples, dim)
+        The original embedding of the source data.
+
+    Returns
+    -------
+    new_embedding: array of shape (n_new_samples, dim)
+        An initial embedding of the new sample points.
+    """
+    print("inside function\n", graph)
+    result = np.zeros((graph.shape[0], embedding.shape[1]), dtype=np.float32)
+
+    for row_index in range(graph.shape[0]):
+        num_neighbours = len(graph[row_index].indices)
+        if num_neighbours == 0:
+            result[row_index] = np.nan
+            continue
+        for col_index in graph[row_index].indices:
+            if graph[row_index, col_index] == 1:
+                result[row_index, :] = embedding[col_index, :]
+                break
+            for d in range(embedding.shape[1]):
+                result[row_index, d] += graph[row_index, col_index] / num_neighbours * embedding[col_index, d]
+
+    return result
 
 @numba.njit()
 def init_update(current_init, n_original_samples, indices):
@@ -1422,6 +1512,8 @@ class UMAP(BaseEstimator):
         embedded.  If you have more duplicates than you have n_neighbour
         you can have the identical data points lying in different regions of
         your space.  It also violates the definition of a metric.
+        For to map from internal structures back to your data use the variable
+        _unique_inverse_.
 
     densmap: bool (optional, default False)
         Specifies whether the density-augmented objective of densMAP
@@ -1456,6 +1548,12 @@ class UMAP(BaseEstimator):
         can also be used when densmap=False to calculate the densities for
         UMAP embeddings.
 
+    disconnection_distance: float (optional, default np.inf or maximal value for bounded distances)
+        Disconnect any vertices of distance greater than or equal to disconnection_distance when approximating the
+        manifold via our k-nn graph. This is particularly useful in the case that you have a bounded metric.  The
+        UMAP assumption that we have a connected manifold can be problematic when you have points that are maximally
+        different from all the rest of your data.  The connected manifold assumption will make such points have perfect
+        similarity to a random set of other points.  Too many such points will artificially connect your space.
     """
 
     def __init__(
@@ -1496,6 +1594,7 @@ class UMAP(BaseEstimator):
         dens_frac=0.3,
         dens_var_shift=0.1,
         output_dens=False,
+        disconnection_distance=None,
     ):
         self.n_neighbors = n_neighbors
         self.metric = metric
@@ -1533,6 +1632,7 @@ class UMAP(BaseEstimator):
         self.dens_frac = dens_frac if densmap else 0.0
         self.dens_var_shift = dens_var_shift
         self.output_dens = output_dens
+        self.disconnection_distance = disconnection_distance
 
         self.n_jobs = n_jobs
 
@@ -1659,7 +1759,7 @@ class UMAP(BaseEstimator):
                 self._inverse_distance_func = None
         else:
             raise ValueError("metric is neither callable nor a recognised string")
-        # set ooutput distance metric
+        # set output distance metric
         if callable(self.output_metric):
             out_returns_grad = self._check_custom_metric(
                 self.output_metric, self._output_metric_kwds
@@ -1719,6 +1819,20 @@ class UMAP(BaseEstimator):
                 raise ValueError(
                     "Non-Euclidean output metric not supported for densMAP."
                 )
+
+        # This will be used to prune all edges of greater than a fixed value from our knn graph.
+        # We have preset defaults described in DISCONNECTION_DISTANCES for our bounded measures.
+        # Otherwise a user can pass in their own value.
+        if self.disconnection_distance is None:
+            self._disconnection_distance = DISCONNECTION_DISTANCES.get(
+                self.metric, np.inf
+            )
+        elif isinstance(self.disconnection_distance, int) or isinstance(
+            self.disconnection_distance, float
+        ):
+            self._disconnection_distance = self.disconnection_distance
+        else:
+            raise ValueError("disconnection_distance must either be None or a numeric.")
 
     def _check_custom_metric(self, metric, kwds, data=None):
         # quickly check to determine whether user-defined
@@ -2075,6 +2189,8 @@ class UMAP(BaseEstimator):
                     " with a count of ",
                     counts[most_common],
                 )
+            # We'll expose an inverse map when unique=True for users to map from our internal structures to their data
+            self._unique_inverse_ = inverse
         # If we aren't asking for unique use the full index.
         # This will save special cases later.
         else:
@@ -2114,7 +2230,7 @@ class UMAP(BaseEstimator):
             # nearest neighbors. To make this easier, we expect matrices that are
             # symmetrical (so we can find neighbors by looking at rows in isolation,
             # rather than also having to consider that sample's column too).
-            print("Computing KNNs for sparse precomputed distances...")
+            # print("Computing KNNs for sparse precomputed distances...")
             if sparse_tril(X).getnnz() != sparse_triu(X).getnnz():
                 raise ValueError(
                     "Sparse precomputed distance matrices should be symmetrical!"
@@ -2134,6 +2250,13 @@ class UMAP(BaseEstimator):
                 row_nn_data_indices = np.argsort(row_data)[: self._n_neighbors]
                 self._knn_indices[row_id] = row_indices[row_nn_data_indices]
                 self._knn_dists[row_id] = row_data[row_nn_data_indices]
+
+            # Disconnect any vertices farther apart than _disconnection_distance
+            disconnected_index = self._knn_dists >= self._disconnection_distance
+            self._knn_indices[disconnected_index] = -1
+            self._knn_dists[disconnected_index] = np.inf
+            edges_removed = disconnected_index.sum()
+
             (
                 self.graph_,
                 self._sigmas,
@@ -2153,6 +2276,18 @@ class UMAP(BaseEstimator):
                 True,
                 self.verbose,
                 self.densmap or self.output_dens,
+            )
+            # Report the number of vertices with degree 0 in our our umap.graph_
+            # This ensures that they were properly disconnected.
+            vertices_disconnected = np.sum(
+                np.array(self.graph_.sum(axis=1)).flatten() == 0
+            )
+            raise_disconnected_warning(
+                edges_removed,
+                vertices_disconnected,
+                self._disconnection_distance,
+                self._raw_data.shape[0],
+                verbose=self.verbose,
             )
         # Handle small cases efficiently by computing all distances
         elif X[index].shape[0] < 4096 and not self.force_approximation_algorithm:
@@ -2184,6 +2319,10 @@ class UMAP(BaseEstimator):
                         metric=self._input_distance_func,
                         kwds=self._metric_kwds,
                     )
+            # set any values greater than disconnection_distance to be np.inf.
+            # This will have no effect when _disconnection_distance is not set since it defaults to np.inf.
+            edges_removed = np.sum(dmat >= self._disconnection_distance)
+            dmat[dmat >= self._disconnection_distance] = np.inf
             (
                 self.graph_,
                 self._sigmas,
@@ -2203,6 +2342,18 @@ class UMAP(BaseEstimator):
                 True,
                 self.verbose,
                 self.densmap or self.output_dens,
+            )
+            # Report the number of vertices with degree 0 in our our umap.graph_
+            # This ensures that they were properly disconnected.
+            vertices_disconnected = np.sum(
+                np.array(self.graph_.sum(axis=1)).flatten() == 0
+            )
+            raise_disconnected_warning(
+                edges_removed,
+                vertices_disconnected,
+                self._disconnection_distance,
+                self._raw_data.shape[0],
+                verbose=self.verbose,
             )
         else:
             # Standard case
@@ -2232,6 +2383,12 @@ class UMAP(BaseEstimator):
                 verbose=self.verbose,
             )
 
+            # Disconnect any vertices farther apart than _disconnection_distance
+            disconnected_index = self._knn_dists >= self._disconnection_distance
+            self._knn_indices[disconnected_index] = -1
+            self._knn_dists[disconnected_index] = np.inf
+            edges_removed = disconnected_index.sum()
+
             (
                 self.graph_,
                 self._sigmas,
@@ -2251,6 +2408,18 @@ class UMAP(BaseEstimator):
                 True,
                 self.verbose,
                 self.densmap or self.output_dens,
+            )
+            # Report the number of vertices with degree 0 in our our umap.graph_
+            # This ensures that they were properly disconnected.
+            vertices_disconnected = np.sum(
+                np.array(self.graph_.sum(axis=1)).flatten() == 0
+            )
+            raise_disconnected_warning(
+                edges_removed,
+                vertices_disconnected,
+                self._disconnection_distance,
+                self._raw_data.shape[0],
+                verbose=self.verbose,
             )
 
         # Currently not checking if any duplicate points have differing labels
@@ -2379,6 +2548,12 @@ class UMAP(BaseEstimator):
             self.embedding_, aux_data = self._fit_embed_data(
                 self._raw_data[index], n_epochs, init, random_state,  # JH why raw data?
             )
+            # Assign any points that are fully disconnected from our manifold(s) to have embedding
+            # coordinates of np.nan.  These will be filtered by our plotting functions automatically.
+            # They also prevent users from being deceived a distance query to one of these points.
+            # Might be worth moving this into simplicial_set_embedding or _fit_embed_data
+            disconnected_vertices = np.array(self.graph_.sum(axis=1)).flatten() == 0
+            self.embedding_[disconnected_vertices] = np.full(self.n_components, np.nan)
 
             self.embedding_ = self.embedding_[inverse]
             if self.output_dens:
@@ -2394,7 +2569,7 @@ class UMAP(BaseEstimator):
         return self
 
     def _fit_embed_data(self, X, n_epochs, init, random_state):
-        """A method wrapper for simlicial_set_embedding that can be
+        """A method wrapper for simplicial_set_embedding that can be
         replaced by subclasses.
         """
         return simplicial_set_embedding(
@@ -2539,7 +2714,8 @@ class UMAP(BaseEstimator):
             )
 
         dists = dists.astype(np.float32, order="C")
-
+        # Remove any nearest neighbours who's distances are greater than our disconnection_distance
+        indices[dists >= self._disconnection_distance] = -1
         adjusted_local_connectivity = max(0.0, self.local_connectivity - 1.0)
         sigmas, rhos = smooth_knn_dist(
             dists,
@@ -2548,7 +2724,7 @@ class UMAP(BaseEstimator):
         )
 
         rows, cols, vals, dists = compute_membership_strengths(
-            indices, dists, sigmas, rhos
+            indices, dists, sigmas, rhos, bipartite=True
         )
 
         graph = scipy.sparse.coo_matrix(
@@ -2561,10 +2737,15 @@ class UMAP(BaseEstimator):
         # This was a very specially constructed graph with constant degree.
         # That lets us do fancy unpacking by reshaping the csr matrix indices
         # and data. Doing so relies on the constant degree assumption!
-        csr_graph = normalize(graph.tocsr(), norm="l1")
-        inds = csr_graph.indices.reshape(X.shape[0], self._n_neighbors)
-        weights = csr_graph.data.reshape(X.shape[0], self._n_neighbors)
-        embedding = init_transform(inds, weights, self.embedding_)
+        #csr_graph = normalize(graph.tocsr(), norm="l1")
+        #inds = csr_graph.indices.reshape(X.shape[0], self._n_neighbors)
+        #weights = csr_graph.data.reshape(X.shape[0], self._n_neighbors)
+        #embedding = init_transform(inds, weights, self.embedding_)
+        # This is less fast code than the above numba.jit'd code.
+        # It handles the fact that our nearest neighbour graph can now contain variable numbers of vertices.
+        csr_graph = graph.tocsr()
+        csr_graph.eliminate_zeros()
+        embedding = init_graph_transform(csr_graph, self.embedding_)
 
         if self.n_epochs is None:
             # For smaller datasets we can use more epochs
