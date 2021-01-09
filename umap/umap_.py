@@ -2157,7 +2157,7 @@ class UMAP(BaseEstimator):
             print(str(self))
 
         self._original_n_threads = numba.get_num_threads()
-        if self.n_jobs > 0 and self.njobs is not None:
+        if self.n_jobs > 0 and self.n_jobs is not None:
             numba.set_num_threads(self.n_jobs)
 
         # Check if we should unique the data
@@ -2437,7 +2437,10 @@ class UMAP(BaseEstimator):
                         len_x=len_X, len_y=len(y)
                     )
                 )
-            y_ = check_array(y, ensure_2d=False)[index]
+            if self.target_metric == "string":
+                y_ = y[index]
+            else:
+                y_ = check_array(y, ensure_2d=False)[index]
             if self.target_metric == "categorical":
                 if self.target_weight < 1.0:
                     far_dist = 2.5 * (1.0 / (1.0 - self.target_weight))

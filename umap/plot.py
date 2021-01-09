@@ -25,11 +25,11 @@ except ImportError:
 
     or via conda using
 
-     conda install pandas matplotlib datashader bokeh holoviews colorcet
+     conda install pandas matplotlib datashader bokeh holoviews colorcet scikit-image
     """
     )
     raise ImportError(
-        "umap.plot requires pandas matplotlib datashader bokeh holoviews and colorcet to be "
+        "umap.plot requires pandas matplotlib datashader bokeh holoviews scikit-image and colorcet to be "
         "installed"
     ) from None
 

@@ -18,12 +18,13 @@ except ImportError:
 
 def test_composite_trustworthiness(nn_data, iris_model):
     data = nn_data[:50]
-    model1 = UMAP(
-        n_neighbors=10, min_dist=0.01, random_state=42, n_epochs=50
-    ).fit(data)
+    model1 = UMAP(n_neighbors=10, min_dist=0.01, random_state=42, n_epochs=50).fit(data)
     model2 = UMAP(
-        n_neighbors=30, min_dist=0.01, random_state=42, n_epochs=50,
-        init=model1.embedding_
+        n_neighbors=30,
+        min_dist=0.01,
+        random_state=42,
+        n_epochs=50,
+        init=model1.embedding_,
     ).fit(data)
     model3 = model1 * model2
     trust = trustworthiness(data, model3.embedding_, 10)
@@ -49,8 +50,9 @@ def test_composite_trustworthiness(nn_data, iris_model):
     with pytest.raises(ValueError):
         model5 = model1 - iris_model
 
+
 @SkipTest
-def test_composite_trustworthiness_random_init(nn_data): # pragma: no cover
+def test_composite_trustworthiness_random_init(nn_data):  # pragma: no cover
     data = nn_data[:50]
     model1 = UMAP(
         n_neighbors=10, min_dist=0.01, random_state=42, n_epochs=50, init="random",
@@ -72,7 +74,6 @@ def test_composite_trustworthiness_random_init(nn_data): # pragma: no cover
         0.82,
         "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust),
     )
-
 
 
 def test_composite_trustworthiness_on_iris(iris):

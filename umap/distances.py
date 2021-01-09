@@ -748,7 +748,7 @@ def ll_dirichlet(data1, data2):
 
 
 @numba.njit(fastmath=True)
-def symmetric_kl(x, y, z=1e-11): # pragma: no cover
+def symmetric_kl(x, y, z=1e-11):  # pragma: no cover
     """
     symmetrized KL divergence between two probability distributions
 
@@ -779,7 +779,7 @@ def symmetric_kl(x, y, z=1e-11): # pragma: no cover
 
 
 @numba.njit(fastmath=True)
-def symmetric_kl_grad(x, y, z=1e-11): # pragma: no cover
+def symmetric_kl_grad(x, y, z=1e-11):  # pragma: no cover
     """
     symmetrized KL divergence and its gradient
 
@@ -848,7 +848,7 @@ def correlation_grad(x, y):
 @numba.njit(fastmath=True)
 def sinkhorn_distance(
     x, y, M=_mock_identity, cost=_mock_cost, maxiter=64
-): # pragma: no cover
+):  # pragma: no cover
     p = (x / x.sum()).astype(np.float32)
     q = (y / y.sum()).astype(np.float32)
 
@@ -872,7 +872,7 @@ def sinkhorn_distance(
 
 
 @numba.njit(fastmath=True)
-def spherical_gaussian_energy_grad(x, y): # pragma: no cover
+def spherical_gaussian_energy_grad(x, y):  # pragma: no cover
     mu_1 = x[0] - y[0]
     mu_2 = x[1] - y[1]
 
@@ -890,7 +890,7 @@ def spherical_gaussian_energy_grad(x, y): # pragma: no cover
 
 
 @numba.njit(fastmath=True)
-def diagonal_gaussian_energy_grad(x, y): # pragma: no cover
+def diagonal_gaussian_energy_grad(x, y):  # pragma: no cover
     mu_1 = x[0] - y[0]
     mu_2 = x[1] - y[1]
 
@@ -925,7 +925,7 @@ def diagonal_gaussian_energy_grad(x, y): # pragma: no cover
 
 
 @numba.njit(fastmath=True)
-def gaussian_energy_grad(x, y): # pragma: no cover
+def gaussian_energy_grad(x, y):  # pragma: no cover
     mu_1 = x[0] - y[0]
     mu_2 = x[1] - y[1]
 
@@ -998,7 +998,7 @@ def gaussian_energy_grad(x, y): # pragma: no cover
 
 
 @numba.njit(fastmath=True)
-def spherical_gaussian_grad(x, y): # pragma: no cover
+def spherical_gaussian_grad(x, y):  # pragma: no cover
     mu_1 = x[0] - y[0]
     mu_2 = x[1] - y[1]
 
