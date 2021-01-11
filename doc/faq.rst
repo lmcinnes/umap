@@ -241,6 +241,45 @@ Where can I learn more?
 - While PCA is ubiquitous, you may `look <https://github.com/snakers4/playing_with_vae>`_
   at this example comparing PCA / UMAP / VAEs;
 
+How UMAP can go wrong
+---------------------
+
+One way UMAP can go wrong is the introduction of data points that are maximally far apart
+from all other points in your data set.  In other words, a points nearest neighbour is maximally
+far from it.  A common example of this could be a point which shares no features in common
+with any other point under a Jaccard distance or a point whose nearest neighbour is np.inf from
+it under a continuous distance function.  In both these cases UMAPs assumption of all points
+lying on a connected manifold can lead us astray.  From this points perspective all other points
+are equally valid nearest neighbours so its k-nearest neighbour query will return a random
+selection of neighbours all at this maximal distance.  Next we will normalize this distance by
+applying our UMAP kernel which says that a point should be maximally similar to it's nearest neighbour.
+Since all k-nearest neighbours are identically far apart they will all be considered maximally
+similar by our point in question.  When we try to embed our data into a low dimensional space
+our optimization will attempt to pull all these randomly selected points together.  Add a
+sufficiently large number of these points and our entire space gets pulled together destroying
+any of the structure we had hoped to identify.
+
+To circumvent this problem we've added a disconnection_distance parameter to UMAP which will cut
+any edge with a distance greater than the value passed in.  This parameter defaults to ``None``.
+When set to ``None`` the disconnection_distance will be set to the maximal value for any of our
+supported bounded metrics and otherwise set to np.inf.  Removing these edges from the UMAP graph
+will disconnect our manifold and cause these points to start where they are initialized and get pushed
+away from all other points via the our optimization.
+
+If a user has a good understanding of their distance metric they can set this value by hand to prevent
+data in particularly sparse regions of their space from becoming connected to their manifold.
+
+If vertices in your graph are disconnected a warning message will be thrown.  At that point a user can
+make use of the umap.utils.disconnected_vertices() function to identify the disconnected points.
+This can be used either for filtering and retraining a new UMAP model or simple to bed used as a
+filter for visualization purposes as seen below.
+
+.. code:: python3
+
+    umap_model = umap.UMAP().fit(data)
+    disconnected_points = umap.utils.disconnected_vertices(umap_model)
+    umap.plot.points(umap_model, subset_points=~disconnected_points)
+
 Successful use-cases
 --------------------
 

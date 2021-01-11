@@ -6,6 +6,8 @@ import time
 
 import numpy as np
 import numba
+from sklearn.utils.validation import check_is_fitted
+import scipy.sparse
 
 
 @numba.njit(parallel=True)
@@ -161,3 +163,28 @@ def csr_unique(matrix, return_index=True, return_inverse=True, return_counts=Tru
         return_inverse=return_inverse,
         return_counts=return_counts,
     )[1 : (return_values + 1)]
+
+
+def disconnected_vertices(model):
+    """
+    Returns a boolean vector indicating which vertices are disconnected from the umap graph.
+    These vertices will often be scattered across the space and make it difficult to focus on the main
+    manifold.  They can either be filtered and have UMAP re-run or simply filtered from the interactive plotting tool
+    via the subset_points parameter.
+    Use ~disconnected_vertices(model) to only plot the connected points.
+    Parameters
+    ----------
+    model: a trained UMAP model
+
+    Returns
+    -------
+    A boolean vector indicating which points are disconnected
+    """
+    check_is_fitted(model, "graph_")
+    if model.unique:
+        vertices_disconnected = (
+            np.array(model.graph_[model._unique_inverse_].sum(axis=1)).flatten() == 0
+        )
+    else:
+        vertices_disconnected = np.array(model.graph_.sum(axis=1)).flatten() == 0
+    return vertices_disconnected
