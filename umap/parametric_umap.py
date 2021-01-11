@@ -376,7 +376,11 @@ class ParametricUMAP(UMAP):
 
     def __getstate__(self):
         # this function supports pickling, making sure that objects can be pickled
-        return dict((k, v) for (k, v) in self.__dict__.items() if should_pickle(k, v) and k != "optimizer")
+        return dict(
+            (k, v)
+            for (k, v) in self.__dict__.items()
+            if should_pickle(k, v) and k != "optimizer"
+        )
 
     def save(self, save_location, verbose=True):
 
@@ -907,10 +911,9 @@ def load_ParametricUMAP(save_location, verbose=True):
         print("Pickle of ParametricUMAP model loaded from {}".format(model_output))
 
     # Work around optimizer not pickling anymore (since tf 2.4)
-    class_name = model._optimizer_dict['name']
+    class_name = model._optimizer_dict["name"]
     OptimizerClass = getattr(tf.keras.optimizers, class_name)
     model.optimizer = OptimizerClass.from_config(model._optimizer_dict)
-
 
     # load encoder
     encoder_output = os.path.join(save_location, "encoder")

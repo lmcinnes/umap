@@ -101,6 +101,7 @@ def test_multi_component_layout_precomputed():
 
     assert_less(error, 15.0, msg="Multi component embedding to far astray")
 
+
 @pytest.mark.parametrize("num_isolates", [1, 5])
 @pytest.mark.parametrize("metric", ["jaccard", "hellinger", "cosine"])
 @pytest.mark.parametrize("force_approximation", [True, False])
@@ -137,7 +138,8 @@ def test_disconnected_data(num_isolates, metric, force_approximation):
         isolated_vertices = disconnected_vertices(model)
         assert isolated_vertices[10] == True
         number_of_nan = np.sum(np.isnan(model.embedding_[isolated_vertices]))
-        assert number_of_nan >= num_isolates*model.n_components
+        assert number_of_nan >= num_isolates * model.n_components
+
 
 @pytest.mark.parametrize("num_isolates", [1])
 @pytest.mark.parametrize("sparse", [True, False])
@@ -165,6 +167,7 @@ def test_disconnected_data_precomputed(num_isolates, sparse):
     assert isolated_vertices[10] == True
     number_of_nan = np.sum(np.isnan(model.embedding_[isolated_vertices]))
     assert number_of_nan >= num_isolates * model.n_components
+
 
 # ---------------
 # Umap Transform

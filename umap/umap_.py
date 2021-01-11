@@ -415,7 +415,7 @@ def compute_membership_strengths(
                 continue  # We didn't get the full knn for i
             # If applied to an adjacency matrix points shouldn't be similar to themselves.
             # If applied to an incidence matrix (or bipartite) then the row and column indices are different.
-            if (bipartite==False) & (knn_indices[i, j] == i):
+            if (bipartite == False) & (knn_indices[i, j] == i):
                 val = 0.0
             elif knn_dists[i, j] - rhos[i] <= 0.0 or sigmas[i] == 0.0:
                 val = 1.0
@@ -1258,6 +1258,7 @@ def init_transform(indices, weights, embedding):
 
     return result
 
+
 def init_graph_transform(graph, embedding):
     """Given a bipartite graph representing the 1-simplices and strengths between the
      new points and the original data set along with an embedding of the original points
@@ -1295,9 +1296,14 @@ def init_graph_transform(graph, embedding):
                 result[row_index, :] = embedding[col_index, :]
                 break
             for d in range(embedding.shape[1]):
-                result[row_index, d] += graph[row_index, col_index] / num_neighbours * embedding[col_index, d]
+                result[row_index, d] += (
+                    graph[row_index, col_index]
+                    / num_neighbours
+                    * embedding[col_index, d]
+                )
 
     return result
+
 
 @numba.njit()
 def init_update(current_init, n_original_samples, indices):
@@ -2737,10 +2743,10 @@ class UMAP(BaseEstimator):
         # This was a very specially constructed graph with constant degree.
         # That lets us do fancy unpacking by reshaping the csr matrix indices
         # and data. Doing so relies on the constant degree assumption!
-        #csr_graph = normalize(graph.tocsr(), norm="l1")
-        #inds = csr_graph.indices.reshape(X.shape[0], self._n_neighbors)
-        #weights = csr_graph.data.reshape(X.shape[0], self._n_neighbors)
-        #embedding = init_transform(inds, weights, self.embedding_)
+        # csr_graph = normalize(graph.tocsr(), norm="l1")
+        # inds = csr_graph.indices.reshape(X.shape[0], self._n_neighbors)
+        # weights = csr_graph.data.reshape(X.shape[0], self._n_neighbors)
+        # embedding = init_transform(inds, weights, self.embedding_)
         # This is less fast code than the above numba.jit'd code.
         # It handles the fact that our nearest neighbour graph can now contain variable numbers of vertices.
         csr_graph = graph.tocsr()
