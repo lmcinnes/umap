@@ -42,6 +42,7 @@ from matplotlib.patches import Patch
 from umap.utils import submatrix
 
 from bokeh.plotting import show as show_interactive
+from bokeh.plotting import output_file, output_notebook
 from bokeh.layouts import column
 from bokeh.models import CustomJS, TextInput
 from matplotlib.pyplot import show as show_static
