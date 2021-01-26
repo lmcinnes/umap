@@ -251,6 +251,38 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
     return result, rho
 
 
+@numba.njit(fastmath=True)
+def anisotropy_distance_recalculation(X, knn_indices, knn_dists):
+    cov = np.zeros((X.shape[1], X.shape[1]))
+    for i in range(X.shape[0]):
+        cov[:] = 0.0
+        n_cov_samples = 0
+        for idx in knn_indices[i]:
+            if idx >= 0:
+                cov += np.cov(X[knn_indices[idx]].T)
+                n_cov_samples += 1
+        cov /= n_cov_samples
+        u, s, v = np.linalg.svd(cov)
+        k = min(X.shape[1], knn_indices.shape[1])
+        u = u[:, :k] * s[:k]
+        v = v[:k, :]
+        uinv = np.linalg.pinv(u)
+        vinv = np.linalg.pinv(v)
+
+        for j in range(knn_indices.shape[1]):
+            diff = X[i] - X[knn_indices[i, j]]
+            d = np.dot(diff, vinv.astype(np.float32))
+            d = np.dot(d, uinv.astype(np.float32))
+            d = np.dot(d, diff)
+            knn_dists[i, j] = np.sqrt(d)
+
+        new_order = np.argsort(knn_dists[i])
+        knn_indices[i] = knn_indices[i][new_order]
+        knn_dists[i] = knn_dists[i][new_order]
+
+    return
+
+
 def nearest_neighbors(
     X,
     n_neighbors,
@@ -340,6 +372,10 @@ def nearest_neighbors(
         )
         knn_indices, knn_dists = knn_search_index.neighbor_graph
 
+    # Quick and crazy hack for euclidean distance approach to anisotropy
+    if metric == "euclidean":
+        anisotropy_distance_recalculation(X, knn_indices, knn_dists)
+
     if verbose:
         print(ts(), "Finished Nearest Neighbor Search")
     return knn_indices, knn_dists, knn_search_index
@@ -357,6 +393,7 @@ def nearest_neighbors(
 )
 def compute_membership_strengths(
     knn_indices, knn_dists, sigmas, rhos, return_dists=False, bipartite=False,
+    local_smoothing=False,
 ):
     """Construct the membership strength data for the 1-skeleton of each local
     fuzzy simplicial set -- this is formed as a sparse matrix where each row is
@@ -410,6 +447,21 @@ def compute_membership_strengths(
         dists = None
 
     for i in range(n_samples):
+
+        sigma = sigmas[i]
+        rho = rhos[i]
+        if local_smoothing:
+            n_inds = 0
+            for j in range(1, n_neighbors):
+                ind = knn_indices[i, j]
+                if ind >= 0:
+                    sigma += sigmas[ind]
+                    rho += rhos[ind]
+                    n_inds += 1
+            sigma /= n_inds
+            rho /= n_inds
+
+
         for j in range(n_neighbors):
             if knn_indices[i, j] == -1:
                 continue  # We didn't get the full knn for i
@@ -417,10 +469,10 @@ def compute_membership_strengths(
             # If applied to an incidence matrix (or bipartite) then the row and column indices are different.
             if (bipartite == False) & (knn_indices[i, j] == i):
                 val = 0.0
-            elif knn_dists[i, j] - rhos[i] <= 0.0 or sigmas[i] == 0.0:
+            elif knn_dists[i, j] - rho <= 0.0 or sigma == 0.0:
                 val = 1.0
             else:
-                val = np.exp(-((knn_dists[i, j] - rhos[i]) / (sigmas[i])))
+                val = np.exp(-((knn_dists[i, j] - rho) / (sigma)))
 
             rows[i * n_neighbors + j] = i
             cols[i * n_neighbors + j] = knn_indices[i, j]
