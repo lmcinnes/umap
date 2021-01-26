@@ -207,7 +207,7 @@ def multi_component_layout(
         distances = pairwise_distances([meta_embedding[label]], meta_embedding)
         data_range = distances[distances > 0.0].min() / 2.0
 
-        if component_graph.shape[0] < 2 * dim:
+        if component_graph.shape[0] < 2 * dim or component_graph.shape[0] <= dim + 1:
             result[component_labels == label] = (
                 random_state.uniform(
                     low=-data_range,
