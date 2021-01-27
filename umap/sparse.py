@@ -288,9 +288,8 @@ def sparse_canberra(ind1, data1, ind2, data2):
 
 @numba.njit()
 def sparse_bray_curtis(ind1, data1, ind2, data2):  # pragma: no cover
-    abs_data1 = np.abs(data1)
-    abs_data2 = np.abs(data2)
-    denom_inds, denom_data = sparse_sum(ind1, abs_data1, ind2, abs_data2)
+    denom_inds, denom_data = sparse_sum(ind1, data1, ind2, data2)
+    denom_data = np.sum(denom_data)
 
     if denom_data.shape[0] == 0:
         return 0.0
@@ -302,7 +301,10 @@ def sparse_bray_curtis(ind1, data1, ind2, data2):  # pragma: no cover
 
     numerator = np.sum(numer_data)
 
-    return float(numerator) / denominator
+    if denominator == 0:
+        return 0.0
+    else:
+        return float(numerator) / denominator
 
 
 @numba.njit()
