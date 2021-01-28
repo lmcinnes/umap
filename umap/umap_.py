@@ -1283,7 +1283,6 @@ def init_graph_transform(graph, embedding):
     new_embedding: array of shape (n_new_samples, dim)
         An initial embedding of the new sample points.
     """
-    print("inside function\n", graph)
     result = np.zeros((graph.shape[0], embedding.shape[1]), dtype=np.float32)
 
     for row_index in range(graph.shape[0]):
