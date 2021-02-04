@@ -33,7 +33,7 @@ def clip(val):
     locals={
         "result": numba.types.float32,
         "diff": numba.types.float32,
-        "dim": numba.types.int32,
+        "dim": numba.types.intp,
     },
 )
 def rdist(x, y):
