@@ -291,6 +291,10 @@ class AlignedUMAP(BaseEstimator):
         assert type(X) in (list, tuple, np.ndarray)
         assert (len(X) - 1) == (len(self.dict_relations_))
 
+        # We need n_components to be constant or this won't work
+        if type(self.n_components) in (list, tuple, np.ndarray):
+            raise ValueError("n_components must be a single integer, and cannot vary")
+
         self.n_models_ = len(X)
 
         self.mappers_ = [
@@ -305,6 +309,7 @@ class AlignedUMAP(BaseEstimator):
                 local_connectivity=get_nth_item_or_val(self.local_connectivity, n),
                 set_op_mix_ratio=get_nth_item_or_val(self.set_op_mix_ratio, n),
                 unique=get_nth_item_or_val(self.unique, n),
+                n_components=self.n_components,
             ).fit(X[n])
             for n in range(self.n_models_)
         ]
