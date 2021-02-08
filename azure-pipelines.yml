@@ -5,7 +5,6 @@
 
 trigger:
 - master
-- 0.5dev
 
 jobs:
   - job: Linux
