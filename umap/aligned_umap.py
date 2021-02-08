@@ -341,7 +341,7 @@ class AlignedUMAP(BaseEstimator):
             indptr_list, indices_list, relations,
         )
         first_init = spectral_layout(
-            self.mappers_[0]._raw_data, self.mappers_[0].graph_, 2, np.random,
+            self.mappers_[0]._raw_data, self.mappers_[0].graph_, self.n_components, np.random,
         )
         expansion = 10.0 / np.abs(first_init).max()
         first_embedding = (first_init * expansion).astype(np.float32, order="C",)
@@ -350,7 +350,7 @@ class AlignedUMAP(BaseEstimator):
         embeddings.append(first_embedding)
         for i in range(1, self.n_models_):
             next_init = spectral_layout(
-                self.mappers_[i]._raw_data, self.mappers_[i].graph_, 2, np.random,
+                self.mappers_[i]._raw_data, self.mappers_[i].graph_, self.n_components, np.random,
             )
             expansion = 10.0 / np.abs(next_init).max()
             next_embedding = (next_init * expansion).astype(np.float32, order="C",)
