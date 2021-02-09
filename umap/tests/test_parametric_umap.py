@@ -1,43 +1,66 @@
-from sklearn.datasets import make_moons
 import numpy as np
-import tensorflow as tf
-from umap.parametric_umap import ParametricUMAP, load_ParametricUMAP
-import platform
 import tempfile
+import pytest
+from sklearn.datasets import make_moons
+from sklearn.model_selection import train_test_split
+
+try:
+    import tensorflow as tf
+
+    IMPORT_TF = True
+except ImportError:
+    IMPORT_TF = False
+else:
+    from umap.parametric_umap import ParametricUMAP, load_ParametricUMAP
+
+tf_only = pytest.mark.skipif(not IMPORT_TF, reason="TensorFlow >= 2.0 is not installed")
 
 
-def test_create_model():
+@pytest.fixture(scope="session")
+def moon_dataset():
+    X, _ = make_moons(200)
+    return X
+
+
+@tf_only
+def test_create_model(moon_dataset):
     """test a simple parametric UMAP network"""
-    X, y = make_moons(100)
     embedder = ParametricUMAP()
-    embedding = embedder.fit_transform(X)
+    embedding = embedder.fit_transform(moon_dataset)
+    # completes successfully
+    assert embedding is not None
+    assert embedding.shape == (moon_dataset.shape[0], 2)
 
 
-def test_inverse_transform():
+@tf_only
+def test_inverse_transform(moon_dataset):
     """tests inverse_transform"""
 
     def norm(x):
         return (x - np.min(x)) / (np.max(x) - np.min(x))
 
-    X, y = make_moons(100)
-    X = norm(X)
+    X = norm(moon_dataset)
     embedder = ParametricUMAP(parametric_reconstruction=True)
-    embedding = embedder.fit_transform(X)
-    Z = embedder.transform(X)
+    Z = embedder.fit_transform(X)
     X_r = embedder.inverse_transform(Z)
+    # completes successfully
+    assert X_r is not None
+    assert X_r.shape == X.shape
 
 
-def test_nonparametric():
+@tf_only
+def test_nonparametric(moon_dataset):
     """test nonparametric embedding"""
-    X, y = make_moons(100)
     embedder = ParametricUMAP(parametric_embedding=False)
-    embedding = embedder.fit_transform(X)
+    embedding = embedder.fit_transform(moon_dataset)
+    # completes successfully
+    assert embedding is not None
+    assert embedding.shape == (moon_dataset.shape[0], 2)
 
 
-def test_custom_encoder_decoder():
+@tf_only
+def test_custom_encoder_decoder(moon_dataset):
     """test using a custom encoder / decoder"""
-    X, y = make_moons(100)
-
     dims = (2,)
     n_components = 2
     encoder = tf.keras.Sequential(
@@ -71,29 +94,39 @@ def test_custom_encoder_decoder():
         parametric_reconstruction=True,
         verbose=True,
     )
-    embedding = embedder.fit_transform(X)
+    embedding = embedder.fit_transform(moon_dataset)
+    # completes successfully
+    assert embedding is not None
+    assert embedding.shape == (moon_dataset.shape[0], 2)
 
 
-def test_validation():
+@tf_only
+def test_validation(moon_dataset):
     """tests adding a validation dataset"""
-    X, y = make_moons(100)
-
-    X_valid, y = make_moons(100)
+    X_train, X_valid = train_test_split(moon_dataset, train_size=0.5)
     embedder = ParametricUMAP(
         parametric_reconstruction=True, reconstruction_validation=X_valid, verbose=True,
     )
-    embedding = embedder.fit_transform(X)
+    embedding = embedder.fit_transform(X_train)
+    # completes successfully
+    assert embedding is not None
+    assert embedding.shape == (X_train.shape[0], 2)
 
 
-def test_save_load():
+@tf_only
+def test_save_load(moon_dataset):
     """tests saving and loading"""
-    X, y = make_moons(100)
+
     embedder = ParametricUMAP()
-    embedding = embedder.fit_transform(X)
+    embedding = embedder.fit_transform(moon_dataset)
+    # completes successfully
+    assert embedding is not None
+    assert embedding.shape == (moon_dataset.shape[0], 2)
 
     # if platform.system() != "Windows":
     # Portable tempfile
     model_path = tempfile.mkdtemp(suffix="_umap_model")
 
     embedder.save(model_path)
-    embedder = load_ParametricUMAP(model_path)
+    loaded_model = load_ParametricUMAP(model_path)
+    assert loaded_model is not None
