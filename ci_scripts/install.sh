@@ -38,19 +38,19 @@ if [[ "$DISTRIB" == "conda" ]]; then
 
   # Configure the conda environment and put it in the path using the
   # provided versions
-#  conda create -n testenv --yes python=$PYTHON_VERSION pip nose \
+#  conda create -n testenv --yes python=$PYTHON_VERSION pip \
 #        numpy=$NUMPY_VERSION scipy=$SCIPY_VERSION numba=$NUMBA_VERSION scikit-learn \
 #        pytest "tensorflow-mkl>=2.2.0"
   if [ $TRAVIS_OS_NAME = 'osx' ]; then
     conda create -q -n testenv --yes python=$PYTHON_VERSION numpy scipy scikit-learn \
-          numba nose pytest pandas
+          numba pytest pandas
 #    pip install bokeh
 #    pip install datashader
 #    pip install holoviews
     conda install --yes "tensorflow>=2.0.0"
   else
     conda create -q -n testenv --yes python=$PYTHON_VERSION numpy scipy scikit-learn \
-          numba pandas bokeh holoviews datashader scikit-image nose pytest \
+          numba pandas bokeh holoviews datashader scikit-image pytest \
           "tensorflow-mkl>=2.2.0"
   fi
 
