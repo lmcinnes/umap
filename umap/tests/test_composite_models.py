@@ -24,10 +24,14 @@ def test_composite_trustworthiness(nn_data, iris_model):
     ).fit(data)
     model3 = model1 * model2
     trust = trustworthiness(data, model3.embedding_, 10)
-    assert trust >= 0.82, "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust)
+    assert (
+        trust >= 0.82
+    ), "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust)
     model4 = model1 + model2
     trust = trustworthiness(data, model4.embedding_, 10)
-    assert trust >= 0.82, "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust)
+    assert (
+        trust >= 0.82
+    ), "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust)
 
     with pytest.raises(ValueError):
         _ = model1 + iris_model
@@ -50,10 +54,14 @@ def test_composite_trustworthiness_random_init(nn_data):  # pragma: no cover
     ).fit(data)
     model3 = model1 * model2
     trust = trustworthiness(data, model3.embedding_, 10)
-    assert trust >= 0.82, "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust)
+    assert (
+        trust >= 0.82
+    ), "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust)
     model4 = model1 + model2
     trust = trustworthiness(data, model4.embedding_, 10)
-    assert trust >= 0.82, "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust)
+    assert (
+        trust >= 0.82
+    ), "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust)
 
 
 def test_composite_trustworthiness_on_iris(iris):
@@ -65,10 +73,14 @@ def test_composite_trustworthiness_on_iris(iris):
     ).fit(iris.data[:, 2:])
     embedding = (iris_model1 + iris_model2).embedding_
     trust = trustworthiness(iris.data, embedding, 10)
-    assert trust >= 0.82, "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust)
+    assert (
+        trust >= 0.82
+    ), "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust)
     embedding = (iris_model1 * iris_model2).embedding_
     trust = trustworthiness(iris.data, embedding, 10)
-    assert trust >= 0.82, "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust)
+    assert (
+        trust >= 0.82
+    ), "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust)
 
 
 def test_contrastive_trustworthiness_on_iris(iris):
@@ -80,4 +92,6 @@ def test_contrastive_trustworthiness_on_iris(iris):
     ).fit(iris.data[:, 2:])
     embedding = (iris_model1 - iris_model2).embedding_
     trust = trustworthiness(iris.data, embedding, 10)
-    assert trust >= 0.75, "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust)
+    assert (
+        trust >= 0.75
+    ), "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust)

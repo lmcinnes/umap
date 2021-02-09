@@ -273,6 +273,7 @@ def test_sparse_correlation(sparse_spatial_data):
 def test_sparse_braycurtis(sparse_spatial_data):
     sparse_spatial_check("braycurtis", sparse_spatial_data)
 
+
 # ---------------------------
 # Sparse Binary Metric Tests
 # ---------------------------
