@@ -20,7 +20,7 @@ Parametric UMAP is simply a subclass of UMAP, so it can be used just like nonpar
     embedder = ParametricUMAP()
     embedding = embedder.fit_transform(my_data)
 
-In this implementation, we use Keras and Tensorflow as a backend to train that neural network. The added complexity of a learned embedding presents a number of configurable settings available in addition to those in non-parametric UMAP. A set of Jupyter notebooks walking you through these parameters are available on the  `GitHub repository <http://github.com/lmcinnes/umap/notebooks/parametric_umap/>`_
+In this implementation, we use Keras and Tensorflow as a backend to train that neural network. The added complexity of a learned embedding presents a number of configurable settings available in addition to those in non-parametric UMAP. A set of Jupyter notebooks walking you through these parameters are available on the  `GitHub repository <https://github.com/lmcinnes/umap/tree/master/notebooks/Parametric_UMAP>`_
 
 
 Defining your own network
