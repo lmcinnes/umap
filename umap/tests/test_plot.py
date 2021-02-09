@@ -3,7 +3,18 @@ import pytest
 import umap
 from unittest import mock
 
-np.random.seed(42)
+# Globals, used for all the tests
+SEED = 189212  # 0b101110001100011100
+np.random.seed(SEED)
+
+try:
+    from umap import plot
+
+    IMPORT_PLOT = True
+except ImportError:
+    IMPORT_PLOT = False
+
+plot_only = pytest.mark.skipif(not IMPORT_PLOT, reason="umap plot not found.")
 
 
 @pytest.fixture(scope="session")
@@ -21,20 +32,10 @@ def test_umap_plot_dependency():
             assert False, "Exception not raised for missing dependency"
 
 
-# Check that the environment is actually setup for testability
-# i.e. all the extra packages have been installed
-def test_umap_plot_testability():
-    try:
-        from umap import plot
-
-        assert True
-    except ImportError:
-        assert False, "Missing dependencies - unable to test!"
-
-
 # These tests requires revision: Refactoring is
 # needed as there is no assertion nor
 # property verification.
+@plot_only
 def test_plot_runs_at_all(mapper, iris, iris_selection):
     from umap import plot as umap_plot
 
