@@ -1,7 +1,6 @@
 import numpy as np
 import pytest
 import umap
-from unittest import mock
 
 # Globals, used for all the tests
 SEED = 189212  # 0b101110001100011100
@@ -20,16 +19,6 @@ plot_only = pytest.mark.skipif(not IMPORT_PLOT, reason="umap plot not found.")
 @pytest.fixture(scope="session")
 def mapper(iris):
     return umap.UMAP(n_epochs=100).fit(iris.data)
-
-
-def test_umap_plot_dependency():
-    with mock.patch.dict("sys.modules", pandas=mock.MagicMock()):
-        try:
-            from umap import plot
-        except:
-            assert True
-        else:
-            assert False, "Exception not raised for missing dependency"
 
 
 # These tests requires revision: Refactoring is
