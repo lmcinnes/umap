@@ -416,6 +416,7 @@ class AlignedUMAP(BaseEstimator):
             ),
             set_op_mix_ratio=get_nth_item_or_val(self.set_op_mix_ratio, self.n_models_),
             unique=get_nth_item_or_val(self.unique, self.n_models_),
+            n_components=self.n_components,
         ).fit(X)
 
         self.mappers_ += [new_mapper]
