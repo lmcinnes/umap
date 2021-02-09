@@ -9,7 +9,8 @@ from sklearn.datasets import load_iris
 from umap import UMAP, AlignedUMAP
 
 # Globals, used for all the tests
-np.random.seed(42)
+SEED = 189212  # 0b101110001100011100
+np.random.seed(SEED)
 
 
 # Spatial and Binary Data
