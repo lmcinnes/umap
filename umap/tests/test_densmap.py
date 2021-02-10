@@ -1,9 +1,5 @@
 from umap import UMAP
-from sklearn.datasets import make_blobs
-from nose.tools import assert_greater_equal, assert_raises
-from nose import SkipTest
 import pytest
-import numpy as np
 
 try:
     # works for sklearn>=0.22
@@ -27,25 +23,21 @@ def test_densmap_trustworthiness(nn_data):
         output_dens=True,
     ).fit_transform(data)
     trust = trustworthiness(data, embedding, 10)
-    assert_greater_equal(
-        trust,
-        0.75,
-        "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust),
-    )
+    assert (
+        trust >= 0.75
+    ), "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust)
 
 
-@SkipTest
+@pytest.mark.skip()
 def test_densmap_trustworthiness_random_init(nn_data):  # pragma: no cover
     data = nn_data[:50]
     embedding = UMAP(
         n_neighbors=10, min_dist=0.01, random_state=42, init="random", densmap=True,
     ).fit_transform(data)
     trust = trustworthiness(data, embedding, 10)
-    assert_greater_equal(
-        trust,
-        0.75,
-        "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust),
-    )
+    assert (
+        trust >= 0.75
+    ), "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust)
 
 
 def test_densmap_trustworthiness_on_iris(iris):
@@ -54,16 +46,17 @@ def test_densmap_trustworthiness_on_iris(iris):
     ).fit(iris.data)
     embedding = densmap_iris_model.embedding_
     trust = trustworthiness(iris.data, embedding, 10)
-    assert_greater_equal(
-        trust,
-        0.97,
-        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
-    )
-
-    assert_raises(NotImplementedError, densmap_iris_model.transform, iris.data[:10])
-    assert_raises(ValueError, densmap_iris_model.inverse_transform, embedding[:10])
+    assert (
+        trust >= 0.97
+    ), "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust)
 
     with pytest.raises(NotImplementedError):
-        supervised_densmap_iris_model = UMAP(
+        densmap_iris_model.transform(iris.data[:10])
+
+    with pytest.raises(ValueError):
+        densmap_iris_model.inverse_transform(embedding[:10])
+
+    with pytest.raises(NotImplementedError):
+        _ = UMAP(
             n_neighbors=10, min_dist=0.01, random_state=42, densmap=True, verbose=True,
         ).fit(iris.data, y=iris.target)

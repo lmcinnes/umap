@@ -1,5 +1,4 @@
 from umap import UMAP
-from nose.tools import assert_greater_equal
 from scipy import sparse
 import numpy as np
 from sklearn.cluster import KMeans
@@ -25,11 +24,9 @@ except ImportError:
 def test_umap_trustworthiness_on_iris(iris, iris_model):
     embedding = iris_model.embedding_
     trust = trustworthiness(iris.data, embedding, 10)
-    assert_greater_equal(
-        trust,
-        0.97,
-        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
-    )
+    assert (
+        trust >= 0.97
+    ), "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust)
 
 
 def test_initialized_umap_trustworthiness_on_iris(iris):
@@ -38,11 +35,9 @@ def test_initialized_umap_trustworthiness_on_iris(iris):
         n_neighbors=10, min_dist=0.01, init=data[:, 2:], n_epochs=200, random_state=42,
     ).fit_transform(data)
     trust = trustworthiness(iris.data, embedding, 10)
-    assert_greater_equal(
-        trust,
-        0.97,
-        "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust),
-    )
+    assert (
+        trust >= 0.97
+    ), "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust)
 
 
 def test_umap_trustworthiness_on_sphere_iris(iris,):
@@ -65,12 +60,10 @@ def test_umap_trustworthiness_on_sphere_iris(iris,):
         ]
     ).T
     trust = trustworthiness(iris.data, projected_embedding, 10, metric="cosine")
-    assert_greater_equal(
-        trust,
-        0.80,
-        "Insufficiently trustworthy spherical embedding for iris dataset: {}".format(
-            trust
-        ),
+    assert (
+        trust >= 0.80
+    ), "Insufficiently trustworthy spherical embedding for iris dataset: {}".format(
+        trust
     )
 
 
@@ -83,11 +76,9 @@ def test_umap_transform_on_iris(iris, iris_subset_model, iris_selection):
     embedding = fitter.transform(new_data)
 
     trust = trustworthiness(new_data, embedding, 10)
-    assert_greater_equal(
-        trust,
-        0.85,
-        "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust),
-    )
+    assert (
+        trust >= 0.85
+    ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
 
 
 def test_umap_transform_on_iris_w_pynndescent(iris, iris_selection):
@@ -104,11 +95,9 @@ def test_umap_transform_on_iris_w_pynndescent(iris, iris_selection):
     embedding = fitter.transform(new_data)
 
     trust = trustworthiness(new_data, embedding, 10)
-    assert_greater_equal(
-        trust,
-        0.85,
-        "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust),
-    )
+    assert (
+        trust >= 0.85
+    ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
 
 
 def test_umap_transform_on_iris_modified_dtype(iris, iris_subset_model, iris_selection):
@@ -119,11 +108,9 @@ def test_umap_transform_on_iris_modified_dtype(iris, iris_subset_model, iris_sel
     embedding = fitter.transform(new_data)
 
     trust = trustworthiness(new_data, embedding, 10)
-    assert_greater_equal(
-        trust,
-        0.8,
-        "Insufficiently trustworthy transform for iris dataset: {}".format(trust),
-    )
+    assert (
+        trust >= 0.8
+    ), "Insufficiently trustworthy transform for iris dataset: {}".format(trust)
 
 
 def test_umap_sparse_transform_on_iris(iris, iris_selection):
@@ -142,11 +129,9 @@ def test_umap_sparse_transform_on_iris(iris, iris_selection):
     embedding = fitter.transform(new_data)
 
     trust = trustworthiness(new_data, embedding, 10)
-    assert_greater_equal(
-        trust,
-        0.80,
-        "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust),
-    )
+    assert (
+        trust >= 0.80
+    ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
 
 
 # UMAP Clusterability on Iris
@@ -154,7 +139,7 @@ def test_umap_sparse_transform_on_iris(iris, iris_selection):
 def test_umap_clusterability_on_supervised_iris(supervised_iris_model, iris):
     embedding = supervised_iris_model.embedding_
     clusters = KMeans(3).fit_predict(embedding)
-    assert_greater_equal(adjusted_rand_score(clusters, iris.target), 0.95)
+    assert adjusted_rand_score(clusters, iris.target) >= 0.95
 
 
 # UMAP Inverse transform on Iris
@@ -171,6 +156,4 @@ def test_umap_inverse_transform_on_iris(iris, iris_model):
         highd_near_points = highd_tree.query(
             highd_centroid, k=10, return_distance=False
         )
-        assert_greater_equal(
-            np.intersect1d(near_points, highd_near_points[0]).shape[0], 3
-        )
+        assert np.intersect1d(near_points, highd_near_points[0]).shape[0] >= 3

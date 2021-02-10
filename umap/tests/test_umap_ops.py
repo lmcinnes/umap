@@ -7,7 +7,6 @@ from sklearn.datasets import make_blobs
 from sklearn.cluster import KMeans
 from sklearn.metrics import adjusted_rand_score, pairwise_distances
 from sklearn.preprocessing import normalize
-from nose.tools import assert_equal, assert_less, assert_raises
 from numpy.testing import assert_array_equal
 from umap import UMAP
 from umap.spectral import component_layout
@@ -42,7 +41,7 @@ from scipy.sparse import csr_matrix
 def test_blobs_cluster():
     data, labels = make_blobs(n_samples=500, n_features=10, centers=5)
     embedding = UMAP(n_epochs=100).fit_transform(data)
-    assert_equal(adjusted_rand_score(labels, KMeans(5).fit_predict(embedding)), 1.0)
+    assert adjusted_rand_score(labels, KMeans(5).fit_predict(embedding)) == 1.0
 
 
 # Multi-components Layout
@@ -69,7 +68,7 @@ def test_multi_component_layout():
 
     error = np.sum((true_centroids - embed_centroids) ** 2)
 
-    assert_less(error, 15.0, msg="Multi component embedding to far astray")
+    assert error < 15.0, "Multi component embedding to far astray"
 
 
 # Multi-components Layout
@@ -99,7 +98,7 @@ def test_multi_component_layout_precomputed():
 
     error = np.sum((true_centroids - embed_centroids) ** 2)
 
-    assert_less(error, 15.0, msg="Multi component embedding to far astray")
+    assert error < 15.0, "Multi component embedding to far astray"
 
 
 @pytest.mark.parametrize("num_isolates", [1, 5])
@@ -176,7 +175,8 @@ def test_disconnected_data_precomputed(num_isolates, sparse):
 
 def test_bad_transform_data(nn_data):
     u = UMAP().fit([[1, 1, 1, 1]])
-    assert_raises(ValueError, u.transform, [[0, 0, 0, 0]])
+    with pytest.raises(ValueError):
+        u.transform([[0, 0, 0, 0]])
 
 
 # Transform Stability
@@ -236,7 +236,7 @@ def test_umap_update(iris, iris_subset_model, iris_selection, iris_model):
 
     error = np.sum(np.abs((new_model.graph_ - comparison_graph).data))
 
-    assert_less(error, 1.0)
+    assert error < 1.0
 
 
 # -----------------
@@ -248,7 +248,7 @@ def test_umap_graph_layout():
     graph = model.fit_transform(data)
     assert scipy.sparse.issparse(graph)
     nc, cl = scipy.sparse.csgraph.connected_components(graph)
-    assert_equal(nc, 5)
+    assert nc == 5
 
     new_graph = model.transform(data[:10] + np.random.normal(0.0, 0.1, size=(10, 10)))
     assert scipy.sparse.issparse(graph)
