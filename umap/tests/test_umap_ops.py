@@ -117,27 +117,27 @@ def test_disconnected_data(num_isolates, metric, force_approximation):
         new_columns[10 + i, i] = True
     disconnected_data = np.hstack([disconnected_data, new_columns])
 
-    with warnings.catch_warnings(record=True) as w:
+    with pytest.warns(None) as w:
         model = UMAP(
             n_neighbors=3,
             metric=metric,
             force_approximation_algorithm=force_approximation,
         ).fit(disconnected_data)
-        assert len(w) >= 1  # at least one warning should be raised here
-        # we can't guarantee the order that the warnings will be raised in so check them all.
-        flag = 0
-        if num_isolates == 1:
-            warning_contains = "A few of your vertices"
-        elif num_isolates > 1:
-            warning_contains = "A large number of your vertices"
-        for i in range(len(w)):
-            flag += warning_contains in str(w[i].message)
-        assert flag == 1
-        # Check that the first isolate has no edges in our umap.graph_
-        isolated_vertices = disconnected_vertices(model)
-        assert isolated_vertices[10] == True
-        number_of_nan = np.sum(np.isnan(model.embedding_[isolated_vertices]))
-        assert number_of_nan >= num_isolates * model.n_components
+    assert len(w) >= 1  # at least one warning should be raised here
+    # we can't guarantee the order that the warnings will be raised in so check them all.
+    flag = 0
+    if num_isolates == 1:
+        warning_contains = "A few of your vertices"
+    elif num_isolates > 1:
+        warning_contains = "A large number of your vertices"
+    for i in range(len(w)):
+        flag += warning_contains in str(w[i].message)
+    assert flag == 1
+    # Check that the first isolate has no edges in our umap.graph_
+    isolated_vertices = disconnected_vertices(model)
+    assert isolated_vertices[10] == True
+    number_of_nan = np.sum(np.isnan(model.embedding_[isolated_vertices]))
+    assert number_of_nan >= num_isolates * model.n_components
 
 
 @pytest.mark.parametrize("num_isolates", [1])
