@@ -33,6 +33,16 @@ def test_create_model(moon_dataset):
 
 
 @tf_only
+def test_global_loss(moon_dataset):
+    """test a simple parametric UMAP network"""
+    embedder = ParametricUMAP(global_correlation_loss_weight=1.0)
+    embedding = embedder.fit_transform(moon_dataset)
+    # completes successfully
+    assert embedding is not None
+    assert embedding.shape == (moon_dataset.shape[0], 2)
+
+
+@tf_only
 def test_inverse_transform(moon_dataset):
     """tests inverse_transform"""
 
@@ -105,7 +115,7 @@ def test_validation(moon_dataset):
     """tests adding a validation dataset"""
     X_train, X_valid = train_test_split(moon_dataset, train_size=0.5)
     embedder = ParametricUMAP(
-        parametric_reconstruction=True, reconstruction_validation=X_valid, verbose=True,
+        parametric_reconstruction=True, reconstruction_validation=X_valid, verbose=True
     )
     embedding = embedder.fit_transform(X_train)
     # completes successfully

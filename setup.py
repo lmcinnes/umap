@@ -60,10 +60,7 @@ configuration = {
             "seaborn",
             "scikit-image",
         ],
-        "parametric_umap":
-        [
-            "tensorflow >= 2.1"
-        ]
+        "parametric_umap": ["tensorflow >= 2.1", "tensorflow-probability >= 0.10"],
     },
     "ext_modules": [],
     "cmdclass": {},

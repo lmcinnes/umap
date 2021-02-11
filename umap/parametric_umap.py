@@ -9,6 +9,7 @@ from sklearn.utils import check_random_state
 import codecs, pickle
 from sklearn.neighbors import KDTree
 
+
 try:
     import tensorflow as tf
 except ImportError:
@@ -38,6 +39,21 @@ if TF_MAJOR_VERSION < 2:
     )
     raise ImportError("umap.parametric_umap requires Tensorflow >= 2.0") from None
 
+try:
+    import tensorflow_probability as tfp
+except ImportError:
+    warn(
+        """ Global structure preservation in The umap.parametric_umap package requires 
+        tensorflow_probability to be installed. You can install tensorflow_probability at
+        https://www.tensorflow.org/probability, 
+        
+        or via
+
+        pip install --upgrade tensorflow-probability
+
+        """
+    )
+
 
 class ParametricUMAP(UMAP):
     def __init__(
@@ -53,6 +69,7 @@ class ParametricUMAP(UMAP):
         reconstruction_validation=None,
         loss_report_frequency=10,
         n_training_epochs=1,
+        global_correlation_loss_weight=0,
         keras_fit_kwargs={},
         **kwargs
     ):
@@ -103,6 +120,7 @@ class ParametricUMAP(UMAP):
         self.loss_report_frequency = (
             loss_report_frequency  # how many times per epoch to report loss in keras
         )
+        self.global_correlation_loss_weight = global_correlation_loss_weight
         self.reconstruction_validation = (
             reconstruction_validation  # holdout data for reconstruction acc
         )
@@ -121,7 +139,6 @@ class ParametricUMAP(UMAP):
                 self.optimizer = tf.keras.optimizers.Adam(1e-1)
         else:
             self.optimizer = optimizer
-
         if parametric_reconstruction and not parametric_embedding:
             warn(
                 "Parametric decoding is not implemented with nonparametric \
@@ -224,12 +241,19 @@ class ParametricUMAP(UMAP):
         )
         outputs["umap"] = embedding_to_from
 
+        if self.global_correlation_loss_weight > 0:
+            outputs["global_correlation"] = tf.keras.layers.Lambda(
+                lambda x: x, name="global_correlation"
+            )(embedding_to)
+
         # create model
-        self.parametric_model = tf.keras.Model(inputs=inputs, outputs=outputs,)
+
+        # self.parametric_model = tf.keras.Model(inputs=inputs, outputs=outputs)
+        self.parametric_model = GradientClippedModel(inputs=inputs, outputs=outputs)
 
     def _compile_model(self):
         """
-        Compiles
+        Compiles keras model with losses
         """
         losses = {}
         loss_weights = {}
@@ -245,6 +269,10 @@ class ParametricUMAP(UMAP):
         losses["umap"] = umap_loss_fn
         loss_weights["umap"] = 1.0
 
+        if self.global_correlation_loss_weight > 0:
+            losses["global_correlation"] = distance_loss_corr
+            loss_weights["global_correlation"] = self.global_correlation_loss_weight
+
         if self.parametric_reconstruction:
             losses["reconstruction"] = tf.keras.losses.BinaryCrossentropy(
                 from_logits=True
@@ -252,8 +280,12 @@ class ParametricUMAP(UMAP):
             loss_weights["reconstruction"] = 1.0
 
         self.parametric_model.compile(
-            optimizer=self.optimizer, loss=losses, loss_weights=loss_weights,
+            optimizer=self.optimizer,
+            loss=losses,
+            loss_weights=loss_weights,
+            run_eagerly=True,
         )
+        print("running eagerly")
 
     def _fit_embed_data(self, X, n_epochs, init, random_state):
 
@@ -285,6 +317,7 @@ class ParametricUMAP(UMAP):
             self.batch_size,
             self.parametric_embedding,
             self.parametric_reconstruction,
+            self.global_correlation_loss_weight,
         )
         self.head = tf.constant(tf.expand_dims(head.astype(np.int64), 0))
         self.tail = tf.constant(tf.expand_dims(tail.astype(np.int64), 0))
@@ -662,7 +695,7 @@ def umap_loss(
 
         # set true probabilities based on negative sampling
         probabilities_graph = tf.concat(
-            [tf.ones(batch_size), tf.zeros(batch_size * negative_sample_rate)], axis=0,
+            [tf.ones(batch_size), tf.zeros(batch_size * negative_sample_rate)], axis=0
         )
 
         # compute cross entropy
@@ -678,6 +711,41 @@ def umap_loss(
         return tf.reduce_mean(ce_loss)
 
     return loss
+
+
+def distance_loss_corr(x, z_x):
+    """ Loss based on the distance between elements in a batch
+    """
+
+    # flatten data
+    x = tf.keras.layers.Flatten()(x)
+    z_x = tf.keras.layers.Flatten()(z_x)
+
+    ## z score data
+    def z_score(x):
+        return (x - tf.reduce_mean(x)) / tf.math.reduce_std(x)
+
+    x = z_score(x)
+    z_x = z_score(z_x)
+
+    # clip distances to 10 standard deviations for stability
+    x = tf.clip_by_value(x, -10, 10)
+    z_x = tf.clip_by_value(z_x, -10, 10)
+
+    dx = tf.math.reduce_euclidean_norm(x[1:] - x[:-1], axis=1)
+    dz = tf.math.reduce_euclidean_norm(z_x[1:] - z_x[:-1], axis=1)
+
+    # jitter dz to prevent mode collapse
+    dz = dz + tf.random.uniform(dz.shape) * 1e-10
+
+    # compute correlation
+    corr_d = tf.squeeze(
+        tfp.stats.correlation(x=tf.expand_dims(dx, -1), y=tf.expand_dims(dz, -1))
+    )
+    if tf.math.is_nan(corr_d):
+        raise ValueError("NaN values found in correlation loss.")
+
+    return -corr_d
 
 
 def prepare_networks(
@@ -760,7 +828,13 @@ def prepare_networks(
 
 
 def construct_edge_dataset(
-    X, graph_, n_epochs, batch_size, parametric_embedding, parametric_reconstruction,
+    X,
+    graph_,
+    n_epochs,
+    batch_size,
+    parametric_embedding,
+    parametric_reconstruction,
+    global_correlation_loss_weight,
 ):
     """
     Construct a tf.data.Dataset of edges, sampled by edge weight.
@@ -785,6 +859,9 @@ def construct_edge_dataset(
         edge_to_batch = tf.gather(X, edge_to)
         edge_from_batch = tf.gather(X, edge_from)
         outputs = {"umap": 0}
+        if global_correlation_loss_weight > 0:
+            outputs["global_correlation"] = edge_to_batch
+
         if parametric_reconstruction:
             # add reconstruction to iterator output
             # edge_out = tf.concat([edge_to_batch, edge_from_batch], axis=0)
@@ -844,7 +921,7 @@ def construct_edge_dataset(
         edge_dataset = tf.data.Dataset.from_generator(
             gen,
             (tf.int32, tf.int32),
-            output_shapes=(tf.TensorShape(1,), tf.TensorShape((1,))),
+            output_shapes=(tf.TensorShape(1), tf.TensorShape((1,))),
         )
     return edge_dataset, batch_size, len(edges_to_exp), head, tail, weight
 
@@ -947,3 +1024,37 @@ def load_ParametricUMAP(save_location, verbose=True):
         print("Keras full model loaded from {}".format(parametric_model_output))
 
     return model
+
+
+class GradientClippedModel(tf.keras.Model):
+    """
+    We need to define a custom keras model here for gradient clipping, 
+    to stabilize training. 
+    """
+
+    def train_step(self, data):
+        # Unpack the data. Its structure depends on your model and
+        # on what you pass to `fit()`.
+        x, y = data
+
+        with tf.GradientTape() as tape:
+            y_pred = self(x, training=True)  # Forward pass
+            # Compute the loss value
+            # (the loss function is configured in `compile()`)
+            loss = self.compiled_loss(y, y_pred, regularization_losses=self.losses)
+
+        # Compute gradients
+        trainable_vars = self.trainable_variables
+        gradients = tape.gradient(loss, trainable_vars)
+        gradients = [tf.clip_by_value(grad, -4.0, 4.0) for grad in gradients]
+        gradients = [
+            (tf.where(tf.math.is_nan(grad), tf.zeros_like(grad), grad))
+            for grad in gradients
+        ]
+
+        # Update weights
+        self.optimizer.apply_gradients(zip(gradients, trainable_vars))
+        # Update metrics (includes the metric that tracks the loss)
+        self.compiled_metrics.update_state(y, y_pred)
+        # Return a dict mapping metric names to current value
+        return {m.name: m.result() for m in self.metrics}
