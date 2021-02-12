@@ -130,6 +130,7 @@ class ParametricUMAP(UMAP):
                 "tensorflow_probability not installed. \
                 Setting global_correlation_loss_weight to zero."
             )
+            self.global_correlation_loss_weight = 0
 
         self.reconstruction_validation = (
             reconstruction_validation  # holdout data for reconstruction acc
