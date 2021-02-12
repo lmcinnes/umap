@@ -8,6 +8,7 @@ from umap.spectral import spectral_layout
 from sklearn.utils import check_random_state
 import codecs, pickle
 from sklearn.neighbors import KDTree
+import sys
 
 
 try:
@@ -101,7 +102,9 @@ class ParametricUMAP(UMAP):
         loss_report_frequency : int, optional
             how many times per epoch to report loss, by default 1
         n_training_epochs : int, optional
-            [description], by default 1
+            number of epochs to train for, by default 1
+        global_correlation_loss_weight : float, optional
+            Whether to additionally train on correlation of global pairwise relationships (>0), by default 0
         keras_fit_kwargs : dict, optional
             additional arguments for model.fit (like callbacks), by default {}
         """
@@ -120,7 +123,14 @@ class ParametricUMAP(UMAP):
         self.loss_report_frequency = (
             loss_report_frequency  # how many times per epoch to report loss in keras
         )
-        self.global_correlation_loss_weight = global_correlation_loss_weight
+        if "tfp" in sys.modules:
+            self.global_correlation_loss_weight = global_correlation_loss_weight
+        else:
+            warn(
+                "tensorflow_probability not installed. \
+                Setting global_correlation_loss_weight to zero."
+            )
+
         self.reconstruction_validation = (
             reconstruction_validation  # holdout data for reconstruction acc
         )
