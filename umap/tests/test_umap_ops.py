@@ -106,11 +106,11 @@ def test_multi_component_layout_precomputed():
 @pytest.mark.parametrize("force_approximation", [True, False])
 def test_disconnected_data(num_isolates, metric, force_approximation):
     disconnected_data = np.random.choice(
-        a=[False, True], size=(10, 20), p=[0.66, 1 - 0.66]
+        a=[False, True], size=(10, 30), p=[0.6, 1 - 0.6]
     )
     # Add some disconnected data for the corner case test
     disconnected_data = np.vstack(
-        [disconnected_data, np.zeros((num_isolates, 20), dtype="bool")]
+        [disconnected_data, np.zeros((num_isolates, 30), dtype="bool")]
     )
     new_columns = np.zeros((num_isolates + 10, num_isolates), dtype="bool")
     for i in range(num_isolates):
