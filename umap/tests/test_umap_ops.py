@@ -106,38 +106,39 @@ def test_multi_component_layout_precomputed():
 @pytest.mark.parametrize("force_approximation", [True, False])
 def test_disconnected_data(num_isolates, metric, force_approximation):
     disconnected_data = np.random.choice(
-        a=[False, True], size=(10, 20), p=[0.66, 1 - 0.66]
+        a=[False, True], size=(10, 30), p=[0.6, 1 - 0.6]
     )
     # Add some disconnected data for the corner case test
     disconnected_data = np.vstack(
-        [disconnected_data, np.zeros((num_isolates, 20), dtype="bool")]
+        [disconnected_data, np.zeros((num_isolates, 30), dtype="bool")]
     )
     new_columns = np.zeros((num_isolates + 10, num_isolates), dtype="bool")
     for i in range(num_isolates):
         new_columns[10 + i, i] = True
     disconnected_data = np.hstack([disconnected_data, new_columns])
 
-    with warnings.catch_warnings(record=True) as w:
+    with pytest.warns(None) as w:
         model = UMAP(
             n_neighbors=3,
             metric=metric,
             force_approximation_algorithm=force_approximation,
         ).fit(disconnected_data)
-        assert len(w) >= 1  # at least one warning should be raised here
-        # we can't guarantee the order that the warnings will be raised in so check them all.
-        flag = 0
-        if num_isolates == 1:
-            warning_contains = "A few of your vertices"
-        elif num_isolates > 1:
-            warning_contains = "A large number of your vertices"
-        for i in range(len(w)):
-            flag += warning_contains in str(w[i].message)
-        assert flag == 1
-        # Check that the first isolate has no edges in our umap.graph_
-        isolated_vertices = disconnected_vertices(model)
-        assert isolated_vertices[10] == True
-        number_of_nan = np.sum(np.isnan(model.embedding_[isolated_vertices]))
-        assert number_of_nan >= num_isolates * model.n_components
+    assert len(w) >= 1  # at least one warning should be raised here
+    # we can't guarantee the order that the warnings will be raised in so check them all.
+    flag = 0
+    if num_isolates == 1:
+        warning_contains = "A few of your vertices"
+    elif num_isolates > 1:
+        warning_contains = "A large number of your vertices"
+    for wn in w:
+        flag += warning_contains in str(wn.message)
+    isolated_vertices = disconnected_vertices(model)
+    assert flag == 1, str(([wn.message for wn in w], isolated_vertices))
+    # Check that the first isolate has no edges in our umap.graph_
+    isolated_vertices = disconnected_vertices(model)
+    assert isolated_vertices[10] == True
+    number_of_nan = np.sum(np.isnan(model.embedding_[isolated_vertices]))
+    assert number_of_nan >= num_isolates * model.n_components
 
 
 @pytest.mark.parametrize("num_isolates", [1])
