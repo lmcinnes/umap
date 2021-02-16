@@ -1305,4 +1305,4 @@ def pairwise_special_metric(X, Y=None, metric="hellinger", kwds=None):
         return pairwise_distances(X, Y, metric=_partial_metric)
     else:
         special_metric_func = named_distances[metric]
-    return chunked_parallel_special_metric(X, Y, metric=special_metric_func)
+    return parallel_special_metric(X, Y, metric=special_metric_func)
