@@ -1,0 +1,171 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.8.6, pytest-6.2.2, py-1.10.0, pluggy-0.13.1 -- /Users/valerio/anaconda3/envs/umap/bin/python
+cachedir: .pytest_cache
+benchmark: 3.2.3 (defaults: timer=time.perf_counter disable_gc=False min_rounds=5 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)
+plugins: cov-2.11.1, benchmark-3.2.3
+collecting ... collected 62 items
+
+test_chunked_parallel_spatial_metric.py::test_chunked_parallel_alternative_implementations 
+test_chunked_parallel_spatial_metric.py::test_chunked_parallel_special_metric_implementation_hellinger 
+test_chunked_parallel_spatial_metric.py::test_benchmark_full_iterations_x_only[ data[100x100] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_full_iterations_x_only[ data[200x200] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_full_iterations_x_only[ data[300x300] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_full_iterations_x_only[ data[400x400] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_full_iterations_x_only[ data[500x500] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_full_iterations_x_only[ data[600x600] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_full_iterations_x_only[ data[700x700] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_full_iterations_x_only[ data[800x800] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_full_iterations_x_only[ data[900x900] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_full_iterations_x_only[data[1000x1000] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_workaround_590_x_only[ data[100x100] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_workaround_590_x_only[ data[200x200] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_workaround_590_x_only[ data[300x300] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_workaround_590_x_only[ data[400x400] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_workaround_590_x_only[ data[500x500] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_workaround_590_x_only[ data[600x600] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_workaround_590_x_only[ data[700x700] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_workaround_590_x_only[ data[800x800] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_workaround_590_x_only[ data[900x900] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_workaround_590_x_only[data[1000x1000] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_check_symmetrical_and_skips_x_only[ data[100x100] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_check_symmetrical_and_skips_x_only[ data[200x200] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_check_symmetrical_and_skips_x_only[ data[300x300] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_check_symmetrical_and_skips_x_only[ data[400x400] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_check_symmetrical_and_skips_x_only[ data[500x500] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_check_symmetrical_and_skips_x_only[ data[600x600] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_check_symmetrical_and_skips_x_only[ data[700x700] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_check_symmetrical_and_skips_x_only[ data[800x800] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_check_symmetrical_and_skips_x_only[ data[900x900] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_check_symmetrical_and_skips_x_only[data[1000x1000] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_full_iterations_x_y[ data[100x100] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_full_iterations_x_y[ data[200x200] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_full_iterations_x_y[ data[300x300] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_full_iterations_x_y[ data[400x400] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_full_iterations_x_y[ data[500x500] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_full_iterations_x_y[ data[600x600] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_full_iterations_x_y[ data[700x700] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_full_iterations_x_y[ data[800x800] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_full_iterations_x_y[ data[900x900] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_full_iterations_x_y[data[1000x1000] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_workaround_590_x_y[ data[100x100] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_workaround_590_x_y[ data[200x200] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_workaround_590_x_y[ data[300x300] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_workaround_590_x_y[ data[400x400] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_workaround_590_x_y[ data[500x500] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_workaround_590_x_y[ data[600x600] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_workaround_590_x_y[ data[700x700] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_workaround_590_x_y[ data[800x800] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_workaround_590_x_y[ data[900x900] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_workaround_590_x_y[data[1000x1000] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_check_symmetrical_and_skips_x_y[ data[100x100] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_check_symmetrical_and_skips_x_y[ data[200x200] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_check_symmetrical_and_skips_x_y[ data[300x300] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_check_symmetrical_and_skips_x_y[ data[400x400] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_check_symmetrical_and_skips_x_y[ data[500x500] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_check_symmetrical_and_skips_x_y[ data[600x600] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_check_symmetrical_and_skips_x_y[ data[700x700] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_check_symmetrical_and_skips_x_y[ data[800x800] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_check_symmetrical_and_skips_x_y[ data[900x900] ] 
+test_chunked_parallel_spatial_metric.py::test_benchmark_check_symmetrical_and_skips_x_y[data[1000x1000] ] 
+
+
+------------------------------------------------------------------------------------------------------ benchmark 'benchmark_X_Y_params': 20 tests ------------------------------------------------------------------------------------------------------
+Name (time in us)                                                Min                     Max                    Mean                 StdDev                  Median                    IQR            Outliers         OPS            Rounds  Iterations
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+test_benchmark_workaround_590_x_y[ data[100x100] ]          495.2882 (1.0)          581.9437 (1.0)          519.2556 (1.0)          27.0327 (1.0)          508.6135 (1.0)           6.6197 (1.0)           2;3  1,925.8338 (1.0)          10          10
+test_benchmark_full_iterations_x_y[ data[100x100] ]         503.0740 (1.02)         598.4168 (1.03)         543.3031 (1.05)         40.7701 (1.51)         526.4162 (1.04)         84.9594 (12.83)         3;0  1,840.5932 (0.96)         10          10
+test_benchmark_workaround_590_x_y[ data[200x200] ]        3,134.7095 (6.33)       3,935.8991 (6.76)       3,423.0194 (6.59)        241.3009 (8.93)       3,365.2021 (6.62)        298.7960 (45.14)         2;0    292.1397 (0.15)         10          10
+test_benchmark_full_iterations_x_y[ data[200x200] ]       3,179.7060 (6.42)       3,728.3993 (6.41)       3,381.3674 (6.51)        201.6991 (7.46)       3,291.8583 (6.47)        350.3217 (52.92)         2;0    295.7383 (0.15)         10          10
+test_benchmark_workaround_590_x_y[ data[300x300] ]       10,352.4933 (20.90)     12,110.4164 (20.81)     10,809.5356 (20.82)       536.0440 (19.83)     10,615.3089 (20.87)       663.3065 (100.20)        1;1     92.5109 (0.05)         10          10
+test_benchmark_full_iterations_x_y[ data[300x300] ]      11,055.3934 (22.32)     13,482.4475 (23.17)     11,909.8777 (22.94)       770.7927 (28.51)     11,874.7330 (23.35)     1,139.4526 (172.13)        3;0     83.9639 (0.04)         10          10
+test_benchmark_workaround_590_x_y[ data[400x400] ]       24,664.7938 (49.80)     28,167.0286 (48.40)     26,350.9905 (50.75)     1,096.6480 (40.57)     26,051.6451 (51.22)     1,820.6287 (275.03)        3;0     37.9492 (0.02)         10          10
+test_benchmark_full_iterations_x_y[ data[400x400] ]      27,776.9751 (56.08)     38,615.6205 (66.36)     31,171.1570 (60.03)     3,536.6754 (130.83)    30,223.7039 (59.42)     5,538.6732 (836.70)        1;0     32.0809 (0.02)         10          10
+test_benchmark_workaround_590_x_y[ data[500x500] ]       49,849.8904 (100.65)    54,210.5126 (93.15)     52,575.6962 (101.25)    1,236.1049 (45.73)     52,723.8550 (103.66)    1,224.2897 (184.95)        2;1     19.0202 (0.01)         10          10
+test_benchmark_full_iterations_x_y[ data[500x500] ]      50,771.3486 (102.51)    56,165.4936 (96.51)     52,523.2740 (101.15)    1,821.5717 (67.38)     51,685.7755 (101.62)    2,374.9763 (358.77)        2;0     19.0392 (0.01)         10          10
+test_benchmark_full_iterations_x_y[ data[600x600] ]      86,985.4059 (175.63)    97,282.6817 (167.17)    91,042.4181 (175.33)    3,101.8286 (114.74)    90,372.1142 (177.68)    2,502.8313 (378.09)        3;1     10.9839 (0.01)         10          10
+test_benchmark_workaround_590_x_y[ data[600x600] ]       87,117.3090 (175.89)    92,148.5567 (158.35)    88,686.5638 (170.80)    1,772.9945 (65.59)     88,154.6498 (173.32)    1,638.6971 (247.55)        2;2     11.2757 (0.01)         10          10
+test_benchmark_full_iterations_x_y[ data[700x700] ]     134,155.8264 (270.86)   195,090.1518 (335.24)   150,513.3770 (289.86)   17,454.8018 (645.69)   146,080.9688 (287.21)   14,639.2919 (>1000.0)       1;1      6.6439 (0.00)         10          10
+test_benchmark_workaround_590_x_y[ data[700x700] ]      137,349.5913 (277.31)   141,872.6337 (243.79)   139,834.1692 (269.30)    1,588.1998 (58.75)    139,665.6146 (274.60)    2,556.3532 (386.17)        4;0      7.1513 (0.00)         10          10
+test_benchmark_workaround_590_x_y[ data[800x800] ]      203,786.8799 (411.45)   211,778.5061 (363.92)   208,991.0718 (402.48)    2,491.5095 (92.17)    208,964.5512 (410.85)    2,993.1144 (452.15)        3;0      4.7849 (0.00)         10          10
+test_benchmark_full_iterations_x_y[ data[800x800] ]     211,612.1562 (427.25)   259,770.0716 (446.38)   225,817.7957 (434.89)   15,734.8161 (582.07)   218,611.4108 (429.82)   12,563.1945 (>1000.0)       2;1      4.4283 (0.00)         10          10
+test_benchmark_workaround_590_x_y[ data[900x900] ]      299,095.6022 (603.88)   320,117.5249 (550.08)   305,201.1442 (587.77)    6,036.1670 (223.29)   304,293.5137 (598.28)    6,080.4573 (918.54)        2;1      3.2765 (0.00)         10          10
+test_benchmark_full_iterations_x_y[ data[900x900] ]     305,578.3148 (616.97)   391,039.8149 (671.95)   326,928.5459 (629.61)   27,681.6121 (>1000.0)  315,198.2412 (619.72)   39,957.5664 (>1000.0)       1;0      3.0588 (0.00)         10          10
+test_benchmark_workaround_590_x_y[data[1000x1000] ]     393,951.6103 (795.40)   413,456.3637 (710.47)   402,317.8758 (774.80)    5,183.4806 (191.75)   401,597.8912 (789.59)    5,179.2594 (782.40)        2;1      2.4856 (0.00)         10          10
+test_benchmark_full_iterations_x_y[data[1000x1000] ]    397,389.4004 (802.34)   410,324.6078 (705.09)   403,744.5900 (777.54)    3,742.4926 (138.44)   404,585.5561 (795.47)    4,517.0076 (682.36)        2;0      2.4768 (0.00)         10          10
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+------------------------------------------------------------------------------------------------------- benchmark 'benchmark_single_param': 20 tests ------------------------------------------------------------------------------------------------------
+Name (time in us)                                                   Min                     Max                    Mean                 StdDev                  Median                    IQR            Outliers         OPS            Rounds  Iterations
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+test_benchmark_workaround_590_x_only[ data[100x100] ]          362.2505 (1.0)          413.5014 (1.0)          377.0515 (1.0)          15.8155 (1.0)          369.3731 (1.0)          19.5738 (1.0)           1;0  2,652.1576 (1.0)          10          10
+test_benchmark_full_iterations_x_only[ data[100x100] ]         384.4862 (1.06)         562.4220 (1.36)         458.4880 (1.22)         50.4907 (3.19)         454.5856 (1.23)         38.3369 (1.96)          3;1  2,181.0821 (0.82)         10          10
+test_benchmark_workaround_590_x_only[ data[200x200] ]        2,123.9449 (5.86)       2,648.7091 (6.41)       2,363.2995 (6.27)        185.3854 (11.72)      2,314.7106 (6.27)        310.7253 (15.87)         4;0    423.1372 (0.16)         10          10
+test_benchmark_full_iterations_x_only[ data[200x200] ]       2,310.0399 (6.38)       2,715.4285 (6.57)       2,476.1816 (6.57)        142.2387 (8.99)       2,471.9525 (6.69)        278.5954 (14.23)         5;0    403.8476 (0.15)         10          10
+test_benchmark_workaround_590_x_only[ data[300x300] ]        6,538.1371 (18.05)      7,452.2394 (18.02)      6,865.4766 (18.21)       319.3252 (20.19)      6,797.4015 (18.40)       443.2515 (22.65)         4;0    145.6563 (0.05)         10          10
+test_benchmark_full_iterations_x_only[ data[300x300] ]       7,438.5034 (20.53)      9,362.3238 (22.64)      8,385.0608 (22.24)       643.1059 (40.66)      8,369.6041 (22.66)       819.5210 (41.87)         4;0    119.2597 (0.04)         10          10
+test_benchmark_workaround_590_x_only[ data[400x400] ]       15,316.6575 (42.28)     17,603.1655 (42.57)     16,274.8503 (43.16)       708.9554 (44.83)     16,267.4506 (44.04)       565.3928 (28.89)         3;2     61.4445 (0.02)         10          10
+test_benchmark_full_iterations_x_only[ data[400x400] ]      17,875.6201 (49.35)     19,168.6169 (46.36)     18,392.5088 (48.78)       488.1199 (30.86)     18,373.2064 (49.74)       698.4732 (35.68)         4;0     54.3700 (0.02)         10          10
+test_benchmark_workaround_590_x_only[ data[500x500] ]       29,741.1648 (82.10)     33,197.0463 (80.28)     31,469.1346 (83.46)     1,055.4702 (66.74)     31,176.2826 (84.40)     1,680.0425 (85.83)         3;0     31.7772 (0.01)         10          10
+test_benchmark_full_iterations_x_only[ data[500x500] ]      30,746.4713 (84.88)     40,875.4446 (98.85)     34,512.9465 (91.53)     2,983.0185 (188.61)    34,072.8217 (92.25)     3,384.2393 (172.90)        2;1     28.9746 (0.01)         10          10
+test_benchmark_workaround_590_x_only[ data[600x600] ]       52,641.0856 (145.32)    57,108.4223 (138.11)    54,146.3303 (143.60)    1,503.4445 (95.06)     53,705.9503 (145.40)    1,598.3489 (81.66)         3;1     18.4685 (0.01)         10          10
+test_benchmark_full_iterations_x_only[ data[600x600] ]      55,768.8934 (153.95)    58,703.1365 (141.97)    57,095.5321 (151.43)      951.9274 (60.19)     57,033.3062 (154.41)    1,037.6198 (53.01)         3;0     17.5145 (0.01)         10          10
+test_benchmark_workaround_590_x_only[ data[700x700] ]       80,885.0513 (223.28)    90,551.0176 (218.99)    84,904.2654 (225.18)    3,071.5487 (194.21)    83,989.1639 (227.38)    3,849.8860 (196.69)        3;0     11.7780 (0.00)         10          10
+test_benchmark_full_iterations_x_only[ data[700x700] ]      90,959.4319 (251.10)   100,470.6427 (242.98)    96,745.3198 (256.58)    3,403.2398 (215.18)    97,298.5022 (263.42)    6,795.8512 (347.19)        4;0     10.3364 (0.00)         10          10
+test_benchmark_workaround_590_x_only[ data[800x800] ]      119,050.5809 (328.64)   128,988.5609 (311.94)   121,875.7714 (323.23)    2,831.5631 (179.04)   121,767.7474 (329.66)    1,771.0754 (90.48)         1;1      8.2051 (0.00)         10          10
+test_benchmark_full_iterations_x_only[ data[800x800] ]     128,731.8918 (355.37)   134,332.8607 (324.87)   131,630.7095 (349.11)    1,906.2793 (120.53)   131,411.9510 (355.77)    3,230.6582 (165.05)        4;0      7.5970 (0.00)         10          10
+test_benchmark_workaround_590_x_only[ data[900x900] ]      176,390.0035 (486.93)   189,750.1736 (458.89)   180,776.2797 (479.45)    4,232.1109 (267.59)   179,916.1031 (487.09)    5,833.1252 (298.01)        3;0      5.5317 (0.00)         10          10
+test_benchmark_full_iterations_x_only[ data[900x900] ]     210,398.8009 (580.81)   384,475.0259 (929.80)   241,568.7858 (640.68)   51,134.9218 (>1000.0)  226,375.1326 (612.86)   22,939.1708 (>1000.0)       1;1      4.1396 (0.00)         10          10
+test_benchmark_workaround_590_x_only[data[1000x1000] ]     229,134.5087 (632.53)   249,239.7535 (602.75)   239,964.3732 (636.42)    5,771.3315 (364.92)   239,776.2774 (649.14)    7,963.7580 (406.86)        2;0      4.1673 (0.00)         10          10
+test_benchmark_full_iterations_x_only[data[1000x1000] ]    239,408.4818 (660.89)   252,452.1994 (610.52)   245,509.7511 (651.13)    4,244.1530 (268.35)   245,009.0788 (663.31)    5,898.4645 (301.34)        4;0      4.0732 (0.00)         10          10
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Legend:
+  Outliers: 1 Standard Deviation from Mean; 1.5 IQR (InterQuartile Range) from 1st Quartile and 3rd Quartile.
+  OPS: Operations Per Second, computed as 1 / Mean
+=========== 40 passed, 22 skipped, 14 warnings in 666.70s (0:11:06) ============
+
+Process finished with exit code 0
+SKIPPED [  1%]
+Skipped: Focus on benchmark for now. This passes!
+SKIPPED [  3%]
+Skipped: Focus on benchmark for now. This passes!
+PASSED [  4%]PASSED [  6%]PASSED [  8%]PASSED [  9%]PASSED [ 11%]PASSED [ 12%]PASSED [ 14%]PASSED [ 16%]PASSED [ 17%]PASSED [ 19%]PASSED [ 20%]PASSED [ 22%]PASSED [ 24%]PASSED [ 25%]PASSED [ 27%]PASSED [ 29%]PASSED [ 30%]PASSED [ 32%]PASSED [ 33%]PASSED [ 35%]SKIPPED [ 37%]
+Skipped: This implementation is NO GO
+SKIPPED [ 38%]
+Skipped: This implementation is NO GO
+SKIPPED [ 40%]
+Skipped: This implementation is NO GO
+SKIPPED [ 41%]
+Skipped: This implementation is NO GO
+SKIPPED [ 43%]
+Skipped: This implementation is NO GO
+SKIPPED [ 45%]
+Skipped: This implementation is NO GO
+SKIPPED [ 46%]
+Skipped: This implementation is NO GO
+SKIPPED [ 48%]
+Skipped: This implementation is NO GO
+SKIPPED [ 50%]
+Skipped: This implementation is NO GO
+SKIPPED [ 51%]
+Skipped: This implementation is NO GO
+PASSED [ 53%]PASSED [ 54%]PASSED [ 56%]PASSED [ 58%]PASSED [ 59%]PASSED [ 61%]PASSED [ 62%]PASSED [ 64%]PASSED [ 66%]PASSED [ 67%]PASSED [ 69%]PASSED [ 70%]PASSED [ 72%]PASSED [ 74%]PASSED [ 75%]PASSED [ 77%]PASSED [ 79%]PASSED [ 80%]PASSED [ 82%]PASSED [ 83%]SKIPPED [ 85%]
+Skipped: This implementation is NO GO
+SKIPPED [ 87%]
+Skipped: This implementation is NO GO
+SKIPPED [ 88%]
+Skipped: This implementation is NO GO
+SKIPPED [ 90%]
+Skipped: This implementation is NO GO
+SKIPPED [ 91%]
+Skipped: This implementation is NO GO
+SKIPPED [ 93%]
+Skipped: This implementation is NO GO
+SKIPPED [ 95%]
+Skipped: This implementation is NO GO
+SKIPPED [ 96%]
+Skipped: This implementation is NO GO
+SKIPPED [ 98%]
+Skipped: This implementation is NO GO
+SKIPPED [100%]
+Skipped: This implementation is NO GO

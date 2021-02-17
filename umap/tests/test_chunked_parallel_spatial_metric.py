@@ -128,6 +128,55 @@ def chunked_parallel_full_iterations():
 
 
 @pytest.fixture(scope="function")
+def workaround_590_impl():
+    @numba.njit(parallel=True, nogil=True)
+    def chunked_parallel_special_metric(
+        X, Y=None, metric=dist.named_distances["hellinger"], chunk_size=16
+    ):
+        if Y is None:
+            size = X.shape[0]
+            result = np.zeros((size, size), dtype=np.float32)
+            n_row_chunks = (size // chunk_size) + 1
+            for chunk_idx in numba.prange(n_row_chunks):
+                n = chunk_idx * chunk_size
+                chunk_end_n = min(n + chunk_size, size)
+                for m in range(n, size, chunk_size):
+                    chunk_end_m = min(m + chunk_size, size)
+                    if n == m:
+                        for i in range(n, chunk_end_n):
+                            for j in range(m, chunk_end_m):
+                                if j > i:
+                                    d = metric(X[i], X[j])
+                                    result[i, j] = d
+                                    result[j, i] = d
+                    else:
+                        for i in range(n, chunk_end_n):
+                            for j in range(m, chunk_end_m):
+                                d = metric(X[i], X[j])
+                                result[i, j] = d
+                                result[j, i] = d
+            return result
+
+        row_size = X.shape[0]
+        col_size = Y.shape[0]
+        result = np.zeros((row_size, col_size), dtype=np.float32)
+        n_row_chunks = (row_size // chunk_size) + 1
+        for chunk_idx in numba.prange(n_row_chunks):
+            n = chunk_idx * chunk_size
+            chunk_end_n = min(n + chunk_size, row_size)
+            for m in range(0, col_size, chunk_size):
+                chunk_end_m = min(m + chunk_size, col_size)
+                for i in range(n, chunk_end_n):
+                    for j in range(m, chunk_end_m):
+                        d = metric(X[i], Y[j])
+                        result[i, j] = d
+
+        return result
+
+    return chunked_parallel_special_metric
+
+
+@pytest.fixture(scope="function")
 def benchmark_data(request):
     shape = request.param
     spatial_data = np.random.randn(*shape).astype(np.float32)
@@ -137,7 +186,7 @@ def benchmark_data(request):
 # ---------------------------------------------------------------
 
 # Uncomment this to skip the tests
-# @pytest.mark.skip(reason="Focus on benchmark for now. This passes!")
+@pytest.mark.skip(reason="Focus on benchmark for now. This passes!")
 def test_chunked_parallel_alternative_implementations(
     spatial_data, chunked_parallel_if_clause, chunked_parallel_full_iterations
 ):
@@ -166,7 +215,7 @@ def test_chunked_parallel_alternative_implementations(
 
 
 # Uncomment this to skip the tests
-# @pytest.mark.skip(reason="Focus on benchmark for now. This passes!")
+@pytest.mark.skip(reason="Focus on benchmark for now. This passes!")
 def test_chunked_parallel_special_metric_implementation_hellinger(
     spatial_data, stashed_chunked_implementation
 ):
@@ -232,15 +281,21 @@ def test_chunked_parallel_special_metric_implementation_hellinger(
     )
 
 
+# ----------------------------
+# 1st Group Benchmark: X only
+# (Worst Case)
+# ----------------------------
+
+
 @pytest.mark.benchmark(
     group="benchmark_single_param",
 )
 @pytest.mark.parametrize(
     "benchmark_data",
-    [(10 * s, 10 * s) for s in range(1, 101, 10)],
+    [(10 * s, 10 * s) for s in list(range(0, 101, 10))[1:]],
     indirect=["benchmark_data"],
 )
-def test_benchmark_full_iteration_no_symmetrical_skips_x_only(
+def test_benchmark_full_iterations_x_only(
     benchmark,
     benchmark_data,
     chunked_parallel_full_iterations,
@@ -261,7 +316,32 @@ def test_benchmark_full_iteration_no_symmetrical_skips_x_only(
 )
 @pytest.mark.parametrize(
     "benchmark_data",
-    [(10 * s, 10 * s) for s in range(1, 101, 10)],
+    [(10 * s, 10 * s) for s in list(range(0, 101, 10))[1:]],
+    indirect=["benchmark_data"],
+)
+def test_benchmark_workaround_590_x_only(
+    benchmark,
+    benchmark_data,
+    workaround_590_impl,
+):
+
+    # single argument
+    benchmark.pedantic(
+        workaround_590_impl,
+        kwargs={"X": benchmark_data, "Y": None},
+        warmup_rounds=5,
+        iterations=10,
+        rounds=10,
+    )
+
+
+@pytest.mark.skip(reason="This implementation is NO GO")
+@pytest.mark.benchmark(
+    group="benchmark_single_param",
+)
+@pytest.mark.parametrize(
+    "benchmark_data",
+    [(10 * s, 10 * s) for s in list(range(0, 101, 10))[1:]],
     indirect=["benchmark_data"],
 )
 def test_benchmark_check_symmetrical_and_skips_x_only(
@@ -280,15 +360,20 @@ def test_benchmark_check_symmetrical_and_skips_x_only(
     )
 
 
+# ----------------------------
+# 2nd Group Benchmark: X and Y
+# ----------------------------
+
+
 @pytest.mark.benchmark(
     group="benchmark_X_Y_params",
 )
 @pytest.mark.parametrize(
     "benchmark_data",
-    [(10 * s, 10 * s) for s in range(1, 101, 10)],
+    [(10 * s, 10 * s) for s in list(range(0, 101, 10))[1:]],
     indirect=["benchmark_data"],
 )
-def test_benchmark_full_iteration_no_symmetrical_skips_x_y(
+def test_benchmark_full_iterations_x_y(
     benchmark,
     benchmark_data,
     chunked_parallel_full_iterations,
@@ -309,7 +394,32 @@ def test_benchmark_full_iteration_no_symmetrical_skips_x_y(
 )
 @pytest.mark.parametrize(
     "benchmark_data",
-    [(10 * s, 10 * s) for s in range(1, 101, 10)],
+    [(10 * s, 10 * s) for s in list(range(0, 101, 10))[1:]],
+    indirect=["benchmark_data"],
+)
+def test_benchmark_workaround_590_x_y(
+    benchmark,
+    benchmark_data,
+    workaround_590_impl,
+):
+
+    # single argument
+    benchmark.pedantic(
+        workaround_590_impl,
+        kwargs={"X": benchmark_data, "Y": benchmark_data},
+        warmup_rounds=5,
+        iterations=10,
+        rounds=10,
+    )
+
+
+@pytest.mark.skip(reason="This implementation is NO GO")
+@pytest.mark.benchmark(
+    group="benchmark_X_Y_params",
+)
+@pytest.mark.parametrize(
+    "benchmark_data",
+    [(10 * s, 10 * s) for s in list(range(0, 101, 10))[1:]],
     indirect=["benchmark_data"],
 )
 def test_benchmark_check_symmetrical_and_skips_x_y(
