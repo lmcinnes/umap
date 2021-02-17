@@ -2,10 +2,13 @@ import pytest
 import numba
 from numpy.testing import assert_array_equal
 
+
 @pytest.fixture(scope="function")
 def stashed_chunked_implementation():
     @numba.njit(parallel=True, nogil=True)
-    def stashed_chunked_parallel_special_metric(X, Y=None, metric=dist.named_distances["hellinger"], chunk_size=16):
+    def stashed_chunked_parallel_special_metric(
+        X, Y=None, metric=dist.named_distances["hellinger"], chunk_size=16
+    ):
         if Y is None:
             row_size = col_size = X.shape[0]
         else:
@@ -46,14 +49,19 @@ def stashed_chunked_implementation():
                             result[i, j] = d
 
         return result
+
     return stashed_chunked_parallel_special_metric
 
 
-def test_chunked_parallel_special_metric_implementation_hellinger(spatial_data, stashed_chunked_implementation):
+def test_chunked_parallel_special_metric_implementation_hellinger(
+    spatial_data, stashed_chunked_implementation
+):
 
     # Base tests that must pass!
     dist_matrix_x = dist.chunked_parallel_special_metric(np.abs(spatial_data[:-2]))
-    dist_matrix_xy = dist.chunked_parallel_special_metric(np.abs(spatial_data[:-2]), np.abs(spatial_data[:-2]))
+    dist_matrix_xy = dist.chunked_parallel_special_metric(
+        np.abs(spatial_data[:-2]), np.abs(spatial_data[:-2])
+    )
     test_matrix = np.array(
         [
             [
@@ -78,7 +86,9 @@ def test_chunked_parallel_special_metric_implementation_hellinger(spatial_data, 
 
     # Test to compare chunked_parallel different implementations
     dist_x_stashed = stashed_chunked_implementation(np.abs(spatial_data[:-2]))
-    dist_xy_stashed = stashed_chunked_implementation(np.abs(spatial_data[:-2]), np.abs(spatial_data[:-2]))
+    dist_xy_stashed = stashed_chunked_implementation(
+        np.abs(spatial_data[:-2]), np.abs(spatial_data[:-2])
+    )
 
     assert_array_equal(
         dist_xy_stashed,
@@ -94,8 +104,12 @@ def test_chunked_parallel_special_metric_implementation_hellinger(spatial_data, 
 
     # test hellinger on different X and Y Pair
     spatial_data_two = np.random.randn(10, 20)
-    dist_stashed_diff_pair = stashed_chunked_implementation(np.abs(spatial_data[:-2]), spatial_data_two)
-    dist_chunked_diff_pair = dist.chunked_parallel_special_metric(np.abs(spatial_data[:-2]), spatial_data_two)
+    dist_stashed_diff_pair = stashed_chunked_implementation(
+        np.abs(spatial_data[:-2]), spatial_data_two
+    )
+    dist_chunked_diff_pair = dist.chunked_parallel_special_metric(
+        np.abs(spatial_data[:-2]), spatial_data_two
+    )
 
     assert_array_equal(
         dist_stashed_diff_pair,
