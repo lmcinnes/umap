@@ -1252,42 +1252,30 @@ def parallel_special_metric(X, Y=None, metric=hellinger):
 @numba.njit(parallel=True, nogil=True)
 def chunked_parallel_special_metric(X, Y=None, metric=hellinger, chunk_size=16):
     if Y is None:
-        size = X.shape[0]
-        result = np.zeros((size, size), dtype=np.float32)
-        n_row_chunks = (size // chunk_size) + 1
-        for chunk_idx in numba.prange(n_row_chunks):
-            n = chunk_idx * chunk_size
-            chunk_end_n = min(n + chunk_size, size)
-            for m in range(n, size, chunk_size):
-                chunk_end_m = min(m + chunk_size, size)
-                if n == m:
-                    for i in range(n, chunk_end_n):
-                        for j in range(m, chunk_end_m):
-                            if j > i:
-                                d = metric(X[i], X[j])
-                                result[i, j] = d
-                                result[j, i] = d
-                else:
-                    for i in range(n, chunk_end_n):
-                        for j in range(m, chunk_end_m):
-                            d = metric(X[i],X[j])
-                            result[i, j] = d
-                            result[j, i] = d
+        XX = X
+        row_size = col_size = X.shape[0]
+        symmetrical = True
     else:
+        XX = Y
         row_size = X.shape[0]
         col_size = Y.shape[0]
-        result = np.zeros((row_size, col_size), dtype=np.float32)
-        n_row_chunks = (row_size // chunk_size) + 1
-        for chunk_idx in numba.prange(n_row_chunks):
-            n = chunk_idx * chunk_size
-            chunk_end_n = min(n + chunk_size, row_size)
-            for m in range(0, col_size, chunk_size):
-                chunk_end_m = min(m + chunk_size, col_size)
-                for i in range(n, chunk_end_n):
-                    for j in range(m, chunk_end_m):
-                        d = metric(X[i], Y[j])
-                        result[i, j] = d
+        symmetrical = False
 
+    result = np.zeros((row_size, col_size), dtype=np.float32)
+    n_row_chunks = (row_size // chunk_size) + 1
+    for chunk_idx in numba.prange(n_row_chunks):
+        n = chunk_idx * chunk_size
+        chunk_end_n = min(n + chunk_size, row_size)
+        m_start = 0 if not symmetrical else n
+        for m in range(m_start, col_size, chunk_size):
+            chunk_end_m = min(m + chunk_size, col_size)
+            for i in range(n, chunk_end_n):
+                j_start = m if not symmetrical else i + 1
+                for j in range(j_start, chunk_end_m):
+                    d = metric(X[i], XX[j])
+                    result[i, j] = d
+                    if symmetrical:
+                        result[j, i] = d
     return result
 
 
