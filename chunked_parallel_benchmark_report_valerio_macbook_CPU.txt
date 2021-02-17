@@ -1,0 +1,112 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.8.6, pytest-6.2.2, py-1.10.0, pluggy-0.13.1 -- /Users/valerio/anaconda3/envs/umap/bin/python
+cachedir: .pytest_cache
+benchmark: 3.2.3 (defaults: timer=time.perf_counter disable_gc=False min_rounds=5 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)
+rootdir: /Users/valerio/Research/UoB/repos/umap/umap_lmcinnes_repo/chunked_parallel_special_metric_fix
+plugins: cov-2.11.1, benchmark-3.2.3
+collecting ... collected 42 items
+
+test_chunked_parallel_spatial_metric.py::test_chunked_parallel_alternative_implementations 
+test_chunked_parallel_spatial_metric.py::test_chunked_parallel_special_metric_implementation_hellinger 
+test_chunked_parallel_spatial_metric.py::test_FULL_it_x_only[data[10x10]] 
+test_chunked_parallel_spatial_metric.py::test_FULL_it_x_only[data[110x110]] 
+test_chunked_parallel_spatial_metric.py::test_FULL_it_x_only[data[210x210]] 
+test_chunked_parallel_spatial_metric.py::test_FULL_it_x_only[data[310x310]] 
+test_chunked_parallel_spatial_metric.py::test_FULL_it_x_only[data[410x410]] 
+test_chunked_parallel_spatial_metric.py::test_FULL_it_x_only[data[510x510]] 
+test_chunked_parallel_spatial_metric.py::test_FULL_it_x_only[data[610x610]] 
+test_chunked_parallel_spatial_metric.py::test_FULL_it_x_only[data[710x710]] 
+test_chunked_parallel_spatial_metric.py::test_FULL_it_x_only[data[810x810]] 
+test_chunked_parallel_spatial_metric.py::test_FULL_it_x_only[data[910x910]] 
+test_chunked_parallel_spatial_metric.py::test_with_IF_x_only[data[10x10]] 
+test_chunked_parallel_spatial_metric.py::test_with_IF_x_only[data[110x110]] 
+test_chunked_parallel_spatial_metric.py::test_with_IF_x_only[data[210x210]] 
+test_chunked_parallel_spatial_metric.py::test_with_IF_x_only[data[310x310]] 
+test_chunked_parallel_spatial_metric.py::test_with_IF_x_only[data[410x410]] 
+test_chunked_parallel_spatial_metric.py::test_with_IF_x_only[data[510x510]] 
+test_chunked_parallel_spatial_metric.py::test_with_IF_x_only[data[610x610]] 
+test_chunked_parallel_spatial_metric.py::test_with_IF_x_only[data[710x710]] 
+test_chunked_parallel_spatial_metric.py::test_with_IF_x_only[data[810x810]] 
+test_chunked_parallel_spatial_metric.py::test_with_IF_x_only[data[910x910]] 
+test_chunked_parallel_spatial_metric.py::test_FULL_it_x_y[data[10x10]] 
+test_chunked_parallel_spatial_metric.py::test_FULL_it_x_y[data[110x110]] 
+test_chunked_parallel_spatial_metric.py::test_FULL_it_x_y[data[210x210]] 
+test_chunked_parallel_spatial_metric.py::test_FULL_it_x_y[data[310x310]] 
+test_chunked_parallel_spatial_metric.py::test_FULL_it_x_y[data[410x410]] 
+test_chunked_parallel_spatial_metric.py::test_FULL_it_x_y[data[510x510]] 
+test_chunked_parallel_spatial_metric.py::test_FULL_it_x_y[data[610x610]] 
+test_chunked_parallel_spatial_metric.py::test_FULL_it_x_y[data[710x710]] 
+test_chunked_parallel_spatial_metric.py::test_FULL_it_x_y[data[810x810]] 
+test_chunked_parallel_spatial_metric.py::test_FULL_it_x_y[data[910x910]] 
+test_chunked_parallel_spatial_metric.py::test_with_IF_x_y[data[10x10]] 
+test_chunked_parallel_spatial_metric.py::test_with_IF_x_y[data[110x110]] 
+test_chunked_parallel_spatial_metric.py::test_with_IF_x_y[data[210x210]] 
+test_chunked_parallel_spatial_metric.py::test_with_IF_x_y[data[310x310]] 
+test_chunked_parallel_spatial_metric.py::test_with_IF_x_y[data[410x410]] 
+test_chunked_parallel_spatial_metric.py::test_with_IF_x_y[data[510x510]] 
+test_chunked_parallel_spatial_metric.py::test_with_IF_x_y[data[610x610]] 
+test_chunked_parallel_spatial_metric.py::test_with_IF_x_y[data[710x710]] 
+test_chunked_parallel_spatial_metric.py::test_with_IF_x_y[data[810x810]] 
+test_chunked_parallel_spatial_metric.py::test_with_IF_x_y[data[910x910]] 
+
+---------------------------------------------------------------------------------------------------------------- benchmark 'benchmark_X_Y_params': 20 tests -----------------------------------------------------------------------------------------
+Name (time in us)                                 Min                     Max                    Mean                 StdDev                  Median                    IQR            Outliers         OPS            Rounds  Iterations
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+test_with_IF_x_y[data[10x10]]                   116.1694 (1.0)            142.7597 (1.14)           124.9468 (1.02)           8.3338 (2.87)            121.3152 (1.0)              7.2998 (2.35)       3;1     8,003.4056 (0.98)    10          10   
+test_FULL_it_x_y[data[10x10]]                   116.3393 (1.00)           125.7696 (1.0)            122.1186 (1.0)            2.9046 (1.0)             122.5071 (1.01)             3.0998 (1.0)        4;1     8,188.7581 (1.0)     10          10   
+test_FULL_it_x_y[data[110x110]]                 599.5490 (5.16)           676.2736 (5.38)           617.8396 (5.06)           28.2709 (9.73)           605.0703 (4.99)             4.2892 (1.38)       2;2     1,618.5431 (0.20)    10          10   
+test_with_IF_x_y[data[110x110]]                 608.2156 (5.24)           709.4090 (5.64)           640.6131 (5.25)           39.1054 (13.46)          616.5491 (5.08)            68.4495 (22.08)      2;0     1,561.0046 (0.19)    10          10   
+test_FULL_it_x_y[data[210x210]]               3,483.6769 (29.99)        3,878.1007 (30.83)        3,650.1988 (29.89)         137.3676 (47.29)        3,622.6037 (29.86)          176.5579 (56.96)      3;0       273.9577 (0.03)    10          10   
+test_with_IF_x_y[data[210x210]]               3,505.2565 (30.17)        4,091.2115 (32.53)        3,685.6793 (30.18)         220.1469 (75.79)        3,576.5952 (29.48)          387.8806 (125.13)     3;0       271.3204 (0.03)    10          10   
+test_FULL_it_x_y[data[310x310]]              10,948.1756 (94.24)       11,996.8244 (95.39)       11,431.4489 (93.61)         373.9917 (128.76)      11,375.4732 (93.77)          677.5611 (218.58)     3;0        87.4780 (0.01)    10          10   
+test_with_IF_x_y[data[310x310]]              11,142.2018 (95.91)       11,674.2205 (92.82)       11,356.0270 (92.99)         169.4974 (58.36)       11,291.8491 (93.08)          260.7004 (84.10)      3;0        88.0590 (0.01)    10          10   
+test_with_IF_x_y[data[410x410]]              26,353.4724 (226.85)      31,575.6133 (251.06)      29,573.6223 (242.17)      1,517.9818 (522.62)      29,995.1011 (247.25)       2,090.8943 (674.53)     2;0        33.8139 (0.00)    10          10   
+test_FULL_it_x_y[data[410x410]]              29,450.5884 (253.51)      31,725.3939 (252.25)      30,497.1929 (249.73)        645.8709 (222.37)      30,396.7504 (250.56)         687.2365 (221.70)     2;0        32.7899 (0.00)    10          10   
+test_FULL_it_x_y[data[510x510]]              52,521.3432 (452.11)      57,683.0627 (458.64)      54,918.1479 (449.71)      1,668.7460 (574.53)      55,000.6463 (453.37)       2,164.5638 (698.29)     4;0        18.2089 (0.00)    10          10   
+test_with_IF_x_y[data[510x510]]              52,682.6285 (453.50)      54,910.0585 (436.59)      53,987.5998 (442.09)        850.1203 (292.69)      54,269.5800 (447.34)       1,576.4912 (508.58)     4;0        18.5228 (0.00)    10          10   
+test_FULL_it_x_y[data[610x610]]              88,848.4992 (764.82)      103,187.6534 (820.45)     93,269.1775 (763.76)      4,049.5180 (>1000.0)     93,434.0849 (770.18)       3,655.0260 (>1000.0)    2;1        10.7217 (0.00)    10          10   
+test_with_IF_x_y[data[610x610]]              89,716.8394 (772.29)      94,597.6918 (752.15)      92,300.1011 (755.82)      1,569.5791 (540.39)      92,518.4915 (762.63)       2,604.2964 (840.15)     3;0        10.8342 (0.00)    10          10   
+test_with_IF_x_y[data[710x710]]             137,927.0038 (>1000.0)    152,111.8210 (>1000.0)    144,229.3473 (>1000.0)     4,325.0616 (>1000.0)     143,048.2955 (>1000.0)     3,495.4093 (>1000.0)    3;2         6.9334 (0.00)    10          10   
+test_FULL_it_x_y[data[710x710]]             139,947.0966 (>1000.0)    148,148.0797 (>1000.0)    142,694.9302 (>1000.0)     2,132.5541 (734.21)      142,183.9633 (>1000.0)     1,009.0715 (325.53)     2;2         7.0080 (0.00)    10          10   
+test_FULL_it_x_y[data[810x810]]             206,752.0591 (>1000.0)    217,390.5238 (>1000.0)    212,608.4541 (>1000.0)     3,404.5841 (>1000.0)     212,011.0442 (>1000.0)     5,705.9227 (>1000.0)    4;0         4.7035 (0.00)    10          10   
+test_with_IF_x_y[data[810x810]]             209,881.4435 (>1000.0)    250,172.5393 (>1000.0)    220,062.0733 (>1000.0)    12,196.9309 (>1000.0)     214,449.3262 (>1000.0)    12,261.6736 (>1000.0)    1;1         4.5442 (0.00)    10          10   
+test_FULL_it_x_y[data[910x910]]             300,780.8808 (>1000.0)    314,192.3415 (>1000.0)    306,595.1813 (>1000.0)     4,539.3937 (>1000.0)     306,928.5177 (>1000.0)     7,423.8811 (>1000.0)    5;0         3.2616 (0.00)    10          10   
+test_with_IF_x_y[data[910x910]]             303,427.9160 (>1000.0)    309,341.2432 (>1000.0)    306,128.9567 (>1000.0)     1,722.3325 (592.98)      306,411.6523 (>1000.0)     1,708.2976 (551.10)     3;1         3.2666 (0.00)    10          10   
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+---------------------------------------------------------------------------------------------------------------------- benchmark 'benchmark_single_param': 20 tests ---------------------------------------------------------------------------------
+Name (time in us)                         Min                       Max                             Mean                  StdDev                    Median                   IQR                  Outliers         OPS            Rounds  Iterations
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+test_with_IF_x_only[data[10x10]]                111.5881 (1.0)            125.9761 (1.0)            117.6174 (1.0)             4.4610 (1.0)             117.0728 (1.0)            6.0993 (1.0)         3;0     8,502.1412 (1.0)     10          10   
+test_FULL_it_x_only[data[10x10]]                112.6317 (1.01)           137.3392 (1.09)           122.7055 (1.04)            7.8049 (1.75)            123.0046 (1.05)           13.0194 (2.13)       3;0     8,149.5933 (0.96)    10          10   
+test_FULL_it_x_only[data[110x110]]              492.1740 (4.41)           566.0697 (4.49)           526.9719 (4.48)            29.6018 (6.64)           529.0762 (4.52)           60.8159 (9.97)       5;0     1,897.6345 (0.22)    10          10   
+test_with_IF_x_only[data[110x110]]            1,266.4963 (11.35)        1,646.0659 (13.07)        1,378.8148 (11.72)         140.0270 (31.39)         1,322.4671 (11.30)         142.7225 (23.40)      2;1       725.2605 (0.09)    10          10   
+test_FULL_it_x_only[data[210x210]]            2,450.4310 (21.96)        2,908.2459 (23.09)        2,667.1745 (22.68)         160.3251 (35.94)         2,644.8229 (22.59)         293.2365 (48.08)      4;0       374.9286 (0.04)    10          10   
+test_FULL_it_x_only[data[310x310]]            7,235.3026 (64.84)        7,765.1405 (61.64)        7,524.6213 (63.98)         195.3468 (43.79)         7,569.0518 (64.65)         310.0245 (50.83)      4;0       132.8971 (0.02)    10          10   
+test_with_IF_x_only[data[210x210]]           13,661.9218 (122.43)      14,292.1631 (113.45)      13,959.6965 (118.69)        198.7843 (44.56)        13,975.0947 (119.37)        155.8778 (25.56)      4;1        71.6348 (0.01)    10          10   
+test_FULL_it_x_only[data[410x410]]           17,212.3454 (154.25)      19,121.4449 (151.79)      18,046.8780 (153.44)        733.0230 (164.32)       17,688.2054 (151.09)      1,490.5371 (244.38)     4;0        55.4112 (0.01)    10          10   
+test_FULL_it_x_only[data[510x510]]           30,678.7159 (274.93)      33,235.2085 (263.82)      31,651.7005 (269.11)        965.2443 (216.37)       31,180.1773 (266.33)      1,791.4311 (293.71)     4;0        31.5939 (0.00)    10          10   
+test_FULL_it_x_only[data[610x610]]           53,265.6537 (477.34)      56,477.8207 (448.32)      54,930.1568 (467.02)        934.7446 (209.54)       54,933.6074 (469.23)      1,074.1096 (176.10)     4;0        18.2049 (0.00)    10          10   
+test_with_IF_x_only[data[310x310]]           63,012.9655 (564.69)      65,090.0480 (516.69)      64,053.3466 (544.59)        747.5328 (167.57)       64,078.6706 (547.34)      1,194.9034 (195.91)     4;0        15.6120 (0.00)    10          10   
+test_FULL_it_x_only[data[710x710]]           85,787.0168 (768.78)      91,190.3604 (723.87)      88,247.8948 (750.30)      1,885.4049 (422.64)       88,208.7615 (753.45)      2,389.0051 (391.69)     4;0        11.3317 (0.00)    10          10   
+test_FULL_it_x_only[data[810x810]]          127,610.1309 (>1000.0)    133,283.4367 (>1000.0)    130,511.0792 (>1000.0)     1,811.0226 (405.97)      130,645.2464 (>1000.0)     3,022.7571 (495.59)     4;0         7.6622 (0.00)    10          10   
+test_with_IF_x_only[data[410x410]]          181,488.5093 (>1000.0)    188,664.7736 (>1000.0)    183,598.4168 (>1000.0)     2,575.5809 (577.35)      182,552.9089 (>1000.0)     2,566.5524 (420.79)     2;1         5.4467 (0.00)    10          10   
+test_FULL_it_x_only[data[910x910]]          183,009.9343 (>1000.0)    205,503.0484 (>1000.0)    195,880.3827 (>1000.0)     7,054.8864 (>1000.0)     197,983.6975 (>1000.0)     9,853.2242 (>1000.0)    3;0         5.1052 (0.00)    10          10   
+test_with_IF_x_only[data[510x510]]          367,268.5786 (>1000.0)    513,075.9512 (>1000.0)    411,896.4430 (>1000.0)    52,981.5444 (>1000.0)     392,348.2785 (>1000.0)    62,036.8229 (>1000.0)    2;0         2.4278 (0.00)    10          10   
+test_with_IF_x_only[data[610x610]]          784,043.1916 (>1000.0)    864,240.5277 (>1000.0)    827,244.3031 (>1000.0)    25,054.3525 (>1000.0)     830,155.1746 (>1000.0)    36,526.6274 (>1000.0)    3;0         1.2088 (0.00)    10          10   
+test_with_IF_x_only[data[710x710]]        1,427,355.1318 (>1000.0)  1,460,081.2895 (>1000.0)  1,442,794.8306 (>1000.0)    12,309.5582 (>1000.0)   1,441,753.5744 (>1000.0)    22,577.0327 (>1000.0)    5;0         0.6931 (0.00)    10          10   
+test_with_IF_x_only[data[810x810]]        2,431,981.3970 (>1000.0)  2,640,225.8713 (>1000.0)  2,479,152.6904 (>1000.0)    62,442.3379 (>1000.0)   2,460,022.4122 (>1000.0)    36,321.4264 (>1000.0)    1;1         0.4034 (0.00)    10          10   
+test_with_IF_x_only[data[910x910]]        3,971,150.7003 (>1000.0)  4,675,302.5390 (>1000.0)  4,222,890.3663 (>1000.0)   232,279.3880 (>1000.0)   4,172,040.5152 (>1000.0)   179,079.4522 (>1000.0)    3;2         0.2368 (0.00)    10          10   
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Legend:
+  Outliers: 1 Standard Deviation from Mean; 1.5 IQR (InterQuartile Range) from 1st Quartile and 3rd Quartile.
+  OPS: Operations Per Second, computed as 1 / Mean
+=========== 40 passed, 2 skipped, 14 warnings in 1821.18s (0:30:21) ============
+
+Process finished with exit code 0
+SKIPPED [  2%]
+Skipped: Focus on benchmark for now. This passes!
+SKIPPED [  4%]
+Skipped: Focus on benchmark for now. This passes!
+PASSED [  7%]PASSED [  9%]PASSED [ 11%]PASSED [ 14%]PASSED [ 16%]PASSED [ 19%]PASSED [ 21%]PASSED [ 23%]PASSED [ 26%]PASSED [ 28%]PASSED [ 30%]PASSED [ 33%]PASSED [ 35%]PASSED [ 38%]PASSED [ 40%]PASSED [ 42%]PASSED [ 45%]PASSED [ 47%]PASSED [ 50%]PASSED [ 52%]PASSED [ 54%]PASSED [ 57%]PASSED [ 59%]PASSED [ 61%]PASSED [ 64%]PASSED [ 66%]PASSED [ 69%]PASSED [ 71%]PASSED [ 73%]PASSED [ 76%]PASSED [ 78%]PASSED [ 80%]PASSED [ 83%]PASSED [ 85%]PASSED [ 88%]PASSED [ 90%]PASSED [ 92%]PASSED [ 95%]PASSED [ 97%]PASSED [100%]
