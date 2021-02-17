@@ -1,6 +1,8 @@
 import pytest
 import numba
+import numpy as np
 from numpy.testing import assert_array_equal
+from umap import distances as dist
 
 
 @pytest.fixture(scope="function")
