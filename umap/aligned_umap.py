@@ -310,6 +310,21 @@ class AlignedUMAP(BaseEstimator):
                 set_op_mix_ratio=get_nth_item_or_val(self.set_op_mix_ratio, n),
                 unique=get_nth_item_or_val(self.unique, n),
                 n_components=self.n_components,
+                metric=self.metric,
+                metric_kwds=self.metric_kwds,
+                low_memory=self.low_memory,
+                random_state=self.random_state,
+                angular_rp_forest=self.angular_rp_forest,
+                transform_queue_size=self.transform_queue_size,
+                target_n_neighbors=self.target_n_neighbors,
+                target_metric=self.target_metric,
+                target_metric_kwds=self.target_metric_kwds,
+                target_weight=self.target_weight,
+                transform_seed=self.transform_seed,
+                force_approximation_algorithm=self.force_approximation_algorithm,
+                verbose=self.verbose,
+                a=self.a,
+                b=self.b,
             ).fit(X[n])
             for n in range(self.n_models_)
         ]
@@ -380,6 +395,10 @@ class AlignedUMAP(BaseEstimator):
             rng_state,
             lambda_=self.alignment_regularisation,
         )
+
+        for i, embedding in enumerate(self.embeddings_):
+            disconnected_vertices = np.array(self.mappers_[i].graph_.sum(axis=1)).flatten() == 0
+            embedding[disconnected_vertices] = np.full(self.n_components, np.nan)
 
         return self
 
