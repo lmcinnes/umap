@@ -60,68 +60,29 @@ def stashed_chunked_implementation():
 
 
 @pytest.fixture(scope="function")
-def chunked_parallel_if_clause():
-    @numba.njit(parallel=True, nogil=True)
-    def chunked_parallel_special_metric(
-        X, Y=None, metric=dist.named_distances["hellinger"], chunk_size=16
-    ):
-        if Y is None:
-            XX = X
-            row_size = col_size = X.shape[0]
-            symmetrical = True
-        else:
-            XX = Y
-            row_size = X.shape[0]
-            col_size = Y.shape[0]
-            symmetrical = False
-
-        result = np.zeros((row_size, col_size), dtype=np.float32)
-        n_row_chunks = (row_size // chunk_size) + 1
-        for chunk_idx in numba.prange(n_row_chunks):
-            n = chunk_idx * chunk_size
-            chunk_end_n = min(n + chunk_size, row_size)
-            m_start = 0 if not symmetrical else n
-            for m in range(m_start, col_size, chunk_size):
-                chunk_end_m = min(m + chunk_size, col_size)
-                for i in range(n, chunk_end_n):
-                    j_start = m if not symmetrical else i + 1
-                    for j in range(j_start, chunk_end_m):
-                        d = metric(X[i], XX[j])
-                        result[i, j] = d
-                        if symmetrical:
-                            result[j, i] = d
-        return result
-
-    return chunked_parallel_special_metric
-
-
-@pytest.fixture(scope="function")
 def chunked_parallel_full_iterations():
     @numba.njit(parallel=True, nogil=True)
     def chunked_parallel_special_metric(
         X, Y=None, metric=dist.named_distances["hellinger"], chunk_size=16
     ):
         if Y is None:
-            XX = X
+            XX, symmetrical = X, True
             row_size = col_size = X.shape[0]
-            symmetrical = True
         else:
-            XX = Y
+            XX, symmetrical = Y, False
             row_size, col_size = X.shape[0], Y.shape[0]
-            symmetrical = False
 
         result = np.zeros((row_size, col_size), dtype=np.float32)
         n_row_chunks = (row_size // chunk_size) + 1
         for chunk_idx in numba.prange(n_row_chunks):
             n = chunk_idx * chunk_size
             chunk_end_n = min(n + chunk_size, row_size)
-            m_start = 0 if not symmetrical else n
+            m_start = n if symmetrical else 0
             for m in range(m_start, col_size, chunk_size):
                 chunk_end_m = min(m + chunk_size, col_size)
                 for i in range(n, chunk_end_n):
                     for j in range(m, chunk_end_m):
-                        d = metric(X[i], XX[j])
-                        result[i, j] = d
+                        result[i, j] = metric(X[i], XX[j])
         return result
 
     return chunked_parallel_special_metric
@@ -186,13 +147,13 @@ def benchmark_data(request):
 # ---------------------------------------------------------------
 
 # Uncomment this to skip the tests
-@pytest.mark.skip(reason="Focus on benchmark for now. This passes!")
+# @pytest.mark.skip(reason="Focus on benchmark for now. This passes!")
 def test_chunked_parallel_alternative_implementations(
-    spatial_data, chunked_parallel_if_clause, chunked_parallel_full_iterations
+    spatial_data, workaround_590_impl, chunked_parallel_full_iterations
 ):
     # Base tests that must pass!
-    dist_matrix_x = chunked_parallel_if_clause(np.abs(spatial_data[:-2]))
-    dist_matrix_xy = chunked_parallel_if_clause(
+    dist_matrix_x = workaround_590_impl(np.abs(spatial_data[:-2]))
+    dist_matrix_xy = workaround_590_impl(
         np.abs(spatial_data[:-2]), np.abs(spatial_data[:-2])
     )
 
@@ -215,14 +176,14 @@ def test_chunked_parallel_alternative_implementations(
 
 
 # Uncomment this to skip the tests
-@pytest.mark.skip(reason="Focus on benchmark for now. This passes!")
+# @pytest.mark.skip(reason="Focus on benchmark for now. This passes!")
 def test_chunked_parallel_special_metric_implementation_hellinger(
-    spatial_data, stashed_chunked_implementation
+    spatial_data, stashed_chunked_implementation, chunked_parallel_full_iterations
 ):
 
     # Base tests that must pass!
-    dist_matrix_x = dist.chunked_parallel_special_metric(np.abs(spatial_data[:-2]))
-    dist_matrix_xy = dist.chunked_parallel_special_metric(
+    dist_matrix_x = chunked_parallel_full_iterations(np.abs(spatial_data[:-2]))
+    dist_matrix_xy = chunked_parallel_full_iterations(
         np.abs(spatial_data[:-2]), np.abs(spatial_data[:-2])
     )
     test_matrix = np.array(
@@ -335,31 +296,6 @@ def test_benchmark_workaround_590_x_only(
     )
 
 
-@pytest.mark.skip(reason="This implementation is NO GO")
-@pytest.mark.benchmark(
-    group="benchmark_single_param",
-)
-@pytest.mark.parametrize(
-    "benchmark_data",
-    [(10 * s, 10 * s) for s in list(range(0, 101, 10))[1:]],
-    indirect=["benchmark_data"],
-)
-def test_benchmark_check_symmetrical_and_skips_x_only(
-    benchmark,
-    benchmark_data,
-    chunked_parallel_if_clause,
-):
-
-    # single argument
-    benchmark.pedantic(
-        chunked_parallel_if_clause,
-        kwargs={"X": benchmark_data, "Y": None},
-        warmup_rounds=5,
-        iterations=10,
-        rounds=10,
-    )
-
-
 # ----------------------------
 # 2nd Group Benchmark: X and Y
 # ----------------------------
@@ -406,31 +342,6 @@ def test_benchmark_workaround_590_x_y(
     # single argument
     benchmark.pedantic(
         workaround_590_impl,
-        kwargs={"X": benchmark_data, "Y": benchmark_data},
-        warmup_rounds=5,
-        iterations=10,
-        rounds=10,
-    )
-
-
-@pytest.mark.skip(reason="This implementation is NO GO")
-@pytest.mark.benchmark(
-    group="benchmark_X_Y_params",
-)
-@pytest.mark.parametrize(
-    "benchmark_data",
-    [(10 * s, 10 * s) for s in list(range(0, 101, 10))[1:]],
-    indirect=["benchmark_data"],
-)
-def test_benchmark_check_symmetrical_and_skips_x_y(
-    benchmark,
-    benchmark_data,
-    chunked_parallel_if_clause,
-):
-
-    # single argument
-    benchmark.pedantic(
-        chunked_parallel_if_clause,
         kwargs={"X": benchmark_data, "Y": benchmark_data},
         warmup_rounds=5,
         iterations=10,
