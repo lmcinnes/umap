@@ -157,6 +157,17 @@ class ParametricUMAP(UMAP):
             )
             self.parametric_reconstruction = False
 
+        if self.encoder is not None:
+            if encoder.outputs[0].shape[-1] != self.n_components:
+                raise ValueError(
+                    (
+                        "Dimensionality of embedder network output ({}) does"
+                        "not match n_components ({})".format(
+                            encoder.outputs[0].shape[-1], self.n_components
+                        )
+                    )
+                )
+
     def transform(self, X):
         """Transform X into the existing embedded space and return that
         transformed output.
