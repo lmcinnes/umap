@@ -109,8 +109,8 @@ def component_layout(
             if callable(metric) and scipy.sparse.isspmatrix(data):
                 function_to_name_mapping = {
                     sparse_named_distances[k]: k for k in
-                        set(SKLEARN_PAIRWISE_VALID_METRICS) &
-                        set(sparse_named_distances.keys())
+                    set(SKLEARN_PAIRWISE_VALID_METRICS) &
+                    set(sparse_named_distances.keys())
                 }
                 try:
                     metric_name = function_to_name_mapping[metric]
