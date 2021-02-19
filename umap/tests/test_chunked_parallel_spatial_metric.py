@@ -1,8 +1,17 @@
 import pytest
 import numba
+import os
 import numpy as np
 from numpy.testing import assert_array_equal
 from umap import distances as dist
+
+benchmark_only = pytest.mark.skipif(
+    "BENCHARM_TEST" not in os.environ, reason="Benchmark tests skipped"
+)
+# Constants for benchmark
+WARMUP_ROUNDS = 5
+ITERATIONS = 10
+ROUNDS = 10
 
 # --------
 # Fixtures
@@ -10,7 +19,7 @@ from umap import distances as dist
 
 
 @pytest.fixture(scope="function")
-def stashed_chunked_implementation():
+def stashed_previous_impl_for_regression_test():
     @numba.njit(parallel=True, nogil=True)
     def stashed_chunked_parallel_special_metric(
         X, Y=None, metric=dist.named_distances["hellinger"], chunk_size=16
@@ -57,35 +66,6 @@ def stashed_chunked_implementation():
         return result
 
     return stashed_chunked_parallel_special_metric
-
-
-@pytest.fixture(scope="function")
-def chunked_parallel_full_iterations():
-    @numba.njit(parallel=True, nogil=True)
-    def chunked_parallel_special_metric(
-        X, Y=None, metric=dist.named_distances["hellinger"], chunk_size=16
-    ):
-        if Y is None:
-            XX, symmetrical = X, True
-            row_size = col_size = X.shape[0]
-        else:
-            XX, symmetrical = Y, False
-            row_size, col_size = X.shape[0], Y.shape[0]
-
-        result = np.zeros((row_size, col_size), dtype=np.float32)
-        n_row_chunks = (row_size // chunk_size) + 1
-        for chunk_idx in numba.prange(n_row_chunks):
-            n = chunk_idx * chunk_size
-            chunk_end_n = min(n + chunk_size, row_size)
-            m_start = n if symmetrical else 0
-            for m in range(m_start, col_size, chunk_size):
-                chunk_end_m = min(m + chunk_size, col_size)
-                for i in range(n, chunk_end_n):
-                    for j in range(m, chunk_end_m):
-                        result[i, j] = metric(X[i], XX[j])
-        return result
-
-    return chunked_parallel_special_metric
 
 
 @pytest.fixture(scope="function")
@@ -146,10 +126,10 @@ def benchmark_data(request):
 
 # ---------------------------------------------------------------
 
-# Uncomment this to skip the tests
-# @pytest.mark.skip(reason="Focus on benchmark for now. This passes!")
+
+@benchmark_only
 def test_chunked_parallel_alternative_implementations(
-    spatial_data, workaround_590_impl, chunked_parallel_full_iterations
+    spatial_data, workaround_590_impl
 ):
     # Base tests that must pass!
     dist_matrix_x = workaround_590_impl(np.abs(spatial_data[:-2]))
@@ -157,8 +137,8 @@ def test_chunked_parallel_alternative_implementations(
         np.abs(spatial_data[:-2]), np.abs(spatial_data[:-2])
     )
 
-    dist_matrix_x_full = chunked_parallel_full_iterations(np.abs(spatial_data[:-2]))
-    dist_matrix_xy_full = chunked_parallel_full_iterations(
+    dist_matrix_x_full = dist.chunked_parallel_special_metric(np.abs(spatial_data[:-2]))
+    dist_matrix_xy_full = dist.chunked_parallel_special_metric(
         np.abs(spatial_data[:-2]), np.abs(spatial_data[:-2])
     )
 
@@ -175,15 +155,15 @@ def test_chunked_parallel_alternative_implementations(
     )
 
 
-# Uncomment this to skip the tests
-# @pytest.mark.skip(reason="Focus on benchmark for now. This passes!")
+@benchmark_only
 def test_chunked_parallel_special_metric_implementation_hellinger(
-    spatial_data, stashed_chunked_implementation, chunked_parallel_full_iterations
+    spatial_data,
+    stashed_previous_impl_for_regression_test,
 ):
 
     # Base tests that must pass!
-    dist_matrix_x = chunked_parallel_full_iterations(np.abs(spatial_data[:-2]))
-    dist_matrix_xy = chunked_parallel_full_iterations(
+    dist_matrix_x = dist.chunked_parallel_special_metric(np.abs(spatial_data[:-2]))
+    dist_matrix_xy = dist.chunked_parallel_special_metric(
         np.abs(spatial_data[:-2]), np.abs(spatial_data[:-2])
     )
     test_matrix = np.array(
@@ -209,8 +189,10 @@ def test_chunked_parallel_special_metric_implementation_hellinger(
     )
 
     # Test to compare chunked_parallel different implementations
-    dist_x_stashed = stashed_chunked_implementation(np.abs(spatial_data[:-2]))
-    dist_xy_stashed = stashed_chunked_implementation(
+    dist_x_stashed = stashed_previous_impl_for_regression_test(
+        np.abs(spatial_data[:-2])
+    )
+    dist_xy_stashed = stashed_previous_impl_for_regression_test(
         np.abs(spatial_data[:-2]), np.abs(spatial_data[:-2])
     )
 
@@ -228,7 +210,7 @@ def test_chunked_parallel_special_metric_implementation_hellinger(
 
     # test hellinger on different X and Y Pair
     spatial_data_two = np.random.randn(10, 20)
-    dist_stashed_diff_pair = stashed_chunked_implementation(
+    dist_stashed_diff_pair = stashed_previous_impl_for_regression_test(
         np.abs(spatial_data[:-2]), spatial_data_two
     )
     dist_chunked_diff_pair = dist.chunked_parallel_special_metric(
@@ -248,6 +230,7 @@ def test_chunked_parallel_special_metric_implementation_hellinger(
 # ----------------------------
 
 
+@benchmark_only
 @pytest.mark.benchmark(
     group="benchmark_single_param",
 )
@@ -256,22 +239,22 @@ def test_chunked_parallel_special_metric_implementation_hellinger(
     [(10 * s, 10 * s) for s in list(range(0, 101, 10))[1:]],
     indirect=["benchmark_data"],
 )
-def test_benchmark_full_iterations_x_only(
+def test_benchmark_chunked_parallel_special_metric_x_only(
     benchmark,
     benchmark_data,
-    chunked_parallel_full_iterations,
 ):
 
     # single argument
     benchmark.pedantic(
-        chunked_parallel_full_iterations,
+        dist.chunked_parallel_special_metric,
         kwargs={"X": benchmark_data, "Y": None},
-        warmup_rounds=5,
-        iterations=10,
-        rounds=10,
+        warmup_rounds=WARMUP_ROUNDS,
+        iterations=ITERATIONS,
+        rounds=ROUNDS,
     )
 
 
+@benchmark_only
 @pytest.mark.benchmark(
     group="benchmark_single_param",
 )
@@ -290,9 +273,9 @@ def test_benchmark_workaround_590_x_only(
     benchmark.pedantic(
         workaround_590_impl,
         kwargs={"X": benchmark_data, "Y": None},
-        warmup_rounds=5,
-        iterations=10,
-        rounds=10,
+        warmup_rounds=WARMUP_ROUNDS,
+        iterations=ITERATIONS,
+        rounds=ROUNDS,
     )
 
 
@@ -301,6 +284,7 @@ def test_benchmark_workaround_590_x_only(
 # ----------------------------
 
 
+@benchmark_only
 @pytest.mark.benchmark(
     group="benchmark_X_Y_params",
 )
@@ -309,22 +293,22 @@ def test_benchmark_workaround_590_x_only(
     [(10 * s, 10 * s) for s in list(range(0, 101, 10))[1:]],
     indirect=["benchmark_data"],
 )
-def test_benchmark_full_iterations_x_y(
+def test_benchmark_chunked_parallel_special_metric_x_y(
     benchmark,
     benchmark_data,
-    chunked_parallel_full_iterations,
 ):
 
     # single argument
     benchmark.pedantic(
-        chunked_parallel_full_iterations,
+        dist.chunked_parallel_special_metric,
         kwargs={"X": benchmark_data, "Y": benchmark_data},
-        warmup_rounds=5,
-        iterations=10,
-        rounds=10,
+        warmup_rounds=WARMUP_ROUNDS,
+        iterations=ITERATIONS,
+        rounds=ROUNDS,
     )
 
 
+@benchmark_only
 @pytest.mark.benchmark(
     group="benchmark_X_Y_params",
 )
@@ -343,7 +327,7 @@ def test_benchmark_workaround_590_x_y(
     benchmark.pedantic(
         workaround_590_impl,
         kwargs={"X": benchmark_data, "Y": benchmark_data},
-        warmup_rounds=5,
-        iterations=10,
-        rounds=10,
+        warmup_rounds=WARMUP_ROUNDS,
+        iterations=ITERATIONS,
+        rounds=ROUNDS,
     )
