@@ -37,7 +37,7 @@ jobs:
         displayName: 'Install package'
 
       - script: |
-          pip install pytest
+          pip install pytest pytest-benchmark
           pytest --show-capture=no -v --disable-warnings --junitxml=pytest.xml
         displayName: 'Run tests'
 
@@ -77,7 +77,7 @@ jobs:
         displayName: 'Install package'
 
       - script: |
-          pip install pytest
+          pip install pytest pytest-benchmark
           pytest --show-capture=no -v --disable-warnings --junitxml=pytest.xml
         displayName: 'Run tests'
 
@@ -117,7 +117,7 @@ jobs:
         displayName: 'Install package'
 
       - script: |
-          pip install pytest
+          pip install pytest pytest-benchmark
           pytest --show-capture=no -v --disable-warnings --junitxml=pytest.xml
         displayName: 'Run tests'
 
@@ -150,7 +150,7 @@ jobs:
           pip install -e .
           pip install .[plot]
           pip install .[parametric_umap]
-          pip install pytest
+          pip install pytest pytest-benchmark
           pip install pytest-cov
           pip install coveralls
         displayName: 'Install package'

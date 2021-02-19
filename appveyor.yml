@@ -20,6 +20,7 @@ install:
   - "conda create -q -n test-environment python=%PYTHON_VERSION% numpy scipy scikit-learn numba pandas bokeh holoviews datashader scikit-image pytest"
   - activate test-environment
   - pip install "tensorflow>=2.1"
+  - pip install pytest-benchmark
   - pip install -e .
 
 test_script:

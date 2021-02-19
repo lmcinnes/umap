@@ -519,15 +519,25 @@ def haversine_grad(x, y):
 
     d = 2.0 * np.arcsin(np.sqrt(min(max(abs(a_1), 0), 1)))
     denom = np.sqrt(abs(a_1 - 1)) * np.sqrt(abs(a_1))
-    grad = np.array(
-        [
-            (
-                sin_lat * cos_lat
-                - np.sin(x[0] + np.pi / 2) * np.cos(y[0] + np.pi / 2) * sin_long ** 2
-            ),
-            (np.cos(x[0] + np.pi / 2) * np.cos(y[0] + np.pi / 2) * sin_long * cos_long),
-        ]
-    ) / (denom + 1e-6)
+    grad = (
+        np.array(
+            [
+                (
+                    sin_lat * cos_lat
+                    - np.sin(x[0] + np.pi / 2)
+                    * np.cos(y[0] + np.pi / 2)
+                    * sin_long ** 2
+                ),
+                (
+                    np.cos(x[0] + np.pi / 2)
+                    * np.cos(y[0] + np.pi / 2)
+                    * sin_long
+                    * cos_long
+                ),
+            ]
+        )
+        / (denom + 1e-6)
+    )
     return d, grad
 
 
@@ -1247,47 +1257,29 @@ def parallel_special_metric(X, Y=None, metric=hellinger):
 
     return result
 
+
 # We can gain efficiency by chunking the matrix into blocks;
 # this keeps data vectors in cache better
 @numba.njit(parallel=True, nogil=True)
 def chunked_parallel_special_metric(X, Y=None, metric=hellinger, chunk_size=16):
     if Y is None:
-        size = X.shape[0]
-        result = np.zeros((size, size), dtype=np.float32)
-        n_row_chunks = (size // chunk_size) + 1
-        for chunk_idx in numba.prange(n_row_chunks):
-            n = chunk_idx * chunk_size
-            chunk_end_n = min(n + chunk_size, size)
-            for m in range(n, size, chunk_size):
-                chunk_end_m = min(m + chunk_size, size)
-                if n == m:
-                    for i in range(n, chunk_end_n):
-                        for j in range(m, chunk_end_m):
-                            if j > i:
-                                d = metric(X[i], X[j])
-                                result[i, j] = d
-                                result[j, i] = d
-                else:
-                    for i in range(n, chunk_end_n):
-                        for j in range(m, chunk_end_m):
-                            d = metric(X[i],X[j])
-                            result[i, j] = d
-                            result[j, i] = d
+        XX, symmetrical = X, True
+        row_size = col_size = X.shape[0]
     else:
-        row_size = X.shape[0]
-        col_size = Y.shape[0]
-        result = np.zeros((row_size, col_size), dtype=np.float32)
-        n_row_chunks = (row_size // chunk_size) + 1
-        for chunk_idx in numba.prange(n_row_chunks):
-            n = chunk_idx * chunk_size
-            chunk_end_n = min(n + chunk_size, row_size)
-            for m in range(0, col_size, chunk_size):
-                chunk_end_m = min(m + chunk_size, col_size)
-                for i in range(n, chunk_end_n):
-                    for j in range(m, chunk_end_m):
-                        d = metric(X[i], Y[j])
-                        result[i, j] = d
+        XX, symmetrical = Y, False
+        row_size, col_size = X.shape[0], Y.shape[0]
 
+    result = np.zeros((row_size, col_size), dtype=np.float32)
+    n_row_chunks = (row_size // chunk_size) + 1
+    for chunk_idx in numba.prange(n_row_chunks):
+        n = chunk_idx * chunk_size
+        chunk_end_n = min(n + chunk_size, row_size)
+        m_start = n if symmetrical else 0
+        for m in range(m_start, col_size, chunk_size):
+            chunk_end_m = min(m + chunk_size, col_size)
+            for i in range(n, chunk_end_n):
+                for j in range(m, chunk_end_m):
+                    result[i, j] = metric(X[i], XX[j])
     return result
 
 
