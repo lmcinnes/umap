@@ -50,7 +50,7 @@ if [[ "$DISTRIB" == "conda" ]]; then
     conda install --yes "tensorflow>=2.0.0"
   else
     conda create -q -n testenv --yes python=$PYTHON_VERSION numpy scipy scikit-learn \
-          numba pandas bokeh holoviews datashader scikit-image pytest \
+          numba pandas bokeh holoviews datashader scikit-image pytest pytest-benchmark \
           "tensorflow-mkl>=2.2.0"
   fi
 
@@ -64,7 +64,7 @@ if [[ "$DISTRIB" == "conda" ]]; then
 
   if [[ "$COVERAGE" == "true" ]]; then
       pip install coverage coveralls
-      pip install pytest-cov  # pytest coverage plugin
+      pip install pytest-cov pytest-benchmark # pytest coverage plugin
   fi
 
   python --version
