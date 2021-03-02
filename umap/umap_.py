@@ -356,7 +356,12 @@ def nearest_neighbors(
     fastmath=True,
 )
 def compute_membership_strengths(
-    knn_indices, knn_dists, sigmas, rhos, return_dists=False, bipartite=False,
+    knn_indices,
+    knn_dists,
+    sigmas,
+    rhos,
+    return_dists=False,
+    bipartite=False,
 ):
     """Construct the membership strength data for the 1-skeleton of each local
     fuzzy simplicial set -- this is formed as a sparse matrix where each row is
@@ -555,13 +560,21 @@ def fuzzy_simplicial_set(
     """
     if knn_indices is None or knn_dists is None:
         knn_indices, knn_dists, _ = nearest_neighbors(
-            X, n_neighbors, metric, metric_kwds, angular, random_state, verbose=verbose,
+            X,
+            n_neighbors,
+            metric,
+            metric_kwds,
+            angular,
+            random_state,
+            verbose=verbose,
         )
 
     knn_dists = knn_dists.astype(np.float32)
 
     sigmas, rhos = smooth_knn_dist(
-        knn_dists, float(n_neighbors), local_connectivity=float(local_connectivity),
+        knn_dists,
+        float(n_neighbors),
+        local_connectivity=float(local_connectivity),
     )
 
     rows, cols, vals, dists = compute_membership_strengths(
@@ -1655,7 +1668,10 @@ class UMAP(BaseEstimator):
             raise ValueError("min_dist cannot be negative")
         if not isinstance(self.init, str) and not isinstance(self.init, np.ndarray):
             raise ValueError("init must be a string or ndarray")
-        if isinstance(self.init, str) and self.init not in ("spectral", "random",):
+        if isinstance(self.init, str) and self.init not in (
+            "spectral",
+            "random",
+        ):
             raise ValueError('string init values must be "spectral" or "random"')
         if (
             isinstance(self.init, np.ndarray)
@@ -1762,6 +1778,22 @@ class UMAP(BaseEstimator):
                     "inverse_transform will be unavailable".format(self.metric)
                 )
                 self._inverse_distance_func = None
+        elif self.metric in pynn_named_distances:
+            if self._sparse_data:
+                if self.metric in pynn_sparse_named_distances:
+                    self._input_distance_func = pynn_sparse_named_distances[self.metric]
+                else:
+                    raise ValueError(
+                        "Metric {} is not supported for sparse data".format(self.metric)
+                    )
+            else:
+                self._input_distance_func = pynn_named_distances[self.metric]
+
+            warn(
+                "gradient function is not yet implemented for {} distance metric; "
+                "inverse_transform will be unavailable".format(self.metric)
+            )
+            self._inverse_distance_func = None
         else:
             raise ValueError("metric is neither callable nor a recognised string")
         # set output distance metric
@@ -2310,7 +2342,9 @@ class UMAP(BaseEstimator):
                     if not callable(self.metric):
                         _m = dist.named_distances[self.metric]
                         dmat = dist.pairwise_special_metric(
-                            X[index].toarray(), metric=_m, kwds=self._metric_kwds,
+                            X[index].toarray(),
+                            metric=_m,
+                            kwds=self._metric_kwds,
                         )
                     else:
                         dmat = dist.pairwise_special_metric(
@@ -2551,7 +2585,10 @@ class UMAP(BaseEstimator):
 
         if self.transform_mode == "embedding":
             self.embedding_, aux_data = self._fit_embed_data(
-                self._raw_data[index], n_epochs, init, random_state,  # JH why raw data?
+                self._raw_data[index],
+                n_epochs,
+                init,
+                random_state,  # JH why raw data?
             )
             # Assign any points that are fully disconnected from our manifold(s) to have embedding
             # coordinates of np.nan.  These will be filtered by our plotting functions automatically.
@@ -2559,7 +2596,9 @@ class UMAP(BaseEstimator):
             # Might be worth moving this into simplicial_set_embedding or _fit_embed_data
             disconnected_vertices = np.array(self.graph_.sum(axis=1)).flatten() == 0
             if len(disconnected_vertices) > 0:
-                self.embedding_[disconnected_vertices] = np.full(self.n_components, np.nan)
+                self.embedding_[disconnected_vertices] = np.full(
+                    self.n_components, np.nan
+                )
 
             self.embedding_ = self.embedding_[inverse]
             if self.output_dens:
