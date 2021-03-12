@@ -56,7 +56,13 @@ def test_densmap_trustworthiness_on_iris(iris):
     with pytest.raises(ValueError):
         densmap_iris_model.inverse_transform(embedding[:10])
 
-    with pytest.raises(NotImplementedError):
-        _ = UMAP(
-            n_neighbors=10, min_dist=0.01, random_state=42, densmap=True, verbose=True,
-        ).fit(iris.data, y=iris.target)
+
+def test_densmap_trustworthiness_on_iris_supervised(iris):
+    densmap_iris_model = UMAP(
+        n_neighbors=10, min_dist=0.01, random_state=42, densmap=True, verbose=True,
+    ).fit(iris.data, y=iris.target)
+    embedding = densmap_iris_model.embedding_
+    trust = trustworthiness(iris.data, embedding, 10)
+    assert (
+        trust >= 0.97
+    ), "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust)
