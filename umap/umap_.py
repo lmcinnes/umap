@@ -2464,11 +2464,6 @@ class UMAP(BaseEstimator):
         # Currently not checking if any duplicate points have differing labels
         # Might be worth throwing a warning...
         if y is not None:
-            if self.densmap:
-                raise NotImplementedError(
-                    "Supervised embedding is not supported with densMAP."
-                )
-
             len_X = len(X) if not self._sparse_data else X.shape[0]
             if len_X != len(y):
                 raise ValueError(
