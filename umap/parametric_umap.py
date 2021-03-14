@@ -344,9 +344,6 @@ class ParametricUMAP(UMAP):
         self.head = tf.constant(tf.expand_dims(head.astype(np.int64), 0))
         self.tail = tf.constant(tf.expand_dims(tail.astype(np.int64), 0))
 
-        a, b = next(iter(edge_dataset))
-        # breakme
-
         if self.parametric_embedding:
             init_embedding = None
         else:
@@ -849,6 +846,9 @@ def prepare_networks(
     return encoder, decoder
 
 
+from umap.parametric_umap import get_graph_elements
+
+
 def construct_edge_dataset(
     X,
     graph_,
@@ -877,23 +877,38 @@ def construct_edge_dataset(
         Whether the decoder is parametric or non-parametric
     """
 
+    def gather_index(index):
+        return X[index]
+
+    # if X is > 2Gb in size, we need to use a different, slower method for
+    #    batching data.
+    gather_indices_in_python = True if X.nbytes * 1e-9 > 2 else False
+
     def gather_X(edge_to, edge_from):
-        edge_to_batch = tf.gather(X, edge_to)
-        edge_from_batch = tf.gather(X, edge_from)
-        outputs = {"umap": 0}
+        # gather data from indexes (edges) in either numpy of tf, depending on array size
+        if gather_indices_in_python:
+            edge_to_batch = tf.py_function(gather_index, [edge_to], [tf.float32])[0]
+            edge_from_batch = tf.py_function(gather_index, [edge_from], [tf.float32])[0]
+        else:
+            edge_to_batch = tf.gather(X, edge_to)
+            edge_from_batch = tf.gather(X, edge_from)
+        return edge_to_batch, edge_from_batch
+
+    def get_outputs(edge_to_batch, edge_from_batch):
+        outputs = {"umap": tf.repeat(0, batch_size)}
         if global_correlation_loss_weight > 0:
             outputs["global_correlation"] = edge_to_batch
-
         if parametric_reconstruction:
             # add reconstruction to iterator output
             # edge_out = tf.concat([edge_to_batch, edge_from_batch], axis=0)
             outputs["reconstruction"] = edge_to_batch
-
         return (edge_to_batch, edge_from_batch), outputs
 
     def make_sham_generator():
         """
-        The sham generator is used to
+        The sham generator is a placeholder when all data is already intrinsic to
+        the model, but keras wants some input data. Used for non-parametric
+        embedding. 
         """
 
         def sham_generator():
@@ -932,10 +947,13 @@ def construct_edge_dataset(
         )
         edge_dataset = edge_dataset.repeat()
         edge_dataset = edge_dataset.shuffle(10000)
+        edge_dataset = edge_dataset.batch(batch_size, drop_remainder=True)
         edge_dataset = edge_dataset.map(
             gather_X, num_parallel_calls=tf.data.experimental.AUTOTUNE
         )
-        edge_dataset = edge_dataset.batch(batch_size, drop_remainder=True)
+        edge_dataset = edge_dataset.map(
+            get_outputs, num_parallel_calls=tf.data.experimental.AUTOTUNE
+        )
         edge_dataset = edge_dataset.prefetch(10)
     else:
         # nonparametric embedding uses a sham dataset
