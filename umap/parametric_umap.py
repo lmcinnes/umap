@@ -846,9 +846,6 @@ def prepare_networks(
     return encoder, decoder
 
 
-from umap.parametric_umap import get_graph_elements
-
-
 def construct_edge_dataset(
     X,
     graph_,
