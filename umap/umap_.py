@@ -2730,10 +2730,10 @@ class UMAP(BaseEstimator):
         rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
         if self.metric == 'precomputed':
-            warn("Transforming new data with precomputed metric."
-                 "We are assuming the input data is a matrix of distances from the new points"
-                 "to the points in the training set. If the input matrix is sparse, it should"
-                 "contain distances from the new points to their nearest neighbours"
+            warn("Transforming new data with precomputed metric. "
+                 "We are assuming the input data is a matrix of distances from the new points "
+                 "to the points in the training set. If the input matrix is sparse, it should "
+                 "contain distances from the new points to their nearest neighbours "
                  "or approximate nearest neighbours in the training set.")
             assert X.shape[1] == self._raw_data.shape[0]
             if scipy.sparse.issparse(X):
