@@ -2741,6 +2741,8 @@ class UMAP(BaseEstimator):
                 dists = np.full_like(indices, dtype=np.float32, fill_value=-1)
                 for i in range(X.shape[0]):
                     data_indices = np.argsort(X[i].data)
+                    if len(data_indices) < self._n_neighbors:
+                        raise ValueError(f"Need at least n_neighbors ({self.n_neighbors}) distances for each row!")
                     indices[i] = X[i].indices[data_indices[:self._n_neighbors]]
                     dists[i] = X[i].data[data_indices[:self._n_neighbors]]
             else:
