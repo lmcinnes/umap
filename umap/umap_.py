@@ -2720,11 +2720,6 @@ class UMAP(BaseEstimator):
                 "Transforming data into an existing embedding not supported for densMAP."
             )
 
-        # if self.metric == "precomputed":
-        #     raise ValueError(
-        #         "Transform  of new data not available for precomputed metric."
-        #     )
-
         # X = check_array(X, dtype=np.float32, order="C", accept_sparse="csr")
         random_state = check_random_state(self.transform_seed)
         rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
