@@ -1755,8 +1755,7 @@ class UMAP(BaseEstimator):
             if self.unique:
                 raise ValueError("unique is poorly defined on a precomputed metric")
             warn(
-                "using precomputed metric; transform will be unavailable for new data and inverse_transform "
-                "will be unavailable for all data"
+                "using precomputed metric; inverse_transform will be unavailable"
             )
             self._input_distance_func = self.metric
             self._inverse_distance_func = None
