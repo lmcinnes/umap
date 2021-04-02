@@ -4,7 +4,7 @@ import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.metrics import adjusted_rand_score
 from sklearn.neighbors import KDTree
-from scipy.spatial.distance import cdist, pdist
+from scipy.spatial.distance import cdist, pdist, squareform
 
 try:
     # works for sklearn>=0.22
@@ -139,7 +139,7 @@ def test_umap_sparse_transform_on_iris(iris, iris_selection):
 # ----------------------
 def test_precomputed_transform_on_iris(iris, iris_selection):
     data = iris.data[iris_selection]
-    distance_matrix = pdist(data)
+    distance_matrix = squareform(pdist(data))
 
     fitter = UMAP(
         n_neighbors=10,
@@ -163,7 +163,7 @@ def test_precomputed_transform_on_iris(iris, iris_selection):
 # ----------------------
 def test_precomputed_sparse_transform_on_iris(iris, iris_selection):
     data = iris.data[iris_selection]
-    distance_matrix = sparse.csr_matrix(pdist(data))
+    distance_matrix = sparse.csr_matrix(squareform(pdist(data)))
 
     fitter = UMAP(
         n_neighbors=10,
