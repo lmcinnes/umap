@@ -58,8 +58,8 @@ MIN_K_DIST_SCALE = 1e-3
 NPY_INFINITY = np.inf
 
 DISCONNECTION_DISTANCES = {
-    "correlation": 1,
-    "cosine": 1,
+    "correlation": 2,
+    "cosine": 2,
     "hellinger": 1,
     "jaccard": 1,
     "dice": 1,
