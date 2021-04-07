@@ -105,8 +105,12 @@ def test_multi_component_layout_precomputed():
 @pytest.mark.parametrize("metric", ["jaccard", "hellinger", "cosine"])
 @pytest.mark.parametrize("force_approximation", [True, False])
 def test_disconnected_data(num_isolates, metric, force_approximation):
+    if metric == "cosine":
+        options = [-1, 1]
+    else:
+        options = [False, True]
     disconnected_data = np.random.choice(
-        a=[False, True], size=(10, 30), p=[0.6, 1 - 0.6]
+        a=options, size=(10, 30), p=[0.6, 1 - 0.6]
     )
     # Add some disconnected data for the corner case test
     disconnected_data = np.vstack(
