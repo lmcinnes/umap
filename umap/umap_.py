@@ -1044,18 +1044,24 @@ def simplicial_set_embedding(
     graph.sum_duplicates()
     n_vertices = graph.shape[1]
 
-    if n_epochs <= 0:
-        # For smaller datasets we can use more epochs
-        if graph.shape[0] <= 10000:
-            n_epochs = 500
-        else:
-            n_epochs = 200
+    # For smaller datasets we can use more epochs
+    if graph.shape[0] <= 10000:
+        default_epochs = 500
+    else:
+        default_epochs = 200
 
-        # Use more epochs for densMAP
-        if densmap:
-            n_epochs += 200
+    # Use more epochs for densMAP
+    if densmap:
+        default_epochs += 200
 
-    graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
+    if n_epochs is None:
+        n_epochs = default_epochs
+
+    if n_epochs > 10:
+        graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
+    else:
+        graph.data[graph.data < (graph.data.max() / float(default_epochs))] = 0.0
+
     graph.eliminate_zeros()
 
     if isinstance(init, str) and init == "random":
@@ -1702,9 +1708,9 @@ class UMAP(BaseEstimator):
         if self.n_components < 1:
             raise ValueError("n_components must be greater than 0")
         if self.n_epochs is not None and (
-            self.n_epochs <= 10 or not isinstance(self.n_epochs, int)
+            self.n_epochs < 0 or not isinstance(self.n_epochs, int)
         ):
-            raise ValueError("n_epochs must be a positive integer of at least 10")
+            raise ValueError("n_epochs must be a nonnegative integer")
         if self.metric_kwds is None:
             self._metric_kwds = {}
         else:
@@ -1749,8 +1755,7 @@ class UMAP(BaseEstimator):
             if self.unique:
                 raise ValueError("unique is poorly defined on a precomputed metric")
             warn(
-                "using precomputed metric; transform will be unavailable for new data and inverse_transform "
-                "will be unavailable for all data"
+                "using precomputed metric; inverse_transform will be unavailable"
             )
             self._input_distance_func = self.metric
             self._inverse_distance_func = None
@@ -2567,11 +2572,6 @@ class UMAP(BaseEstimator):
         else:
             self._supervised = False
 
-        if self.n_epochs is None:
-            n_epochs = 0
-        else:
-            n_epochs = self.n_epochs
-
         if self.densmap or self.output_dens:
             self._densmap_kwds["graph_dists"] = self.graph_dists_
 
@@ -2581,7 +2581,7 @@ class UMAP(BaseEstimator):
         if self.transform_mode == "embedding":
             self.embedding_, aux_data = self._fit_embed_data(
                 self._raw_data[index],
-                n_epochs,
+                self.n_epochs,
                 init,
                 random_state,  # JH why raw data?
             )
@@ -2719,16 +2719,31 @@ class UMAP(BaseEstimator):
                 "Transforming data into an existing embedding not supported for densMAP."
             )
 
-        if self.metric == "precomputed":
-            raise ValueError(
-                "Transform  of new data not available for precomputed metric."
-            )
-
         # X = check_array(X, dtype=np.float32, order="C", accept_sparse="csr")
         random_state = check_random_state(self.transform_seed)
         rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
-        if self._small_data:
+        if self.metric == 'precomputed':
+            warn("Transforming new data with precomputed metric. "
+                 "We are assuming the input data is a matrix of distances from the new points "
+                 "to the points in the training set. If the input matrix is sparse, it should "
+                 "contain distances from the new points to their nearest neighbours "
+                 "or approximate nearest neighbours in the training set.")
+            assert X.shape[1] == self._raw_data.shape[0]
+            if scipy.sparse.issparse(X):
+                indices = np.full((X.shape[0], self._n_neighbors), dtype=np.int32, fill_value=-1)
+                dists = np.full_like(indices, dtype=np.float32, fill_value=-1)
+                for i in range(X.shape[0]):
+                    data_indices = np.argsort(X[i].data)
+                    if len(data_indices) < self._n_neighbors:
+                        raise ValueError(f"Need at least n_neighbors ({self.n_neighbors}) distances for each row!")
+                    indices[i] = X[i].indices[data_indices[:self._n_neighbors]]
+                    dists[i] = X[i].data[data_indices[:self._n_neighbors]]
+            else:
+                indices = np.argsort(X, axis=1)[:, :self._n_neighbors].astype(np.int32)
+                dists = np.take_along_axis(X, indices, axis=1)
+            assert np.min(indices) >= 0 and np.min(dists) >= 0.
+        elif self._small_data:
             try:
                 # sklearn pairwise_distances fails for callable metric on sparse data
                 _m = self.metric if self._sparse_data else self._input_distance_func

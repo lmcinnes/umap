@@ -4,6 +4,7 @@ import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.metrics import adjusted_rand_score
 from sklearn.neighbors import KDTree
+from scipy.spatial.distance import cdist, pdist, squareform
 
 try:
     # works for sklearn>=0.22
@@ -131,6 +132,54 @@ def test_umap_sparse_transform_on_iris(iris, iris_selection):
     trust = trustworthiness(new_data, embedding, 10)
     assert (
         trust >= 0.80
+    ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
+
+
+# UMAP precomputed metric transform on iris
+# ----------------------
+def test_precomputed_transform_on_iris(iris, iris_selection):
+    data = iris.data[iris_selection]
+    distance_matrix = squareform(pdist(data))
+
+    fitter = UMAP(
+        n_neighbors=10,
+        min_dist=0.01,
+        random_state=42,
+        n_epochs=100,
+        metric='precomputed'
+    ).fit(distance_matrix)
+
+    new_data = iris.data[~iris_selection]
+    new_distance_matrix = cdist(new_data, data)
+    embedding = fitter.transform(new_distance_matrix)
+
+    trust = trustworthiness(new_data, embedding, 10)
+    assert (
+        trust >= 0.85
+    ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
+
+
+# UMAP precomputed metric transform on iris with sparse distances
+# ----------------------
+def test_precomputed_sparse_transform_on_iris(iris, iris_selection):
+    data = iris.data[iris_selection]
+    distance_matrix = sparse.csr_matrix(squareform(pdist(data)))
+
+    fitter = UMAP(
+        n_neighbors=10,
+        min_dist=0.01,
+        random_state=42,
+        n_epochs=100,
+        metric='precomputed'
+    ).fit(distance_matrix)
+
+    new_data = iris.data[~iris_selection]
+    new_distance_matrix = sparse.csr_matrix(cdist(new_data, data))
+    embedding = fitter.transform(new_distance_matrix)
+
+    trust = trustworthiness(new_data, embedding, 10)
+    assert (
+        trust >= 0.85
     ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
 
 
