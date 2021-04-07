@@ -113,13 +113,18 @@ def test_disconnected_data(num_isolates, metric, force_approximation):
         a=options, size=(10, 30), p=[0.6, 1 - 0.6]
     )
     # Add some disconnected data for the corner case test
-    disconnected_data = np.vstack(
-        [disconnected_data, np.zeros((num_isolates, 30), dtype="bool")]
-    )
-    new_columns = np.zeros((num_isolates + 10, num_isolates), dtype="bool")
-    for i in range(num_isolates):
-        new_columns[10 + i, i] = True
-    disconnected_data = np.hstack([disconnected_data, new_columns])
+    if metric == "cosine":
+        disconnected_data = np.vstack(
+            [disconnected_data, -disconnected_data[:num_isolates]]
+        )
+    else:
+        disconnected_data = np.vstack(
+            [disconnected_data, np.zeros((num_isolates, 30), dtype="bool")]
+        )
+        new_columns = np.zeros((num_isolates + 10, num_isolates), dtype="bool")
+        for i in range(num_isolates):
+            new_columns[10 + i, i] = True
+        disconnected_data = np.hstack([disconnected_data, new_columns])
 
     with pytest.warns(None) as w:
         model = UMAP(
