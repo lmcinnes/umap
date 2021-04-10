@@ -287,7 +287,7 @@ def nearest_neighbors(
     random_state: np.random state
         The random state to use for approximate NN computations.
 
-    low_memory: bool (optional, default False)
+    low_memory: bool (optional, default True)
         Whether to pursue lower memory NNdescent.
 
     verbose: bool (optional, default False)
@@ -1438,7 +1438,7 @@ class UMAP(BaseEstimator):
         The effective scale of embedded points. In combination with ``min_dist``
         this determines how clustered/clumped the embedded points are.
 
-    low_memory: bool (optional, default False)
+    low_memory: bool (optional, default True)
         For some datasets the nearest neighbor computation can consume a lot of
         memory. If you find that UMAP is failing due to memory constraints
         consider setting this option to True. This approach is more
