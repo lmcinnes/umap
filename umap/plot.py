@@ -458,6 +458,8 @@ def show(plot_to_show):
         show_static()
     elif isinstance(plot_to_show, bpl.Figure):
         show_interactive(plot_to_show)
+    elif isinstance(plot_to_show, hv.core.spaces.DynamicMap):
+        show_interactive(hv.render(plot_to_show), backend="bokeh")
     else:
         raise ValueError(
             "The type of ``plot_to_show`` was not valid, or not understood."
@@ -1211,6 +1213,7 @@ def interactive(
     interactive_text_search=False,
     interactive_text_search_columns=None,
     interactive_text_search_alpha_contrast=0.95,
+    alpha=None,
 ):
     """Create an interactive bokeh plot of a UMAP embedding.
     While static plots are useful, sometimes a plot that
@@ -1327,6 +1330,9 @@ def interactive(
         Alpha value for points matching text search. Alpha value for points
         not matching text search will be 1 - interactive_text_search_alpha_contrast
 
+    alpha: float (optional, default: None)
+        The alpha blending value, between 0 (transparent) and 1 (opaque).
+
     Returns
     -------
 
@@ -1340,6 +1346,10 @@ def interactive(
         raise ValueError(
             "Conflicting options; only one of labels or values should be set"
         )
+
+    if alpha is not None:
+        if not 0.0 <= alpha <= 1.0:
+            raise ValueError("Alpha must be between 0 and 1 inclusive")
 
     points = _get_embedding(umap_object)
     if subset_points is not None:
@@ -1409,7 +1419,10 @@ def interactive(
         else:
             tooltips = None
 
-        data["alpha"] = 1
+        if alpha is not None:
+            data["alpha"] = alpha
+        else:
+            data["alpha"] = 1
 
         # bpl.output_notebook(hide_banner=True) # this doesn't work for non-notebook use
         data_source = bpl.ColumnDataSource(data)
@@ -1500,9 +1513,14 @@ def interactive(
             warn(
                 "Too many points for text search." "Sorry; try subssampling your data."
             )
+        if alpha is not None:
+            warn(
+                "Alpha parameter will not be applied on holoviews plots"
+            )
         hv.extension("bokeh")
         hv.output(size=300)
-        hv.opts('RGB [bgcolor="{}", xaxis=None, yaxis=None]'.format(background))
+        hv.opts.defaults(hv.opts.RGB(bgcolor=background, xaxis=None, yaxis=None))
+
         if labels is not None:
             point_plot = hv.Points(data, kdims=["x", "y"])
             plot = hd.datashade(
