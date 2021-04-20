@@ -41,7 +41,7 @@ if TF_MAJOR_VERSION < 2:
     raise ImportError("umap.parametric_umap requires Tensorflow >= 2.0") from None
 
 try:
-    import tensorflow_probability as tfp
+    import tensorflow_probability
 except ImportError:
     warn(
         """ Global structure preservation in The umap.parametric_umap package requires 
@@ -71,6 +71,7 @@ class ParametricUMAP(UMAP):
         loss_report_frequency=10,
         n_training_epochs=1,
         global_correlation_loss_weight=0,
+        run_eagerly=False,
         keras_fit_kwargs={},
         **kwargs
     ):
@@ -105,6 +106,8 @@ class ParametricUMAP(UMAP):
             number of epochs to train for, by default 1
         global_correlation_loss_weight : float, optional
             Whether to additionally train on correlation of global pairwise relationships (>0), by default 0
+        run_eagerly : bool, optional
+            Whether to run tensorflow eagerly
         keras_fit_kwargs : dict, optional
             additional arguments for model.fit (like callbacks), by default {}
         """
@@ -118,12 +121,13 @@ class ParametricUMAP(UMAP):
             parametric_embedding  # nonparametric vs parametric embedding
         )
         self.parametric_reconstruction = parametric_reconstruction
+        self.run_eagerly = run_eagerly
         self.autoencoder_loss = autoencoder_loss
         self.batch_size = batch_size
         self.loss_report_frequency = (
             loss_report_frequency  # how many times per epoch to report loss in keras
         )
-        if "tfp" in sys.modules:
+        if "tensorflow_probability" in sys.modules:
             self.global_correlation_loss_weight = global_correlation_loss_weight
         else:
             warn(
@@ -294,6 +298,12 @@ class ParametricUMAP(UMAP):
         if self.global_correlation_loss_weight > 0:
             losses["global_correlation"] = distance_loss_corr
             loss_weights["global_correlation"] = self.global_correlation_loss_weight
+            if self.run_eagerly == False:
+                # this is needed to avoid a 'NaN' error bug in tensorflow_probability (v0.12.2)
+                warn(
+                    "Setting tensorflow to run eagerly for global_correlation_loss."
+                )
+                self.run_eagerly = True
 
         if self.parametric_reconstruction:
             losses["reconstruction"] = tf.keras.losses.BinaryCrossentropy(
@@ -305,9 +315,8 @@ class ParametricUMAP(UMAP):
             optimizer=self.optimizer,
             loss=losses,
             loss_weights=loss_weights,
-            run_eagerly=True,
+            run_eagerly=self.run_eagerly,
         )
-        print("running eagerly")
 
     def _fit_embed_data(self, X, n_epochs, init, random_state):
 
@@ -514,7 +523,7 @@ def get_graph_elements(graph_, n_epochs):
     graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
     graph.eliminate_zeros()
     # get epochs per sample based upon edge probability
-    epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs)
+    epochs_per_sample = n_epochs * graph.data
 
     head = graph.row
     tail = graph.col
@@ -759,7 +768,9 @@ def distance_loss_corr(x, z_x):
 
     # compute correlation
     corr_d = tf.squeeze(
-        tfp.stats.correlation(x=tf.expand_dims(dx, -1), y=tf.expand_dims(dz, -1))
+        tensorflow_probability.stats.correlation(
+            x=tf.expand_dims(dx, -1), y=tf.expand_dims(dz, -1)
+        )
     )
     if tf.math.is_nan(corr_d):
         raise ValueError("NaN values found in correlation loss.")
