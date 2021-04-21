@@ -66,6 +66,10 @@ class ParametricUMAP(UMAP):
         decoder=None,
         parametric_embedding=True,
         parametric_reconstruction=False,
+        parametric_reconstruction_loss_fcn=tf.keras.losses.BinaryCrossentropy(
+            from_logits=True
+        ),
+        parametric_reconstruction_loss_weight=1.0,
         autoencoder_loss=False,
         reconstruction_validation=None,
         loss_report_frequency=10,
@@ -96,6 +100,10 @@ class ParametricUMAP(UMAP):
             Whether the embedder is parametric or non-parametric, by default True
         parametric_reconstruction : bool, optional
             Whether the decoder is parametric or non-parametric, by default False
+        parametric_reconstruction_loss_fcn : bool, optional
+            What loss function to use for parametric reconstruction, by default tf.keras.losses.BinaryCrossentropy
+        parametric_reconstruction_loss_weight : float, optional
+            How to weight the parametric reconstruction loss relative to umap loss, by default 1.0
         autoencoder_loss : bool, optional
             [description], by default False
         reconstruction_validation : array, optional
@@ -121,6 +129,10 @@ class ParametricUMAP(UMAP):
             parametric_embedding  # nonparametric vs parametric embedding
         )
         self.parametric_reconstruction = parametric_reconstruction
+        self.parametric_reconstruction_loss_fcn = parametric_reconstruction_loss_fcn
+        self.parametric_reconstruction_loss_weight = (
+            parametric_reconstruction_loss_weight
+        )
         self.run_eagerly = run_eagerly
         self.autoencoder_loss = autoencoder_loss
         self.batch_size = batch_size
@@ -300,16 +312,12 @@ class ParametricUMAP(UMAP):
             loss_weights["global_correlation"] = self.global_correlation_loss_weight
             if self.run_eagerly == False:
                 # this is needed to avoid a 'NaN' error bug in tensorflow_probability (v0.12.2)
-                warn(
-                    "Setting tensorflow to run eagerly for global_correlation_loss."
-                )
+                warn("Setting tensorflow to run eagerly for global_correlation_loss.")
                 self.run_eagerly = True
 
         if self.parametric_reconstruction:
-            losses["reconstruction"] = tf.keras.losses.BinaryCrossentropy(
-                from_logits=True
-            )
-            loss_weights["reconstruction"] = 1.0
+            losses["reconstruction"] = self.parametric_reconstruction_loss_fcn
+            loss_weights["reconstruction"] = self.parametric_reconstruction_loss_weight
 
         self.parametric_model.compile(
             optimizer=self.optimizer,
