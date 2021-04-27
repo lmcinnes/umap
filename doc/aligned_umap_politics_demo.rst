@@ -975,7 +975,7 @@ block of contiguous years needs to be a separate path, and we shouldn’t
 connect them. We therefore need some logic to find the contiguous blocks
 and generate smooth paths for each of them.
 
-Another catch is that Ssome representatives have only been in office for
+Another catch is that some representatives have only been in office for
 a year or two (special elections and so forth) and we can’t do a cubic
 spline interpolation for that; we can devolve to linear interpolation or
 quadratic splines for those cases, so simply add the point itself for
