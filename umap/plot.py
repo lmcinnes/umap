@@ -1590,4 +1590,3 @@ def nearest_neighbour_distribution(umap_object, bins=25, ax=None):
     ax.hist(nn_distances, bins=bins)
 
     return ax
-
