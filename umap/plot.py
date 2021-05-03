@@ -39,7 +39,7 @@ import sklearn.neighbors
 
 from matplotlib.patches import Patch
 
-from umap.utils import submatrix
+from umap.utils import submatrix, average_nn_distance
 
 from bokeh.plotting import show as show_interactive
 from bokeh.plotting import output_file, output_notebook
@@ -1556,3 +1556,37 @@ def interactive(
             )
 
     return plot
+
+
+def nearest_neighbour_distribution(umap_object, bins=25, ax=None):
+    """Create a histogram of the average distance to each points
+    nearest neighbors.
+
+    Parameters
+    ----------
+    umap_object: trained UMAP object
+        A trained UMAP object that has an embedding.
+
+    bins: int (optional, default 25)
+        Number of bins to put the points into
+
+    ax: matlotlib axis (optional, default None)
+        A matplotlib axis to plot to, or, if None, a new
+        axis will be created and returned.
+
+    Returns
+    -------
+
+    """
+    nn_distances = average_nn_distance(umap_object.graph_)
+
+    if ax is None:
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+
+    ax.set_xlabel(f'Average distance to nearest neighbors')
+    ax.set_ylabel('Frequency')
+
+    ax.hist(nn_distances, bins=bins)
+
+    return ax

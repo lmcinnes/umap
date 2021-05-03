@@ -3,6 +3,7 @@
 # License: BSD 3 clause
 
 import time
+from warnings import warn
 
 import numpy as np
 import numba
@@ -188,3 +189,32 @@ def disconnected_vertices(model):
     else:
         vertices_disconnected = np.array(model.graph_.sum(axis=1)).flatten() == 0
     return vertices_disconnected
+
+
+def average_nn_distance(dist_matrix):
+    """Calculate the average distance to each points nearest neighbors.
+
+    Parameters
+    ----------
+    dist_matrix: a csr_matrix
+        A distance matrix (usually umap_model.graph_)
+
+    Returns
+    -------
+    An array with the average distance to each points nearest neighbors
+
+    """
+    (row_idx, col_idx, val) = scipy.sparse.find(dist_matrix)
+
+    # Count/sum is done per row
+    count_non_zero_elems = np.bincount(row_idx)
+    sum_non_zero_elems = np.bincount(row_idx, weights=val)
+    averages = sum_non_zero_elems/count_non_zero_elems
+
+    if any(np.isnan(averages)):
+        warn(
+            "Embedding contains disconnected vertices which will be ignored." 
+            "Use umap.utils.disconnected_vertices() to identify them."
+        )
+
+    return averages
