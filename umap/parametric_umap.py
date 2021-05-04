@@ -326,7 +326,7 @@ class ParametricUMAP(UMAP):
             run_eagerly=self.run_eagerly,
         )
 
-    def _fit_embed_data(self, X, n_epochs, init, random_state):
+    def _fit_embed_data(self, X, n_epochs, init, random_state, pin_mask):
 
         # get dimensionality of dataset
         if self.dims is None:
@@ -335,6 +335,12 @@ class ParametricUMAP(UMAP):
             # reshape data for network
             if len(self.dims) > 1:
                 X = np.reshape(X, [len(X)] + list(self.dims))
+
+        if pin_mask is not None:
+            warn(
+                "Pinning is not yet supported by Parametric UMAP.\
+                Ignoring the pin_mask."
+            )
 
         if (np.max(X) > 1.0) or (np.min(X) < 0.0) and self.parametric_reconstruction:
             warn(
