@@ -252,8 +252,12 @@ def optimize_layout_euclidean(
         The indices of the heads of 1-simplices with non-zero membership.
     tail: array of shape (n_1_simplices)
         The indices of the tails of 1-simplices with non-zero membership.
-    n_epochs: int
-        The number of training epochs to use in optimization.
+    n_epochs: int, or list of int
+        The number of training epochs to use in optimization, or a list of
+        epochs at which to save the embedding. In case of a list, the optimization
+        will use the maximum number of epochs in the list, and will return a list
+        of embedding in the order of increasing epoch, regardless of the order in
+        the epoch list.
     n_vertices: int
         The number of vertices (0-simplices) in the dataset.
     epochs_per_samples: array of shape (n_1_simplices)
@@ -322,6 +326,12 @@ def optimize_layout_euclidean(
         dens_phi_sum = np.zeros(1, dtype=np.float32)
         dens_re_sum = np.zeros(1, dtype=np.float32)
 
+    epochs_list = None
+    embedding_list = []
+    if isinstance(n_epochs, list):
+        epochs_list = n_epochs
+        n_epochs = max(epochs_list)
+
     for n in range(n_epochs):
 
         densmap_flag = (
@@ -385,7 +395,14 @@ def optimize_layout_euclidean(
         if verbose and n % int(n_epochs / 10) == 0:
             print("\tcompleted ", n, " / ", n_epochs, "epochs")
 
-    return head_embedding
+        if epochs_list is not None and n in epochs_list:
+            embedding_list.append(head_embedding.copy())
+
+    # Add the last embedding to the list as well
+    if epochs_list is not None:
+        embedding_list.append(head_embedding.copy())
+
+    return head_embedding if epochs_list is None else embedding_list
 
 
 @numba.njit(fastmath=True)
