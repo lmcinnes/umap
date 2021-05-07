@@ -2607,7 +2607,7 @@ class UMAP(BaseEstimator):
                     raise KeyError("No list of embedding were found in 'aux_data'. It is likely the"
                                    "layout optimization function doesn't support the list of int for 'n_epochs'.")
                 else:
-                    self.embedding_list = aux_data["embedding_list"]
+                    self.embedding_list = [e[inverse] for e in aux_data["embedding_list"]]
 
             # Assign any points that are fully disconnected from our manifold(s) to have embedding
             # coordinates of np.nan.  These will be filtered by our plotting functions automatically.
