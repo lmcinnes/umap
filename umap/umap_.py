@@ -1611,6 +1611,7 @@ class UMAP(BaseEstimator):
         transform_seed=42,
         transform_mode="embedding",
         force_approximation_algorithm=False,
+        force_exact_distances=False,
         verbose=False,
         unique=False,
         densmap=False,
@@ -1648,6 +1649,7 @@ class UMAP(BaseEstimator):
         self.transform_seed = transform_seed
         self.transform_mode = transform_mode
         self.force_approximation_algorithm = force_approximation_algorithm
+        self.force_exact_distances = force_exact_distances
         self.verbose = verbose
         self.unique = unique
 
@@ -1842,6 +1844,10 @@ class UMAP(BaseEstimator):
         if self.n_jobs < -1 or self.n_jobs == 0:
             raise ValueError("n_jobs must be a postive integer, or -1 (for all cores)")
 
+        if self.force_approximation_algorithm and self.force_exact_distances:
+            raise ValueError("enforcing both exact distances and an approximation "
+                             "contradict each other")
+
         if self.dens_lambda < 0.0:
             raise ValueError("dens_lambda cannot be negative")
         if self.dens_frac < 0.0 or self.dens_frac > 1.0:
@@ -1929,6 +1935,9 @@ class UMAP(BaseEstimator):
         self.transform_seed = flattened([m.transform_seed for m in models])
         self.force_approximation_algorithm = flattened(
             [m.force_approximation_algorithm for m in models]
+        )
+        self.force_exact_distances = flattened(
+            [m.force_exact_distances for m in models]
         )
         self.verbose = flattened([m.verbose for m in models])
         self.unique = flattened([m.unique for m in models])
@@ -2332,7 +2341,9 @@ class UMAP(BaseEstimator):
                 verbose=self.verbose,
             )
         # Handle small cases efficiently by computing all distances
-        elif X[index].shape[0] < 4096 and not self.force_approximation_algorithm:
+        elif self.force_exact_distances or (
+                X[index].shape[0] < 4096 and not self.force_approximation_algorithm
+                ):
             self._small_data = True
             try:
                 # sklearn pairwise_distances fails for callable metric on sparse data
