@@ -59,7 +59,7 @@ the clustering to recover the digit structure.
 
 .. code:: python3
 
-    mnist = fetch_openml('Fashion-MNIST', version=1)
+    mnist = fetch_openml('mnist_784', version=1)
     mnist.target = mnist.target.astype(int)
 
 For visualization purposes we can reduce the data to 2-dimensions using
