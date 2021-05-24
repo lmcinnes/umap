@@ -336,7 +336,7 @@ class ParametricUMAP(UMAP):
             if len(self.dims) > 1:
                 X = np.reshape(X, [len(X)] + list(self.dims))
 
-        if (np.max(X) > 1.0) or (np.min(X) < 0.0) and self.parametric_reconstruction:
+        if self.parametric_reconstruction and (np.max(X) > 1.0 or np.min(X) < 0.0):
             warn(
                 "Data should be scaled to the range 0-1 for cross-entropy reconstruction loss."
             )
