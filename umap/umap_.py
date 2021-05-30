@@ -1652,8 +1652,8 @@ class UMAP(BaseEstimator):
         self.unique = unique
 
         self.densmap = densmap
-        self.dens_lambda = dens_lambda if densmap else 0.0
-        self.dens_frac = dens_frac if densmap else 0.0
+        self.dens_lambda = dens_lambda
+        self.dens_frac = dens_frac
         self.dens_var_shift = dens_var_shift
         self.output_dens = output_dens
         self.disconnection_distance = disconnection_distance
@@ -1850,8 +1850,8 @@ class UMAP(BaseEstimator):
             raise ValueError("dens_var_shift cannot be negative")
 
         self._densmap_kwds = {
-            "lambda": self.dens_lambda,
-            "frac": self.dens_frac,
+            "lambda": self.dens_lambda if self.densmap else 0.0,
+            "frac": self.dens_frac if self.densmap else 0.0,
             "var_shift": self.dens_var_shift,
             "n_neighbors": self.n_neighbors,
         }
