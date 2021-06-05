@@ -29,6 +29,8 @@ how to get it running on data.
     import umap.utils as utils
     import umap.aligned_umap
     import matplotlib.pyplot as plt
+    from matplotlib import animation
+    from IPython.display import display, Image, HTML
 
 For our demonstration we’ll just use the pendigits dataset from sklearn.
 
@@ -163,9 +165,6 @@ by combining them into a GIF. Like before, we can use matplotlib to generate
 this animation, then save it to a file.
 
 .. code:: python3
-
-    from IPython.display import display, Image, HTML
-    from matplotlib import animation
 
     fig = plt.figure(figsize=(5, 5), dpi=150)
     ax = fig.add_subplot(1, 1, 1)
