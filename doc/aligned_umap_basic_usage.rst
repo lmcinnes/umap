@@ -158,14 +158,66 @@ down).
 
 .. image:: images/aligned_umap_basic_usage_15_0.png
 
+We can also present these ten scatter plots as a animated series of images
+by combining them into a GIF. Like before, we can use matplotlib to generate
+this animation, then save it to a file.
+
+.. code:: python3
+
+    from IPython.display import display, Image, HTML
+    from matplotlib import animation
+
+    fig = plt.figure(figsize=(5, 5), dpi=200)
+    ax = fig.add_subplot(1, 1, 1)
+
+    ax.set(xticks=[], yticks=[])
+    num_frames = len(aligned_mapper.embeddings_)
+
+    scat = ax.scatter([], [], s=2)
+    scat.set_cmap('Spectral')
+    text = ax.text(ax_bound[0] + 0.5, ax_bound[2] + 0.5, '')
+    plt.tight_layout()
+    ax.axis(ax_bound)
+
+    def init():
+        return scat
+
+    def animate(i):
+        current_target = ordered_target[150 * i:min(ordered_target.shape[0], 150 * i + 400)]
+        scat.set_array(current_target)
+        scat.set_offsets(aligned_mapper.embeddings_[i])
+        text.set_text(f'Frame {i}')
+        return scat
+
+    anim = animation.FuncAnimation(
+        fig,
+        init_func=init,
+        func=animate,
+        frames=num_frames,
+        interval=300)
+
+    # Save to file. Depending on your machine, you may need to change the
+    # writer for this step to work correctly.
+    anim.save("aligned_umap_pendigits_anim.gif", writer="pillow")
+
+    plt.close(anim._fig)
+
+Next, we read in the GIF and display it:
+
+.. code:: python3
+
+    with open("aligned_umap_pendigits_anim.gif", "rb") as f:
+    display(Image(f.read()))
+
+
+.. image:: images/aligned_umap_pendigits_anim.gif
 
 So despite being different embeddings on different datasets, the
-clusters keep their general alignment – the top left plot and bottom
-right plot have the same rough positions for specific digit clusters. We
-can also, to a degree, see how the structure changes over the course of
-the different slices. Thus we are keeping the various embeddings
-aligned, but allowing the changes dictated by the differing structures
-of each different slice of data.
+clusters keep their general alignment – the first and last plot have the
+same rough positions for specific digit clusters. We can also, to a degree,
+see how the structure changes over the course of the different slices. Thus
+we are keeping the various embeddings aligned, but allowing the changes
+dictated by the differing structures of each different slice of data.
 
 Online updating of aligned embeddings
 -------------------------------------
