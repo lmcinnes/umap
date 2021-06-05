@@ -207,7 +207,7 @@ Next, we read in the GIF and display it:
 .. code:: python3
 
     with open("aligned_umap_pendigits_anim.gif", "rb") as f:
-    display(Image(f.read()))
+        display(Image(f.read()))
 
 
 .. image:: images/aligned_umap_pendigits_anim.gif
