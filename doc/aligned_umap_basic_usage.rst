@@ -167,7 +167,7 @@ this animation, then save it to a file.
     from IPython.display import display, Image, HTML
     from matplotlib import animation
 
-    fig = plt.figure(figsize=(5, 5), dpi=200)
+    fig = plt.figure(figsize=(5, 5), dpi=150)
     ax = fig.add_subplot(1, 1, 1)
 
     ax.set(xticks=[], yticks=[])
