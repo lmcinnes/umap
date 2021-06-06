@@ -444,7 +444,7 @@ module.
 
 
 Next, we'll create a new figure, initialize a blank scatter plot, then use
-`FuncAnimation` to update the dot positions (called "offsets") one frame at a
+``FuncAnimation`` to update the dot positions (called "offsets") one frame at a
 time.
 
 .. code:: python3
