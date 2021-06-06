@@ -482,11 +482,10 @@ your machine, you may need to change which writer the save method uses.
 .. code:: python3
 
     anim.save("aligned_umap_pendigits_anim.gif", writer="pillow")
-
     plt.close(anim._fig)
 
 
-And finally, we can read in our rendered GIF, and display it in the notebook.
+Finally, we can read in our rendered GIF and display it in the notebook.
 
 .. code:: python3
 
