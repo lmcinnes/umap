@@ -390,7 +390,7 @@ generate smooth curves in three dimensions.
     )
     z = np.linspace(0, 1.0, 100)
 
-With that is hand it is just a matter of plotting all the curves. In
+With that in hand it is just a matter of plotting all the curves. In
 plotly parlance each curve is a “trace” and we generate each one
 separately (along with a suitable colour given by the digit the sample
 represents). We then add all the traces to a figure, and display the
@@ -444,8 +444,8 @@ module.
 
 
 Next, we'll create a new figure, initialize a blank scatter plot, then use
-``FuncAnimation`` to update the dot positions (called "offsets") one frame at a
-time.
+``FuncAnimation`` to update the point positions (called "offsets") one frame at
+a time.
 
 .. code:: python3
 
