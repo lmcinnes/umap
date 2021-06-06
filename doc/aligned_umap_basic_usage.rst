@@ -158,7 +158,7 @@ down).
 
 
 
-.. image:: images/aligned_umap_basic_usage_15_0.png
+.. image:: images/aligned_umap_basic_usage_15_1.png
 
 We can also present these ten scatter plots as a animated series of images
 by combining them into a GIF. Like before, we can use matplotlib to generate
