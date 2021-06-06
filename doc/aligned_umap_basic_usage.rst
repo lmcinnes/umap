@@ -432,10 +432,8 @@ documentation we have a static image here, but if you run this yourself
 you will have a fully interactive view of the data.
 
 Alternatively, we can visualize the third dimension as an evolution of the
-embeddings through time by rendering each z-slice as a frame in an
-animated GIF.
-
-To do this, we'll first need to import some notebook display tools and
+embeddings through time by rendering each z-slice as a frame in an animated
+GIF. To do this, we'll first need to import some notebook display tools and
 matplotlib's `animation <https://matplotlib.org/stable/api/animation_api.html>`_
 module.
 
@@ -446,7 +444,7 @@ module.
 
 
 Next, we'll create a new figure, initialize a blank scatter plot, then use
-FuncAnimation to update the dot positions (called "offsets") one frame at a
+`FuncAnimation` to update the dot positions (called "offsets") one frame at a
 time.
 
 .. code:: python3
