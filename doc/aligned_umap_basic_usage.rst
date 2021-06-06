@@ -329,7 +329,7 @@ As before we can look at the results by plotting each of the embeddings.
 
 
 
-.. image:: images/aligned_umap_basic_usage_29_0.png
+.. image:: images/aligned_umap_basic_usage_29_1.png
 
 
 To get a better feel for the evolution of the embedding over the change
@@ -424,9 +424,76 @@ figure.
     fig.show()
 
 
-.. image:: images/aligned_umap_pendigits_3d.png
+.. image:: images/aligned_umap_pendigits_3d_1.png
 
 
 Since it is tricky to get the interactive plotly figure embedded in
 documentation we have a static image here, but if you run this yourself
 you will have a fully interactive view of the data.
+
+Alternatively, we can visualize the third dimension as an evolution of the
+embeddings through time by rendering each z-slice as a frame in an
+animated GIF.
+
+To do this, we'll first need to import some notebook display tools and
+matplotlib's `animation <https://matplotlib.org/stable/api/animation_api.html>`_
+module.
+
+.. code:: python3
+
+    from IPython.display import display, Image, HTML
+    from matplotlib import animation
+
+
+Next, we'll create a new figure, initialize a blank scatter plot, then use
+FuncAnimation to update the dot positions (called "offsets") one frame at a
+time.
+
+.. code:: python3
+
+    fig = plt.figure(figsize=(4, 4), dpi=150)
+    ax = fig.add_subplot(1, 1, 1)
+
+    scat = ax.scatter([], [], s=2)
+    scat.set_array(digits.target)
+    scat.set_cmap('Spectral')
+    text = ax.text(ax_bound[0] + 0.5, ax_bound[2] + 0.5, '')
+    ax.axis(ax_bound)
+    ax.set(xticks=[], yticks=[])
+    plt.tight_layout()
+
+    offsets = np.array(interpolated_traces).T
+    num_frames = offsets.shape[0]
+
+    def animate(i):
+        scat.set_offsets(offsets[i])
+        text.set_text(f'Frame {i}')
+        return scat
+
+    anim = animation.FuncAnimation(
+        fig,
+        init_func=None,
+        func=animate,
+        frames=num_frames,
+        interval=40)
+
+
+Then we can save the animation as a GIF and close our animation. Depending on
+your machine, you may need to change which writer the save method uses.
+
+.. code:: python3
+
+    anim.save("aligned_umap_pendigits_anim.gif", writer="pillow")
+
+    plt.close(anim._fig)
+
+
+And finally, we can read in our rendered GIF, and display it in the notebook.
+
+.. code:: python3
+
+    with open("aligned_umap_pendigits_anim.gif", "rb") as f:
+        display(Image(f.read()))
+
+
+.. image:: images/aligned_umap_pendigits_anim.gif
