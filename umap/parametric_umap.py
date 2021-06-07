@@ -184,6 +184,35 @@ class ParametricUMAP(UMAP):
                     )
                 )
 
+    def fit(self, X, y=None, precomputed_distances=None):
+        if self.metric == "precomputed":
+            if precomputed_distances is None:
+                raise ValueError(
+                    "Precomputed distances must be supplied if metric \
+                    is precomputed."
+                )
+            # prepare X for training the network
+            self._X = X
+            # geneate the graph on precomputed distances
+            return super().fit(precomputed_distances, y)
+        else:
+            return super().fit(X, y)
+
+    def fit_transform(self, X, y=None, precomputed_distances=None):
+
+        if self.metric == "precomputed":
+            if precomputed_distances is None:
+                raise ValueError(
+                    "Precomputed distances must be supplied if metric \
+                    is precomputed."
+                )
+            # prepare X for training the network
+            self._X = X
+            # geneate the graph on precomputed distances
+            return super().fit_transform(precomputed_distances, y)
+        else:
+            return super().fit_transform(X, y)
+
     def transform(self, X):
         """Transform X into the existing embedded space and return that
         transformed output.
@@ -327,6 +356,9 @@ class ParametricUMAP(UMAP):
         )
 
     def _fit_embed_data(self, X, n_epochs, init, random_state):
+
+        if self.metric == "precomputed":
+            X = self._X
 
         # get dimensionality of dataset
         if self.dims is None:
