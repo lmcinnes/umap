@@ -184,6 +184,21 @@ class ParametricUMAP(UMAP):
                     )
                 )
 
+    def fit_transform(self, X, y=None, precomputed_distances=None):
+
+        if self.metric == "precomputed":
+            if precomputed_distances is None:
+                raise ValueError(
+                    "Precomputed distances must be supplied if metric \
+                    is precomputed."
+                )
+            # prepare X for training the network
+            self._X = X
+            # geneate the graph on precomputed distances
+            return super().fit_transform(precomputed_distances, y)
+        else:
+            return super().fit_transform(X, y)
+
     def transform(self, X):
         """Transform X into the existing embedded space and return that
         transformed output.
@@ -328,6 +343,9 @@ class ParametricUMAP(UMAP):
 
     def _fit_embed_data(self, X, n_epochs, init, random_state):
 
+        if self.metric == "precomputed":
+            X = self._X
+
         # get dimensionality of dataset
         if self.dims is None:
             self.dims = [np.shape(X)[-1]]
@@ -335,11 +353,6 @@ class ParametricUMAP(UMAP):
             # reshape data for network
             if len(self.dims) > 1:
                 X = np.reshape(X, [len(X)] + list(self.dims))
-
-        if (np.max(X) > 1.0) or (np.min(X) < 0.0) and self.parametric_reconstruction:
-            warn(
-                "Data should be scaled to the range 0-1 for cross-entropy reconstruction loss."
-            )
 
         # get dataset of edges
         (
@@ -952,6 +965,7 @@ def construct_edge_dataset(
     )
 
     # shuffle edges
+    print("DELETEME: {}".format(len(edges_to_exp)))
     shuffle_mask = np.random.permutation(range(len(edges_to_exp)))
     edges_to_exp = edges_to_exp[shuffle_mask].astype(np.int64)
     edges_from_exp = edges_from_exp[shuffle_mask].astype(np.int64)
