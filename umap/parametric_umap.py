@@ -984,7 +984,6 @@ def construct_edge_dataset(
     )
 
     # shuffle edges
-    print("DELETEME: {}".format(len(edges_to_exp)))
     shuffle_mask = np.random.permutation(range(len(edges_to_exp)))
     edges_to_exp = edges_to_exp[shuffle_mask].astype(np.int64)
     edges_from_exp = edges_from_exp[shuffle_mask].astype(np.int64)
