@@ -1748,8 +1748,8 @@ class UMAP(BaseEstimator):
                 self._inverse_distance_func = None
                 warn(
                     "custom distance metric does not return gradient; inverse_transform will be unavailable. "
-                    "To enable using inverse_transform method method, define a distance function that returns "
-                    "a tuple of (distance [float], gradient [np.array])"
+                    "To enable using inverse_transform method, define a distance function that returns a tuple "
+                    "of (distance [float], gradient [np.array])"
                 )
         elif self.metric == "precomputed":
             if self.unique:
