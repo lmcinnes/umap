@@ -1,7 +1,6 @@
 import numpy as np
 from umap import UMAP
 from warnings import warn, catch_warnings, filterwarnings
-from umap.umap_ import make_epochs_per_sample
 from numba import TypingError
 import os
 from umap.spectral import spectral_layout
@@ -44,13 +43,17 @@ try:
     import tensorflow_probability
 except ImportError:
     warn(
-        """ Global structure preservation in The umap.parametric_umap package requires 
+        """ Global structure preservation in the umap.parametric_umap package requires 
         tensorflow_probability to be installed. You can install tensorflow_probability at
         https://www.tensorflow.org/probability, 
         
         or via
 
         pip install --upgrade tensorflow-probability
+
+        Please ensure to install a version which is compatible to your tensorflow 
+        installation. You can verify the correct release at 
+        https://github.com/tensorflow/probability/releases.
 
         """
     )
@@ -143,8 +146,8 @@ class ParametricUMAP(UMAP):
             self.global_correlation_loss_weight = global_correlation_loss_weight
         else:
             warn(
-                "tensorflow_probability not installed. \
-                Setting global_correlation_loss_weight to zero."
+                "tensorflow_probability not installed or incompatible to current \
+                tensorflow installation. Setting global_correlation_loss_weight to zero."
             )
             self.global_correlation_loss_weight = 0
 
