@@ -931,9 +931,9 @@ def construct_edge_dataset(
     def gather_index(index):
         return X[index]
 
-    # if X is > 2Gb in size, we need to use a different, slower method for
+    # if X is > 512Mb in size, we need to use a different, slower method for
     #    batching data.
-    gather_indices_in_python = True if X.nbytes * 1e-9 > 2 else False
+    gather_indices_in_python = True if X.nbytes * 1e-9 > 0.5 else False
 
     def gather_X(edge_to, edge_from):
         # gather data from indexes (edges) in either numpy of tf, depending on array size
