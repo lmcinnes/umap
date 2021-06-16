@@ -1057,11 +1057,11 @@ def simplicial_set_embedding(
     if densmap:
         default_epochs += 200
 
-    # Get the maximum epoch to reach
-    n_epochs_max = max(n_epochs) if isinstance(n_epochs, list) else n_epochs
+    if n_epochs is None:
+        n_epochs = default_epochs
 
-    if n_epochs_max is None:
-        n_epochs_max = default_epochs
+    # If n_epoch is a list, get the maximum epoch to reach
+    n_epochs_max = max(n_epochs) if isinstance(n_epochs, list) else n_epochs
 
     if n_epochs_max > 10:
         graph.data[graph.data < (graph.data.max() / float(n_epochs_max))] = 0.0
@@ -1721,13 +1721,15 @@ class UMAP(BaseEstimator):
         self.n_epochs_list = None
         if isinstance(self.n_epochs, list):
             if not all(isinstance(n, int) and n >= 0 for n in self.n_epochs):
-                raise ValueError("n_epochs must be a nonnegative integer or a list of nonnegative integers")
+                raise ValueError("n_epochs must be a nonnegative integer "
+                                 "or a list of nonnegative integers")
             self.n_epochs_list = self.n_epochs
             self.n_epochs = max(self.n_epochs_list)
         if self.n_epochs is not None and (
                 self.n_epochs < 0 or not isinstance(self.n_epochs, int)
-            ):
-                raise ValueError("n_epochs must be a nonnegative integer or a list of nonnegative integers")
+        ):
+            raise ValueError("n_epochs must be a nonnegative integer "
+                             "or a list of nonnegative integers")
         if self.metric_kwds is None:
             self._metric_kwds = {}
         else:
@@ -2603,9 +2605,10 @@ class UMAP(BaseEstimator):
             )
 
             if self.n_epochs_list is not None:
-                if not "embedding_list" in aux_data:
-                    raise KeyError("No list of embedding were found in 'aux_data'. It is likely the"
-                                   "layout optimization function doesn't support the list of int for 'n_epochs'.")
+                if "embedding_list" not in aux_data:
+                    raise KeyError("No list of embedding were found in 'aux_data'. "
+                                   "It is likely the layout optimization function "
+                                   "doesn't support the list of int for 'n_epochs'.")
                 else:
                     self.embedding_list = [e[inverse] for e in aux_data["embedding_list"]]
 
