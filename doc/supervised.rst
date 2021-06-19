@@ -350,7 +350,9 @@ Supervised UMAP on the Galaxy10SDSS dataset
 The `Galaxy10SDSS dataset <https://astronn.readthedocs.io/en/latest/galaxy10sdss.html>`__
 is a crowd sourced human labelled dataset of galaxy images,
 which have been separated in to ten classes. Umap can
-learn an embedding that partially separates the data.
+learn an embedding that partially separates the data. To
+keep runtime small, UMAP is applied to a subset of the
+data.
 
 .. code:: python3
 
