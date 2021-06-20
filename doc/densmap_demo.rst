@@ -99,7 +99,7 @@ narrower, taller, shorter, sloping one way or another); this results in
 less local density in high dimensional space, and this lack of local
 density has been preserved by DensMAP.
 
-Let’s no look at the Fashion-MNIST dataset; as before we’ll start by
+Let’s now look at the Fashion-MNIST dataset; as before we’ll start by
 reminding ourselves what the default UMAP results look like:
 
 .. code:: python3
