@@ -478,7 +478,7 @@ If you use the Parametric UMAP algorithm in your work please cite the following 
         title = {Parametric UMAP: learning embeddings with deep neural networks for representation and semi-supervised learning},
         journal = {ArXiv e-prints},
         archivePrefix = "arXiv",
-        eprint = {},
+        eprint = {2009.12981},
         primaryClass = "stat.ML",
         keywords = {Statistics - Machine Learning,
                     Computer Science - Computational Geometry,
