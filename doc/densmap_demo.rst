@@ -99,7 +99,7 @@ narrower, taller, shorter, sloping one way or another); this results in
 less local density in high dimensional space, and this lack of local
 density has been preserved by DensMAP.
 
-Let’s no look at the Fashion-MNIST dataset; as before we’ll start by
+Let’s now look at the Fashion-MNIST dataset; as before we’ll start by
 reminding ourselves what the default UMAP results look like:
 
 .. code:: python3
@@ -230,3 +230,155 @@ And indeed, this looks very much like the original plot, but the bags
 (label 8 in blue) are slightly more diffused, and the pants (label 1 in
 red) are a little denser. This is very much the default UMAP with just a
 tweak to better reflect some notion of local density.
+
+Supervised DensMAP on the Galaxy10SDSS dataset
+----------------------------------------------
+
+The `Galaxy10SDSS dataset <https://astronn.readthedocs.io/en/latest/galaxy10sdss.html>`__
+is a crowd sourced human labelled dataset of galaxy images,
+which have been separated in to ten classes. DensMAP can
+learn an embedding that partially separates the data. To
+keep runtime small, DensMAP is applied to a subset of the
+data.
+
+.. code:: python3
+
+    import numpy as np
+    import h5py
+    import matplotlib.pyplot as plt
+    import umap
+    import os
+    import math
+    import requests
+
+    if not os.path.isfile("Galaxy10.h5"):
+        url = "http://astro.utoronto.ca/~bovy/Galaxy10/Galaxy10.h5"
+        r = requests.get(url, allow_redirects=True)
+        open("Galaxy10.h5", "wb").write(r.content)
+
+    # To get the images and labels from file
+    with h5py.File("Galaxy10.h5", "r") as F:
+        images = np.array(F["images"])
+        labels = np.array(F["ans"])
+
+    X_train = np.empty([math.floor(len(labels) / 100), 14283], dtype=np.float64)
+    y_train = np.empty([math.floor(len(labels) / 100)], dtype=np.float64)
+    X_test = X_train
+    y_test = y_train
+    # Get a subset of the data
+    for i in range(math.floor(len(labels) / 100)):
+        X_train[i, :] = np.array(np.ndarray.flatten(images[i, :, :, :]), dtype=np.float64)
+        y_train[i] = labels[i]
+        X_test[i, :] = np.array(
+            np.ndarray.flatten(images[i + math.floor(len(labels) / 100), :, :, :]),
+            dtype=np.float64,
+        )
+        y_test[i] = labels[i + math.floor(len(labels) / 100)]
+
+    # Plot distribution
+    classes, frequency = np.unique(y_train, return_counts=True)
+    fig = plt.figure(1, figsize=(4, 4))
+    plt.clf()
+    plt.bar(classes, frequency)
+    plt.xlabel("Class")
+    plt.ylabel("Frequency")
+    plt.title("Data Subset")
+    plt.savefig("galaxy10_subset.svg")
+
+
+
+.. image:: images/galaxy10_subset.svg
+
+
+The figure shows that the selected subset of the data set is
+unbalanced, but the entire dataset is also unbalanced, so
+this experiment will still use this subset. The next step is
+to examine the output of the standard DensMAP algorithm.
+
+.. code:: python3
+
+    reducer = umap.UMAP(
+        densmap=True, n_components=2, random_state=42, verbose=False
+    )
+    reducer.fit(X_train)
+
+    galaxy10_densmap = reducer.transform(X_train)
+    fig = plt.figure(1, figsize=(4, 4))
+    plt.clf()
+    plt.scatter(
+        galaxy10_densmap[:, 0],
+        galaxy10_densmap[:, 1],
+        c=y_train,
+        cmap=plt.cm.nipy_spectral,
+        edgecolor="k",
+        label=y_train,
+    )
+    plt.colorbar(boundaries=np.arange(11) - 0.5).set_ticks(np.arange(10))
+    plt.savefig("galaxy10_2D_densmap.svg")
+
+
+
+.. image:: images/galaxy10_2D_densmap.svg
+
+
+The standard DensMAP algorithm does not separate the galaxies
+according to their type. Supervised DensMAP can do better.
+
+.. code:: python3
+
+    reducer = umap.UMAP(
+        densmap=True, n_components=2, random_state=42, verbose=False
+    )
+    reducer.fit(X_train, y_train)
+
+    galaxy10_densmap_supervised = reducer.transform(X_train)
+    fig = plt.figure(1, figsize=(4, 4))
+    plt.clf()
+    plt.scatter(
+        galaxy10_densmap_supervised[:, 0],
+        galaxy10_densmap_supervised[:, 1],
+        c=y_train,
+        cmap=plt.cm.nipy_spectral,
+        edgecolor="k",
+        label=y_train,
+    )
+    plt.colorbar(boundaries=np.arange(11) - 0.5).set_ticks(np.arange(10))
+    plt.savefig("galaxy10_2D_densmap_supervised.svg")
+
+
+
+.. image:: images/galaxy10_2D_densmap_supervised.svg
+
+
+Supervised DensMAP does indeed do better. There is a litle overlap
+between some of the classes, but the original dataset
+also has some ambiguities in the classification.  The best
+check of this method is to project the testing data onto the
+learned embedding.
+
+.. code:: python3
+
+    galaxy10_densmap_supervised_prediction = reducer.transform(X_test)
+    fig = plt.figure(1, figsize=(4, 4))
+    plt.clf()
+    plt.scatter(
+        galaxy10_densmap_supervised_prediction[:, 0],
+        galaxy10_densmap_supervised_prediction[:, 1],
+        c=y_test,
+        cmap=plt.cm.nipy_spectral,
+        edgecolor="k",
+        label=y_test,
+    )
+    plt.colorbar(boundaries=np.arange(11) - 0.5).set_ticks(np.arange(10))
+    plt.savefig("galaxy10_2D_densmap_supervised_prediction.svg")
+
+
+
+.. image:: images/galaxy10_2D_densmap_supervised_prediction.svg
+
+
+This shows that the learned embedding can be used on new data
+sets, and so this method may be helpful for examining images
+of galaxies. Try out this method on the full 200 Mb dataset
+as well as the newer 2.54 Gb
+`Galaxy 10 DECals dataset <https://astronn.readthedocs.io/en/latest/galaxy10.html>`__
