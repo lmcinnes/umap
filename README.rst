@@ -1,5 +1,10 @@
 .. -*- mode: rst -*-
 
+.. image:: doc/logo_large.png
+  :width: 600
+  :alt: UMAP logo
+  :align: center
+
 |pypi_version|_ |pypi_downloads|_
 
 |conda_version|_ |conda_downloads|_

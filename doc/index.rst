@@ -3,6 +3,10 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
+.. image:: logo_large.png
+  :width: 600
+  :align: center
+
 UMAP: Uniform Manifold Approximation and Projection for Dimension Reduction
 ===========================================================================
 
