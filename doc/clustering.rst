@@ -153,7 +153,7 @@ color the remaining points according to the cluster membership.
     clustered = (hdbscan_labels >= 0)
     plt.scatter(standard_embedding[~clustered, 0], 
                 standard_embedding[~clustered, 1], 
-                c=(0.5, 0.5, 0.5), 
+                color=(0.5, 0.5, 0.5), 
                 s=0.1,
                 alpha=0.5)
     plt.scatter(standard_embedding[clustered, 0], 
@@ -316,7 +316,7 @@ And now we can visualize the results, just as before.
     clustered = (labels >= 0)
     plt.scatter(standard_embedding[~clustered, 0], 
                 standard_embedding[~clustered, 1], 
-                c=(0.5, 0.5, 0.5), 
+                color=(0.5, 0.5, 0.5), 
                 s=0.1,
                 alpha=0.5)
     plt.scatter(standard_embedding[clustered, 0], 
