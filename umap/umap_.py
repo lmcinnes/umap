@@ -2751,12 +2751,32 @@ class UMAP(BaseEstimator):
                     X, self._raw_data, metric=_m, **self._metric_kwds
                 )
             except (TypeError, ValueError):
-                dmat = dist.pairwise_special_metric(
-                    X,
-                    self._raw_data,
-                    metric=self._input_distance_func,
-                    kwds=self._metric_kwds,
-                )
+                # metric is numba.jit'd or not supported by sklearn,
+                # fallback to pairwise special
+                if self._sparse_data:
+                    # Get a fresh metric since we are casting to dense
+                    if not callable(self.metric):
+                        _m = dist.named_distances[self.metric]
+                        dmat = dist.pairwise_special_metric(
+                            X.toarray(),
+                            self._raw_data.toarray(),
+                            metric=_m,
+                            kwds=self._metric_kwds,
+                        )
+                    else:
+                        dmat = dist.pairwise_special_metric(
+                            X,
+                            self._raw_data,
+                            metric=self._input_distance_func,
+                            kwds=self._metric_kwds,
+                        )
+                else:
+                    dmat = dist.pairwise_special_metric(
+                        X,
+                        self._raw_data,
+                        metric=self._input_distance_func,
+                        kwds=self._metric_kwds,
+                    )
             indices = np.argpartition(dmat, self._n_neighbors)[:, : self._n_neighbors]
             dmat_shortened = submatrix(dmat, indices, self._n_neighbors)
             indices_sorted = np.argsort(dmat_shortened)
