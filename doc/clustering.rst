@@ -37,7 +37,6 @@ Information <https://en.wikipedia.org/wiki/Adjusted_mutual_information>`__.
     from sklearn.decomposition import PCA
     import numpy as np
     import matplotlib.pyplot as plt
-    import seaborn as sns
     %matplotlib inline
     
     # Dimension reduction and clustering libraries
@@ -52,10 +51,6 @@ pixel grayscale images of handwritten digits (0 through 9). These can be
 unraveled such that each digit is described by a 784 dimensional vector
 (the gray scale value of each pixel in the image). Ideally we would like
 the clustering to recover the digit structure.
-
-.. code:: python3
-
-    sns.set(style='white', rc={'figure.figsize':(10,8)})
 
 .. code:: python3
 
