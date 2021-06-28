@@ -3,8 +3,8 @@ UMAP on the Galaxy10SDSS dataset
 ---------------------------------------------------------
 
 This is an example of using UMAP on the Galaxy10SDSS
-dataset. The goal of this example is largely to 
-demonstrate the use of supervised learning as an 
+dataset. The goal of this example is largely to
+demonstrate the use of supervised learning as an
 effective tool for visualizing and reducing complex data.
 In addition, hdbscan is used to classify the processed
 data.
@@ -244,7 +244,7 @@ print(
 )
 
 print(np.sum(clustered) / y_test.shape[0])
-## Dimensions 4 to 25
+# Dimensions 4 to 25
 for dimensions in range(4, 26):
     reducer = umap.UMAP(
         n_components=dimensions,
@@ -255,7 +255,7 @@ for dimensions in range(4, 26):
     )
     reducer.fit(X_train, y_train)
     galaxy10_umap_supervised = reducer.transform(X_train)
-    ## UMAP - Supervised prediction
+    # UMAP - Supervised prediction
     galaxy10_umap_supervised_prediction = reducer.transform(X_test)
     # cluster the data
     labels = hdbscan.HDBSCAN(
