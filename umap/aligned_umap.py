@@ -357,7 +357,8 @@ class AlignedUMAP(BaseEstimator):
             indptr_list, indices_list, relations,
         )
         first_init = spectral_layout(
-            self.mappers_[0]._raw_data, self.mappers_[0].graph_, self.n_components, rng_state_transform,
+            self.mappers_[0]._raw_data, self.mappers_[0].graph_, self.n_components,
+            rng_state_transform,
         )
         expansion = 10.0 / np.abs(first_init).max()
         first_embedding = (first_init * expansion).astype(np.float32, order="C",)
@@ -366,7 +367,8 @@ class AlignedUMAP(BaseEstimator):
         embeddings.append(first_embedding)
         for i in range(1, self.n_models_):
             next_init = spectral_layout(
-                self.mappers_[i]._raw_data, self.mappers_[i].graph_, self.n_components, rng_state_transform,
+                self.mappers_[i]._raw_data, self.mappers_[i].graph_, self.n_components,
+                rng_state_transform,
             )
             expansion = 10.0 / np.abs(next_init).max()
             next_embedding = (next_init * expansion).astype(np.float32, order="C",)
@@ -381,7 +383,9 @@ class AlignedUMAP(BaseEstimator):
                 )
             )
 
-        seed_triplet = rng_state_transform.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
+        seed_triplet = rng_state_transform.randint(
+            INT32_MIN, INT32_MAX, 3
+        ).astype(np.int64)
         self.embeddings_ = optimize_layout_aligned_euclidean(
             embeddings,
             embeddings,
@@ -481,7 +485,9 @@ class AlignedUMAP(BaseEstimator):
         self.embeddings_.append(new_embedding)
 
         rng_state_transform = np.random.RandomState(self.transform_seed)
-        seed_triplet = rng_state_transform.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
+        seed_triplet = rng_state_transform.randint(
+            INT32_MIN, INT32_MAX, 3
+        ).astype(np.int64)
         self.embeddings_ = optimize_layout_aligned_euclidean(
             self.embeddings_,
             self.embeddings_,
