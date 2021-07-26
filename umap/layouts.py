@@ -722,6 +722,7 @@ def _optimize_layout_aligned_euclidean_single_epoch(
             max_n_edges = e_p_s.shape[0]
 
     embedding_order = np.arange(n_embeddings).astype(np.int32)
+    np.random.seed(abs(rng_state[0]))
     np.random.shuffle(embedding_order)
 
     for i in range(max_n_edges):
