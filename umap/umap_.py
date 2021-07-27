@@ -40,6 +40,7 @@ from umap.utils import (
 from umap.spectral import spectral_layout
 from umap.layouts import (
     optimize_layout_euclidean,
+    optimize_layout_euclidean_masked,
     optimize_layout_generic,
     optimize_layout_inverse,
 )
@@ -927,6 +928,7 @@ def simplicial_set_embedding(
     a,
     b,
     gamma,
+    pin_mask,
     negative_sample_rate,
     n_epochs,
     init,
@@ -971,6 +973,15 @@ def simplicial_set_embedding(
 
     gamma: float
         Weight to apply to negative samples.
+
+    pin_mask : array, shape (n_samples) or None
+        A mask used for pinning points in the embedding. It should be an array
+        of weights in [0,1] (one weight per point), defining how much points
+        will be updated from their initial position: 0 means the point will be
+        pinned (fixed), 1 means it will be updated normally, and in-between
+        values allow for soft-pinning. This argument is useful when providing a
+        numpy array for the initial embedding positions (``init`` parameter of
+        the ``UMAP`` class).
 
     negative_sample_rate: int (optional, default 5)
         The number of negative samples to select per positive sample
@@ -1148,25 +1159,47 @@ def simplicial_set_embedding(
     ).astype(np.float32, order="C")
 
     if euclidean_output:
-        embedding = optimize_layout_euclidean(
-            embedding,
-            embedding,
-            head,
-            tail,
-            n_epochs,
-            n_vertices,
-            epochs_per_sample,
-            a,
-            b,
-            rng_state,
-            gamma,
-            initial_alpha,
-            negative_sample_rate,
-            parallel=parallel,
-            verbose=verbose,
-            densmap=densmap,
-            densmap_kwds=densmap_kwds,
-        )
+        if pin_mask is not None:
+            embedding = optimize_layout_euclidean_masked(
+                embedding,
+                embedding,
+                head,
+                tail,
+                pin_mask,
+                n_epochs,
+                n_vertices,
+                epochs_per_sample,
+                a,
+                b,
+                rng_state,
+                gamma,
+                initial_alpha,
+                negative_sample_rate,
+                parallel=parallel,
+                verbose=verbose,
+                densmap=densmap,
+                densmap_kwds=densmap_kwds,
+            )
+        else:
+            embedding = optimize_layout_euclidean(
+                embedding,
+                embedding,
+                head,
+                tail,
+                n_epochs,
+                n_vertices,
+                epochs_per_sample,
+                a,
+                b,
+                rng_state,
+                gamma,
+                initial_alpha,
+                negative_sample_rate,
+                parallel=parallel,
+                verbose=verbose,
+                densmap=densmap,
+                densmap_kwds=densmap_kwds,
+            )
     else:
         embedding = optimize_layout_generic(
             embedding,
@@ -1997,6 +2030,7 @@ class UMAP(BaseEstimator):
             np.mean(result._a),
             np.mean(result._b),
             np.mean(result.repulsion_strength),
+            None,
             np.mean(result.negative_sample_rate),
             n_epochs,
             init,
@@ -2066,6 +2100,7 @@ class UMAP(BaseEstimator):
             np.mean(result._a),
             np.mean(result._b),
             np.mean(result.repulsion_strength),
+            None,
             np.mean(result.negative_sample_rate),
             n_epochs,
             init,
@@ -2137,6 +2172,7 @@ class UMAP(BaseEstimator):
             np.mean(result._a),
             np.mean(result._b),
             np.mean(result.repulsion_strength),
+            None,
             np.mean(result.negative_sample_rate),
             n_epochs,
             init,
@@ -2156,7 +2192,7 @@ class UMAP(BaseEstimator):
 
         return result
 
-    def fit(self, X, y=None):
+    def fit(self, X, y=None, pin_mask=None):
         """Fit X into an embedded space.
 
         Optionally use y for supervised dimension reduction.
@@ -2174,6 +2210,15 @@ class UMAP(BaseEstimator):
             handled is determined by parameters UMAP was instantiated with.
             The relevant attributes are ``target_metric`` and
             ``target_metric_kwds``.
+
+        pin_mask : array, shape (n_samples) or None
+            A mask used for pinning points in the embedding. It should be an array
+            of weights in [0,1] (one weight per point), defining how much points
+            will be updated from their initial position: 0 means the point will be
+            pinned (fixed), 1 means it will be updated normally, and in-between
+            values allow for soft-pinning. This argument is useful when providing a
+            numpy array for the initial embedding positions (``init`` parameter of
+            the ``UMAP`` class).
         """
 
         X = check_array(X, dtype=np.float32, accept_sparse="csr", order="C")
@@ -2584,6 +2629,7 @@ class UMAP(BaseEstimator):
                 self.n_epochs,
                 init,
                 random_state,  # JH why raw data?
+                pin_mask
             )
             # Assign any points that are fully disconnected from our manifold(s) to have embedding
             # coordinates of np.nan.  These will be filtered by our plotting functions automatically.
@@ -2608,7 +2654,7 @@ class UMAP(BaseEstimator):
 
         return self
 
-    def _fit_embed_data(self, X, n_epochs, init, random_state):
+    def _fit_embed_data(self, X, n_epochs, init, random_state, pin_mask):
         """A method wrapper for simplicial_set_embedding that can be
         replaced by subclasses.
         """
@@ -2620,6 +2666,7 @@ class UMAP(BaseEstimator):
             self._a,
             self._b,
             self.repulsion_strength,
+            pin_mask,
             self.negative_sample_rate,
             n_epochs,
             init,
@@ -2636,7 +2683,7 @@ class UMAP(BaseEstimator):
             self.verbose,
         )
 
-    def fit_transform(self, X, y=None):
+    def fit_transform(self, X, y=None, pin_mask=None):
         """Fit X into an embedded space and return that transformed
         output.
 
@@ -2652,6 +2699,15 @@ class UMAP(BaseEstimator):
             The relevant attributes are ``target_metric`` and
             ``target_metric_kwds``.
 
+        pin_mask : array, shape (n_samples) or None
+            A mask used for pinning points in the embedding. It should be an array
+            of weights in [0,1] (one weight per point), defining how much points
+            will be updated from their initial position: 0 means the point will be
+            pinned (fixed), 1 means it will be updated normally, and in-between
+            values allow for soft-pinning. This argument is useful when providing a
+            numpy array for the initial embedding positions (``init`` parameter of
+            the ``UMAP`` class).
+
         Returns
         -------
         X_new : array, shape (n_samples, n_components)
@@ -2666,7 +2722,7 @@ class UMAP(BaseEstimator):
         r_emb: array, shape (n_samples)
             Local radii of data points in the embedding (log-transformed).
         """
-        self.fit(X, y)
+        self.fit(X, y, pin_mask)
         if self.transform_mode == "embedding":
             if self.output_dens:
                 return self.embedding_, self.rad_orig_, self.rad_emb_
@@ -3181,6 +3237,7 @@ class UMAP(BaseEstimator):
                 self._a,
                 self._b,
                 self.repulsion_strength,
+                None,
                 self.negative_sample_rate,
                 n_epochs,
                 init,
@@ -3246,6 +3303,7 @@ class UMAP(BaseEstimator):
                 self._a,
                 self._b,
                 self.repulsion_strength,
+                None,
                 self.negative_sample_rate,
                 n_epochs,
                 init,
