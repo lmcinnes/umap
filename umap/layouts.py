@@ -383,7 +383,91 @@ def optimize_layout_euclidean(
     return head_embedding
 
 
-@numba.njit(fastmath=True)
+def _optimize_layout_generic_single_epoch(
+    epochs_per_sample,
+    epoch_of_next_sample,
+    head,
+    tail,
+    head_embedding,
+    tail_embedding,
+    output_metric,
+    output_metric_kwds,
+    dim,
+    alpha,
+    move_other,
+    n,
+    epoch_of_next_negative_sample,
+    epochs_per_negative_sample,
+    rng_state,
+    n_vertices,
+    a,
+    b,
+    gamma,
+):
+    for i in range(epochs_per_sample.shape[0]):
+        if epoch_of_next_sample[i] <= n:
+            j = head[i]
+            k = tail[i]
+
+            current = head_embedding[j]
+            other = tail_embedding[k]
+
+            dist_output, grad_dist_output = output_metric(
+                current, other, *output_metric_kwds
+            )
+            _, rev_grad_dist_output = output_metric(
+                other, current, *output_metric_kwds
+            )
+
+            if dist_output > 0.0:
+                w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
+            else:
+                w_l = 1.0
+            grad_coeff = 2 * b * (w_l - 1) / (dist_output + 1e-6)
+
+            for d in range(dim):
+                grad_d = clip(grad_coeff * grad_dist_output[d])
+
+                current[d] += grad_d * alpha
+                if move_other:
+                    grad_d = clip(grad_coeff * rev_grad_dist_output[d])
+                    other[d] += grad_d * alpha
+
+            epoch_of_next_sample[i] += epochs_per_sample[i]
+
+            n_neg_samples = int(
+                (n - epoch_of_next_negative_sample[i])
+                / epochs_per_negative_sample[i]
+            )
+
+            for p in range(n_neg_samples):
+                k = tau_rand_int(rng_state) % n_vertices
+
+                other = tail_embedding[k]
+
+                dist_output, grad_dist_output = output_metric(
+                    current, other, *output_metric_kwds
+                )
+
+                if dist_output > 0.0:
+                    w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
+                elif j == k:
+                    continue
+                else:
+                    w_l = 1.0
+
+                grad_coeff = gamma * 2 * b * w_l / (dist_output + 1e-6)
+
+                for d in range(dim):
+                    grad_d = clip(grad_coeff * grad_dist_output[d])
+                    current[d] += grad_d * alpha
+
+            epoch_of_next_negative_sample[i] += (
+                    n_neg_samples * epochs_per_negative_sample[i]
+            )
+    return epoch_of_next_sample, epoch_of_next_negative_sample
+
+
 def optimize_layout_generic(
     head_embedding,
     tail_embedding,
@@ -477,78 +561,113 @@ def optimize_layout_generic(
     epoch_of_next_negative_sample = epochs_per_negative_sample.copy()
     epoch_of_next_sample = epochs_per_sample.copy()
 
+    optimize_fn = numba.njit(
+        _optimize_layout_generic_single_epoch, fastmath=True,
+    )
+
     if 'disable' not in tqdm_kwds:
         tqdm_kwds['disable'] = not verbose
 
     for n in tqdm(range(n_epochs), **tqdm_kwds):
-        for i in range(epochs_per_sample.shape[0]):
-            if epoch_of_next_sample[i] <= n:
-                j = head[i]
-                k = tail[i]
-
-                current = head_embedding[j]
-                other = tail_embedding[k]
-
-                dist_output, grad_dist_output = output_metric(
-                    current, other, *output_metric_kwds
-                )
-                _, rev_grad_dist_output = output_metric(
-                    other, current, *output_metric_kwds
-                )
-
-                if dist_output > 0.0:
-                    w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
-                else:
-                    w_l = 1.0
-                grad_coeff = 2 * b * (w_l - 1) / (dist_output + 1e-6)
-
-                for d in range(dim):
-                    grad_d = clip(grad_coeff * grad_dist_output[d])
-
-                    current[d] += grad_d * alpha
-                    if move_other:
-                        grad_d = clip(grad_coeff * rev_grad_dist_output[d])
-                        other[d] += grad_d * alpha
-
-                epoch_of_next_sample[i] += epochs_per_sample[i]
-
-                n_neg_samples = int(
-                    (n - epoch_of_next_negative_sample[i])
-                    / epochs_per_negative_sample[i]
-                )
-
-                for p in range(n_neg_samples):
-                    k = tau_rand_int(rng_state) % n_vertices
-
-                    other = tail_embedding[k]
-
-                    dist_output, grad_dist_output = output_metric(
-                        current, other, *output_metric_kwds
-                    )
-
-                    if dist_output > 0.0:
-                        w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
-                    elif j == k:
-                        continue
-                    else:
-                        w_l = 1.0
-
-                    grad_coeff = gamma * 2 * b * w_l / (dist_output + 1e-6)
-
-                    for d in range(dim):
-                        grad_d = clip(grad_coeff * grad_dist_output[d])
-                        current[d] += grad_d * alpha
-
-                epoch_of_next_negative_sample[i] += (
-                    n_neg_samples * epochs_per_negative_sample[i]
-                )
-
+        optimize_fn(
+            epochs_per_sample,
+            epoch_of_next_sample,
+            head,
+            tail,
+            head_embedding,
+            tail_embedding,
+            output_metric,
+            output_metric_kwds,
+            dim,
+            alpha,
+            move_other,
+            n,
+            epoch_of_next_negative_sample,
+            epochs_per_negative_sample,
+            rng_state,
+            n_vertices,
+            a,
+            b,
+            gamma
+        )
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
 
     return head_embedding
 
 
-@numba.njit(fastmath=True)
+def _optimize_layout_inverse_single_epoch(
+    epochs_per_sample,
+    epoch_of_next_sample,
+    head,
+    tail,
+    head_embedding,
+    tail_embedding,
+    output_metric,
+    output_metric_kwds,
+    weight,
+    sigmas,
+    dim,
+    alpha,
+    move_other,
+    n,
+    epoch_of_next_negative_sample,
+    epochs_per_negative_sample,
+    rng_state,
+    n_vertices,
+    rhos,
+    gamma,
+):
+    for i in range(epochs_per_sample.shape[0]):
+        if epoch_of_next_sample[i] <= n:
+            j = head[i]
+            k = tail[i]
+
+            current = head_embedding[j]
+            other = tail_embedding[k]
+
+            dist_output, grad_dist_output = output_metric(
+                current, other, *output_metric_kwds
+            )
+
+            w_l = weight[i]
+            grad_coeff = -(1 / (w_l * sigmas[k] + 1e-6))
+
+            for d in range(dim):
+                grad_d = clip(grad_coeff * grad_dist_output[d])
+
+                current[d] += grad_d * alpha
+                if move_other:
+                    other[d] += -grad_d * alpha
+
+            epoch_of_next_sample[i] += epochs_per_sample[i]
+
+            n_neg_samples = int(
+                (n - epoch_of_next_negative_sample[i])
+                / epochs_per_negative_sample[i]
+            )
+
+            for p in range(n_neg_samples):
+                k = tau_rand_int(rng_state) % n_vertices
+
+                other = tail_embedding[k]
+
+                dist_output, grad_dist_output = output_metric(
+                    current, other, *output_metric_kwds
+                )
+
+                # w_l = 0.0 # for negative samples, the edge does not exist
+                w_h = np.exp(-max(dist_output - rhos[k], 1e-6) / (sigmas[k] + 1e-6))
+                grad_coeff = -gamma * ((0 - w_h) / ((1 - w_h) * sigmas[k] + 1e-6))
+
+                for d in range(dim):
+                    grad_d = clip(grad_coeff * grad_dist_output[d])
+                    current[d] += grad_d * alpha
+
+            epoch_of_next_negative_sample[i] += (
+                    n_neg_samples * epochs_per_negative_sample[i]
+            )
+
+
 def optimize_layout_inverse(
     head_embedding,
     tail_embedding,
@@ -645,60 +764,36 @@ def optimize_layout_inverse(
     epoch_of_next_negative_sample = epochs_per_negative_sample.copy()
     epoch_of_next_sample = epochs_per_sample.copy()
 
+    optimize_fn = numba.njit(
+        _optimize_layout_inverse_single_epoch, fastmath=True,
+    )
+
     if 'disable' not in tqdm_kwds:
         tqdm_kwds['disable'] = not verbose
 
     for n in tqdm(range(n_epochs), **tqdm_kwds):
-        for i in range(epochs_per_sample.shape[0]):
-            if epoch_of_next_sample[i] <= n:
-                j = head[i]
-                k = tail[i]
-
-                current = head_embedding[j]
-                other = tail_embedding[k]
-
-                dist_output, grad_dist_output = output_metric(
-                    current, other, *output_metric_kwds
-                )
-
-                w_l = weight[i]
-                grad_coeff = -(1 / (w_l * sigmas[k] + 1e-6))
-
-                for d in range(dim):
-                    grad_d = clip(grad_coeff * grad_dist_output[d])
-
-                    current[d] += grad_d * alpha
-                    if move_other:
-                        other[d] += -grad_d * alpha
-
-                epoch_of_next_sample[i] += epochs_per_sample[i]
-
-                n_neg_samples = int(
-                    (n - epoch_of_next_negative_sample[i])
-                    / epochs_per_negative_sample[i]
-                )
-
-                for p in range(n_neg_samples):
-                    k = tau_rand_int(rng_state) % n_vertices
-
-                    other = tail_embedding[k]
-
-                    dist_output, grad_dist_output = output_metric(
-                        current, other, *output_metric_kwds
-                    )
-
-                    # w_l = 0.0 # for negative samples, the edge does not exist
-                    w_h = np.exp(-max(dist_output - rhos[k], 1e-6) / (sigmas[k] + 1e-6))
-                    grad_coeff = -gamma * ((0 - w_h) / ((1 - w_h) * sigmas[k] + 1e-6))
-
-                    for d in range(dim):
-                        grad_d = clip(grad_coeff * grad_dist_output[d])
-                        current[d] += grad_d * alpha
-
-                epoch_of_next_negative_sample[i] += (
-                    n_neg_samples * epochs_per_negative_sample[i]
-                )
-
+        optimize_fn(
+            epochs_per_sample,
+            epoch_of_next_sample,
+            head,
+            tail,
+            head_embedding,
+            tail_embedding,
+            output_metric,
+            output_metric_kwds,
+            weight,
+            sigmas,
+            dim,
+            alpha,
+            move_other,
+            n,
+            epoch_of_next_negative_sample,
+            epochs_per_negative_sample,
+            rng_state,
+            n_vertices,
+            rhos,
+            gamma,
+        )
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
 
     return head_embedding
