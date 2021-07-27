@@ -2,6 +2,7 @@ import numpy as np
 import numba
 import umap.distances as dist
 from umap.utils import tau_rand_int
+from tqdm.auto import tqdm
 
 
 @numba.njit()
@@ -225,6 +226,7 @@ def optimize_layout_euclidean(
     verbose=False,
     densmap=False,
     densmap_kwds={},
+    tqdm_kwds={},
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
     fuzzy set cross entropy between the 1-skeletons of the high dimensional
@@ -273,6 +275,8 @@ def optimize_layout_euclidean(
         Whether to use the density-augmented densMAP objective
     densmap_kwds: dict (optional, default {})
         Auxiliary data for densMAP
+    tqdm_kwds: dict (optional, default {})
+        Keyword arguments for tqdm progress bar.
     Returns
     -------
     embedding: array of shape (n_samples, n_components)
@@ -313,7 +317,10 @@ def optimize_layout_euclidean(
         dens_phi_sum = np.zeros(1, dtype=np.float32)
         dens_re_sum = np.zeros(1, dtype=np.float32)
 
-    for n in range(n_epochs):
+    if 'disable' not in tqdm_kwds:
+        tqdm_kwds['disable'] = not verbose
+
+    for n in tqdm(range(n_epochs), **tqdm_kwds):
 
         densmap_flag = (
             densmap
@@ -373,9 +380,6 @@ def optimize_layout_euclidean(
 
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
 
-        if verbose and n % int(n_epochs / 10) == 0:
-            print("\tcompleted ", n, " / ", n_epochs, "epochs")
-
     return head_embedding
 
 
@@ -397,6 +401,7 @@ def optimize_layout_generic(
     output_metric=dist.euclidean,
     output_metric_kwds=(),
     verbose=False,
+    tqdm_kwds={},
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
     fuzzy set cross entropy between the 1-skeletons of the high dimensional
@@ -455,6 +460,9 @@ def optimize_layout_generic(
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
 
+    tqdm_kwds: dict (optional, default {})
+        Keyword arguments for tqdm progress bar.
+
     Returns
     -------
     embedding: array of shape (n_samples, n_components)
@@ -469,7 +477,10 @@ def optimize_layout_generic(
     epoch_of_next_negative_sample = epochs_per_negative_sample.copy()
     epoch_of_next_sample = epochs_per_sample.copy()
 
-    for n in range(n_epochs):
+    if 'disable' not in tqdm_kwds:
+        tqdm_kwds['disable'] = not verbose
+
+    for n in tqdm(range(n_epochs), **tqdm_kwds):
         for i in range(epochs_per_sample.shape[0]):
             if epoch_of_next_sample[i] <= n:
                 j = head[i]
@@ -534,9 +545,6 @@ def optimize_layout_generic(
 
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
 
-        if verbose and n % int(n_epochs / 10) == 0:
-            print("\tcompleted ", n, " / ", n_epochs, "epochs")
-
     return head_embedding
 
 
@@ -561,6 +569,7 @@ def optimize_layout_inverse(
     output_metric=dist.euclidean,
     output_metric_kwds=(),
     verbose=False,
+    tqdm_kwds={},
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
     fuzzy set cross entropy between the 1-skeletons of the high dimensional
@@ -619,6 +628,9 @@ def optimize_layout_inverse(
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
 
+    tqdm_kwds: dict (optional, default {})
+        Keyword arguments for tqdm progress bar.
+
     Returns
     -------
     embedding: array of shape (n_samples, n_components)
@@ -633,7 +645,10 @@ def optimize_layout_inverse(
     epoch_of_next_negative_sample = epochs_per_negative_sample.copy()
     epoch_of_next_sample = epochs_per_sample.copy()
 
-    for n in range(n_epochs):
+    if 'disable' not in tqdm_kwds:
+        tqdm_kwds['disable'] = not verbose
+
+    for n in tqdm(range(n_epochs), **tqdm_kwds):
         for i in range(epochs_per_sample.shape[0]):
             if epoch_of_next_sample[i] <= n:
                 j = head[i]
@@ -685,9 +700,6 @@ def optimize_layout_inverse(
                 )
 
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
-
-        if verbose and n % int(n_epochs / 10) == 0:
-            print("\tcompleted ", n, " / ", n_epochs, "epochs")
 
     return head_embedding
 
@@ -873,6 +885,7 @@ def optimize_layout_aligned_euclidean(
     negative_sample_rate=5.0,
     parallel=True,
     verbose=False,
+    tqdm_kwds={},
 ):
     dim = head_embeddings[0].shape[1]
     move_other = head_embeddings[0].shape[0] == tail_embeddings[0].shape[0]
@@ -899,7 +912,10 @@ def optimize_layout_aligned_euclidean(
         parallel=parallel,
     )
 
-    for n in range(n_epochs):
+    if 'disable' not in tqdm_kwds:
+        tqdm_kwds['disable'] = not verbose
+
+    for n in tqdm(range(n_epochs), **tqdm_kwds):
         optimize_fn(
             head_embeddings,
             tail_embeddings,
@@ -923,8 +939,5 @@ def optimize_layout_aligned_euclidean(
         )
 
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
-
-        if verbose and n % int(n_epochs / 10) == 0:
-            print("\tcompleted ", n, " / ", n_epochs, "epochs")
 
     return head_embeddings
