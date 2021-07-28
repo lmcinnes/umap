@@ -292,9 +292,6 @@ def optimize_layout_euclidean(
     dim = head_embedding.shape[1]
     alpha = initial_alpha
 
-    head_embedding = np.round(head_embedding, 3)
-    tail_embedding = np.round(tail_embedding, 3)
-
     epochs_per_negative_sample = epochs_per_sample / negative_sample_rate
     epoch_of_next_negative_sample = epochs_per_negative_sample.copy()
     epoch_of_next_sample = epochs_per_sample.copy()

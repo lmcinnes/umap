@@ -1353,7 +1353,6 @@ def find_ab_params(spread, min_dist):
     yv[xv < min_dist] = 1.0
     yv[xv >= min_dist] = np.exp(-(xv[xv >= min_dist] - min_dist) / spread)
     params, covar = curve_fit(curve, xv, yv)
-    params = params.astype(np.float32)
     return params[0], params[1]
 
 
