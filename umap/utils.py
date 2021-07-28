@@ -209,11 +209,11 @@ def average_nn_distance(dist_matrix):
     # Count/sum is done per row
     count_non_zero_elems = np.bincount(row_idx)
     sum_non_zero_elems = np.bincount(row_idx, weights=val)
-    averages = sum_non_zero_elems/count_non_zero_elems
+    averages = sum_non_zero_elems / count_non_zero_elems
 
     if any(np.isnan(averages)):
         warn(
-            "Embedding contains disconnected vertices which will be ignored." 
+            "Embedding contains disconnected vertices which will be ignored."
             "Use umap.utils.disconnected_vertices() to identify them."
         )
 

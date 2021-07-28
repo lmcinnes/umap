@@ -33,7 +33,11 @@ def test_umap_trustworthiness_on_iris(iris, iris_model):
 def test_initialized_umap_trustworthiness_on_iris(iris):
     data = iris.data
     embedding = UMAP(
-        n_neighbors=10, min_dist=0.01, init=data[:, 2:], n_epochs=200, random_state=42,
+        n_neighbors=10,
+        min_dist=0.01,
+        init=data[:, 2:],
+        n_epochs=200,
+        random_state=42,
     ).fit_transform(data)
     trust = trustworthiness(iris.data, embedding, 10)
     assert (
@@ -41,7 +45,9 @@ def test_initialized_umap_trustworthiness_on_iris(iris):
     ), "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust)
 
 
-def test_umap_trustworthiness_on_sphere_iris(iris,):
+def test_umap_trustworthiness_on_sphere_iris(
+    iris,
+):
     data = iris.data
     embedding = UMAP(
         n_neighbors=10,
@@ -146,7 +152,7 @@ def test_precomputed_transform_on_iris(iris, iris_selection):
         min_dist=0.01,
         random_state=42,
         n_epochs=100,
-        metric='precomputed'
+        metric="precomputed",
     ).fit(distance_matrix)
 
     new_data = iris.data[~iris_selection]
@@ -170,7 +176,7 @@ def test_precomputed_sparse_transform_on_iris(iris, iris_selection):
         min_dist=0.01,
         random_state=42,
         n_epochs=100,
-        metric='precomputed'
+        metric="precomputed",
     ).fit(distance_matrix)
 
     new_data = iris.data[~iris_selection]
