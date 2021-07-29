@@ -234,8 +234,8 @@ def optimize_layout_euclidean(
     parallel=False,
     verbose=False,
     densmap=False,
-    densmap_kwds={},
-    tqdm_kwds={},
+    densmap_kwds=None,
+    tqdm_kwds=None,
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
     fuzzy set cross entropy between the 1-skeletons of the high dimensional
@@ -282,9 +282,9 @@ def optimize_layout_euclidean(
         Whether to report information on the current progress of the algorithm.
     densmap: bool (optional, default False)
         Whether to use the density-augmented densMAP objective
-    densmap_kwds: dict (optional, default {})
+    densmap_kwds: dict (optional, default None)
         Auxiliary data for densMAP
-    tqdm_kwds: dict (optional, default {})
+    tqdm_kwds: dict (optional, default None)
         Keyword arguments for tqdm progress bar.
     Returns
     -------
@@ -303,6 +303,10 @@ def optimize_layout_euclidean(
     optimize_fn = numba.njit(
         _optimize_layout_euclidean_single_epoch, fastmath=True, parallel=parallel
     )
+    if densmap_kwds is None:
+        densmap_kwds = {}
+    if tqdm_kwds is None:
+        tqdm_kwds = {}
 
     if densmap:
         dens_init_fn = numba.njit(
@@ -494,7 +498,7 @@ def optimize_layout_generic(
     output_metric=dist.euclidean,
     output_metric_kwds=(),
     verbose=False,
-    tqdm_kwds={},
+    tqdm_kwds=None,
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
     fuzzy set cross entropy between the 1-skeletons of the high dimensional
@@ -550,7 +554,7 @@ def optimize_layout_generic(
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
 
-    tqdm_kwds: dict (optional, default {})
+    tqdm_kwds: dict (optional, default None)
         Keyword arguments for tqdm progress bar.
 
     Returns
@@ -571,6 +575,9 @@ def optimize_layout_generic(
         _optimize_layout_generic_single_epoch,
         fastmath=True,
     )
+
+    if tqdm_kwds is None:
+        tqdm_kwds = {}
 
     if "disable" not in tqdm_kwds:
         tqdm_kwds["disable"] = not verbose
@@ -694,7 +701,7 @@ def optimize_layout_inverse(
     output_metric=dist.euclidean,
     output_metric_kwds=(),
     verbose=False,
-    tqdm_kwds={},
+    tqdm_kwds=None,
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
     fuzzy set cross entropy between the 1-skeletons of the high dimensional
@@ -757,7 +764,7 @@ def optimize_layout_inverse(
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
 
-    tqdm_kwds: dict (optional, default {})
+    tqdm_kwds: dict (optional, default None)
         Keyword arguments for tqdm progress bar.
 
     Returns
@@ -778,6 +785,9 @@ def optimize_layout_inverse(
         _optimize_layout_inverse_single_epoch,
         fastmath=True,
     )
+
+    if tqdm_kwds is None:
+        tqdm_kwds = {}
 
     if "disable" not in tqdm_kwds:
         tqdm_kwds["disable"] = not verbose
@@ -979,7 +989,7 @@ def optimize_layout_aligned_euclidean(
     negative_sample_rate=5.0,
     parallel=True,
     verbose=False,
-    tqdm_kwds={},
+    tqdm_kwds=None,
 ):
     dim = head_embeddings[0].shape[1]
     move_other = head_embeddings[0].shape[0] == tail_embeddings[0].shape[0]
@@ -1005,6 +1015,9 @@ def optimize_layout_aligned_euclidean(
         fastmath=True,
         parallel=parallel,
     )
+
+    if tqdm_kwds is None:
+        tqdm_kwds = {}
 
     if "disable" not in tqdm_kwds:
         tqdm_kwds["disable"] = not verbose
