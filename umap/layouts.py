@@ -183,7 +183,14 @@ def _optimize_layout_euclidean_single_epoch(
 
 
 def _optimize_layout_euclidean_densmap_epoch_init(
-    head_embedding, tail_embedding, head, tail, a, b, re_sum, phi_sum,
+    head_embedding,
+    tail_embedding,
+    head,
+    tail,
+    a,
+    b,
+    re_sum,
+    phi_sum,
 ):
     re_sum.fill(0)
     phi_sum.fill(0)
@@ -317,8 +324,8 @@ def optimize_layout_euclidean(
         dens_phi_sum = np.zeros(1, dtype=np.float32)
         dens_re_sum = np.zeros(1, dtype=np.float32)
 
-    if 'disable' not in tqdm_kwds:
-        tqdm_kwds['disable'] = not verbose
+    if "disable" not in tqdm_kwds:
+        tqdm_kwds["disable"] = not verbose
 
     for n in tqdm(range(n_epochs), **tqdm_kwds):
 
@@ -415,9 +422,7 @@ def _optimize_layout_generic_single_epoch(
             dist_output, grad_dist_output = output_metric(
                 current, other, *output_metric_kwds
             )
-            _, rev_grad_dist_output = output_metric(
-                other, current, *output_metric_kwds
-            )
+            _, rev_grad_dist_output = output_metric(other, current, *output_metric_kwds)
 
             if dist_output > 0.0:
                 w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
@@ -436,8 +441,7 @@ def _optimize_layout_generic_single_epoch(
             epoch_of_next_sample[i] += epochs_per_sample[i]
 
             n_neg_samples = int(
-                (n - epoch_of_next_negative_sample[i])
-                / epochs_per_negative_sample[i]
+                (n - epoch_of_next_negative_sample[i]) / epochs_per_negative_sample[i]
             )
 
             for p in range(n_neg_samples):
@@ -463,7 +467,7 @@ def _optimize_layout_generic_single_epoch(
                     current[d] += grad_d * alpha
 
             epoch_of_next_negative_sample[i] += (
-                    n_neg_samples * epochs_per_negative_sample[i]
+                n_neg_samples * epochs_per_negative_sample[i]
             )
     return epoch_of_next_sample, epoch_of_next_negative_sample
 
@@ -562,11 +566,12 @@ def optimize_layout_generic(
     epoch_of_next_sample = epochs_per_sample.copy()
 
     optimize_fn = numba.njit(
-        _optimize_layout_generic_single_epoch, fastmath=True,
+        _optimize_layout_generic_single_epoch,
+        fastmath=True,
     )
 
-    if 'disable' not in tqdm_kwds:
-        tqdm_kwds['disable'] = not verbose
+    if "disable" not in tqdm_kwds:
+        tqdm_kwds["disable"] = not verbose
 
     for n in tqdm(range(n_epochs), **tqdm_kwds):
         optimize_fn(
@@ -588,7 +593,7 @@ def optimize_layout_generic(
             n_vertices,
             a,
             b,
-            gamma
+            gamma,
         )
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
 
@@ -642,8 +647,7 @@ def _optimize_layout_inverse_single_epoch(
             epoch_of_next_sample[i] += epochs_per_sample[i]
 
             n_neg_samples = int(
-                (n - epoch_of_next_negative_sample[i])
-                / epochs_per_negative_sample[i]
+                (n - epoch_of_next_negative_sample[i]) / epochs_per_negative_sample[i]
             )
 
             for p in range(n_neg_samples):
@@ -664,7 +668,7 @@ def _optimize_layout_inverse_single_epoch(
                     current[d] += grad_d * alpha
 
             epoch_of_next_negative_sample[i] += (
-                    n_neg_samples * epochs_per_negative_sample[i]
+                n_neg_samples * epochs_per_negative_sample[i]
             )
 
 
@@ -765,11 +769,12 @@ def optimize_layout_inverse(
     epoch_of_next_sample = epochs_per_sample.copy()
 
     optimize_fn = numba.njit(
-        _optimize_layout_inverse_single_epoch, fastmath=True,
+        _optimize_layout_inverse_single_epoch,
+        fastmath=True,
     )
 
-    if 'disable' not in tqdm_kwds:
-        tqdm_kwds['disable'] = not verbose
+    if "disable" not in tqdm_kwds:
+        tqdm_kwds["disable"] = not verbose
 
     for n in tqdm(range(n_epochs), **tqdm_kwds):
         optimize_fn(
@@ -1007,8 +1012,8 @@ def optimize_layout_aligned_euclidean(
         parallel=parallel,
     )
 
-    if 'disable' not in tqdm_kwds:
-        tqdm_kwds['disable'] = not verbose
+    if "disable" not in tqdm_kwds:
+        tqdm_kwds["disable"] = not verbose
 
     for n in tqdm(range(n_epochs), **tqdm_kwds):
         optimize_fn(
