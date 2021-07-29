@@ -141,6 +141,8 @@ def _optimize_layout_euclidean_single_epoch(
                 grad_d = clip(grad_coeff * (current[d] - other[d]))
 
                 if densmap_flag:
+                    # FIXME: grad_cor_coeff might be referenced before assignment
+
                     grad_d += clip(2 * grad_cor_coeff * (current[d] - other[d]))
 
                 current[d] += grad_d * alpha
@@ -257,7 +259,7 @@ def optimize_layout_euclidean(
         The number of training epochs to use in optimization.
     n_vertices: int
         The number of vertices (0-simplices) in the dataset.
-    epochs_per_samples: array of shape (n_1_simplices)
+    epochs_per_sample: array of shape (n_1_simplices)
         A float value of the number of epochs per 1-simplex. 1-simplices with
         weaker membership strength will have more epochs between being sampled.
     a: float
@@ -336,6 +338,8 @@ def optimize_layout_euclidean(
         )
 
         if densmap_flag:
+            # FIXME: dens_init_fn might be referenced before assignment
+
             dens_init_fn(
                 head_embedding,
                 tail_embedding,
@@ -347,6 +351,7 @@ def optimize_layout_euclidean(
                 dens_phi_sum,
             )
 
+            # FIXME: dens_var_shift might be referenced before assignment
             dens_re_std = np.sqrt(np.var(dens_re_sum) + dens_var_shift)
             dens_re_mean = np.mean(dens_re_sum)
             dens_re_cov = np.dot(dens_re_sum, dens_R) / (n_vertices - 1)
@@ -513,9 +518,6 @@ def optimize_layout_generic(
 
     tail: array of shape (n_1_simplices)
         The indices of the tails of 1-simplices with non-zero membership.
-
-    weight: array of shape (n_1_simplices)
-        The membership weights of the 1-simplices.
 
     n_epochs: int
         The number of training epochs to use in optimization.
@@ -719,6 +721,10 @@ def optimize_layout_inverse(
 
     weight: array of shape (n_1_simplices)
         The membership weights of the 1-simplices.
+
+    sigmas:
+
+    rhos:
 
     n_epochs: int
         The number of training epochs to use in optimization.
