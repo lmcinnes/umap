@@ -591,7 +591,7 @@ sparse_named_distances = {
     # Other distances
     "canberra": sparse_canberra,
     "ll_dirichlet": sparse_ll_dirichlet,
-    'braycurtis': sparse_bray_curtis,
+    "braycurtis": sparse_bray_curtis,
     # Binary distances
     "hamming": sparse_hamming,
     "jaccard": sparse_jaccard,

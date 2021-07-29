@@ -1166,6 +1166,7 @@ def simplicial_set_embedding(
             verbose=verbose,
             densmap=densmap,
             densmap_kwds=densmap_kwds,
+            move_other=True,
         )
     else:
         embedding = optimize_layout_generic(
@@ -1185,8 +1186,8 @@ def simplicial_set_embedding(
             output_metric,
             tuple(output_metric_kwds.values()),
             verbose=verbose,
+            move_other=True,
         )
-
     if output_dens:
         if verbose:
             print(ts() + " Computing embedding densities")
@@ -1309,15 +1310,14 @@ def init_graph_transform(graph, embedding):
         if num_neighbours == 0:
             result[row_index] = np.nan
             continue
+        row_sum = np.sum(graph[row_index])
         for col_index in graph[row_index].indices:
             if graph[row_index, col_index] == 1:
                 result[row_index, :] = embedding[col_index, :]
                 break
             for d in range(embedding.shape[1]):
                 result[row_index, d] += (
-                    graph[row_index, col_index]
-                    / num_neighbours
-                    * embedding[col_index, d]
+                    graph[row_index, col_index] / row_sum * embedding[col_index, d]
                 )
 
     return result
@@ -1754,9 +1754,7 @@ class UMAP(BaseEstimator):
         elif self.metric == "precomputed":
             if self.unique:
                 raise ValueError("unique is poorly defined on a precomputed metric")
-            warn(
-                "using precomputed metric; inverse_transform will be unavailable"
-            )
+            warn("using precomputed metric; inverse_transform will be unavailable")
             self._input_distance_func = self.metric
             self._inverse_distance_func = None
         elif self.metric == "hellinger" and self._raw_data.min() < 0:
@@ -2723,26 +2721,32 @@ class UMAP(BaseEstimator):
         random_state = check_random_state(self.transform_seed)
         rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
-        if self.metric == 'precomputed':
-            warn("Transforming new data with precomputed metric. "
-                 "We are assuming the input data is a matrix of distances from the new points "
-                 "to the points in the training set. If the input matrix is sparse, it should "
-                 "contain distances from the new points to their nearest neighbours "
-                 "or approximate nearest neighbours in the training set.")
+        if self.metric == "precomputed":
+            warn(
+                "Transforming new data with precomputed metric. "
+                "We are assuming the input data is a matrix of distances from the new points "
+                "to the points in the training set. If the input matrix is sparse, it should "
+                "contain distances from the new points to their nearest neighbours "
+                "or approximate nearest neighbours in the training set."
+            )
             assert X.shape[1] == self._raw_data.shape[0]
             if scipy.sparse.issparse(X):
-                indices = np.full((X.shape[0], self._n_neighbors), dtype=np.int32, fill_value=-1)
+                indices = np.full(
+                    (X.shape[0], self._n_neighbors), dtype=np.int32, fill_value=-1
+                )
                 dists = np.full_like(indices, dtype=np.float32, fill_value=-1)
                 for i in range(X.shape[0]):
                     data_indices = np.argsort(X[i].data)
                     if len(data_indices) < self._n_neighbors:
-                        raise ValueError(f"Need at least n_neighbors ({self.n_neighbors}) distances for each row!")
-                    indices[i] = X[i].indices[data_indices[:self._n_neighbors]]
-                    dists[i] = X[i].data[data_indices[:self._n_neighbors]]
+                        raise ValueError(
+                            f"Need at least n_neighbors ({self.n_neighbors}) distances for each row!"
+                        )
+                    indices[i] = X[i].indices[data_indices[: self._n_neighbors]]
+                    dists[i] = X[i].data[data_indices[: self._n_neighbors]]
             else:
-                indices = np.argsort(X, axis=1)[:, :self._n_neighbors].astype(np.int32)
+                indices = np.argsort(X, axis=1)[:, : self._n_neighbors].astype(np.int32)
                 dists = np.take_along_axis(X, indices, axis=1)
-            assert np.min(indices) >= 0 and np.min(dists) >= 0.
+            assert np.min(indices) >= 0 and np.min(dists) >= 0.0
         elif self._small_data:
             try:
                 # sklearn pairwise_distances fails for callable metric on sparse data

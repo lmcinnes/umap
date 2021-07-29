@@ -785,8 +785,7 @@ def umap_loss(
 
 
 def distance_loss_corr(x, z_x):
-    """ Loss based on the distance between elements in a batch
-    """
+    """Loss based on the distance between elements in a batch"""
 
     # flatten data
     x = tf.keras.layers.Flatten()(x)
@@ -959,7 +958,7 @@ def construct_edge_dataset(
         """
         The sham generator is a placeholder when all data is already intrinsic to
         the model, but keras wants some input data. Used for non-parametric
-        embedding. 
+        embedding.
         """
 
         def sham_generator():
@@ -1119,8 +1118,8 @@ def load_ParametricUMAP(save_location, verbose=True):
 
 class GradientClippedModel(tf.keras.Model):
     """
-    We need to define a custom keras model here for gradient clipping, 
-    to stabilize training. 
+    We need to define a custom keras model here for gradient clipping,
+    to stabilize training.
     """
 
     def train_step(self, data):

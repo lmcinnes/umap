@@ -193,7 +193,8 @@ def _nhood_search(umap_object, nhood_size):
         rng_state = np.empty(3, dtype=np.int64)
 
         indices, dists = umap_object._knn_search_index.query(
-            umap_object._raw_data, k=nhood_size,
+            umap_object._raw_data,
+            k=nhood_size,
         )
 
     return indices, dists
@@ -298,12 +299,16 @@ def _datashade_points(
                 Patch(facecolor=color_key[i], label=k)
                 for i, k in enumerate(unique_labels)
             ]
-            result = tf.shade(aggregation, color_key=color_key, how="eq_hist", alpha=alpha)
+            result = tf.shade(
+                aggregation, color_key=color_key, how="eq_hist", alpha=alpha
+            )
         else:
             legend_elements = [
                 Patch(facecolor=color_key[k], label=k) for k in color_key.keys()
             ]
-            result = tf.shade(aggregation, color_key=color_key, how="eq_hist", alpha=alpha)
+            result = tf.shade(
+                aggregation, color_key=color_key, how="eq_hist", alpha=alpha
+            )
 
     # Color by values
     elif values is not None:
@@ -323,7 +328,9 @@ def _datashade_points(
             )
             aggregation = canvas.points(data, "x", "y", agg=ds.count_cat("val_cat"))
             color_key = _to_hex(plt.get_cmap(cmap)(np.linspace(0, 1, 256)))
-            result = tf.shade(aggregation, color_key=color_key, how="eq_hist", alpha=alpha)
+            result = tf.shade(
+                aggregation, color_key=color_key, how="eq_hist", alpha=alpha
+            )
         else:
             data["val_cat"] = pd.Categorical(values)
             aggregation = canvas.points(data, "x", "y", agg=ds.count_cat("val_cat"))
@@ -331,7 +338,9 @@ def _datashade_points(
                 plt.get_cmap(cmap)(np.linspace(0, 1, unique_values.shape[0]))
             )
             color_key = dict(zip(unique_values, color_key_cols))
-            result = tf.shade(aggregation, color_key=color_key, how="eq_hist", alpha=alpha)
+            result = tf.shade(
+                aggregation, color_key=color_key, how="eq_hist", alpha=alpha
+            )
 
     # Color by density (default datashader option)
     else:
@@ -428,7 +437,9 @@ def _matplotlib_points(
                     values.shape[0], points.shape[0]
                 )
             )
-        ax.scatter(points[:, 0], points[:, 1], s=point_size, c=values, cmap=cmap, alpha=alpha)
+        ax.scatter(
+            points[:, 0], points[:, 1], s=point_size, c=values, cmap=cmap, alpha=alpha
+        )
 
     # No color (just pick the midpoint of the cmap)
     else:
@@ -583,7 +594,7 @@ def points(
     ax: matplotlib axis (optional, default None)
         The matplotlib axis to draw the plot to, or if None, which is
         the default, a new axis will be created and returned.
-    
+
     alpha: float (optional, default: None)
         The alpha blending value, between 0 (transparent) and 1 (opaque).
 
@@ -660,7 +671,7 @@ def points(
             alpha = alpha * 255
         else:
             alpha = 255
-        
+
         ax = _datashade_points(
             points,
             ax,
@@ -1514,9 +1525,7 @@ def interactive(
                 "Too many points for text search." "Sorry; try subssampling your data."
             )
         if alpha is not None:
-            warn(
-                "Alpha parameter will not be applied on holoviews plots"
-            )
+            warn("Alpha parameter will not be applied on holoviews plots")
         hv.extension("bokeh")
         hv.output(size=300)
         hv.opts.defaults(hv.opts.RGB(bgcolor=background, xaxis=None, yaxis=None))
@@ -1584,8 +1593,8 @@ def nearest_neighbour_distribution(umap_object, bins=25, ax=None):
         fig = plt.figure()
         ax = fig.add_subplot(111)
 
-    ax.set_xlabel(f'Average distance to nearest neighbors')
-    ax.set_ylabel('Frequency')
+    ax.set_xlabel(f"Average distance to nearest neighbors")
+    ax.set_ylabel("Frequency")
 
     ax.hist(nn_distances, bins=bins)
 

@@ -182,7 +182,14 @@ def _optimize_layout_euclidean_single_epoch(
 
 
 def _optimize_layout_euclidean_densmap_epoch_init(
-    head_embedding, tail_embedding, head, tail, a, b, re_sum, phi_sum,
+    head_embedding,
+    tail_embedding,
+    head,
+    tail,
+    a,
+    b,
+    re_sum,
+    phi_sum,
 ):
     re_sum.fill(0)
     phi_sum.fill(0)
@@ -225,6 +232,7 @@ def optimize_layout_euclidean(
     verbose=False,
     densmap=False,
     densmap_kwds={},
+    move_other=False,
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
     fuzzy set cross entropy between the 1-skeletons of the high dimensional
@@ -273,6 +281,8 @@ def optimize_layout_euclidean(
         Whether to use the density-augmented densMAP objective
     densmap_kwds: dict (optional, default {})
         Auxiliary data for densMAP
+    move_other: bool (optional, default False)
+        Whether to adjust tail_embedding alongside head_embedding
     Returns
     -------
     embedding: array of shape (n_samples, n_components)
@@ -280,7 +290,6 @@ def optimize_layout_euclidean(
     """
 
     dim = head_embedding.shape[1]
-    move_other = head_embedding.shape[0] == tail_embedding.shape[0]
     alpha = initial_alpha
 
     epochs_per_negative_sample = epochs_per_sample / negative_sample_rate
@@ -397,6 +406,7 @@ def optimize_layout_generic(
     output_metric=dist.euclidean,
     output_metric_kwds=(),
     verbose=False,
+    move_other=False,
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
     fuzzy set cross entropy between the 1-skeletons of the high dimensional
@@ -455,6 +465,9 @@ def optimize_layout_generic(
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
 
+    move_other: bool (optional, default False)
+        Whether to adjust tail_embedding alongside head_embedding
+
     Returns
     -------
     embedding: array of shape (n_samples, n_components)
@@ -462,7 +475,6 @@ def optimize_layout_generic(
     """
 
     dim = head_embedding.shape[1]
-    move_other = head_embedding.shape[0] == tail_embedding.shape[0]
     alpha = initial_alpha
 
     epochs_per_negative_sample = epochs_per_sample / negative_sample_rate
@@ -561,6 +573,7 @@ def optimize_layout_inverse(
     output_metric=dist.euclidean,
     output_metric_kwds=(),
     verbose=False,
+    move_other=False,
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
     fuzzy set cross entropy between the 1-skeletons of the high dimensional
@@ -619,6 +632,9 @@ def optimize_layout_inverse(
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
 
+    move_other: bool (optional, default False)
+        Whether to adjust tail_embedding alongside head_embedding
+
     Returns
     -------
     embedding: array of shape (n_samples, n_components)
@@ -626,7 +642,6 @@ def optimize_layout_inverse(
     """
 
     dim = head_embedding.shape[1]
-    move_other = head_embedding.shape[0] == tail_embedding.shape[0]
     alpha = initial_alpha
 
     epochs_per_negative_sample = epochs_per_sample / negative_sample_rate
@@ -873,9 +888,9 @@ def optimize_layout_aligned_euclidean(
     negative_sample_rate=5.0,
     parallel=True,
     verbose=False,
+    move_other=False,
 ):
     dim = head_embeddings[0].shape[1]
-    move_other = head_embeddings[0].shape[0] == tail_embeddings[0].shape[0]
     alpha = initial_alpha
 
     epochs_per_negative_sample = numba.typed.List.empty_list(numba.types.float32[::1])
