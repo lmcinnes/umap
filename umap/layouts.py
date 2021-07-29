@@ -860,9 +860,7 @@ def _optimize_layout_aligned_euclidean_single_epoch(
                     for offset in range(-window_size, window_size):
                         neighbor_m = m + offset
                         if (
-                            neighbor_m >= 0
-                            and neighbor_m < n_embeddings
-                            and offset != 0
+                                n_embeddings > neighbor_m >= 0 != offset
                         ):
                             identified_index = relations[m, offset + window_size, j]
                             if identified_index >= 0:
@@ -884,9 +882,7 @@ def _optimize_layout_aligned_euclidean_single_epoch(
                         for offset in range(-window_size, window_size):
                             neighbor_m = m + offset
                             if (
-                                neighbor_m >= 0
-                                and neighbor_m < n_embeddings
-                                and offset != 0
+                                    n_embeddings > neighbor_m >= 0 != offset
                             ):
                                 identified_index = relations[m, offset + window_size, k]
                                 if identified_index >= 0:
@@ -940,11 +936,7 @@ def _optimize_layout_aligned_euclidean_single_epoch(
 
                         for offset in range(-window_size, window_size):
                             neighbor_m = m + offset
-                            if (
-                                neighbor_m >= 0
-                                and neighbor_m < n_embeddings
-                                and offset != 0
-                            ):
+                            if n_embeddings > neighbor_m >= 0 != offset:
                                 identified_index = relations[m, offset + window_size, j]
                                 if identified_index >= 0:
                                     grad_d -= clip(
