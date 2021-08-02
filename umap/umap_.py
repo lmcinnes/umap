@@ -1719,13 +1719,14 @@ class UMAP(BaseEstimator):
         if self.n_components < 1:
             raise ValueError("n_components must be greater than 0")
         self.n_epochs_list = None
-        if isinstance(self.n_epochs, list):
-            if not all(isinstance(n, int) and n >= 0 for n in self.n_epochs):
+        if isinstance(self.n_epochs, list) or isinstance(self.n_epochs, tuple) or \
+                isinstance(self.n_epochs, np.ndarray):
+            if not issubclass(np.array(self.n_epochs).dtype.type, np.integer) or \
+                    not np.all(np.array(self.n_epochs) >= 0):
                 raise ValueError("n_epochs must be a nonnegative integer "
                                  "or a list of nonnegative integers")
-            self.n_epochs_list = self.n_epochs
-            self.n_epochs = max(self.n_epochs_list)
-        if self.n_epochs is not None and (
+            self.n_epochs_list = list(self.n_epochs)
+        elif self.n_epochs is not None and (
                 self.n_epochs < 0 or not isinstance(self.n_epochs, int)
         ):
             raise ValueError("n_epochs must be a nonnegative integer "
@@ -2610,7 +2611,7 @@ class UMAP(BaseEstimator):
                                    "It is likely the layout optimization function "
                                    "doesn't support the list of int for 'n_epochs'.")
                 else:
-                    self.embedding_list = [e[inverse] for e in aux_data["embedding_list"]]
+                    self.embedding_list_ = [e[inverse] for e in aux_data["embedding_list"]]
 
             # Assign any points that are fully disconnected from our manifold(s) to have embedding
             # coordinates of np.nan.  These will be filtered by our plotting functions automatically.
