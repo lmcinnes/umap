@@ -2292,7 +2292,7 @@ class UMAP(BaseEstimator):
         random_state = check_random_state(self.random_state)
 
         if self.verbose:
-            print("Construct fuzzy simplicial set")
+            print(ts(), "Construct fuzzy simplicial set")
 
         if self.metric == "precomputed" and self._sparse_data:
             # For sparse precomputed distance matrices, we just argsort the rows to find
