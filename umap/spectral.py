@@ -97,7 +97,9 @@ def component_layout(
 
         if metric in SPECIAL_METRICS:
             distance_matrix = pairwise_special_metric(
-                component_centroids, metric=metric, kwds=metric_kwds,
+                component_centroids,
+                metric=metric,
+                kwds=metric_kwds,
             )
         elif metric in SPARSE_SPECIAL_METRICS:
             distance_matrix = pairwise_special_metric(
@@ -108,9 +110,9 @@ def component_layout(
         else:
             if callable(metric) and scipy.sparse.isspmatrix(data):
                 function_to_name_mapping = {
-                    sparse_named_distances[k]: k for k in
-                    set(SKLEARN_PAIRWISE_VALID_METRICS) &
-                    set(sparse_named_distances.keys())
+                    sparse_named_distances[k]: k
+                    for k in set(SKLEARN_PAIRWISE_VALID_METRICS)
+                    & set(sparse_named_distances.keys())
                 }
                 try:
                     metric_name = function_to_name_mapping[metric]

@@ -32,7 +32,11 @@ def test_densmap_trustworthiness(nn_data):
 def test_densmap_trustworthiness_random_init(nn_data):  # pragma: no cover
     data = nn_data[:50]
     embedding = UMAP(
-        n_neighbors=10, min_dist=0.01, random_state=42, init="random", densmap=True,
+        n_neighbors=10,
+        min_dist=0.01,
+        random_state=42,
+        init="random",
+        densmap=True,
     ).fit_transform(data)
     trust = trustworthiness(data, embedding, 10)
     assert (
@@ -42,7 +46,11 @@ def test_densmap_trustworthiness_random_init(nn_data):  # pragma: no cover
 
 def test_densmap_trustworthiness_on_iris(iris):
     densmap_iris_model = UMAP(
-        n_neighbors=10, min_dist=0.01, random_state=42, densmap=True, verbose=True,
+        n_neighbors=10,
+        min_dist=0.01,
+        random_state=42,
+        densmap=True,
+        verbose=True,
     ).fit(iris.data)
     embedding = densmap_iris_model.embedding_
     trust = trustworthiness(iris.data, embedding, 10)
@@ -59,7 +67,11 @@ def test_densmap_trustworthiness_on_iris(iris):
 
 def test_densmap_trustworthiness_on_iris_supervised(iris):
     densmap_iris_model = UMAP(
-        n_neighbors=10, min_dist=0.01, random_state=42, densmap=True, verbose=True,
+        n_neighbors=10,
+        min_dist=0.01,
+        random_state=42,
+        densmap=True,
+        verbose=True,
     ).fit(iris.data, y=iris.target)
     embedding = densmap_iris_model.embedding_
     trust = trustworthiness(iris.data, embedding, 10)

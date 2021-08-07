@@ -8,11 +8,10 @@ try:
 except ImportError:
     warn(
         "Tensorflow not installed; ParametricUMAP will be unavailable",
-         category=ImportWarning
+        category=ImportWarning,
     )
     # Add a dummy class to raise an error
-    class ParametricUMAP (object):
-
+    class ParametricUMAP(object):
         def __init__(self, **kwds):
             warn(
                 """The umap.parametric_umap package requires Tensorflow > 2.0 to be installed.
@@ -25,7 +24,9 @@ except ImportError:
             """
             )
             raise ImportError(
-                "umap.parametric_umap requires Tensorflow >= 2.0") from None
+                "umap.parametric_umap requires Tensorflow >= 2.0"
+            ) from None
+
 
 from .aligned_umap import AlignedUMAP
 

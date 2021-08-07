@@ -1171,6 +1171,7 @@ def simplicial_set_embedding(
             densmap=densmap,
             densmap_kwds=densmap_kwds,
             tqdm_kwds=tqdm_kwds,
+            move_other=True,
         )
     else:
         embedding = optimize_layout_generic(
@@ -1191,8 +1192,8 @@ def simplicial_set_embedding(
             tuple(output_metric_kwds.values()),
             verbose=verbose,
             tqdm_kwds=tqdm_kwds,
+            move_other=True,
         )
-
     if output_dens:
         if verbose:
             print(ts() + " Computing embedding densities")
@@ -1315,15 +1316,14 @@ def init_graph_transform(graph, embedding):
         if num_neighbours == 0:
             result[row_index] = np.nan
             continue
+        row_sum = np.sum(graph[row_index])
         for col_index in graph[row_index].indices:
             if graph[row_index, col_index] == 1:
                 result[row_index, :] = embedding[col_index, :]
                 break
             for d in range(embedding.shape[1]):
                 result[row_index, d] += (
-                    graph[row_index, col_index]
-                    / num_neighbours
-                    * embedding[col_index, d]
+                    graph[row_index, col_index] / row_sum * embedding[col_index, d]
                 )
 
     return result

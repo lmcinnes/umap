@@ -25,7 +25,12 @@ def test_nn_bad_metric(nn_data):
 def test_nn_bad_metric_sparse_data(sparse_nn_data):
     with pytest.raises(ValueError):
         nearest_neighbors(
-            sparse_nn_data, 10, "seuclidean", {}, False, np.random,
+            sparse_nn_data,
+            10,
+            "seuclidean",
+            {},
+            False,
+            np.random,
         )
 
 
