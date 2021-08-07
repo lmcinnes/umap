@@ -3304,3 +3304,22 @@ class UMAP(BaseEstimator):
         if self.output_dens:
             self.rad_orig_ = aux_data["rad_orig"]
             self.rad_emb_ = aux_data["rad_emb"]
+
+    def __repr__(self):
+        from sklearn.utils._pprint import _EstimatorPrettyPrinter
+        import re
+
+        pp = _EstimatorPrettyPrinter(
+            compact=True,
+            indent=1,
+            indent_at_name=True,
+            n_max_elements_to_show=50,
+        )
+        pp._changed_only = True
+        repr_ = pp.pformat(self)
+        repr_ = re.sub("tqdm_kwds={.*},", "", repr_, flags=re.S)
+        # remove empty lines
+        repr_ = re.sub("\n\s*\n", "\n", repr_, flags=re.S)
+        # remove extra whitespaces after a comma
+        repr_ = re.sub(", +", ", ", repr_)
+        return repr_
