@@ -941,6 +941,7 @@ def simplicial_set_embedding(
     euclidean_output=True,
     parallel=False,
     verbose=False,
+    tqdm_kwds=None,
 ):
     """Perform a fuzzy simplicial set embedding, using a specified
     initialisation method and then minimizing the fuzzy set cross entropy
@@ -1028,6 +1029,9 @@ def simplicial_set_embedding(
 
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
+
+    tqdm_kwds: dict
+        Key word arguments to be used by the tqdm progress bar.
 
     Returns
     -------
@@ -1166,6 +1170,7 @@ def simplicial_set_embedding(
             verbose=verbose,
             densmap=densmap,
             densmap_kwds=densmap_kwds,
+            tqdm_kwds=tqdm_kwds,
         )
     else:
         embedding = optimize_layout_generic(
@@ -1185,6 +1190,7 @@ def simplicial_set_embedding(
             output_metric,
             tuple(output_metric_kwds.values()),
             verbose=verbose,
+            tqdm_kwds=tqdm_kwds,
         )
 
     if output_dens:
@@ -1531,6 +1537,9 @@ class UMAP(BaseEstimator):
     verbose: bool (optional, default False)
         Controls verbosity of logging.
 
+    tqdm_kwds: dict (optional, defaul None)
+        Key word arguments to be used by the tqdm progress bar.
+
     unique: bool (optional, default False)
         Controls if the rows of your data should be uniqued before being
         embedded.  If you have more duplicates than you have n_neighbour
@@ -1612,6 +1621,7 @@ class UMAP(BaseEstimator):
         transform_mode="embedding",
         force_approximation_algorithm=False,
         verbose=False,
+        tqdm_kwds=None,
         unique=False,
         densmap=False,
         dens_lambda=2.0,
@@ -1649,6 +1659,7 @@ class UMAP(BaseEstimator):
         self.transform_mode = transform_mode
         self.force_approximation_algorithm = force_approximation_algorithm
         self.verbose = verbose
+        self.tqdm_kwds = tqdm_kwds
         self.unique = unique
 
         self.densmap = densmap
@@ -1754,9 +1765,7 @@ class UMAP(BaseEstimator):
         elif self.metric == "precomputed":
             if self.unique:
                 raise ValueError("unique is poorly defined on a precomputed metric")
-            warn(
-                "using precomputed metric; inverse_transform will be unavailable"
-            )
+            warn("using precomputed metric; inverse_transform will be unavailable")
             self._input_distance_func = self.metric
             self._inverse_distance_func = None
         elif self.metric == "hellinger" and self._raw_data.min() < 0:
@@ -1875,6 +1884,21 @@ class UMAP(BaseEstimator):
             self._disconnection_distance = self.disconnection_distance
         else:
             raise ValueError("disconnection_distance must either be None or a numeric.")
+
+        if self.tqdm_kwds is None:
+            self.tqdm_kwds = {}
+        else:
+            if isinstance(self.tqdm_kwds, dict) is False:
+                raise ValueError(
+                    "tqdm_kwds must be a dictionary. Please provide valid tqdm parameters as "
+                    "key value pairs. Valid tqdm parameters can be found here: "
+                    "https://github.com/tqdm/tqdm#parameters"
+                )
+        if "desc" not in self.tqdm_kwds:
+            self.tqdm_kwds["desc"] = "Epochs completed"
+        if "bar_format" not in self.tqdm_kwds:
+            bar_f = "{desc}: {percentage:3.0f}%| {bar} {n_fmt}/{total_fmt} [{elapsed}]"
+            self.tqdm_kwds["bar_format"] = bar_f
 
     def _check_custom_metric(self, metric, kwds, data=None):
         # quickly check to determine whether user-defined
@@ -2008,6 +2032,7 @@ class UMAP(BaseEstimator):
             result.output_dens,
             parallel=False,
             verbose=bool(np.max(result.verbose)),
+            tqdm_kwds=self.tqdm_kwds,
         )
 
         if result.output_dens:
@@ -2077,6 +2102,7 @@ class UMAP(BaseEstimator):
             result.output_dens,
             parallel=False,
             verbose=bool(np.max(result.verbose)),
+            tqdm_kwds=self.tqdm_kwds,
         )
 
         if result.output_dens:
@@ -2148,6 +2174,7 @@ class UMAP(BaseEstimator):
             result.output_dens,
             parallel=False,
             verbose=bool(np.max(result.verbose)),
+            tqdm_kwds=self.tqdm_kwds,
         )
 
         if result.output_dens:
@@ -2634,6 +2661,7 @@ class UMAP(BaseEstimator):
             self.output_metric in ("euclidean", "l2"),
             self.random_state is None,
             self.verbose,
+            tqdm_kwds=self.tqdm_kwds,
         )
 
     def fit_transform(self, X, y=None):
@@ -2723,26 +2751,32 @@ class UMAP(BaseEstimator):
         random_state = check_random_state(self.transform_seed)
         rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
-        if self.metric == 'precomputed':
-            warn("Transforming new data with precomputed metric. "
-                 "We are assuming the input data is a matrix of distances from the new points "
-                 "to the points in the training set. If the input matrix is sparse, it should "
-                 "contain distances from the new points to their nearest neighbours "
-                 "or approximate nearest neighbours in the training set.")
+        if self.metric == "precomputed":
+            warn(
+                "Transforming new data with precomputed metric. "
+                "We are assuming the input data is a matrix of distances from the new points "
+                "to the points in the training set. If the input matrix is sparse, it should "
+                "contain distances from the new points to their nearest neighbours "
+                "or approximate nearest neighbours in the training set."
+            )
             assert X.shape[1] == self._raw_data.shape[0]
             if scipy.sparse.issparse(X):
-                indices = np.full((X.shape[0], self._n_neighbors), dtype=np.int32, fill_value=-1)
+                indices = np.full(
+                    (X.shape[0], self._n_neighbors), dtype=np.int32, fill_value=-1
+                )
                 dists = np.full_like(indices, dtype=np.float32, fill_value=-1)
                 for i in range(X.shape[0]):
                     data_indices = np.argsort(X[i].data)
                     if len(data_indices) < self._n_neighbors:
-                        raise ValueError(f"Need at least n_neighbors ({self.n_neighbors}) distances for each row!")
-                    indices[i] = X[i].indices[data_indices[:self._n_neighbors]]
-                    dists[i] = X[i].data[data_indices[:self._n_neighbors]]
+                        raise ValueError(
+                            f"Need at least n_neighbors ({self.n_neighbors}) distances for each row!"
+                        )
+                    indices[i] = X[i].indices[data_indices[: self._n_neighbors]]
+                    dists[i] = X[i].data[data_indices[: self._n_neighbors]]
             else:
-                indices = np.argsort(X, axis=1)[:, :self._n_neighbors].astype(np.int32)
+                indices = np.argsort(X, axis=1)[:, : self._n_neighbors].astype(np.int32)
                 dists = np.take_along_axis(X, indices, axis=1)
-            assert np.min(indices) >= 0 and np.min(dists) >= 0.
+            assert np.min(indices) >= 0 and np.min(dists) >= 0.0
         elif self._small_data:
             try:
                 # sklearn pairwise_distances fails for callable metric on sparse data
@@ -2862,6 +2896,7 @@ class UMAP(BaseEstimator):
                 self.negative_sample_rate,
                 self.random_state is None,
                 verbose=self.verbose,
+                tqdm_kwds=self.tqdm_kwds,
             )
         else:
             embedding = optimize_layout_generic(
@@ -2881,6 +2916,7 @@ class UMAP(BaseEstimator):
                 self._output_distance_func,
                 tuple(self._output_metric_kwds.values()),
                 verbose=self.verbose,
+                tqdm_kwds=self.tqdm_kwds,
             )
 
         return embedding
@@ -3048,6 +3084,7 @@ class UMAP(BaseEstimator):
             self._inverse_distance_func,
             tuple(self._metric_kwds.values()),
             verbose=self.verbose,
+            tqdm_kwds=self.tqdm_kwds,
         )
 
         return inv_transformed_points
@@ -3195,6 +3232,7 @@ class UMAP(BaseEstimator):
                 self.output_metric in ("euclidean", "l2"),
                 self.random_state is None,
                 self.verbose,
+                tqdm_kwds=self.tqdm_kwds,
             )
 
         else:
@@ -3260,6 +3298,7 @@ class UMAP(BaseEstimator):
                 self.output_metric in ("euclidean", "l2"),
                 self.random_state is None,
                 self.verbose,
+                tqdm_kwds=self.tqdm_kwds,
             )
 
         if self.output_dens:
