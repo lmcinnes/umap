@@ -1890,9 +1890,9 @@ class UMAP(BaseEstimator):
         else:
             if isinstance(self.tqdm_kwds, dict) is False:
                 raise ValueError(
-                    "tqdm_kwds must be a dictionary. Please provide valid tqdm parameters as "
-                    "key value pairs. Valid tqdm parameters can be found here: "
-                    "https://github.com/tqdm/tqdm#parameters"
+                    "tqdm_kwds must be a dictionary. Please provide valid tqdm "
+                    "parameters as key value pairs. Valid tqdm parameters can be "
+                    "found here: https://github.com/tqdm/tqdm#parameters"
                 )
         if "desc" not in self.tqdm_kwds:
             self.tqdm_kwds["desc"] = "Epochs completed"
@@ -3319,7 +3319,7 @@ class UMAP(BaseEstimator):
         repr_ = pp.pformat(self)
         repr_ = re.sub("tqdm_kwds={.*},", "", repr_, flags=re.S)
         # remove empty lines
-        repr_ = re.sub("\n\s*\n", "\n", repr_, flags=re.S)
+        repr_ = re.sub("\n *\n", "\n", repr_, flags=re.S)
         # remove extra whitespaces after a comma
         repr_ = re.sub(", +", ", ", repr_)
         return repr_
