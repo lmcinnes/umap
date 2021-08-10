@@ -941,6 +941,7 @@ def simplicial_set_embedding(
     euclidean_output=True,
     parallel=False,
     verbose=False,
+    tqdm_kwds=None,
 ):
     """Perform a fuzzy simplicial set embedding, using a specified
     initialisation method and then minimizing the fuzzy set cross entropy
@@ -1028,6 +1029,9 @@ def simplicial_set_embedding(
 
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
+
+    tqdm_kwds: dict
+        Key word arguments to be used by the tqdm progress bar.
 
     Returns
     -------
@@ -1166,6 +1170,7 @@ def simplicial_set_embedding(
             verbose=verbose,
             densmap=densmap,
             densmap_kwds=densmap_kwds,
+            tqdm_kwds=tqdm_kwds,
             move_other=True,
         )
     else:
@@ -1186,6 +1191,7 @@ def simplicial_set_embedding(
             output_metric,
             tuple(output_metric_kwds.values()),
             verbose=verbose,
+            tqdm_kwds=tqdm_kwds,
             move_other=True,
         )
     if output_dens:
@@ -1531,6 +1537,9 @@ class UMAP(BaseEstimator):
     verbose: bool (optional, default False)
         Controls verbosity of logging.
 
+    tqdm_kwds: dict (optional, defaul None)
+        Key word arguments to be used by the tqdm progress bar.
+
     unique: bool (optional, default False)
         Controls if the rows of your data should be uniqued before being
         embedded.  If you have more duplicates than you have n_neighbour
@@ -1612,6 +1621,7 @@ class UMAP(BaseEstimator):
         transform_mode="embedding",
         force_approximation_algorithm=False,
         verbose=False,
+        tqdm_kwds=None,
         unique=False,
         densmap=False,
         dens_lambda=2.0,
@@ -1649,6 +1659,7 @@ class UMAP(BaseEstimator):
         self.transform_mode = transform_mode
         self.force_approximation_algorithm = force_approximation_algorithm
         self.verbose = verbose
+        self.tqdm_kwds = tqdm_kwds
         self.unique = unique
 
         self.densmap = densmap
@@ -1874,6 +1885,21 @@ class UMAP(BaseEstimator):
         else:
             raise ValueError("disconnection_distance must either be None or a numeric.")
 
+        if self.tqdm_kwds is None:
+            self.tqdm_kwds = {}
+        else:
+            if isinstance(self.tqdm_kwds, dict) is False:
+                raise ValueError(
+                    "tqdm_kwds must be a dictionary. Please provide valid tqdm "
+                    "parameters as key value pairs. Valid tqdm parameters can be "
+                    "found here: https://github.com/tqdm/tqdm#parameters"
+                )
+        if "desc" not in self.tqdm_kwds:
+            self.tqdm_kwds["desc"] = "Epochs completed"
+        if "bar_format" not in self.tqdm_kwds:
+            bar_f = "{desc}: {percentage:3.0f}%| {bar} {n_fmt}/{total_fmt} [{elapsed}]"
+            self.tqdm_kwds["bar_format"] = bar_f
+
     def _check_custom_metric(self, metric, kwds, data=None):
         # quickly check to determine whether user-defined
         # self.metric/self.output_metric returns both distance and gradient
@@ -2006,6 +2032,7 @@ class UMAP(BaseEstimator):
             result.output_dens,
             parallel=False,
             verbose=bool(np.max(result.verbose)),
+            tqdm_kwds=self.tqdm_kwds,
         )
 
         if result.output_dens:
@@ -2075,6 +2102,7 @@ class UMAP(BaseEstimator):
             result.output_dens,
             parallel=False,
             verbose=bool(np.max(result.verbose)),
+            tqdm_kwds=self.tqdm_kwds,
         )
 
         if result.output_dens:
@@ -2146,6 +2174,7 @@ class UMAP(BaseEstimator):
             result.output_dens,
             parallel=False,
             verbose=bool(np.max(result.verbose)),
+            tqdm_kwds=self.tqdm_kwds,
         )
 
         if result.output_dens:
@@ -2263,7 +2292,7 @@ class UMAP(BaseEstimator):
         random_state = check_random_state(self.random_state)
 
         if self.verbose:
-            print("Construct fuzzy simplicial set")
+            print(ts(), "Construct fuzzy simplicial set")
 
         if self.metric == "precomputed" and self._sparse_data:
             # For sparse precomputed distance matrices, we just argsort the rows to find
@@ -2632,6 +2661,7 @@ class UMAP(BaseEstimator):
             self.output_metric in ("euclidean", "l2"),
             self.random_state is None,
             self.verbose,
+            tqdm_kwds=self.tqdm_kwds,
         )
 
     def fit_transform(self, X, y=None):
@@ -2866,6 +2896,7 @@ class UMAP(BaseEstimator):
                 self.negative_sample_rate,
                 self.random_state is None,
                 verbose=self.verbose,
+                tqdm_kwds=self.tqdm_kwds,
             )
         else:
             embedding = optimize_layout_generic(
@@ -2885,6 +2916,7 @@ class UMAP(BaseEstimator):
                 self._output_distance_func,
                 tuple(self._output_metric_kwds.values()),
                 verbose=self.verbose,
+                tqdm_kwds=self.tqdm_kwds,
             )
 
         return embedding
@@ -3052,6 +3084,7 @@ class UMAP(BaseEstimator):
             self._inverse_distance_func,
             tuple(self._metric_kwds.values()),
             verbose=self.verbose,
+            tqdm_kwds=self.tqdm_kwds,
         )
 
         return inv_transformed_points
@@ -3199,6 +3232,7 @@ class UMAP(BaseEstimator):
                 self.output_metric in ("euclidean", "l2"),
                 self.random_state is None,
                 self.verbose,
+                tqdm_kwds=self.tqdm_kwds,
             )
 
         else:
@@ -3264,8 +3298,28 @@ class UMAP(BaseEstimator):
                 self.output_metric in ("euclidean", "l2"),
                 self.random_state is None,
                 self.verbose,
+                tqdm_kwds=self.tqdm_kwds,
             )
 
         if self.output_dens:
             self.rad_orig_ = aux_data["rad_orig"]
             self.rad_emb_ = aux_data["rad_emb"]
+
+    def __repr__(self):
+        from sklearn.utils._pprint import _EstimatorPrettyPrinter
+        import re
+
+        pp = _EstimatorPrettyPrinter(
+            compact=True,
+            indent=1,
+            indent_at_name=True,
+            n_max_elements_to_show=50,
+        )
+        pp._changed_only = True
+        repr_ = pp.pformat(self)
+        repr_ = re.sub("tqdm_kwds={.*},", "", repr_, flags=re.S)
+        # remove empty lines
+        repr_ = re.sub("\n *\n", "\n", repr_, flags=re.S)
+        # remove extra whitespaces after a comma
+        repr_ = re.sub(", +", ", ", repr_)
+        return repr_

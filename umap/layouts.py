@@ -2,6 +2,7 @@ import numpy as np
 import numba
 import umap.distances as dist
 from umap.utils import tau_rand_int
+from tqdm.auto import tqdm
 
 
 @numba.njit()
@@ -140,6 +141,8 @@ def _optimize_layout_euclidean_single_epoch(
                 grad_d = clip(grad_coeff * (current[d] - other[d]))
 
                 if densmap_flag:
+                    # FIXME: grad_cor_coeff might be referenced before assignment
+
                     grad_d += clip(2 * grad_cor_coeff * (current[d] - other[d]))
 
                 current[d] += grad_d * alpha
@@ -231,7 +234,8 @@ def optimize_layout_euclidean(
     parallel=False,
     verbose=False,
     densmap=False,
-    densmap_kwds={},
+    densmap_kwds=None,
+    tqdm_kwds=None,
     move_other=False,
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
@@ -256,7 +260,7 @@ def optimize_layout_euclidean(
         The number of training epochs to use in optimization.
     n_vertices: int
         The number of vertices (0-simplices) in the dataset.
-    epochs_per_samples: array of shape (n_1_simplices)
+    epochs_per_sample: array of shape (n_1_simplices)
         A float value of the number of epochs per 1-simplex. 1-simplices with
         weaker membership strength will have more epochs between being sampled.
     a: float
@@ -279,8 +283,10 @@ def optimize_layout_euclidean(
         Whether to report information on the current progress of the algorithm.
     densmap: bool (optional, default False)
         Whether to use the density-augmented densMAP objective
-    densmap_kwds: dict (optional, default {})
+    densmap_kwds: dict (optional, default None)
         Auxiliary data for densMAP
+    tqdm_kwds: dict (optional, default None)
+        Keyword arguments for tqdm progress bar.
     move_other: bool (optional, default False)
         Whether to adjust tail_embedding alongside head_embedding
     Returns
@@ -299,6 +305,10 @@ def optimize_layout_euclidean(
     optimize_fn = numba.njit(
         _optimize_layout_euclidean_single_epoch, fastmath=True, parallel=parallel
     )
+    if densmap_kwds is None:
+        densmap_kwds = {}
+    if tqdm_kwds is None:
+        tqdm_kwds = {}
 
     if densmap:
         dens_init_fn = numba.njit(
@@ -322,7 +332,10 @@ def optimize_layout_euclidean(
         dens_phi_sum = np.zeros(1, dtype=np.float32)
         dens_re_sum = np.zeros(1, dtype=np.float32)
 
-    for n in range(n_epochs):
+    if "disable" not in tqdm_kwds:
+        tqdm_kwds["disable"] = not verbose
+
+    for n in tqdm(range(n_epochs), **tqdm_kwds):
 
         densmap_flag = (
             densmap
@@ -331,6 +344,8 @@ def optimize_layout_euclidean(
         )
 
         if densmap_flag:
+            # FIXME: dens_init_fn might be referenced before assignment
+
             dens_init_fn(
                 head_embedding,
                 tail_embedding,
@@ -342,6 +357,7 @@ def optimize_layout_euclidean(
                 dens_phi_sum,
             )
 
+            # FIXME: dens_var_shift might be referenced before assignment
             dens_re_std = np.sqrt(np.var(dens_re_sum) + dens_var_shift)
             dens_re_mean = np.mean(dens_re_sum)
             dens_re_cov = np.dot(dens_re_sum, dens_R) / (n_vertices - 1)
@@ -382,13 +398,91 @@ def optimize_layout_euclidean(
 
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
 
-        if verbose and n % int(n_epochs / 10) == 0:
-            print("\tcompleted ", n, " / ", n_epochs, "epochs")
-
     return head_embedding
 
 
-@numba.njit(fastmath=True)
+def _optimize_layout_generic_single_epoch(
+    epochs_per_sample,
+    epoch_of_next_sample,
+    head,
+    tail,
+    head_embedding,
+    tail_embedding,
+    output_metric,
+    output_metric_kwds,
+    dim,
+    alpha,
+    move_other,
+    n,
+    epoch_of_next_negative_sample,
+    epochs_per_negative_sample,
+    rng_state,
+    n_vertices,
+    a,
+    b,
+    gamma,
+):
+    for i in range(epochs_per_sample.shape[0]):
+        if epoch_of_next_sample[i] <= n:
+            j = head[i]
+            k = tail[i]
+
+            current = head_embedding[j]
+            other = tail_embedding[k]
+
+            dist_output, grad_dist_output = output_metric(
+                current, other, *output_metric_kwds
+            )
+            _, rev_grad_dist_output = output_metric(other, current, *output_metric_kwds)
+
+            if dist_output > 0.0:
+                w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
+            else:
+                w_l = 1.0
+            grad_coeff = 2 * b * (w_l - 1) / (dist_output + 1e-6)
+
+            for d in range(dim):
+                grad_d = clip(grad_coeff * grad_dist_output[d])
+
+                current[d] += grad_d * alpha
+                if move_other:
+                    grad_d = clip(grad_coeff * rev_grad_dist_output[d])
+                    other[d] += grad_d * alpha
+
+            epoch_of_next_sample[i] += epochs_per_sample[i]
+
+            n_neg_samples = int(
+                (n - epoch_of_next_negative_sample[i]) / epochs_per_negative_sample[i]
+            )
+
+            for p in range(n_neg_samples):
+                k = tau_rand_int(rng_state) % n_vertices
+
+                other = tail_embedding[k]
+
+                dist_output, grad_dist_output = output_metric(
+                    current, other, *output_metric_kwds
+                )
+
+                if dist_output > 0.0:
+                    w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
+                elif j == k:
+                    continue
+                else:
+                    w_l = 1.0
+
+                grad_coeff = gamma * 2 * b * w_l / (dist_output + 1e-6)
+
+                for d in range(dim):
+                    grad_d = clip(grad_coeff * grad_dist_output[d])
+                    current[d] += grad_d * alpha
+
+            epoch_of_next_negative_sample[i] += (
+                n_neg_samples * epochs_per_negative_sample[i]
+            )
+    return epoch_of_next_sample, epoch_of_next_negative_sample
+
+
 def optimize_layout_generic(
     head_embedding,
     tail_embedding,
@@ -406,6 +500,7 @@ def optimize_layout_generic(
     output_metric=dist.euclidean,
     output_metric_kwds=(),
     verbose=False,
+    tqdm_kwds=None,
     move_other=False,
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
@@ -430,9 +525,6 @@ def optimize_layout_generic(
 
     tail: array of shape (n_1_simplices)
         The indices of the tails of 1-simplices with non-zero membership.
-
-    weight: array of shape (n_1_simplices)
-        The membership weights of the 1-simplices.
 
     n_epochs: int
         The number of training epochs to use in optimization.
@@ -465,6 +557,9 @@ def optimize_layout_generic(
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
 
+    tqdm_kwds: dict (optional, default None)
+        Keyword arguments for tqdm progress bar.
+
     move_other: bool (optional, default False)
         Whether to adjust tail_embedding alongside head_embedding
 
@@ -481,78 +576,116 @@ def optimize_layout_generic(
     epoch_of_next_negative_sample = epochs_per_negative_sample.copy()
     epoch_of_next_sample = epochs_per_sample.copy()
 
-    for n in range(n_epochs):
-        for i in range(epochs_per_sample.shape[0]):
-            if epoch_of_next_sample[i] <= n:
-                j = head[i]
-                k = tail[i]
+    optimize_fn = numba.njit(
+        _optimize_layout_generic_single_epoch,
+        fastmath=True,
+    )
 
-                current = head_embedding[j]
+    if tqdm_kwds is None:
+        tqdm_kwds = {}
+
+    if "disable" not in tqdm_kwds:
+        tqdm_kwds["disable"] = not verbose
+
+    for n in tqdm(range(n_epochs), **tqdm_kwds):
+        optimize_fn(
+            epochs_per_sample,
+            epoch_of_next_sample,
+            head,
+            tail,
+            head_embedding,
+            tail_embedding,
+            output_metric,
+            output_metric_kwds,
+            dim,
+            alpha,
+            move_other,
+            n,
+            epoch_of_next_negative_sample,
+            epochs_per_negative_sample,
+            rng_state,
+            n_vertices,
+            a,
+            b,
+            gamma,
+        )
+        alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
+
+    return head_embedding
+
+
+def _optimize_layout_inverse_single_epoch(
+    epochs_per_sample,
+    epoch_of_next_sample,
+    head,
+    tail,
+    head_embedding,
+    tail_embedding,
+    output_metric,
+    output_metric_kwds,
+    weight,
+    sigmas,
+    dim,
+    alpha,
+    move_other,
+    n,
+    epoch_of_next_negative_sample,
+    epochs_per_negative_sample,
+    rng_state,
+    n_vertices,
+    rhos,
+    gamma,
+):
+    for i in range(epochs_per_sample.shape[0]):
+        if epoch_of_next_sample[i] <= n:
+            j = head[i]
+            k = tail[i]
+
+            current = head_embedding[j]
+            other = tail_embedding[k]
+
+            dist_output, grad_dist_output = output_metric(
+                current, other, *output_metric_kwds
+            )
+
+            w_l = weight[i]
+            grad_coeff = -(1 / (w_l * sigmas[k] + 1e-6))
+
+            for d in range(dim):
+                grad_d = clip(grad_coeff * grad_dist_output[d])
+
+                current[d] += grad_d * alpha
+                if move_other:
+                    other[d] += -grad_d * alpha
+
+            epoch_of_next_sample[i] += epochs_per_sample[i]
+
+            n_neg_samples = int(
+                (n - epoch_of_next_negative_sample[i]) / epochs_per_negative_sample[i]
+            )
+
+            for p in range(n_neg_samples):
+                k = tau_rand_int(rng_state) % n_vertices
+
                 other = tail_embedding[k]
 
                 dist_output, grad_dist_output = output_metric(
                     current, other, *output_metric_kwds
                 )
-                _, rev_grad_dist_output = output_metric(
-                    other, current, *output_metric_kwds
-                )
 
-                if dist_output > 0.0:
-                    w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
-                else:
-                    w_l = 1.0
-                grad_coeff = 2 * b * (w_l - 1) / (dist_output + 1e-6)
+                # w_l = 0.0 # for negative samples, the edge does not exist
+                w_h = np.exp(-max(dist_output - rhos[k], 1e-6) / (sigmas[k] + 1e-6))
+                grad_coeff = -gamma * ((0 - w_h) / ((1 - w_h) * sigmas[k] + 1e-6))
 
                 for d in range(dim):
                     grad_d = clip(grad_coeff * grad_dist_output[d])
-
                     current[d] += grad_d * alpha
-                    if move_other:
-                        grad_d = clip(grad_coeff * rev_grad_dist_output[d])
-                        other[d] += grad_d * alpha
 
-                epoch_of_next_sample[i] += epochs_per_sample[i]
-
-                n_neg_samples = int(
-                    (n - epoch_of_next_negative_sample[i])
-                    / epochs_per_negative_sample[i]
-                )
-
-                for p in range(n_neg_samples):
-                    k = tau_rand_int(rng_state) % n_vertices
-
-                    other = tail_embedding[k]
-
-                    dist_output, grad_dist_output = output_metric(
-                        current, other, *output_metric_kwds
-                    )
-
-                    if dist_output > 0.0:
-                        w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
-                    elif j == k:
-                        continue
-                    else:
-                        w_l = 1.0
-
-                    grad_coeff = gamma * 2 * b * w_l / (dist_output + 1e-6)
-
-                    for d in range(dim):
-                        grad_d = clip(grad_coeff * grad_dist_output[d])
-                        current[d] += grad_d * alpha
-
-                epoch_of_next_negative_sample[i] += (
-                    n_neg_samples * epochs_per_negative_sample[i]
-                )
-
-        alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
-
-        if verbose and n % int(n_epochs / 10) == 0:
-            print("\tcompleted ", n, " / ", n_epochs, "epochs")
-
-    return head_embedding
+            epoch_of_next_negative_sample[i] += (
+                n_neg_samples * epochs_per_negative_sample[i]
+            )
 
 
-@numba.njit(fastmath=True)
 def optimize_layout_inverse(
     head_embedding,
     tail_embedding,
@@ -573,6 +706,7 @@ def optimize_layout_inverse(
     output_metric=dist.euclidean,
     output_metric_kwds=(),
     verbose=False,
+    tqdm_kwds=None,
     move_other=False,
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
@@ -600,6 +734,10 @@ def optimize_layout_inverse(
 
     weight: array of shape (n_1_simplices)
         The membership weights of the 1-simplices.
+
+    sigmas:
+
+    rhos:
 
     n_epochs: int
         The number of training epochs to use in optimization.
@@ -632,6 +770,9 @@ def optimize_layout_inverse(
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
 
+    tqdm_kwds: dict (optional, default None)
+        Keyword arguments for tqdm progress bar.
+
     move_other: bool (optional, default False)
         Whether to adjust tail_embedding alongside head_embedding
 
@@ -648,61 +789,41 @@ def optimize_layout_inverse(
     epoch_of_next_negative_sample = epochs_per_negative_sample.copy()
     epoch_of_next_sample = epochs_per_sample.copy()
 
-    for n in range(n_epochs):
-        for i in range(epochs_per_sample.shape[0]):
-            if epoch_of_next_sample[i] <= n:
-                j = head[i]
-                k = tail[i]
+    optimize_fn = numba.njit(
+        _optimize_layout_inverse_single_epoch,
+        fastmath=True,
+    )
 
-                current = head_embedding[j]
-                other = tail_embedding[k]
+    if tqdm_kwds is None:
+        tqdm_kwds = {}
 
-                dist_output, grad_dist_output = output_metric(
-                    current, other, *output_metric_kwds
-                )
+    if "disable" not in tqdm_kwds:
+        tqdm_kwds["disable"] = not verbose
 
-                w_l = weight[i]
-                grad_coeff = -(1 / (w_l * sigmas[k] + 1e-6))
-
-                for d in range(dim):
-                    grad_d = clip(grad_coeff * grad_dist_output[d])
-
-                    current[d] += grad_d * alpha
-                    if move_other:
-                        other[d] += -grad_d * alpha
-
-                epoch_of_next_sample[i] += epochs_per_sample[i]
-
-                n_neg_samples = int(
-                    (n - epoch_of_next_negative_sample[i])
-                    / epochs_per_negative_sample[i]
-                )
-
-                for p in range(n_neg_samples):
-                    k = tau_rand_int(rng_state) % n_vertices
-
-                    other = tail_embedding[k]
-
-                    dist_output, grad_dist_output = output_metric(
-                        current, other, *output_metric_kwds
-                    )
-
-                    # w_l = 0.0 # for negative samples, the edge does not exist
-                    w_h = np.exp(-max(dist_output - rhos[k], 1e-6) / (sigmas[k] + 1e-6))
-                    grad_coeff = -gamma * ((0 - w_h) / ((1 - w_h) * sigmas[k] + 1e-6))
-
-                    for d in range(dim):
-                        grad_d = clip(grad_coeff * grad_dist_output[d])
-                        current[d] += grad_d * alpha
-
-                epoch_of_next_negative_sample[i] += (
-                    n_neg_samples * epochs_per_negative_sample[i]
-                )
-
+    for n in tqdm(range(n_epochs), **tqdm_kwds):
+        optimize_fn(
+            epochs_per_sample,
+            epoch_of_next_sample,
+            head,
+            tail,
+            head_embedding,
+            tail_embedding,
+            output_metric,
+            output_metric_kwds,
+            weight,
+            sigmas,
+            dim,
+            alpha,
+            move_other,
+            n,
+            epoch_of_next_negative_sample,
+            epochs_per_negative_sample,
+            rng_state,
+            n_vertices,
+            rhos,
+            gamma,
+        )
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
-
-        if verbose and n % int(n_epochs / 10) == 0:
-            print("\tcompleted ", n, " / ", n_epochs, "epochs")
 
     return head_embedding
 
@@ -762,11 +883,7 @@ def _optimize_layout_aligned_euclidean_single_epoch(
 
                     for offset in range(-window_size, window_size):
                         neighbor_m = m + offset
-                        if (
-                            neighbor_m >= 0
-                            and neighbor_m < n_embeddings
-                            and offset != 0
-                        ):
+                        if n_embeddings > neighbor_m >= 0 != offset:
                             identified_index = relations[m, offset + window_size, j]
                             if identified_index >= 0:
                                 grad_d -= clip(
@@ -786,11 +903,7 @@ def _optimize_layout_aligned_euclidean_single_epoch(
 
                         for offset in range(-window_size, window_size):
                             neighbor_m = m + offset
-                            if (
-                                neighbor_m >= 0
-                                and neighbor_m < n_embeddings
-                                and offset != 0
-                            ):
+                            if n_embeddings > neighbor_m >= 0 != offset:
                                 identified_index = relations[m, offset + window_size, k]
                                 if identified_index >= 0:
                                     grad_d -= clip(
@@ -843,11 +956,7 @@ def _optimize_layout_aligned_euclidean_single_epoch(
 
                         for offset in range(-window_size, window_size):
                             neighbor_m = m + offset
-                            if (
-                                neighbor_m >= 0
-                                and neighbor_m < n_embeddings
-                                and offset != 0
-                            ):
+                            if n_embeddings > neighbor_m >= 0 != offset:
                                 identified_index = relations[m, offset + window_size, j]
                                 if identified_index >= 0:
                                     grad_d -= clip(
@@ -888,6 +997,7 @@ def optimize_layout_aligned_euclidean(
     negative_sample_rate=5.0,
     parallel=True,
     verbose=False,
+    tqdm_kwds=None,
     move_other=False,
 ):
     dim = head_embeddings[0].shape[1]
@@ -914,7 +1024,13 @@ def optimize_layout_aligned_euclidean(
         parallel=parallel,
     )
 
-    for n in range(n_epochs):
+    if tqdm_kwds is None:
+        tqdm_kwds = {}
+
+    if "disable" not in tqdm_kwds:
+        tqdm_kwds["disable"] = not verbose
+
+    for n in tqdm(range(n_epochs), **tqdm_kwds):
         optimize_fn(
             head_embeddings,
             tail_embeddings,
@@ -938,8 +1054,5 @@ def optimize_layout_aligned_euclidean(
         )
 
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
-
-        if verbose and n % int(n_epochs / 10) == 0:
-            print("\tcompleted ", n, " / ", n_epochs, "epochs")
 
     return head_embeddings
