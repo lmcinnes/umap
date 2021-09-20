@@ -5,4 +5,5 @@ numba>=0.37
 bokeh>=0.13
 datashader>=0.6
 seaborn>=0.8
+tqdm
 sphinx-gallery

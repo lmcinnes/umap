@@ -93,6 +93,7 @@ Requirements:
 * scipy
 * scikit-learn
 * numba
+* tqdm
 
 Recommended packages:
 
