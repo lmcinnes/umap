@@ -523,6 +523,7 @@ def test_grad_metrics_match_metrics(spatial_data, spatial_distances):
         test_matrix,
         dist_matrix,
         err_msg="Distances don't match " "for metric mahalanobis",
+        decimal=5
     )
 
     # Hellinger
