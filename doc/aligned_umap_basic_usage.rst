@@ -251,7 +251,7 @@ We can look at how we did using essentially the same code as before.
 .. image:: images/aligned_umap_basic_usage_22_0.png
 
 
-Wee see that the alignment is indeed working, so new slices remain
+We see that the alignment is indeed working, so new slices remain
 comparable with previously trained slices. As noted the overall
 alignments and progression is not as nice as the previous version, but
 it does have the significant benefit of allowing an update as you go
