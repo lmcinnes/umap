@@ -1126,7 +1126,7 @@ def simplicial_set_embedding(
             k = tail[i]
 
             D = dists[j, k] * dists[j, k]  # match sq-Euclidean used for embedding
-            mu = graph.data[i]
+            mu = weight[i]
 
             ro[j] += mu * D
             ro[k] += mu * D
@@ -1138,7 +1138,7 @@ def simplicial_set_embedding(
 
         if densmap:
             R = (ro - np.mean(ro)) / np.std(ro)
-            densmap_kwds["mu"] = graph.data
+            densmap_kwds["mu"] = weight
             densmap_kwds["mu_sum"] = mu_sum
             densmap_kwds["R"] = R
 
