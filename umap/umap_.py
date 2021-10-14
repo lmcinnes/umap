@@ -1567,7 +1567,7 @@ class UMAP(BaseEstimator):
         can also be used when densmap=False to calculate the densities for
         UMAP embeddings.
 
-    disconnection_distance: float (optional, default np.inf or maximal value 
+    disconnection_distance: float (optional, default np.inf or maximal value
         for bounded distances) Disconnect any vertices of distance greater than
         or equal to disconnection_distance when approximating the manifold via
         our k-nn graph. This is particularly useful in the case that you have a
