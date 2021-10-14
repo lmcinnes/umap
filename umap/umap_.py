@@ -202,7 +202,7 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
         # TODO: This is very inefficient, but will do for now. FIXME
         ith_distances = distances[i]
         non_zero_dists = ith_distances[ith_distances > 0.0]
-        if non_zero_dists.shape[0] >= local_connectivity:  
+        if non_zero_dists.shape[0] >= local_connectivity:
             if index > 0:
                 rho[i] = non_zero_dists[index - 1]
                 if interpolation > SMOOTH_K_TOLERANCE:
@@ -355,12 +355,7 @@ def nearest_neighbors(
     fastmath=True,
 )
 def compute_membership_strengths(
-    knn_indices,
-    knn_dists,
-    sigmas,
-    rhos,
-    return_dists=False,
-    bipartite=False,
+    knn_indices, knn_dists, sigmas, rhos, return_dists=False, bipartite=False,
 ):
     """Construct the membership strength data for the 1-skeleton of each local
     fuzzy simplicial set -- this is formed as a sparse matrix where each row is
@@ -559,21 +554,13 @@ def fuzzy_simplicial_set(
     """
     if knn_indices is None or knn_dists is None:
         knn_indices, knn_dists, _ = nearest_neighbors(
-            X,
-            n_neighbors,
-            metric,
-            metric_kwds,
-            angular,
-            random_state,
-            verbose=verbose,
+            X, n_neighbors, metric, metric_kwds, angular, random_state, verbose=verbose,
         )
 
     knn_dists = knn_dists.astype(np.float32)
 
     sigmas, rhos = smooth_knn_dist(
-        knn_dists,
-        float(n_neighbors),
-        local_connectivity=float(local_connectivity),
+        knn_dists, float(n_neighbors), local_connectivity=float(local_connectivity),
     )
 
     rows, cols, vals, dists = compute_membership_strengths(
@@ -1687,10 +1674,7 @@ class UMAP(BaseEstimator):
             raise ValueError("min_dist cannot be negative")
         if not isinstance(self.init, str) and not isinstance(self.init, np.ndarray):
             raise ValueError("init must be a string or ndarray")
-        if isinstance(self.init, str) and self.init not in (
-            "spectral",
-            "random",
-        ):
+        if isinstance(self.init, str) and self.init not in ("spectral", "random",):
             raise ValueError('string init values must be "spectral" or "random"')
         if (
             isinstance(self.init, np.ndarray)
@@ -2376,9 +2360,7 @@ class UMAP(BaseEstimator):
                     if not callable(self.metric):
                         _m = dist.named_distances[self.metric]
                         dmat = dist.pairwise_special_metric(
-                            X[index].toarray(),
-                            metric=_m,
-                            kwds=self._metric_kwds,
+                            X[index].toarray(), metric=_m, kwds=self._metric_kwds,
                         )
                     else:
                         dmat = dist.pairwise_special_metric(
@@ -3311,10 +3293,7 @@ class UMAP(BaseEstimator):
         import re
 
         pp = _EstimatorPrettyPrinter(
-            compact=True,
-            indent=1,
-            indent_at_name=True,
-            n_max_elements_to_show=50,
+            compact=True, indent=1, indent_at_name=True, n_max_elements_to_show=50,
         )
         pp._changed_only = True
         repr_ = pp.pformat(self)
