@@ -189,6 +189,8 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
     target = np.log2(k) * bandwidth
     rho = np.zeros(distances.shape[0], dtype=np.float32)
     result = np.zeros(distances.shape[0], dtype=np.float32)
+    index = int(np.floor(local_connectivity))
+    interpolation = local_connectivity - index
 
     mean_distances = np.mean(distances)
 
@@ -200,9 +202,7 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
         # TODO: This is very inefficient, but will do for now. FIXME
         ith_distances = distances[i]
         non_zero_dists = ith_distances[ith_distances > 0.0]
-        if non_zero_dists.shape[0] >= local_connectivity:
-            index = int(np.floor(local_connectivity))
-            interpolation = local_connectivity - index
+        if non_zero_dists.shape[0] >= local_connectivity:  
             if index > 0:
                 rho[i] = non_zero_dists[index - 1]
                 if interpolation > SMOOTH_K_TOLERANCE:
