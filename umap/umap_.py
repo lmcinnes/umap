@@ -319,7 +319,6 @@ def nearest_neighbors(
         disconnected_index = knn_dists == np.inf
         knn_indices[disconnected_index] = -1
 
-        knn_search_index = None
     else:
         # TODO: Hacked values for now
         n_trees = min(64, 5 + int(round((X.shape[0]) ** 0.5 / 20.0)))
@@ -2872,7 +2871,6 @@ class UMAP(BaseEstimator):
 
         head = graph.row
         tail = graph.col
-        weight = graph.data
 
         # optimize_layout = make_optimize_layout(
         #     self._output_distance_func,
