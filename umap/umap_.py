@@ -1650,9 +1650,6 @@ class UMAP(BaseEstimator):
         self.n_components = n_components
         self.repulsion_strength = repulsion_strength
         self.learning_rate = learning_rate
-        self.knn_indices = precomputed_knn[0]
-        self.knn_dists = precomputed_knn[1]
-        self.knn_search_index = precomputed_knn[2]
 
         self.spread = spread
         self.min_dist = min_dist
@@ -1680,6 +1677,7 @@ class UMAP(BaseEstimator):
         self.dens_var_shift = dens_var_shift
         self.output_dens = output_dens
         self.disconnection_distance = disconnection_distance
+        self.precomputed_knn = precomputed_knn
 
         self.n_jobs = n_jobs
 
@@ -2282,6 +2280,10 @@ class UMAP(BaseEstimator):
             init = self.init
 
         self._initial_alpha = self.learning_rate
+
+        self.knn_indices = self.precomputed_knn[0]
+        self.knn_dists = self.precomputed_knn[1]
+        self.knn_search_index = self.precomputed_knn[2]
 
         self._validate_parameters()
 
