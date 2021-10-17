@@ -1589,11 +1589,12 @@ class UMAP(BaseEstimator):
         similarity to a random set of other points.  Too many such points will artificially connect your space.
     
     precomputed_knn: tuple (optional, default (None,None,None))
-        Precomputed knn distances for the data you wish to fit later. The number
-        of nearest neighbors in the precomputed_knn must be greater or equal
-        to the n_neighbors parameter. The input tuple must be the same as the 
-        output of the nearest_neighbors() function; (knn_indices, knn_dists,
-        knn_search_index).
+        If the k-nearest neighbors of each point has already been calculated you
+        can pass them in here to save computation time. The number of nearest 
+        neighbors in the precomputed_knn must be greater or equal to the 
+        n_neighbors parameter. This should be a tuple containing the output
+        of the nearest_neighbors() function or attributes from a previously fit
+        UMAP object; (knn_indices, knn_dists,knn_search_index).
     """
 
     def __init__(
@@ -1922,19 +1923,9 @@ class UMAP(BaseEstimator):
             if self.knn_dists.shape != self.knn_indices.shape:
                 raise ValueError("precomputed_knn[0] and precomputed_knn[1]"
                                  " must be numpy arrays of the same size.")            
-            if self.metric == "precomputed":
-                 # knn_search_index is only necessarry for update which isn't 
-                 # available for precomputed matrices, so it doesn't matter if 
-                 # this is None. This allows the user to pass precomputed knn's 
-                 # that were computed on precomputed matrices without nndescent.
-                if not isinstance(self.knn_search_index, (type(None), NNDescent)):
-                    raise ValueError("If metric precomputed then"
-                                     "precomputed_knn[2] (knn_search_index) "
-                                     "must be an NNDescent or NoneType object.")
-            else:
-                if not isinstance(self.knn_search_index, NNDescent):
-                    raise ValueError("precomputed_knn[2] (knn_search_index)"
-                                     " must be an NNDescent object.")
+            if not isinstance(self.knn_search_index, NNDescent):
+                raise ValueError("precomputed_knn[2] (knn_search_index)"
+                                 " must be an NNDescent object.")
             if self.knn_dists.shape[1] < self.n_neighbors:
                 warn("precomputed_knn has a lower number of neighbors than " 
                      "n_neighbors parameter. precomputed_knn will be ignored"
