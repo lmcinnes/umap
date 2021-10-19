@@ -2354,6 +2354,8 @@ class UMAP(BaseEstimator):
         if self._sparse_data and not X.has_sorted_indices:
             X.sort_indices()
 
+        random_state = check_random_state(self.random_state)
+
         if self.verbose:
             print(ts(), "Construct fuzzy simplicial set")
 
@@ -2402,7 +2404,7 @@ class UMAP(BaseEstimator):
             ) = fuzzy_simplicial_set(
                 X[index],
                 self.n_neighbors,
-                self.random_state,
+                random_state,
                 "precomputed",
                 self._metric_kwds,
                 self._knn_indices,
@@ -2470,7 +2472,7 @@ class UMAP(BaseEstimator):
             ) = fuzzy_simplicial_set(
                 dmat,
                 self._n_neighbors,
-                self.random_state,
+                random_state,
                 "precomputed",
                 self._metric_kwds,
                 None,
@@ -2515,7 +2517,7 @@ class UMAP(BaseEstimator):
                     nn_metric,
                     self._metric_kwds,
                     self.angular_rp_forest,
-                    self.random_state,
+                    random_state,
                     self.low_memory,
                     use_pynndescent=True,
                     n_jobs=self.n_jobs,
@@ -2539,7 +2541,7 @@ class UMAP(BaseEstimator):
             ) = fuzzy_simplicial_set(
                 X[index],
                 self.n_neighbors,
-                self.random_state,
+                random_state,
                 nn_metric,
                 self._metric_kwds,
                 self._knn_indices,
@@ -2563,8 +2565,6 @@ class UMAP(BaseEstimator):
                 self._raw_data.shape[0],
                 verbose=self.verbose,
             )
-
-        random_state = check_random_state(self.random_state)
 
         # Currently not checking if any duplicate points have differing labels
         # Might be worth throwing a warning...
