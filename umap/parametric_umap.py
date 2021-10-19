@@ -230,7 +230,7 @@ class ParametricUMAP(UMAP):
         """
         if self.parametric_embedding:
             return self.encoder.predict(
-                X, batch_size=self.batch_size, verbose=self.verbose
+                np.asanyarray(X), batch_size=self.batch_size, verbose=self.verbose
             )
         else:
             warn(
@@ -253,7 +253,7 @@ class ParametricUMAP(UMAP):
         """
         if self.parametric_reconstruction:
             return self.decoder.predict(
-                X, batch_size=self.batch_size, verbose=self.verbose
+                np.asanyarray(X), batch_size=self.batch_size, verbose=self.verbose
             )
         else:
             return super().inverse_transform(X)
