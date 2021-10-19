@@ -24,7 +24,7 @@ def test_densmap_trustworthiness(nn_data):
     ).fit_transform(data)
     trust = trustworthiness(data, embedding, n_neighbors=10)
     assert (
-        trust >= 0.75
+        trust >= 0.72
     ), "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust)
 
 
