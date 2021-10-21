@@ -337,6 +337,7 @@ def nearest_neighbors(
             low_memory=low_memory,
             n_jobs=n_jobs,
             verbose=verbose,
+            compressed=False
         )
         knn_indices, knn_dists = knn_search_index.neighbor_graph
 
