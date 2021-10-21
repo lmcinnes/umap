@@ -166,6 +166,16 @@ def iris_subset_model(iris, iris_selection):
 
 
 @pytest.fixture(scope="session")
+def iris_subset_model_large(iris, iris_selection):
+    return UMAP(
+        n_neighbors=10,
+        min_dist=0.01,
+        random_state=42,
+        force_approximation_algorithm=True,
+    ).fit(iris.data[iris_selection])
+
+
+@pytest.fixture(scope="session")
 def supervised_iris_model(iris):
     return UMAP(n_neighbors=10, min_dist=0.01, n_epochs=200, random_state=42).fit(
         iris.data, iris.target

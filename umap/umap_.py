@@ -337,7 +337,7 @@ def nearest_neighbors(
             low_memory=low_memory,
             n_jobs=n_jobs,
             verbose=verbose,
-            compressed=False
+            compressed=False,
         )
         knn_indices, knn_dists = knn_search_index.neighbor_graph
 
@@ -1528,8 +1528,8 @@ class UMAP(BaseEstimator):
 
     target_weight: float (optional, default 0.5)
         weighting factor between data topology and target topology. A value of
-        0.0 weights predominantly on data, a value of 1.0 places a strong emphasis on 
-        target. The default of 0.5 balances the weighting equally between data and 
+        0.0 weights predominantly on data, a value of 1.0 places a strong emphasis on
+        target. The default of 0.5 balances the weighting equally between data and
         target.
 
     transform_seed: int (optional, default 42)

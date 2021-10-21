@@ -239,6 +239,24 @@ def test_umap_update(iris, iris_subset_model, iris_selection, iris_model):
     assert error < 1.0
 
 
+def test_umap_update_large(iris, iris_subset_model_large, iris_selection, iris_model):
+
+    new_data = iris.data[~iris_selection]
+    new_model = iris_subset_model_large
+    new_model.update(new_data)
+
+    comparison_graph = scipy.sparse.vstack(
+        [iris_model.graph_[iris_selection], iris_model.graph_[~iris_selection]]
+    )
+    comparison_graph = scipy.sparse.hstack(
+        [comparison_graph[:, iris_selection], comparison_graph[:, ~iris_selection]]
+    )
+
+    error = np.sum(np.abs((new_model.graph_ - comparison_graph).data))
+
+    assert error < 1.0
+
+
 # -----------------
 # UMAP Graph output
 # -----------------
