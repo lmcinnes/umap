@@ -1588,6 +1588,14 @@ class UMAP(BaseEstimator):
         UMAP assumption that we have a connected manifold can be problematic when you have points that are maximally
         different from all the rest of your data.  The connected manifold assumption will make such points have perfect
         similarity to a random set of other points.  Too many such points will artificially connect your space.
+
+    precomputed_knn: tuple (optional, default (None,None,None))
+        If the k-nearest neighbors of each point has already been calculated you
+        can pass them in here to save computation time. The number of nearest
+        neighbors in the precomputed_knn must be greater or equal to the
+        n_neighbors parameter. This should be a tuple containing the output
+        of the nearest_neighbors() function or attributes from a previously fit
+        UMAP object; (knn_indices, knn_dists,knn_search_index).
     """
 
     def __init__(
@@ -1630,6 +1638,7 @@ class UMAP(BaseEstimator):
         dens_var_shift=0.1,
         output_dens=False,
         disconnection_distance=None,
+        precomputed_knn=(None, None, None),
     ):
         self.n_neighbors = n_neighbors
         self.metric = metric
@@ -1669,6 +1678,7 @@ class UMAP(BaseEstimator):
         self.dens_var_shift = dens_var_shift
         self.output_dens = output_dens
         self.disconnection_distance = disconnection_distance
+        self.precomputed_knn = precomputed_knn
 
         self.n_jobs = n_jobs
 
@@ -1900,6 +1910,57 @@ class UMAP(BaseEstimator):
         if "bar_format" not in self.tqdm_kwds:
             bar_f = "{desc}: {percentage:3.0f}%| {bar} {n_fmt}/{total_fmt} [{elapsed}]"
             self.tqdm_kwds["bar_format"] = bar_f
+
+        if self.knn_dists is not None:
+            if self.unique:
+                raise ValueError(
+                    "unique is not currently available for " "precomputed_knn."
+                )
+            if not isinstance(self.knn_indices, np.ndarray):
+                raise ValueError("precomputed_knn[0] must be ndarray object.")
+            if not isinstance(self.knn_dists, np.ndarray):
+                raise ValueError("precomputed_knn[1] must be ndarray object.")
+            if self.knn_dists.shape != self.knn_indices.shape:
+                raise ValueError(
+                    "precomputed_knn[0] and precomputed_knn[1]"
+                    " must be numpy arrays of the same size."
+                )
+            if not isinstance(self.knn_search_index, NNDescent):
+                raise ValueError(
+                    "precomputed_knn[2] (knn_search_index)"
+                    " must be an NNDescent object."
+                )
+            if self.knn_dists.shape[1] < self.n_neighbors:
+                warn(
+                    "precomputed_knn has a lower number of neighbors than "
+                    "n_neighbors parameter. precomputed_knn will be ignored"
+                    " and the k-nn will be computed normally."
+                )
+                self.knn_indices = None
+                self.knn_dists = None
+                self.knn_search_index = None
+            elif self.knn_dists.shape[0] != self._raw_data.shape[0]:
+                warn(
+                    "precomputed_knn has a different number of samples than the"
+                    " data you are fitting. precomputed_knn will be ignored and"
+                    "the k-nn will be computed normally."
+                )
+                self.knn_indices = None
+                self.knn_dists = None
+                self.knn_search_index = None
+            elif (
+                self.knn_dists.shape[0] < 4096
+                and not self.force_approximation_algorithm
+            ):
+                warn(
+                    "precomputed_knn is meant for large datasets. Since your"
+                    " data is small, precomputed_knn will be ignored and the"
+                    " k-nn will be computed normally."
+                )
+            elif self.knn_dists.shape[1] > self.n_neighbors:
+                # if k for precomputed_knn larger than n_neighbors we simply prune it
+                self.knn_indices = self.knn_indices[:, : self.n_neighbors]
+                self.knn_dists = self.knn_dists[:, : self.n_neighbors]
 
     def _check_custom_metric(self, metric, kwds, data=None):
         # quickly check to determine whether user-defined
@@ -2221,6 +2282,10 @@ class UMAP(BaseEstimator):
 
         self._initial_alpha = self.learning_rate
 
+        self.knn_indices = self.precomputed_knn[0]
+        self.knn_dists = self.precomputed_knn[1]
+        self.knn_search_index = self.precomputed_knn[2]
+
         self._validate_parameters()
 
         if self.verbose:
@@ -2307,20 +2372,25 @@ class UMAP(BaseEstimator):
                 )
             if not np.all(X.diagonal() == 0):
                 raise ValueError("Non-zero distances from samples to themselves!")
-            self._knn_indices = np.zeros((X.shape[0], self.n_neighbors), dtype=np.int)
-            self._knn_dists = np.zeros(self._knn_indices.shape, dtype=np.float)
-            for row_id in range(X.shape[0]):
-                # Find KNNs row-by-row
-                row_data = X[row_id].data
-                row_indices = X[row_id].indices
-                if len(row_data) < self._n_neighbors:
-                    raise ValueError(
-                        "Some rows contain fewer than n_neighbors distances!"
-                    )
-                row_nn_data_indices = np.argsort(row_data)[: self._n_neighbors]
-                self._knn_indices[row_id] = row_indices[row_nn_data_indices]
-                self._knn_dists[row_id] = row_data[row_nn_data_indices]
-
+            if self.knn_dists is None:
+                self._knn_indices = np.zeros(
+                    (X.shape[0], self.n_neighbors), dtype=np.int
+                )
+                self._knn_dists = np.zeros(self._knn_indices.shape, dtype=np.float)
+                for row_id in range(X.shape[0]):
+                    # Find KNNs row-by-row
+                    row_data = X[row_id].data
+                    row_indices = X[row_id].indices
+                    if len(row_data) < self._n_neighbors:
+                        raise ValueError(
+                            "Some rows contain fewer than n_neighbors distances!"
+                        )
+                    row_nn_data_indices = np.argsort(row_data)[: self._n_neighbors]
+                    self._knn_indices[row_id] = row_indices[row_nn_data_indices]
+                    self._knn_dists[row_id] = row_data[row_nn_data_indices]
+            else:
+                self._knn_indices = self.knn_indices
+                self._knn_dists = self.knn_dists
             # Disconnect any vertices farther apart than _disconnection_distance
             disconnected_index = self._knn_dists >= self._disconnection_distance
             self._knn_indices[disconnected_index] = -1
@@ -2437,24 +2507,27 @@ class UMAP(BaseEstimator):
                 nn_metric = self.metric
             else:
                 nn_metric = self._input_distance_func
-
-            (
-                self._knn_indices,
-                self._knn_dists,
-                self._knn_search_index,
-            ) = nearest_neighbors(
-                X[index],
-                self._n_neighbors,
-                nn_metric,
-                self._metric_kwds,
-                self.angular_rp_forest,
-                random_state,
-                self.low_memory,
-                use_pynndescent=True,
-                n_jobs=self.n_jobs,
-                verbose=self.verbose,
-            )
-
+            if self.knn_dists is None:
+                (
+                    self._knn_indices,
+                    self._knn_dists,
+                    self._knn_search_index,
+                ) = nearest_neighbors(
+                    X[index],
+                    self._n_neighbors,
+                    nn_metric,
+                    self._metric_kwds,
+                    self.angular_rp_forest,
+                    random_state,
+                    self.low_memory,
+                    use_pynndescent=True,
+                    n_jobs=self.n_jobs,
+                    verbose=self.verbose,
+                )
+            else:
+                self._knn_indices = self.knn_indices
+                self._knn_dists = self.knn_dists
+                self._knn_search_index = self.knn_search_index
             # Disconnect any vertices farther apart than _disconnection_distance
             disconnected_index = self._knn_dists >= self._disconnection_distance
             self._knn_indices[disconnected_index] = -1
