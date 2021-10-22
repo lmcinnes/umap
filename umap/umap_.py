@@ -3311,6 +3311,7 @@ class UMAP(BaseEstimator):
             )
 
         else:
+            self._knn_search_index.prepare()
             self._knn_search_index.update(X)
             self._raw_data = self._knn_search_index._raw_data
             (
