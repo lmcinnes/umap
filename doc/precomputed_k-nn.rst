@@ -23,7 +23,7 @@ nearest neighbors step, saving us a lot of time.
 We note that we don’t use a random state in order to leverage UMAP’s
 parallelization and speed up the calculations.
 
-.. code:: ipython3
+.. code:: python3
 
     from sklearn.datasets import fetch_openml
     import numpy as np
@@ -39,7 +39,7 @@ parallelization and speed up the calculations.
     normal_embeddings = np.zeros((4, 4, 70000, 2))
     precomputed_knn_embeddings = np.zeros((4, 4, 70000, 2))
 
-.. code:: ipython3
+.. code:: python3
 
     %%time
     # UMAP run on the grid of parameters without precomputed_knn
@@ -57,7 +57,7 @@ parallelization and speed up the calculations.
     Wall time: 31min 57s
     
 
-.. code:: ipython3
+.. code:: python3
 
     %%time
     # UMAP run on list of n_neighbors without precomputed_knn
@@ -96,7 +96,7 @@ and then extracting the k-nn graph from that UMAP object.
 With this, we can easily visualize how the n_neighbors parameter affects
 our embedding.
 
-.. code:: ipython3
+.. code:: python3
 
     import matplotlib.pyplot as plt
     
@@ -197,7 +197,7 @@ guaranteed to return the same result. Let’s look at how this works with
 an example. To do this, we’ll create some data to work with; three
 random blobs in 60-dimensional space.
 
-.. code:: ipython3
+.. code:: python3
 
     y = np.random.rand(1700, 60)
     X = np.concatenate((y+20, y, y-20))
@@ -208,7 +208,7 @@ see how two different UMAP runs give the same result. To avoid confusion
 we’ll assume that the UMAP random seed is the same value as the knn
 random seed.
 
-.. code:: ipython3
+.. code:: python3
 
     import umap.plot
     random_seed = 10
@@ -250,7 +250,7 @@ As we can see, by fixing the *random_seed* and the *n_neighbors* for the
 knn, we have been able to obtain identical results from both UMAP runs.
 In contrast, if these differ, we can’t gaurantee the same result.
 
-.. code:: ipython3
+.. code:: python3
 
     random_seed2 = 15
     
@@ -331,7 +331,7 @@ precomputed_knn. To accomplish this, we have to create a new k-nn graph
 using the *nearest_neighbors()* function in the same way that
 *fit()* would.
 
-.. code:: ipython3
+.. code:: python3
 
     from sklearn.utils import check_random_state
     
@@ -366,7 +366,7 @@ directly.
 Graphing and comparing the embeddings, we see that we were able to
 obtain the same results.
 
-.. code:: ipython3
+.. code:: python3
 
     fig, ax = plt.subplots(1, 2, figsize=(13,7))
     umap.plot.points(normal_umap, labels=synthetic_labels, ax=ax[0], theme='green')
