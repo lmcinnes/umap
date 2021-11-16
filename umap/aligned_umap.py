@@ -295,6 +295,12 @@ class AlignedUMAP(BaseEstimator):
         assert type(X) in (list, tuple, np.ndarray)
         assert (len(X) - 1) == (len(self.dict_relations_))
 
+        if y is not None:
+            assert type(y) in (list, tuple, np.ndarray)
+            assert (len(y) - 1) == (len(self.dict_relations_))
+        else:
+            y = [None] * len(X)
+
         # We need n_components to be constant or this won't work
         if type(self.n_components) in (list, tuple, np.ndarray):
             raise ValueError("n_components must be a single integer, and cannot vary")
@@ -329,7 +335,7 @@ class AlignedUMAP(BaseEstimator):
                 verbose=self.verbose,
                 a=self.a,
                 b=self.b,
-            ).fit(X[n])
+            ).fit(X[n], y[n])
             for n in range(self.n_models_)
         ]
 
@@ -460,7 +466,7 @@ class AlignedUMAP(BaseEstimator):
             n_components=self.n_components,
             random_state=self.random_state,
             transform_seed=self.transform_seed,
-        ).fit(X)
+        ).fit(X, y)
 
         self.mappers_ += [new_mapper]
 
