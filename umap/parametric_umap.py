@@ -483,7 +483,7 @@ class ParametricUMAP(UMAP):
         return dict(
             (k, v)
             for (k, v) in self.__dict__.items()
-            if k != "loss" and should_pickle(k, v) and k != "optimizer"
+            if should_pickle(k, v) and k != "optimizer"
         )
 
     def save(self, save_location, verbose=True):
@@ -1048,6 +1048,9 @@ def should_pickle(key, val):
         AttributeError,
     ) as e:
         warn("Did not pickle {}: {}".format(key, e))
+        return False
+    except ValueError as e:
+        print(f"!!!!!!!!!!!!! failed at pickling {key}:{val} due to {e}")
         return False
     return True
 
