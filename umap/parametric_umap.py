@@ -1050,7 +1050,7 @@ def should_pickle(key, val):
         warn("Did not pickle {}: {}".format(key, e))
         return False
     except ValueError as e:
-        print(f"!!!!!!!!!!!!! failed at pickling {key}:{val} due to {e}")
+        warn(f"Failed at pickling {key}:{val} due to {e}")
         return False
     return True
 
