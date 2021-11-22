@@ -483,7 +483,7 @@ class ParametricUMAP(UMAP):
         return dict(
             (k, v)
             for (k, v) in self.__dict__.items()
-            if should_pickle(k, v) and k != "optimizer"
+            if k != "loss" and should_pickle(k, v) and k != "optimizer"
         )
 
     def save(self, save_location, verbose=True):

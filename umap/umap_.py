@@ -1912,7 +1912,7 @@ class UMAP(BaseEstimator):
             bar_f = "{desc}: {percentage:3.0f}%| {bar} {n_fmt}/{total_fmt} [{elapsed}]"
             self.tqdm_kwds["bar_format"] = bar_f
 
-        if self.knn_dists is not None:
+        if hasattr(self, "knn_dists") and self.knn_dists is not None:
             if self.unique:
                 raise ValueError(
                     "unique is not currently available for " "precomputed_knn."
