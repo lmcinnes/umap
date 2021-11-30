@@ -2072,7 +2072,7 @@ class UMAP(BaseEstimator):
         }
 
         if result.n_epochs is None:
-            n_epochs = -1
+            n_epochs = None
         else:
             n_epochs = np.max(result.n_epochs)
 
@@ -2142,7 +2142,7 @@ class UMAP(BaseEstimator):
         }
 
         if result.n_epochs is None:
-            n_epochs = -1
+            n_epochs = None
         else:
             n_epochs = np.max(result.n_epochs)
 
@@ -2214,7 +2214,7 @@ class UMAP(BaseEstimator):
         }
 
         if result.n_epochs is None:
-            n_epochs = -1
+            n_epochs = None
         else:
             n_epochs = np.max(result.n_epochs)
 
