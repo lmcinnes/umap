@@ -1,4 +1,4 @@
-Parametric Embedding
+Parametric (neural network) Embedding
 =============================
 
 .. role:: python(code)
@@ -26,7 +26,7 @@ In this implementation, we use Keras and Tensorflow as a backend to train that n
 Defining your own network
 ---------------------------
 
-By default, parametric UMAP uses 3-layer 100-neuron fully-connected neural network. To extend Parametric UMAP to use a more complex architecture, like a convolutional neural network, we simply need to define the network and pass it in as an argument to ParametricUMAP. This can be done easliy, using tf.keras.Sequential. Here's an example for MNIST:
+By default, Parametric UMAP uses 3-layer 100-neuron fully-connected neural network. To extend Parametric UMAP to use a more complex architecture, like a convolutional neural network, we simply need to define the network and pass it in as an argument to ParametricUMAP. This can be done easliy, using tf.keras.Sequential. Here's an example for MNIST:
 
 .. code:: python3
     
@@ -59,7 +59,7 @@ To load pass the data into ParametricUMAP, we first need to flatten it from 28x2
     test_images = test_images.reshape((test_images.shape[0], -1))/255.
 
 
-We can then the network into ParametricUMAP and train:
+We can then pass the network into ParametricUMAP and train:
 
 .. code:: python3 
 
@@ -204,16 +204,28 @@ Additional important parameters
 * **n_training_epochs:** The number of epochs over the UMAP graph to train for (irrespective of :python:`loss_report_frequency`). Training the network for multiple epochs will result in better embeddings, but take longer. This parameter is different than :python:`n_epochs` in the base UMAP class, which corresponds to the maximum number of times an edge is trained in a single ParametricUMAP epoch.
 * **optimizer:** The optimizer used to train the neural network. by default Adam (:python:`tf.keras.optimizers.Adam(1e-3)`) is used. You might be able to speed up or improve training by using a different optimizer.
 * **parametric_embedding:** If set to false, a non-parametric embedding is learned, using the same code as the parametric embedding, which can serve as a direct comparison between parametric and non-parametric embedding using the same optimizer. The parametric embeddings are performed over the entire dataset simultaneously. 
-
+* **global_correlation_loss_weight:** Whether to additionally train on correlation of global pairwise relationships (multidimensional scaling)
 
 Extending the model
 -------------------
 You may want to customize parametric UMAP beyond what we have implemented in this package. To make it as easy as possible to tinker around with Parametric UMAP, we made a few Jupyter notebooks that show you how to extend Parametric UMAP to your own use-cases. 
 
-* [Link coming soon] [Colab link]
+* https://colab.research.google.com/drive/1WkXVZ5pnMrm17m0YgmtoNjM_XHdnE5Vp?usp=sharing
 
 Citing our work
 ---------------
 If you use Parametric UMAP in your work, please cite our paper:
 
-[link coming soon]
+.. code:: bibtex
+
+    @article{sainburg2021parametric,
+     title={Parametric UMAP Embeddings for Representation and Semisupervised Learning},
+     author={Sainburg, Tim and McInnes, Leland and Gentner, Timothy Q},
+     journal={Neural Computation},
+     volume={33},
+     number={11},
+     pages={2881--2907},
+     year={2021},
+     publisher={MIT Press One Rogers Street, Cambridge, MA 02142-1209, USA journals-info~…}
+   }
+```
