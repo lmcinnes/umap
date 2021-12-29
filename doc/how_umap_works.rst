@@ -209,7 +209,7 @@ The dilemma is in part due to the theorem (called the `Nerve
 theorem <https://en.wikipedia.org/wiki/Nerve_of_a_covering>`__) that
 provides our justification that this process captures the topology.
 Specifically, the theorem says that the simplicial complex will be
-(homtopically) equivalent to the union of the cover. In our case,
+(homotopically) equivalent to the union of the cover. In our case,
 working with finite data, the cover, for certain radii, doesn't cover
 the whole of the manifold that we imagine underlies the data -- it is
 that lack of coverage that results in the disconnected components.
