@@ -736,6 +736,7 @@ def umap_loss(
         # multiply loss by weights for nonparametric
         weights_tiled = np.tile(edge_weights, negative_sample_rate + 1)
 
+    @tf.keras.utils.register_keras_serializable(name="loss")
     @tf.function
     def loss(placeholder_y, embed_to_from):
         # split out to/from
