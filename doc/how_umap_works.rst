@@ -90,7 +90,7 @@ open cover of a topological space. That's a lot of verbiage if you
 haven't done much topology, but we can break it down fairly easily for
 our use case. An open cover is essentially just a family of sets whose
 union is the whole space, and a Čech complex is a combinatorial way to
-covert that into a simplicial complex. It works fairly simply: let each
+convert that into a simplicial complex. It works fairly simply: let each
 set in the cover be a 0-simplex; create a 1-simplex between two such
 sets if they have a non-empty intersection; create a 2-simplex between
 three such sets if the triple intersection of all three is non-empty;
