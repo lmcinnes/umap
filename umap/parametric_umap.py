@@ -483,7 +483,7 @@ class ParametricUMAP(UMAP):
         return dict(
             (k, v)
             for (k, v) in self.__dict__.items()
-            if should_pickle(k, v) and k != "optimizer"
+            if should_pickle(k, v) and k not in ("optimizer", "encoder", "decoder", "parametric_model")
         )
 
     def save(self, save_location, verbose=True):
@@ -736,7 +736,6 @@ def umap_loss(
         # multiply loss by weights for nonparametric
         weights_tiled = np.tile(edge_weights, negative_sample_rate + 1)
 
-    @tf.keras.utils.register_keras_serializable(name="loss")
     @tf.function
     def loss(placeholder_y, embed_to_from):
         # split out to/from
