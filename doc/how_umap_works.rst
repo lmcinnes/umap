@@ -39,7 +39,7 @@ reduction in particular.
 
 The first step is to provide some simple combinatorial building blocks
 called `*simplices* <https://en.wikipedia.org/wiki/Simplex>`__.
-Geometrically a simplex is a very simple way to build an
+Geometrically a simplex is a very simple way to build a
 :math:`k`-dimensional object. A :math:`k` dimensional simplex is called
 a :math:`k`-simplex, and it is formed by taking the convex hull of
 :math:`k+1` independent points. Thus a 0-simplex is a point, a 1-simplex
