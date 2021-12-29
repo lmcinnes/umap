@@ -35,6 +35,7 @@ def run_test_metric(metric, test_data, dist_matrix, with_grad=False):
     assert_array_almost_equal(
         test_matrix,
         dist_matrix,
+        decimal=5,
         err_msg="Distances don't match " "for metric {}".format(metric),
     )
 
