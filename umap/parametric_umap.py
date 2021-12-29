@@ -509,16 +509,16 @@ class ParametricUMAP(UMAP):
             if verbose:
                 print("Keras full model saved to {}".format(parametric_model_output))
 
-        # save model.pkl (ignoring unpickleable warnings)
-        with catch_warnings():
-            filterwarnings("ignore")
+        # # save model.pkl (ignoring unpickleable warnings)
+        # with catch_warnings():
+        #     filterwarnings("ignore")
             # work around optimizers not pickling anymore (since tf 2.4)
-            self._optimizer_dict = self.optimizer.get_config()
-            model_output = os.path.join(save_location, "model.pkl")
-            with open(model_output, "wb") as output:
-                pickle.dump(self, output, pickle.HIGHEST_PROTOCOL)
-            if verbose:
-                print("Pickle of ParametricUMAP model saved to {}".format(model_output))
+        self._optimizer_dict = self.optimizer.get_config()
+        model_output = os.path.join(save_location, "model.pkl")
+        with open(model_output, "wb") as output:
+            pickle.dump(self, output, pickle.HIGHEST_PROTOCOL)
+        if verbose:
+            print("Pickle of ParametricUMAP model saved to {}".format(model_output))
 
 
 def get_graph_elements(graph_, n_epochs):
@@ -1043,6 +1043,7 @@ def should_pickle(key, val):
         tf.errors.InvalidArgumentError,
         TypeError,
         tf.errors.InternalError,
+        tf.errors.NotFoundError,
         OverflowError,
         TypingError,
         AttributeError,

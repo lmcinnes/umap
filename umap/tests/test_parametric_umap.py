@@ -140,3 +140,6 @@ def test_save_load(moon_dataset):
     embedder.save(model_path)
     loaded_model = load_ParametricUMAP(model_path)
     assert loaded_model is not None
+
+    loaded_embedding = loaded_model.transform(moon_dataset)
+    assert np.allclose(embedding, loaded_embedding)
