@@ -3,6 +3,7 @@ import tempfile
 import pytest
 from sklearn.datasets import make_moons
 from sklearn.model_selection import train_test_split
+from numpy.testing import assert_array_almost_equal
 
 try:
     import tensorflow as tf
@@ -142,4 +143,9 @@ def test_save_load(moon_dataset):
     assert loaded_model is not None
 
     loaded_embedding = loaded_model.transform(moon_dataset)
-    assert np.allclose(embedding, loaded_embedding)
+    assert_array_almost_equal(
+        embedding,
+        loaded_embedding,
+        decimal=5,
+        err_msg="Loaded model transform fails to match original embedding",
+    )
