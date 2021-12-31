@@ -468,12 +468,13 @@ Citing our work
 If you use mutual-NN + UMAP in your work, please cite our paper:
 
 .. code:: bibtex
+
   @article{Dalmia2021UMAPConnectivity,
-    author= {Ayush Dalmia and Suzanna Sia},
+    author={Ayush Dalmia and Suzanna Sia},
     title={Clustering with {UMAP:} Why and How Connectivity Matters},
     journal={CoRR},
     volume={abs/2108.05525},
-    year= {2021},
+    year={2021},
     url={https://arxiv.org/abs/2108.05525},
     eprinttype={arXiv},
     eprint={2108.05525},
