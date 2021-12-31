@@ -40,11 +40,9 @@ been previously used to augment and increase the connectivity of the mutual k-NN
 manifold is locally connected, we add an undirected edge between each isolated vertex and
 its original nearest neighbor (de Sousa, Rezende, and Batista 2013).Note that the resulting
 graph may still contain disconnected components.
-
 2. ``MST-min``: To achieve a connected graph, add the minimum number of edges from a maximum
 spanning tree to the mutual-kNN graph that has been weighted with similarity-based
 metrics(Ozaki et al. 2011). We adapt this by calculating the minimum spanning tree for distances.
-
 3. ``MST-all``: Adding all the edges of the MST.
 
 .. image:: images/mutual_nn_umap_connectivity.png
