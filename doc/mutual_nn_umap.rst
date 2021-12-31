@@ -57,7 +57,7 @@ a new distance metric as it directly aligns with UMAP’s definition of an exten
 
 .. image:: images/mutual_nn_umap_lc.png
    :width: 600
-   :height: 600
+   :height: 400
 
 Visualizing the Results
 ----------------------------------------------
