@@ -57,6 +57,29 @@ For all code snippets to reproduce the results and visualizations, please refer 
 and this `Github repo <https://github.com/adalmia96/umap-mnn>`__. Will be adding this soon as a
 mode to the original implementation.
 
+In general we observe that for most of the mutual k-NN graph
+based vectors (Fig. 5), there is a better separation between similar
+classes than the original UMAP vectors regardless of Connectivity
+(NN, MST variants). Connecting isolated vertices in the mutual kNN graph to their original nearest neighbor produced the desired
+separation between similar classes such as with the 4, 7, 9 in MNIST
+and the footwear classes for FMNIST. This follows our intuition
+given that mutual k-NN graphs have previously been shown as a
+useful method for removing edges between points that are only
+loosely similar. This directly reduces many of the undesirable consequences of using a k-NN representation such as the the distance
+concentration and hub effects
+
+For both MNIST and FMNIST, we see that NN which naively
+connects isolated vertices to their nearest neighbor had multiple
+small clusters of points scattered throughout the vector space. Given
+that KMeans is sensitive to noisy outliers, these randomly projected
+points negatively affect clustering performance (Table 2).
+
+We would expect that having higher connectivity that reduces
+random scattering of points would be better for clustering. However,
+too much connectivity with MST-all can also hurt performance. We
+observe that using all the edges from the MST (MST-all) together
+with Path Neighbors can hurt performance on FMNIST (this is
+elaborated on in the next section §5.3).
 
 .. image:: images/mutual_nn_umap_MNIST.png
 
@@ -446,18 +469,17 @@ Citing our work
 If you use mutual-NN + UMAP in your work, please cite our paper:
 
 .. code:: bibtex
-
-@article{DBLP:journals/corr/abs-2108-05525,
-  author    = {Ayush Dalmia and Suzanna Sia},
-  title     = {Clustering with {UMAP:} Why and How Connectivity Matters},
-  journal   = {CoRR},
-  volume    = {abs/2108.05525},
-  year      = {2021},
-  url       = {https://arxiv.org/abs/2108.05525},
-  eprinttype = {arXiv},
-  eprint    = {2108.05525},
-  timestamp = {Wed, 18 Aug 2021 19:45:42 +0200},
-  biburl    = {https://dblp.org/rec/journals/corr/abs-2108-05525.bib},
-  bibsource = {dblp computer science bibliography, https://dblp.org}
-}
+  @article{Dalmia2021UMAPConnectivity
+    author= {Ayush Dalmia and Suzanna Sia},
+    title={Clustering with {UMAP:} Why and How Connectivity Matters},
+    journal={CoRR},
+    volume={abs/2108.05525},
+    year= {2021},
+    url={https://arxiv.org/abs/2108.05525},
+    eprinttype={arXiv},
+    eprint={2108.05525},
+    timestamp={Wed, 18 Aug 2021 19:45:42 +0200},
+    biburl={https://dblp.org/rec/journals/corr/abs-2108-05525.bib},
+    bibsource={dblp computer science bibliography, https://dblp.org}
+    }
 ```
