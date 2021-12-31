@@ -56,9 +56,9 @@ with respect to the connected mutual k-NN graph. This shortest path distance can
 a new distance metric as it directly aligns with UMAP’s definition of an extended pseudo-metric space.
 
 .. image:: images/mutual_nn_umap_lc.png
-   :align: center
    :width: 600
    :height: 400
+   :align: center
 
 Visualizing the Results
 ----------------------------------------------
