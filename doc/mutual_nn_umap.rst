@@ -57,6 +57,13 @@ For all code snippets to reproduce the results and visualizations, please refer 
 and this `Github repo <https://github.com/adalmia96/umap-mnn>`__. Will be adding this soon as a
 mode to the original implementation.
 
+
+.. image:: images/mutual_nn_umap_MNIST.png
+
+.. image:: images/mutual_nn_umap_FMNIST.png
+
+.. image:: images/mutual_nn_umap_20ngc.png
+
 the computes estimates of the local density and uses those estimates as
 a regularizer in the optimization of the low dimensional representation.
 The details are well explained in `the
