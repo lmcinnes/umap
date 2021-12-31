@@ -54,7 +54,7 @@ They also different ways to obtain the new local neighborhood for each point ``x
 Visualizing the Results
 ----------------------------------------------
 For all code snippets to reproduce the results and visualizations, please refer to `the paper <https://arxiv.org/abs/2108.05525>`__
-and this 'Github repo <https://github.com/adalmia96/umap-mnn>`__. Will be adding this soon as a
+and this `Github repo <https://github.com/adalmia96/umap-mnn>`__. Will be adding this soon as a
 mode to the original implementation.
 
 the computes estimates of the local density and uses those estimates as
