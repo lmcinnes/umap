@@ -36,24 +36,16 @@ This violates one of UMAP primary assumptions that "The manifold is locally conn
 combat the issue of isolated components, the authors consider different methods that have
 been previously used to augment and increase the connectivity of the mutual k-NN graph:
 
-#. ``NN``: To minimally connect isolated vertices and satisfy the assumption that the underlying
-manifold is locally connected, we add an undirected edge between each isolated vertex and
-its original nearest neighbor (de Sousa, Rezende, and Batista 2013).Note that the resulting
-graph may still contain disconnected components.
-#. ``MST-min``: To achieve a connected graph, add the minimum number of edges from a maximum
-spanning tree to the mutual-kNN graph that has been weighted with similarity-based
-metrics(Ozaki et al. 2011). We adapt this by calculating the minimum spanning tree for distances.
-#. ``MST-all``: Adding all the edges of the MST.
+1. ``NN``: To minimally connect isolated vertices and satisfy the assumption that the underlying manifold is locally connected, we add an undirected edge between each isolated vertex and its original nearest neighbor (de Sousa, Rezende, and Batista 2013).Note that the resulting graph may still contain disconnected components.
+2. ``MST-min``: To achieve a connected graph, add the minimum number of edges from a maximum spanning tree to the mutual-kNN graph that has been weighted with similarity-based metrics(Ozaki et al. 2011). We adapt this by calculating the minimum spanning tree for distances.
+3. ``MST-all``: Adding all the edges of the MST.
 
 .. image:: images/mutual_nn_umap_connectivity.png
 
 They also different ways to obtain the new local neighborhood for each point ``x_i``:
 
-#. ``Adjacent Neighbors``: Only consider neighbors that are directly connected(adjacent) to ``x_i``
-in the connected mutual k-NN graph.
-#. ``Path Neighbors``: Using shortest path distance to find the new k closest points to ``x_i``
-with respect to the connected mutual k-NN graph. This shortest path distance can be considered
-a new distance metric as it directly aligns with UMAP’s definition of an extended pseudo-metric space.
+#. ``Adjacent Neighbors``: Only consider neighbors that are directly connected(adjacent) to ``x_i`` in the connected mutual k-NN graph.
+#. ``Path Neighbors``: Using shortest path distance to find the new k closest points to ``x_i`` with respect to the connected mutual k-NN graph. This shortest path distance can be considered a new distance metric as it directly aligns with UMAP’s definition of an extended pseudo-metric space.
 
 .. image:: images/mutual_nn_umap_lc.png
    :width: 600
