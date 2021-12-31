@@ -23,7 +23,7 @@ to reduce the undesired distance concentration and hub effects.
 
 A mutual k-NN graph is defined as a graph that only has an undirected edge
 between two vertices ``x_i`` and ``x_j`` if ``x_i`` is in k-nearest neighbors
-of ``x_j`` and ``x_j``is in the k-nearest neighbors of ``x_i``. A mutual k-NN
+of ``x_j`` and ``x_j`` is in the k-nearest neighbors of ``x_i``. A mutual k-NN
 graph can hence be interpreted as a subgraph/subset of the original
 k-NN graph for a specific dataset. Mutual k-NN graphs have been shown to contain many
 desirable properties  when combating the “curse of dimensionality” as discussed in
@@ -40,8 +40,10 @@ been previously used to augment and increase the connectivity of the mutual k-NN
 manifold is locally connected, we add an undirected edge between each isolated vertex and
 its original nearest neighbor (de Sousa, Rezende, and Batista 2013).Note that the resulting
 graph may still contain disconnected components.
+
 2. ``MST-min``: To achieve a connected graph, add the minimum number of edges from a maximum
 spanning tree to the mutual-kNN graph that has been weighted with similarity-based
+
 metrics(Ozaki et al. 2011).We adapt this by calculating the minimum spanning tree for distances
 3. ``MST-all``: Adding all the edges of the MST.
 
@@ -51,6 +53,7 @@ They also different ways to obtain the new local neighborhood for each point ``x
 
 1. ``Adjacent Neighbors``: Only consider neighbors that are directly connected(adjacent) to ``x_i``
 in the connected mutual k-NN graph.
+
 2. ``Path Neighbors``: Using shortest path distance to find the new k closest points to ``x_i``
 with respect to the connected mutual k-NN graph. This shortest path distance can be considered
 a new distance metric as it directly aligns with UMAP’s definition of an extended pseudo-metric space.
