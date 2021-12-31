@@ -438,3 +438,26 @@ sets, and so this method may be helpful for examining images
 of galaxies. Try out this method on the full 200 Mb dataset
 as well as the newer 2.54 Gb
 `Galaxy 10 DECals dataset <https://astronn.readthedocs.io/en/latest/galaxy10.html>`__
+
+.. image:: images/mutual_nn_umap_FMNIST.png
+
+Citing our work
+---------------
+If you use mutual-NN + UMAP in your work, please cite our paper:
+
+.. code:: bibtex
+
+@article{DBLP:journals/corr/abs-2108-05525,
+  author    = {Ayush Dalmia and Suzanna Sia},
+  title     = {Clustering with {UMAP:} Why and How Connectivity Matters},
+  journal   = {CoRR},
+  volume    = {abs/2108.05525},
+  year      = {2021},
+  url       = {https://arxiv.org/abs/2108.05525},
+  eprinttype = {arXiv},
+  eprint    = {2108.05525},
+  timestamp = {Wed, 18 Aug 2021 19:45:42 +0200},
+  biburl    = {https://dblp.org/rec/journals/corr/abs-2108-05525.bib},
+  bibsource = {dblp computer science bibliography, https://dblp.org}
+}
+```
