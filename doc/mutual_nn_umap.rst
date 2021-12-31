@@ -49,7 +49,6 @@ They also different ways to obtain the new local neighborhood for each point ``x
 
 .. image:: images/mutual_nn_umap_lc.png
    :width: 600
-   :margin:0px auto;
    :align: center
 
 Visualizing the Results
