@@ -44,12 +44,12 @@ been previously used to augment and increase the connectivity of the mutual k-NN
 
 They also different ways to obtain the new local neighborhood for each point ``x_i``:
 
-#. ``Adjacent Neighbors``: Only consider neighbors that are directly connected(adjacent) to ``x_i`` in the connected mutual k-NN graph.
-#. ``Path Neighbors``: Using shortest path distance to find the new k closest points to ``x_i`` with respect to the connected mutual k-NN graph. This shortest path distance can be considered a new distance metric as it directly aligns with UMAP’s definition of an extended pseudo-metric space.
+1. ``Adjacent Neighbors``: Only consider neighbors that are directly connected(adjacent) to ``x_i`` in the connected mutual k-NN graph.
+2. ``Path Neighbors``: Using shortest path distance to find the new k closest points to ``x_i`` with respect to the connected mutual k-NN graph. This shortest path distance can be considered a new distance metric as it directly aligns with UMAP’s definition of an extended pseudo-metric space.
 
 .. image:: images/mutual_nn_umap_lc.png
-   :width: 600
    :align: center
+   
 
 Visualizing the Results
 ----------------------------------------------
@@ -57,7 +57,8 @@ For all code snippets to reproduce the results and visualizations, please refer 
 and this `Github repo <https://github.com/adalmia96/umap-mnn>`__. Will be adding this soon as a
 mode to the original implementation.
 
-To visual the differences
+To visual the differences Before we try out DensMAP let’s run standard UMAP so we have a baseline
+to compare to. We’ll start with MNIST digits.
 
 
 In general we observe that for most of the mutual k-NN graph
@@ -86,6 +87,10 @@ elaborated on in the next section §5.3).
 
 .. image:: images/mutual_nn_umap_MNIST.png
 
+
+Let’s now look at the Fashion-MNIST dataset; as before we’ll start by
+reminding ourselves what the default UMAP results look like:
+
 .. image:: images/mutual_nn_umap_FMNIST.png
 
 .. image:: images/mutual_nn_umap_20ngc.png
@@ -98,13 +103,8 @@ sections) MNIST and Fashion-MNIST datasets. MNIST is a collection of
 70,000 gray-scale images of hand-written digits. Fashion-MNIST is a
 collection of 70,000 gray-scale images of fashion items.
 
-.. code:: python3
 
-    mnist = sklearn.datasets.fetch_openml("mnist_784")
-    fmnist = sklearn.datasets.fetch_openml("Fashion-MNIST")
 
-Before we try out DensMAP let’s run standard UMAP so we have a baseline
-to compare to. We’ll start with MNIST digits.
 
 
 Now let’s try running DensMAP instead. In practice this is as easy as
@@ -113,14 +113,6 @@ will cause UMAP use use DensMAP regularization with the default DensMAP
 parameters.
 
 
-
-Now let’s see what sort of results we get:
-
-.. code:: python3
-
-    umap.plot.points(dens_mapper, labels=mnist.target, width=500, height=500)
-
-.. image:: images/densmap_demo_10_1.png
 
 
 This is a significantly different result – although notably the same
@@ -146,16 +138,6 @@ And indeed, this looks very much like the original plot, but the bags
 red) are a little denser. This is very much the default UMAP with just a
 tweak to better reflect some notion of local density.
 
-Supervised DensMAP on the Galaxy10SDSS dataset
-----------------------------------------------
-
-The `Galaxy10SDSS dataset <https://astronn.readthedocs.io/en/latest/galaxy10sdss.html>`__
-is a crowd sourced human labelled dataset of galaxy images,
-which have been separated in to ten classes. DensMAP can
-learn an embedding that partially separates the data. To
-keep runtime small, DensMAP is applied to a subset of the
-data.
-
 
 
 The figure shows that the selected subset of the data set is
@@ -180,7 +162,7 @@ learned embedding.
 
 Citing our work
 ---------------
-If you use mutual-NN + UMAP in your work, please cite our paper:
+If you use our implementation in your work, please cite our paper:
 
 .. code:: bibtex
 
