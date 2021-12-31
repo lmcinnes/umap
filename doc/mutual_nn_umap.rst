@@ -462,14 +462,13 @@ of galaxies. Try out this method on the full 200 Mb dataset
 as well as the newer 2.54 Gb
 `Galaxy 10 DECals dataset <https://astronn.readthedocs.io/en/latest/galaxy10.html>`__
 
-.. image:: images/mutual_nn_umap_FMNIST.png
 
 Citing our work
 ---------------
 If you use mutual-NN + UMAP in your work, please cite our paper:
 
 .. code:: bibtex
-  @article{Dalmia2021UMAPConnectivity
+  @article{Dalmia2021UMAPConnectivity,
     author= {Ayush Dalmia and Suzanna Sia},
     title={Clustering with {UMAP:} Why and How Connectivity Matters},
     journal={CoRR},
