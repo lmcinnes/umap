@@ -43,8 +43,8 @@ graph may still contain disconnected components.
 
 2. ``MST-min``: To achieve a connected graph, add the minimum number of edges from a maximum
 spanning tree to the mutual-kNN graph that has been weighted with similarity-based
-
 metrics(Ozaki et al. 2011).We adapt this by calculating the minimum spanning tree for distances
+
 3. ``MST-all``: Adding all the edges of the MST.
 
 .. image:: images/mutual_nn_umap_connectivity.png
@@ -60,7 +60,6 @@ a new distance metric as it directly aligns with UMAP’s definition of an exten
 
 .. image:: images/mutual_nn_umap_lc.png
    :width: 600
-   :height: 400
    :align: center
 
 Visualizing the Results
