@@ -49,7 +49,6 @@ They also different ways to obtain the new local neighborhood for each point ``x
 
 .. image:: images/mutual_nn_umap_lc.png
   :width: 600
-  :alt: UMAP logo
   :align: center
 
 
@@ -62,9 +61,11 @@ and this `Github repo <https://github.com/adalmia96/umap-mnn>`__. Will be adding
 mode to the original implementation.
 
 
-We’ll start with MNIST digits (a collection of 70,000 gray-scale images of hand-written digits):
+We’ll start with MNIST digits, a collection of 70,000 gray-scale images of hand-written digits:
 
 .. image:: images/mutual_nn_umap_MNIST.png
+:width: 800
+:align: center
 
 In general we observe that for most of the mutual k-NN graph based vectors, there
 is a better separation between similar classes than the original UMAP vectors
@@ -73,40 +74,40 @@ the mutual k-NN graph to their original nearest neighbor produced the desired
 separation between similar classes such as with the 4, 7, 9 in MNIST. This follows
 our intuition given that mutual k-NN graphs have previously been shown as a useful
 method for removing edges between points that are only loosely similar.
-This directly reduces many of the undesirable consequences of using a k-NN 
+This directly reduces many of the undesirable consequences of using a k-NN
 representation such as the the distance concentration and hub effects.
 
-We see a similar results for the Fashion-MNIST dataset(a collection of 70,000
-gray-scale images of fashion items): as before:
-
+We see a similar results for the Fashion-MNIST(FMNIST) dataset, a collection of 70,000
+gray-scale images of fashion items:
 .. image:: images/mutual_nn_umap_FMNIST.png
+:width: 800
+:align: center
 
+For the FMNIST dataset, the vectors using the aforementioned methods preserve
+the global structure between clothing classes (T-shirt/top, Coat, Trouser, and etc.)
+from footwear classes (Sandal, Sneaker, Ankle-boot) while also depicting a clearer
+separation between the footwear classes. This is contrasted with original
+UMAP which has poorer separation between similar classes like the footwear classes.
 
-For MNIST and FMNIST, we see that NN which naively
-connects isolated vertices to their nearest neighbor had multiple
-small clusters of points scattered throughout the vector space.
+For both MNIST and FMNIST, we see that NN which naively connects isolated vertices
+to their nearest neighbor had multiple small clusters of points scattered
+throughout the vector space. This makes sense given using NN for connectivity can 
+still cause the resulting manifold to be broken into many small components. In cases
+like these,
 
 We would expect that having higher connectivity that reduces
 random scattering of points would be better for clustering. However,
-too much connectivity with MST-all can also hurt performance. We
+too much connectivity with MST-all can also hurt. We
 observe that using all the edges from the MST (MST-all) together
 with Path Neighbors can hurt performance on FMNIST (this is
 elaborated on in the next section §5.3).
 
 .. image:: images/mutual_nn_umap_20ngc.png
-
+:width: 800
+:align: center
 
 .. image:: images/mutual_nn_umap_results.png
 
-
-
-
-
-
-Now let’s try running DensMAP instead. In practice this is as easy as
-adding the parameter ``densmap=True`` to the UMAP constructor – this
-will cause UMAP use use DensMAP regularization with the default DensMAP
-parameters.
 
 
 
