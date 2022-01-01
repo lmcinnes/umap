@@ -132,7 +132,7 @@ of the data.
 To evaluate these methods quantitatively, the authors compare the clustering performance
 of the resulting low dimensional vectors generated. Below shows the Normalised Mutual
 Information NMI results after performing KMeans(for more information of the results please refer to `the full
-paper<https://arxiv.org/abs/2108.05525>`__).
+paper <https://arxiv.org/abs/2108.05525>`__).
 
 .. image:: images/mutual_nn_umap_results.png
 
