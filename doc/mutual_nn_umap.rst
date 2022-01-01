@@ -56,18 +56,17 @@ Visualizing the Results
 ----------------------------------------------
 To see the differences between using a mutual k-NN graph vs the original k-NN graph as
 the starting topology for UMAP, let's visualize the 2D projections generated for MNIST, FMNIST, and 20
-NG Count Vectors using each of the discussed methods. For all code snippets to reproduce the results and visualizations, please refer to `the paper <https://arxiv.org/abs/2108.05525>`__
-and this `Github repo <https://github.com/adalmia96/umap-mnn>`__. Will be adding this soon as a
+NG Count Vectors using each of the discussed methods. For all code snippets to reproduce the results and visualizations, please refer
+to this `Github repo <https://github.com/adalmia96/umap-mnn>`__. Will be adding this soon as a
 mode to the original implementation.
-
 
 We’ll start with MNIST digits, a collection of 70,000 gray-scale images of hand-written digits:
 
 .. image:: images/mutual_nn_umap_MNIST.png
-  :width: 800
+  :width: 850
   :align: center
 
-In general we observe that for most of the mutual k-NN graph based vectors, there
+In general, we observe that for most of the mutual k-NN graph based vectors, there
 is a better separation between similar classes than the original UMAP vectors
 regardless of connectivity (NN, MST variants). Connecting isolated vertices in
 the mutual k-NN graph to their original nearest neighbor produced the desired
@@ -81,7 +80,7 @@ We see a similar results for the Fashion-MNIST(FMNIST) dataset, a collection of 
 gray-scale images of fashion items:
 
 .. image:: images/mutual_nn_umap_FMNIST.png
-  :width: 800
+  :width: 850
   :align: center
 
 For the FMNIST dataset, the vectors using the aforementioned methods preserve
@@ -93,74 +92,59 @@ UMAP which has poorer separation between similar classes like the footwear class
 For both MNIST and FMNIST, we see that NN which naively connects isolated vertices
 to their nearest neighbor had multiple small clusters of points scattered
 throughout the vector space. This makes sense given using NN for connectivity can
-still cause the resulting manifold to be broken into many small components. In cases
-like these,
+still cause the resulting manifold to be broken into many small components.
 
-We would expect that having higher connectivity that reduces
-random scattering of points would be better for clustering. However,
-too much connectivity with MST-all can also hurt. We
-observe that using all the edges from the MST (MST-all) together
-with Path Neighbors can hurt performance on FMNIST (this is
-elaborated on in the next section §5.3).
+It would be fair to assume that augmenting the mutual k-NN graph with a "higher connectivity"
+would always be better as it reduces random scattering of points. However,
+too much connectivity such as with MST-all can also hurt. We observe that using
+all the edges from the MST (MST-all) together with Path Neighbors significantly
+reduced the separation between the footwear classes.
+
+This is further discussed in the paper, but this gives an insight on how the
+connectivity of the original graphical representation can adversely affect the generated embeddings.
+
+Finally, we depict the embeddings generated using the 20 newsgroup dataset, a collection of
+18846 documents, transformed using sklearns CountVectorizer:
 
 .. image:: images/mutual_nn_umap_20ngc.png
-  :width: 800
+  :width: 850
   :align: center
+
+We can see there is better distinction between similar subjects such as the recreation
+(rec) topics.
+
+On thing to note is that visually, the vector generated using the Adjacent Neighbors
+and MST-min result in disperse dense clusters of points e.g, the footwear classes in
+FMNIST and the recreation topics in 20 NG. However for Path Neighbors, the groups of
+points belonging to the same class are less dispersed. This can be attributed to
+fact that Adjacent Neighbors is not guaranteed to have k connected neighbors for each local
+neighborhood. Points with smaller neighborhoods will be close to primarily few adjacent
+neighbors and repelled further away from the other points. This creates small groups
+of points that belong to the same class being spread across the vector space. On
+the other hand, for original UMAP and Path Neighbor vectors, the # of neighbors
+is equal to k, and local groups of points are more likely to be connected to other
+groups within the same class. This increase in connectivity explains why visually
+Path Neighbors methods generate vectors which are less dispersed (within class)
+than the Adjacent Neighbors method, while still preserving the underlying structure
+of the data.
+
+
+To evaluate these methods quantitatively, the authors compare the clustering performance
+of the resulting low dimensional vectors generated. Below shows the Normalised Mutual
+Information NMI results after performing KMeans(for more information of the results please refer to `the full
+paper<https://arxiv.org/abs/2108.05525>`__).
 
 .. image:: images/mutual_nn_umap_results.png
 
-
-
-
-
-This is a significantly different result – although notably the same
-groupings of digits and overall structure have resulted. The most
-striking aspects are that the ones cluster has be compressed into a very
-narrow and dense stripe, while other digit clusters, most notably the
-zeros and the twos have expanded out to fill more space in the plot.
-This is due to the fact that in the high dimensional space the ones are
-indeed more densely packed together, with largely only variation along
-one dimension (the angle with which the stroke of the one is drawn). In
-contrast a digit like the zero has a lot more variation (rounder,
-narrower, taller, shorter, sloping one way or another); this results in
-less local density in high dimensional space, and this lack of local
-density has been preserved by DensMAP.
-
-Let’s now look at the Fashion-MNIST dataset; as before we’ll start by
-reminding ourselves what the default UMAP results look like:
-
-
-
-And indeed, this looks very much like the original plot, but the bags
-(label 8 in blue) are slightly more diffused, and the pants (label 1 in
-red) are a little denser. This is very much the default UMAP with just a
-tweak to better reflect some notion of local density.
-
-
-
-The figure shows that the selected subset of the data set is
-unbalanced, but the entire dataset is also unbalanced, so
-this experiment will still use this subset. The next step is
-to examine the output of the standard DensMAP algorithm.
-
-
-
-The standard DensMAP algorithm does not separate the galaxies
-according to their type. Supervised DensMAP can do better.
-
-
-
-Supervised DensMAP does indeed do better. There is a litle overlap
-between some of the classes, but the original dataset
-also has some ambiguities in the classification.  The best
-check of this method is to project the testing data onto the
-learned embedding.
-
+These quantitative experiments show that MST variants combined with Path
+Neighbors can help produce better clustering results and how the initialization
+of a weighted connected graph is critical to the success of topology based
+dimensionality reduction methods like UMAP.
 
 
 Citing our work
 ---------------
-If you use our implementation in your work, please cite our paper:
+If you use this implementation or reference the results in your work, please cite the paper:
 
 .. code:: bibtex
 
