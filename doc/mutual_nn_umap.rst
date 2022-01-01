@@ -79,6 +79,7 @@ representation such as the the distance concentration and hub effects.
 
 We see a similar results for the Fashion-MNIST(FMNIST) dataset, a collection of 70,000
 gray-scale images of fashion items:
+
 .. image:: images/mutual_nn_umap_FMNIST.png
   :width: 800
   :align: center
