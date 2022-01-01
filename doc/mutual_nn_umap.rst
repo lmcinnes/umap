@@ -37,7 +37,7 @@ combat the issue of isolated components, the authors consider different methods 
 been previously used to augment and increase the connectivity of the mutual k-NN graph:
 
 1. ``NN``: To minimally connect isolated vertices and satisfy the assumption that the underlying manifold is locally connected, we add an undirected edge between each isolated vertex and its original nearest neighbor (de Sousa, Rezende, and Batista 2013).Note that the resulting graph may still contain disconnected components.
-2. ``MST-min``: To achieve a connected graph, add the minimum number of edges from a maximum spanning tree to the mutual-kNN graph that has been weighted with similarity-based metrics(Ozaki et al. 2011). We adapt this by calculating the minimum spanning tree for distances.
+2. ``MST-min``: To achieve a connected graph, add the minimum number of edges from a maximum spanning tree to the mutual k-NN graph that has been weighted with similarity-based metrics(Ozaki et al. 2011). We adapt this by calculating the minimum spanning tree for distances.
 3. ``MST-all``: Adding all the edges of the MST.
 
 .. image:: images/mutual_nn_umap_connectivity.png
@@ -48,35 +48,43 @@ They also different ways to obtain the new local neighborhood for each point ``x
 2. ``Path Neighbors``: Using shortest path distance to find the new k closest points to ``x_i`` with respect to the connected mutual k-NN graph. This shortest path distance can be considered a new distance metric as it directly aligns with UMAP’s definition of an extended pseudo-metric space.
 
 .. image:: images/mutual_nn_umap_lc.png
-   :align: center
-   
+  :width: 600
+  :alt: UMAP logo
+  :align: center
+
 
 Visualizing the Results
 ----------------------------------------------
-For all code snippets to reproduce the results and visualizations, please refer to `the paper <https://arxiv.org/abs/2108.05525>`__
+To see the differences between using a mutual k-NN graph vs the original k-NN graph as
+the starting topology for UMAP, let's visualize the 2D projections generated for MNIST, FMNIST, and 20
+NG Count Vectors using each of the discussed methods. For all code snippets to reproduce the results and visualizations, please refer to `the paper <https://arxiv.org/abs/2108.05525>`__
 and this `Github repo <https://github.com/adalmia96/umap-mnn>`__. Will be adding this soon as a
 mode to the original implementation.
 
-To visual the differences Before we try out DensMAP let’s run standard UMAP so we have a baseline
-to compare to. We’ll start with MNIST digits.
+
+We’ll start with MNIST digits (a collection of 70,000 gray-scale images of hand-written digits):
+
+.. image:: images/mutual_nn_umap_MNIST.png
+
+In general we observe that for most of the mutual k-NN graph based vectors, there
+is a better separation between similar classes than the original UMAP vectors
+regardless of connectivity (NN, MST variants). Connecting isolated vertices in
+the mutual k-NN graph to their original nearest neighbor produced the desired
+separation between similar classes such as with the 4, 7, 9 in MNIST. This follows
+our intuition given that mutual k-NN graphs have previously been shown as a useful
+method for removing edges between points that are only loosely similar.
+This directly reduces many of the undesirable consequences of using a k-NN 
+representation such as the the distance concentration and hub effects.
+
+We see a similar results for the Fashion-MNIST dataset(a collection of 70,000
+gray-scale images of fashion items): as before:
+
+.. image:: images/mutual_nn_umap_FMNIST.png
 
 
-In general we observe that for most of the mutual k-NN graph
-based vectors (Fig. 5), there is a better separation between similar
-classes than the original UMAP vectors regardless of Connectivity
-(NN, MST variants). Connecting isolated vertices in the mutual kNN graph to their original nearest neighbor produced the desired
-separation between similar classes such as with the 4, 7, 9 in MNIST
-and the footwear classes for FMNIST. This follows our intuition
-given that mutual k-NN graphs have previously been shown as a
-useful method for removing edges between points that are only
-loosely similar. This directly reduces many of the undesirable consequences of using a k-NN representation such as the the distance
-concentration and hub effects
-
-For both MNIST and FMNIST, we see that NN which naively
+For MNIST and FMNIST, we see that NN which naively
 connects isolated vertices to their nearest neighbor had multiple
-small clusters of points scattered throughout the vector space. Given
-that KMeans is sensitive to noisy outliers, these randomly projected
-points negatively affect clustering performance (Table 2).
+small clusters of points scattered throughout the vector space.
 
 We would expect that having higher connectivity that reduces
 random scattering of points would be better for clustering. However,
@@ -85,23 +93,11 @@ observe that using all the edges from the MST (MST-all) together
 with Path Neighbors can hurt performance on FMNIST (this is
 elaborated on in the next section §5.3).
 
-.. image:: images/mutual_nn_umap_MNIST.png
-
-
-Let’s now look at the Fashion-MNIST dataset; as before we’ll start by
-reminding ourselves what the default UMAP results look like:
-
-.. image:: images/mutual_nn_umap_FMNIST.png
-
 .. image:: images/mutual_nn_umap_20ngc.png
 
 
 .. image:: images/mutual_nn_umap_results.png
 
-For test data we will make use of the now familiar (see earlier tutorial
-sections) MNIST and Fashion-MNIST datasets. MNIST is a collection of
-70,000 gray-scale images of hand-written digits. Fashion-MNIST is a
-collection of 70,000 gray-scale images of fashion items.
 
 
 
