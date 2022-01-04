@@ -1,5 +1,5 @@
- Improving the Separation Between Similar Classes Using a Mutual k-NN Graph
-============================================
+Improving the Separation Between Similar Classes Using a Mutual k-NN Graph
+==========================================================================
 
 In default UMAP, a weighted k nearest neighbor (k-NN) graph, which connects each
 datapoint to its 𝑘 nearest neighbors based on some distance metric, is constructed
