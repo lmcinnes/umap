@@ -70,7 +70,7 @@ def test_umap_trustworthiness_on_sphere_iris(
         iris.data, projected_embedding, n_neighbors=10, metric="cosine"
     )
     assert (
-        trust >= 0.80
+        trust >= 0.70
     ), "Insufficiently trustworthy spherical embedding for iris dataset: {}".format(
         trust
     )
