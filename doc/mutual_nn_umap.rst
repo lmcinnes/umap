@@ -1,5 +1,5 @@
- Improving the Separation Between Similar Classes Using a Mutual k-NN Graph
-============================================
+Improving the Separation Between Similar Classes Using a Mutual k-NN Graph
+==========================================================================
 
 This post briefly explains how the connectivity of the original graphical representation can adversely affect the resulting UMAP embeddings.
 
