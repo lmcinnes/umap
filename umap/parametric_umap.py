@@ -483,7 +483,7 @@ class ParametricUMAP(UMAP):
         return dict(
             (k, v)
             for (k, v) in self.__dict__.items()
-            if should_pickle(k, v) and k != "optimizer"
+            if should_pickle(k, v) and k not in ("optimizer", "encoder", "decoder", "parametric_model")
         )
 
     def save(self, save_location, verbose=True):
@@ -509,7 +509,7 @@ class ParametricUMAP(UMAP):
             if verbose:
                 print("Keras full model saved to {}".format(parametric_model_output))
 
-        # save model.pkl (ignoring unpickleable warnings)
+        # # save model.pkl (ignoring unpickleable warnings)
         with catch_warnings():
             filterwarnings("ignore")
             # work around optimizers not pickling anymore (since tf 2.4)
@@ -1043,11 +1043,15 @@ def should_pickle(key, val):
         tf.errors.InvalidArgumentError,
         TypeError,
         tf.errors.InternalError,
+        tf.errors.NotFoundError,
         OverflowError,
         TypingError,
         AttributeError,
     ) as e:
         warn("Did not pickle {}: {}".format(key, e))
+        return False
+    except ValueError as e:
+        warn(f"Failed at pickling {key}:{val} due to {e}")
         return False
     return True
 

@@ -522,6 +522,7 @@ def test_grad_metrics_match_metrics(spatial_data, spatial_distances):
     assert_array_almost_equal(
         test_matrix,
         dist_matrix,
+        decimal=5,
         err_msg="Distances don't match " "for metric mahalanobis",
     )
 
