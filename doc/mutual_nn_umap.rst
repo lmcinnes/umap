@@ -1,13 +1,15 @@
 Improving the Separation Between Similar Classes Using a Mutual k-NN Graph
 ==========================================================================
 
+This post briefly explains how the connectivity of the original graphical representation can adversely affect the resulting UMAP embeddings.
+
 In default UMAP, a weighted k nearest neighbor (k-NN) graph, which connects each
 datapoint to its 𝑘 nearest neighbors based on some distance metric, is constructed
 and used to generate the initial topological representation of a dataset.
 
 However, previous research has shown that using a weighted k-NN
 graph may not provide an accurate representation of the underlying local
-structure for a high dimensional dataset the k-NN graph is relatively susceptible
+structure for a high dimensional dataset. The k-NN graph is relatively susceptible
 to the “curse of dimensionality” and the associated distance concentration
 effect, where distances are similar in high dimensions, as well as the
 hub effect, where certain points become highly influential when highly
@@ -21,16 +23,11 @@ proposes a refinement in the graph construction stage of the UMAP algorithm
 that uses a weighted mutual k-NN graph rather than it vanilla counterpart,
 to reduce the undesired distance concentration and hub effects.
 
-A mutual k-NN graph is defined as a graph that only has an undirected edge
-between two vertices ``x_i`` and ``x_j`` if ``x_i`` is in k-nearest neighbors
-of ``x_j`` and ``x_j`` is in the k-nearest neighbors of ``x_i``. A mutual k-NN
-graph can hence be interpreted as a subgraph/subset of the original
-k-NN graph for a specific dataset. Mutual k-NN graphs have been shown to contain many
+Mutual k-NN graphs have been shown to contain many
 desirable properties  when combating the “curse of dimensionality” as discussed in
 `this paper <https://arxiv.org/abs/2108.05525>`__ . However, one pitfall of using a
-mutual k-NN graph over the original k-NN graph is that the resulting mutual k-NN graph often
-contains disconnected components and potential isolated vertices since a mutual k-NN graph.
-only retains a subset of the edges from the original k-NN graph.
+mutual k-NN graph over the original k-NN graph is that it often
+contains disconnected components and potential isolated vertices.
 
 This violates one of UMAP primary assumptions that "The manifold is locally connected." To
 combat the issue of isolated components, the authors consider different methods that have
@@ -66,17 +63,15 @@ We’ll start with MNIST digits, a collection of 70,000 gray-scale images of han
   :width: 850
   :align: center
 
-In general, we observe that for most of the mutual k-NN graph based vectors, there
+In general, for most of the mutual k-NN graph based vectors, there
 is a better separation between similar classes than the original UMAP vectors
 regardless of connectivity (NN, MST variants). Connecting isolated vertices in
 the mutual k-NN graph to their original nearest neighbor produced the desired
 separation between similar classes such as with the 4, 7, 9 in MNIST. This follows
 our intuition given that mutual k-NN graphs have previously been shown as a useful
 method for removing edges between points that are only loosely similar.
-This directly reduces many of the undesirable consequences of using a k-NN
-representation such as the the distance concentration and hub effects.
 
-We see a similar results for the Fashion-MNIST(FMNIST) dataset, a collection of 70,000
+Similar results are observed for the Fashion-MNIST(FMNIST) dataset, a collection of 70,000
 gray-scale images of fashion items:
 
 .. image:: images/mutual_nn_umap_FMNIST.png
@@ -89,19 +84,14 @@ from footwear classes (Sandal, Sneaker, Ankle-boot) while also depicting a clear
 separation between the footwear classes. This is contrasted with original
 UMAP which has poorer separation between similar classes like the footwear classes.
 
-For both MNIST and FMNIST, we see that NN which naively connects isolated vertices
+For both MNIST and FMNIST, NN which naively connects isolated vertices
 to their nearest neighbor had multiple small clusters of points scattered
 throughout the vector space. This makes sense given using NN for connectivity can
 still cause the resulting manifold to be broken into many small components.
 
 It would be fair to assume that augmenting the mutual k-NN graph with a "higher connectivity"
 would always be better as it reduces random scattering of points. However,
-too much connectivity such as with MST-all can also hurt. We observe that using
-all the edges from the MST (MST-all) together with Path Neighbors significantly
-reduced the separation between the footwear classes.
-
-This is further discussed in the paper, but this gives an insight on how the
-connectivity of the original graphical representation can adversely affect the generated embeddings.
+too much connectivity such as with MST-all can also hurt which is further discussed in the paper.
 
 Finally, we depict the embeddings generated using the 20 newsgroup dataset, a collection of
 18846 documents, transformed using sklearns CountVectorizer:
@@ -113,21 +103,12 @@ Finally, we depict the embeddings generated using the 20 newsgroup dataset, a co
 We can see there is better distinction between similar subjects such as the recreation
 (rec) topics.
 
-On thing to note is that visually, the vector generated using the Adjacent Neighbors
+Visually, the vector generated using the Adjacent Neighbors
 and MST-min result in disperse dense clusters of points e.g, the footwear classes in
 FMNIST and the recreation topics in 20 NG. However for Path Neighbors, the groups of
-points belonging to the same class are less dispersed. This can be attributed to
-fact that Adjacent Neighbors is not guaranteed to have k connected neighbors for each local
+points belonging to the same class are less dispersed. This is because Adjacent Neighbors are not guaranteed to have k connected neighbors for each local
 neighborhood. Points with smaller neighborhoods will be close to primarily few adjacent
-neighbors and repelled further away from the other points. This creates small groups
-of points that belong to the same class being spread across the vector space. On
-the other hand, for original UMAP and Path Neighbor vectors, the # of neighbors
-is equal to k, and local groups of points are more likely to be connected to other
-groups within the same class. This increase in connectivity explains why visually
-Path Neighbors methods generate vectors which are less dispersed (within class)
-than the Adjacent Neighbors method, while still preserving the underlying structure
-of the data.
-
+neighbors and repelled further away from the other points. 
 
 To evaluate these methods quantitatively, the authors compare the clustering performance
 of the resulting low dimensional vectors generated. Below shows the Normalised Mutual
