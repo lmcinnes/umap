@@ -166,11 +166,11 @@ representation of the data that has a similar topological
 representation. If we only care about the 0- and 1-simplices then the
 topological representation is just a graph, and finding a low
 dimensional representation can be described as a `graph layout
-problem <>`__. If one wants to use, for example, spectral methods for
+problem <https://en.wikipedia.org/wiki/Graph_drawing>`__. If one wants to use, for example, spectral methods for
 graph layout then we arrive at algorithms like `Laplacian
-eigenmaps <>`__ and `Diffusion maps <>`__. Force directed layouts are
-also an option, and provide algorithms closer to `MDS <>`__ or `Sammon
-mapping <>`__ in flavour.
+eigenmaps <https://en.wikipedia.org/wiki/Nonlinear_dimensionality_reduction#Laplacian_eigenmaps>`__ and `Diffusion maps <https://en.wikipedia.org/wiki/Nonlinear_dimensionality_reduction#Diffusion_maps>`__. Force directed layouts are
+also an option, and provide algorithms closer to `MDS <https://en.wikipedia.org/wiki/Multidimensional_scaling>`__ or `Sammon
+mapping <https://en.wikipedia.org/wiki/Sammon_mapping>`__ in flavour.
 
 I would not blame those who have read this far to wonder why we took
 such an abstract roundabout road to simply building a neighborhood-graph
