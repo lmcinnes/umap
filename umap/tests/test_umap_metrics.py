@@ -5,6 +5,8 @@ import umap.sparse as spdist
 
 from sklearn.metrics import pairwise_distances
 from sklearn.neighbors import BallTree
+from scipy.version import full_version as scipy_full_version
+
 
 
 # ===================================================
