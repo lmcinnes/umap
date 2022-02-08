@@ -332,7 +332,9 @@ def test_seuclidean(spatial_data):
         err_msg="Distances don't match " "for metric seuclidean",
     )
 
-
+@pytest.mark.skipif(
+    scipy_full_version < "1.8", reason="incorrect function in scipy<1.8"
+)
 def test_weighted_minkowski(spatial_data):
     v = np.abs(np.random.randn(spatial_data.shape[1]))
     dist_matrix = pairwise_distances(spatial_data, metric="wminkowski", w=v, p=3)
