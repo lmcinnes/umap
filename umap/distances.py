@@ -256,7 +256,7 @@ def weighted_minkowski_grad(x, y, w=_mock_ones, p=2):
     """
     result = 0.0
     for i in range(x.shape[0]):
-        result += (w[i] * np.abs(x[i] - y[i])) ** p
+        result += w[i] * (np.abs(x[i] - y[i])) ** p
 
     grad = np.empty(x.shape[0], dtype=np.float32)
     for i in range(x.shape[0]):
