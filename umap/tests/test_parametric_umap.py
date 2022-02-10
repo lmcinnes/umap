@@ -4,6 +4,7 @@ import pytest
 from sklearn.datasets import make_moons
 from sklearn.model_selection import train_test_split
 from numpy.testing import assert_array_almost_equal
+import platform
 
 try:
     import tensorflow as tf
@@ -15,7 +16,7 @@ else:
     from umap.parametric_umap import ParametricUMAP, load_ParametricUMAP
 
 tf_only = pytest.mark.skipif(not IMPORT_TF, reason="TensorFlow >= 2.0 is not installed")
-
+not_windows = pytest.mark.skipif(platform.system() == "Windows", reason="Windows file access issues")
 
 @pytest.fixture(scope="session")
 def moon_dataset():
@@ -124,6 +125,7 @@ def test_validation(moon_dataset):
     assert embedding.shape == (X_train.shape[0], 2)
 
 
+@not_windows
 @tf_only
 def test_save_load(moon_dataset):
     """tests saving and loading"""
@@ -134,7 +136,6 @@ def test_save_load(moon_dataset):
     assert embedding is not None
     assert embedding.shape == (moon_dataset.shape[0], 2)
 
-    # if platform.system() != "Windows":
     # Portable tempfile
     model_path = tempfile.mkdtemp(suffix="_umap_model")
 
