@@ -165,8 +165,14 @@ PARAM_NAMES = (
 def set_aligned_params(new_params, existing_params, n_models, param_names=PARAM_NAMES):
     for param in param_names:
         if param in new_params:
-            if type(existing_params[param]) in (list, tuple, np.ndarray):
-                existing_params[param] = existing_params[param] + (new_params[param],)
+            if isinstance(existing_params[param], list):
+                existing_params[param].append(new_params[param])
+            elif isinstance(existing_params[param], tuple):
+                existing_params[param] = existing_params[param] + \
+                    (new_params[param],)
+            elif isinstance(existing_params[param], np.ndarray):
+                existing_params[param] = np.append(existing_params[param],
+                                                   new_params[param])
             else:
                 if new_params[param] != existing_params[param]:
                     existing_params[param] = (existing_params[param],) * n_models + (
