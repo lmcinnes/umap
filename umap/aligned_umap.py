@@ -450,7 +450,6 @@ class AlignedUMAP(BaseEstimator):
         X = check_array(X)
 
         self.__dict__ = set_aligned_params(fit_params, self.__dict__, self.n_models_)
-        self.n_models_ += 1
 
         new_mapper = UMAP(
             n_neighbors=get_nth_item_or_val(self.n_neighbors, self.n_models_),
@@ -474,6 +473,7 @@ class AlignedUMAP(BaseEstimator):
             transform_seed=self.transform_seed,
         ).fit(X, y)
 
+        self.n_models_ += 1
         self.mappers_ += [new_mapper]
 
         # TODO: We can likely make this more efficient and not recompute each time
