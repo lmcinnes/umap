@@ -165,8 +165,14 @@ PARAM_NAMES = (
 def set_aligned_params(new_params, existing_params, n_models, param_names=PARAM_NAMES):
     for param in param_names:
         if param in new_params:
-            if type(existing_params[param]) in (list, tuple, np.ndarray):
-                existing_params[param] = existing_params[param] + (new_params[param],)
+            if isinstance(existing_params[param], list):
+                existing_params[param].append(new_params[param])
+            elif isinstance(existing_params[param], tuple):
+                existing_params[param] = existing_params[param] + \
+                    (new_params[param],)
+            elif isinstance(existing_params[param], np.ndarray):
+                existing_params[param] = np.append(existing_params[param],
+                                                   new_params[param])
             else:
                 if new_params[param] != existing_params[param]:
                     existing_params[param] = (existing_params[param],) * n_models + (
@@ -444,7 +450,6 @@ class AlignedUMAP(BaseEstimator):
         X = check_array(X)
 
         self.__dict__ = set_aligned_params(fit_params, self.__dict__, self.n_models_)
-        self.n_models_ += 1
 
         new_mapper = UMAP(
             n_neighbors=get_nth_item_or_val(self.n_neighbors, self.n_models_),
@@ -468,6 +473,7 @@ class AlignedUMAP(BaseEstimator):
             transform_seed=self.transform_seed,
         ).fit(X, y)
 
+        self.n_models_ += 1
         self.mappers_ += [new_mapper]
 
         # TODO: We can likely make this more efficient and not recompute each time
