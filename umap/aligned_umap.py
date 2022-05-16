@@ -477,13 +477,18 @@ class AlignedUMAP(BaseEstimator):
         self.n_models_ += 1
         self.mappers_ += [new_mapper]
 
-        # TODO: We can likely make this more efficient and not recompute each time
-        self.dict_relations_ += [invert_dict(new_dict_relations)]
-
         if self.n_epochs is None:
             n_epochs = 200
         else:
             n_epochs = self.n_epochs
+
+        self.dict_relations_ += [new_dict_relations]
+
+        # TODO: We can likely make this more efficient and not recompute each time
+        new_dict_relations = invert_dict(new_dict_relations)
+
+        window_size = fit_params.get("window_size", self.alignment_window_size)
+        new_relations = expand_relations(self.dict_relations_, window_size)
 
         indptr_list = numba.typed.List.empty_list(numba.types.int32[::1])
         indices_list = numba.typed.List.empty_list(numba.types.int32[::1])
@@ -505,7 +510,6 @@ class AlignedUMAP(BaseEstimator):
                     np.full(mapper.embedding_.shape[0], n_epochs + 1, dtype=np.float64)
                 )
 
-        new_relations = expand_relations(self.dict_relations_)
         new_regularisation_weights = build_neighborhood_similarities(
             indptr_list,
             indices_list,
