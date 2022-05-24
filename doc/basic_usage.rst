@@ -171,7 +171,7 @@ of bill (culmen) and flippers and weights of three species of penguins,
 along with some other metadata about the penguins. In total we have 334
 different penguins measured. Visualizing this data is a little bit
 tricky since we can't plot in 4 dimensions easily. Fortunately four is
-not that large a number, so we can just to a pairwise feature
+not that large a number, so we can just create a pairwise feature
 scatterplot matrix to get an ideas of what is going on. Seaborn makes
 this easy.
 
