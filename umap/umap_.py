@@ -916,7 +916,7 @@ def make_epochs_per_sample(weights, n_epochs):
     """
     result = -1.0 * np.ones(weights.shape[0], dtype=np.float64)
     n_samples = n_epochs * (weights / weights.max())
-    result[n_samples > 0] = float(n_epochs) / n_samples[n_samples > 0]
+    result[n_samples > 0] = float(n_epochs) / np.float64(n_samples[n_samples > 0])
     return result
 
 
