@@ -1,5 +1,6 @@
 from warnings import warn, catch_warnings, simplefilter
 from .umap_ import UMAP
+from . import plot
 
 try:
     with catch_warnings():
