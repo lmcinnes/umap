@@ -103,7 +103,8 @@ def build_neighborhood_similarities(graphs_indptr, graphs_indices, relations):
                 raw_base_graph_indices = base_graph_indices[
                     base_graph_indptr[k] : base_graph_indptr[k + 1]
                 ].copy()
-                base_indices = relations[i, j][raw_base_graph_indices]
+                base_indices = relations[i, j][raw_base_graph_indices[
+                    raw_base_graph_indices < relations.shape[2]]]
                 base_indices = base_indices[base_indices >= 0]
                 comparison_indices = comparison_graph_indices[
                     comparison_graph_indptr[comparison_index] : comparison_graph_indptr[
