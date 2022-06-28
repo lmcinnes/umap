@@ -16,7 +16,7 @@ INT32_MAX = np.iinfo(np.int32).max - 1
 @numba.njit(parallel=True)
 def in1d(arr, test_set):
     test_set = set(test_set)
-    result = np.empty(arr.shape[0], dtype=np.uint8)
+    result = np.empty(arr.shape[0], dtype=np.bool_)
     for i in numba.prange(arr.shape[0]):
         if arr[i] in test_set:
             result[i] = True
