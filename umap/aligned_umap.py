@@ -63,7 +63,7 @@ def expand_relations(relation_dicts, window_size=3):
                 mapping = np.arange(max_n_samples)
                 for k in range(j + 1):
                     mapping = np.array(
-                        [relation_dicts[i + j].get(n, -1) for n in mapping]
+                        [relation_dicts[i + k].get(n, -1) for n in mapping]
                     )
                 result[i, result_index] = mapping
 
@@ -73,9 +73,9 @@ def expand_relations(relation_dicts, window_size=3):
                 result[i, result_index] = np.full(max_n_samples, -1, dtype=np.int32)
             else:
                 mapping = np.arange(max_n_samples)
-                for k in range(np.abs(j) + 1):
+                for k in range(0, j - 1, -1):
                     mapping = np.array(
-                        [reverse_relation_dicts[i + j - 1].get(n, -1) for n in mapping]
+                        [reverse_relation_dicts[i + k - 1].get(n, -1) for n in mapping]
                     )
                 result[i, result_index] = mapping
 
