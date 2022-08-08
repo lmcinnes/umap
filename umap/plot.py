@@ -206,7 +206,8 @@ def _nhood_compare(indices_left, indices_right):
     result = np.empty(indices_left.shape[0])
 
     for i in range(indices_left.shape[0]):
-        intersection_size = np.intersect1d(indices_left[i], indices_right[i]).shape[0]
+        intersection_size = np.intersect1d(indices_left[i], indices_right[i], 
+                                           assume_unique=True).shape[0]
         union_size = np.unique(np.hstack([indices_left[i], indices_right[i]])).shape[0]
         result[i] = float(intersection_size) / float(union_size)
 
