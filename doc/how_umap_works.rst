@@ -39,7 +39,7 @@ reduction in particular.
 
 The first step is to provide some simple combinatorial building blocks
 called `*simplices* <https://en.wikipedia.org/wiki/Simplex>`__.
-Geometrically a simplex is a very simple way to build an
+Geometrically a simplex is a very simple way to build a
 :math:`k`-dimensional object. A :math:`k` dimensional simplex is called
 a :math:`k`-simplex, and it is formed by taking the convex hull of
 :math:`k+1` independent points. Thus a 0-simplex is a point, a 1-simplex
@@ -90,7 +90,7 @@ open cover of a topological space. That's a lot of verbiage if you
 haven't done much topology, but we can break it down fairly easily for
 our use case. An open cover is essentially just a family of sets whose
 union is the whole space, and a Čech complex is a combinatorial way to
-covert that into a simplicial complex. It works fairly simply: let each
+convert that into a simplicial complex. It works fairly simply: let each
 set in the cover be a 0-simplex; create a 1-simplex between two such
 sets if they have a non-empty intersection; create a 2-simplex between
 three such sets if the triple intersection of all three is non-empty;
@@ -166,11 +166,11 @@ representation of the data that has a similar topological
 representation. If we only care about the 0- and 1-simplices then the
 topological representation is just a graph, and finding a low
 dimensional representation can be described as a `graph layout
-problem <>`__. If one wants to use, for example, spectral methods for
+problem <https://en.wikipedia.org/wiki/Graph_drawing>`__. If one wants to use, for example, spectral methods for
 graph layout then we arrive at algorithms like `Laplacian
-eigenmaps <>`__ and `Diffusion maps <>`__. Force directed layouts are
-also an option, and provide algorithms closer to `MDS <>`__ or `Sammon
-mapping <>`__ in flavour.
+eigenmaps <https://en.wikipedia.org/wiki/Nonlinear_dimensionality_reduction#Laplacian_eigenmaps>`__ and `Diffusion maps <https://en.wikipedia.org/wiki/Nonlinear_dimensionality_reduction#Diffusion_maps>`__. Force directed layouts are
+also an option, and provide algorithms closer to `MDS <https://en.wikipedia.org/wiki/Multidimensional_scaling>`__ or `Sammon
+mapping <https://en.wikipedia.org/wiki/Sammon_mapping>`__ in flavour.
 
 I would not blame those who have read this far to wonder why we took
 such an abstract roundabout road to simply building a neighborhood-graph
@@ -209,7 +209,7 @@ The dilemma is in part due to the theorem (called the `Nerve
 theorem <https://en.wikipedia.org/wiki/Nerve_of_a_covering>`__) that
 provides our justification that this process captures the topology.
 Specifically, the theorem says that the simplicial complex will be
-(homtopically) equivalent to the union of the cover. In our case,
+(homotopically) equivalent to the union of the cover. In our case,
 working with finite data, the cover, for certain radii, doesn't cover
 the whole of the manifold that we imagine underlies the data -- it is
 that lack of coverage that results in the disconnected components.

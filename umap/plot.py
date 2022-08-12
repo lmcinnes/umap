@@ -206,7 +206,8 @@ def _nhood_compare(indices_left, indices_right):
     result = np.empty(indices_left.shape[0])
 
     for i in range(indices_left.shape[0]):
-        intersection_size = np.intersect1d(indices_left[i], indices_right[i]).shape[0]
+        intersection_size = np.intersect1d(indices_left[i], indices_right[i], 
+                                           assume_unique=True).shape[0]
         union_size = np.unique(np.hstack([indices_left[i], indices_right[i]])).shape[0]
         result[i] = float(intersection_size) / float(union_size)
 
@@ -215,10 +216,10 @@ def _nhood_compare(indices_left, indices_right):
 
 def _get_extent(points):
     """Compute bounds on a space with appropriate padding"""
-    min_x = np.min(points[:, 0])
-    max_x = np.max(points[:, 0])
-    min_y = np.min(points[:, 1])
-    max_y = np.max(points[:, 1])
+    min_x = np.nanmin(points[:, 0])
+    max_x = np.nanmax(points[:, 0])
+    min_y = np.nanmin(points[:, 1])
+    max_y = np.nanmax(points[:, 1])
 
     extent = (
         np.round(min_x - 0.05 * (max_x - min_x)),

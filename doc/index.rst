@@ -67,10 +67,12 @@ PyPI install, presuming you have numba and sklearn and all its requirements
    outliers
    composing_models
    densmap_demo
+   mutual_nn_umap
    document_embedding
    embedding_space
    aligned_umap_basic_usage
    aligned_umap_politics_demo
+   precomputed_k-nn
    release_notes
    faq
 

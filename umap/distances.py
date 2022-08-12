@@ -21,7 +21,7 @@ def sign(a):
 
 @numba.njit(fastmath=True)
 def euclidean(x, y):
-    """Standard euclidean distance.
+    r"""Standard euclidean distance.
 
     ..math::
         D(x, y) = \sqrt{\sum_i (x_i - y_i)^2}
@@ -34,7 +34,7 @@ def euclidean(x, y):
 
 @numba.njit(fastmath=True)
 def euclidean_grad(x, y):
-    """Standard euclidean distance and its gradient.
+    r"""Standard euclidean distance and its gradient.
 
     ..math::
         D(x, y) = \sqrt{\sum_i (x_i - y_i)^2}
@@ -50,7 +50,7 @@ def euclidean_grad(x, y):
 
 @numba.njit()
 def standardised_euclidean(x, y, sigma=_mock_ones):
-    """Euclidean distance standardised against a vector of standard
+    r"""Euclidean distance standardised against a vector of standard
     deviations per coordinate.
 
     ..math::
@@ -65,7 +65,7 @@ def standardised_euclidean(x, y, sigma=_mock_ones):
 
 @numba.njit(fastmath=True)
 def standardised_euclidean_grad(x, y, sigma=_mock_ones):
-    """Euclidean distance standardised against a vector of standard
+    r"""Euclidean distance standardised against a vector of standard
     deviations per coordinate with gradient.
 
     ..math::
@@ -81,7 +81,7 @@ def standardised_euclidean_grad(x, y, sigma=_mock_ones):
 
 @numba.njit()
 def manhattan(x, y):
-    """Manhattan, taxicab, or l1 distance.
+    r"""Manhattan, taxicab, or l1 distance.
 
     ..math::
         D(x, y) = \sum_i |x_i - y_i|
@@ -95,7 +95,7 @@ def manhattan(x, y):
 
 @numba.njit()
 def manhattan_grad(x, y):
-    """Manhattan, taxicab, or l1 distance with gradient.
+    r"""Manhattan, taxicab, or l1 distance with gradient.
 
     ..math::
         D(x, y) = \sum_i |x_i - y_i|
@@ -110,7 +110,7 @@ def manhattan_grad(x, y):
 
 @numba.njit()
 def chebyshev(x, y):
-    """Chebyshev or l-infinity distance.
+    r"""Chebyshev or l-infinity distance.
 
     ..math::
         D(x, y) = \max_i |x_i - y_i|
@@ -124,7 +124,7 @@ def chebyshev(x, y):
 
 @numba.njit()
 def chebyshev_grad(x, y):
-    """Chebyshev or l-infinity distance with gradient.
+    r"""Chebyshev or l-infinity distance with gradient.
 
     ..math::
         D(x, y) = \max_i |x_i - y_i|
@@ -144,7 +144,7 @@ def chebyshev_grad(x, y):
 
 @numba.njit()
 def minkowski(x, y, p=2):
-    """Minkowski distance.
+    r"""Minkowski distance.
 
     ..math::
         D(x, y) = \left(\sum_i |x_i - y_i|^p\right)^{\frac{1}{p}}
@@ -163,7 +163,7 @@ def minkowski(x, y, p=2):
 
 @numba.njit()
 def minkowski_grad(x, y, p=2):
-    """Minkowski distance with gradient.
+    r"""Minkowski distance with gradient.
 
     ..math::
         D(x, y) = \left(\sum_i |x_i - y_i|^p\right)^{\frac{1}{p}}
@@ -190,7 +190,7 @@ def minkowski_grad(x, y, p=2):
 
 @numba.njit()
 def poincare(u, v):
-    """Poincare distance.
+    r"""Poincare distance.
 
     ..math::
         \delta (u, v) = 2 \frac{ \lVert  u - v \rVert ^2 }{ ( 1 - \lVert  u \rVert ^2 ) ( 1 - \lVert  v \rVert ^2 ) }
@@ -227,7 +227,7 @@ def hyperboloid_grad(x, y):
 
 @numba.njit()
 def weighted_minkowski(x, y, w=_mock_ones, p=2):
-    """A weighted version of Minkowski distance.
+    r"""A weighted version of Minkowski distance.
 
     ..math::
         D(x, y) = \left(\sum_i w_i |x_i - y_i|^p\right)^{\frac{1}{p}}
@@ -238,14 +238,14 @@ def weighted_minkowski(x, y, w=_mock_ones, p=2):
     """
     result = 0.0
     for i in range(x.shape[0]):
-        result += (w[i] * np.abs(x[i] - y[i])) ** p
+        result += w[i] * np.abs(x[i] - y[i]) ** p
 
     return result ** (1.0 / p)
 
 
 @numba.njit()
 def weighted_minkowski_grad(x, y, w=_mock_ones, p=2):
-    """A weighted version of Minkowski distance with gradient.
+    r"""A weighted version of Minkowski distance with gradient.
 
     ..math::
         D(x, y) = \left(\sum_i w_i |x_i - y_i|^p\right)^{\frac{1}{p}}
@@ -256,12 +256,12 @@ def weighted_minkowski_grad(x, y, w=_mock_ones, p=2):
     """
     result = 0.0
     for i in range(x.shape[0]):
-        result += (w[i] * np.abs(x[i] - y[i])) ** p
+        result += w[i] * (np.abs(x[i] - y[i])) ** p
 
     grad = np.empty(x.shape[0], dtype=np.float32)
     for i in range(x.shape[0]):
         grad[i] = (
-            w[i] ** p
+            w[i]
             * pow(np.abs(x[i] - y[i]), (p - 1.0))
             * sign(x[i] - y[i])
             * pow(result, (1.0 / (p - 1)))
@@ -759,7 +759,7 @@ def ll_dirichlet(data1, data2):
 
 @numba.njit(fastmath=True)
 def symmetric_kl(x, y, z=1e-11):  # pragma: no cover
-    """
+    r"""
     symmetrized KL divergence between two probability distributions
 
     ..math::

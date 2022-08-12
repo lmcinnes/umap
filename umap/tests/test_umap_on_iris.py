@@ -24,7 +24,7 @@ except ImportError:
 # ----------------------------
 def test_umap_trustworthiness_on_iris(iris, iris_model):
     embedding = iris_model.embedding_
-    trust = trustworthiness(iris.data, embedding, 10)
+    trust = trustworthiness(iris.data, embedding, n_neighbors=10)
     assert (
         trust >= 0.97
     ), "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust)
@@ -39,7 +39,7 @@ def test_initialized_umap_trustworthiness_on_iris(iris):
         n_epochs=200,
         random_state=42,
     ).fit_transform(data)
-    trust = trustworthiness(iris.data, embedding, 10)
+    trust = trustworthiness(iris.data, embedding, n_neighbors=10)
     assert (
         trust >= 0.97
     ), "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust)
@@ -66,9 +66,11 @@ def test_umap_trustworthiness_on_sphere_iris(
             r * np.cos(embedding[:, 0]),
         ]
     ).T
-    trust = trustworthiness(iris.data, projected_embedding, 10, metric="cosine")
+    trust = trustworthiness(
+        iris.data, projected_embedding, n_neighbors=10, metric="cosine"
+    )
     assert (
-        trust >= 0.80
+        trust >= 0.70
     ), "Insufficiently trustworthy spherical embedding for iris dataset: {}".format(
         trust
     )
@@ -82,7 +84,7 @@ def test_umap_transform_on_iris(iris, iris_subset_model, iris_selection):
     new_data = iris.data[~iris_selection]
     embedding = fitter.transform(new_data)
 
-    trust = trustworthiness(new_data, embedding, 10)
+    trust = trustworthiness(new_data, embedding, n_neighbors=10)
     assert (
         trust >= 0.85
     ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
@@ -101,7 +103,7 @@ def test_umap_transform_on_iris_w_pynndescent(iris, iris_selection):
     new_data = iris.data[~iris_selection]
     embedding = fitter.transform(new_data)
 
-    trust = trustworthiness(new_data, embedding, 10)
+    trust = trustworthiness(new_data, embedding, n_neighbors=10)
     assert (
         trust >= 0.85
     ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
@@ -114,7 +116,7 @@ def test_umap_transform_on_iris_modified_dtype(iris, iris_subset_model, iris_sel
     new_data = iris.data[~iris_selection]
     embedding = fitter.transform(new_data)
 
-    trust = trustworthiness(new_data, embedding, 10)
+    trust = trustworthiness(new_data, embedding, n_neighbors=10)
     assert (
         trust >= 0.8
     ), "Insufficiently trustworthy transform for iris dataset: {}".format(trust)
@@ -135,7 +137,7 @@ def test_umap_sparse_transform_on_iris(iris, iris_selection):
     assert sparse.issparse(new_data)
     embedding = fitter.transform(new_data)
 
-    trust = trustworthiness(new_data, embedding, 10)
+    trust = trustworthiness(new_data, embedding, n_neighbors=10)
     assert (
         trust >= 0.80
     ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
@@ -159,7 +161,7 @@ def test_precomputed_transform_on_iris(iris, iris_selection):
     new_distance_matrix = cdist(new_data, data)
     embedding = fitter.transform(new_distance_matrix)
 
-    trust = trustworthiness(new_data, embedding, 10)
+    trust = trustworthiness(new_data, embedding, n_neighbors=10)
     assert (
         trust >= 0.85
     ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
@@ -183,7 +185,7 @@ def test_precomputed_sparse_transform_on_iris(iris, iris_selection):
     new_distance_matrix = sparse.csr_matrix(cdist(new_data, data))
     embedding = fitter.transform(new_distance_matrix)
 
-    trust = trustworthiness(new_data, embedding, 10)
+    trust = trustworthiness(new_data, embedding, n_neighbors=10)
     assert (
         trust >= 0.85
     ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)

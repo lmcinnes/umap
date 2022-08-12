@@ -15,7 +15,7 @@ def readme():
 
 configuration = {
     "name": "umap-learn",
-    "version": "0.5.1",
+    "version": "0.5.3",
     "description": "Uniform Manifold Approximation and Projection",
     "long_description": readme(),
     "long_description_content_type": "text/x-rst",
@@ -49,6 +49,7 @@ configuration = {
         "scipy >= 1.0",
         "numba >= 0.49",
         "pynndescent >= 0.5",
+        "tqdm",
     ],
     "extras_require": {
         "plot": [

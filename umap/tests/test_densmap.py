@@ -22,9 +22,9 @@ def test_densmap_trustworthiness(nn_data):
         densmap=True,
         output_dens=True,
     ).fit_transform(data)
-    trust = trustworthiness(data, embedding, 10)
+    trust = trustworthiness(data, embedding, n_neighbors=10)
     assert (
-        trust >= 0.75
+        trust >= 0.72
     ), "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust)
 
 
@@ -38,7 +38,7 @@ def test_densmap_trustworthiness_random_init(nn_data):  # pragma: no cover
         init="random",
         densmap=True,
     ).fit_transform(data)
-    trust = trustworthiness(data, embedding, 10)
+    trust = trustworthiness(data, embedding, n_neighbors=10)
     assert (
         trust >= 0.75
     ), "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust)
@@ -53,7 +53,7 @@ def test_densmap_trustworthiness_on_iris(iris):
         verbose=True,
     ).fit(iris.data)
     embedding = densmap_iris_model.embedding_
-    trust = trustworthiness(iris.data, embedding, 10)
+    trust = trustworthiness(iris.data, embedding, n_neighbors=10)
     assert (
         trust >= 0.97
     ), "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust)
@@ -74,7 +74,7 @@ def test_densmap_trustworthiness_on_iris_supervised(iris):
         verbose=True,
     ).fit(iris.data, y=iris.target)
     embedding = densmap_iris_model.embedding_
-    trust = trustworthiness(iris.data, embedding, 10)
+    trust = trustworthiness(iris.data, embedding, n_neighbors=10)
     assert (
         trust >= 0.97
     ), "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust)

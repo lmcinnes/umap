@@ -16,7 +16,7 @@ INT32_MAX = np.iinfo(np.int32).max - 1
 @numba.njit(parallel=True)
 def in1d(arr, test_set):
     test_set = set(test_set)
-    result = np.empty(arr.shape[0], dtype=np.uint8)
+    result = np.empty(arr.shape[0], dtype=np.bool_)
     for i in numba.prange(arr.shape[0]):
         if arr[i] in test_set:
             result[i] = True
@@ -63,7 +63,7 @@ def expand_relations(relation_dicts, window_size=3):
                 mapping = np.arange(max_n_samples)
                 for k in range(j + 1):
                     mapping = np.array(
-                        [relation_dicts[i + j].get(n, -1) for n in mapping]
+                        [relation_dicts[i + k].get(n, -1) for n in mapping]
                     )
                 result[i, result_index] = mapping
 
@@ -73,9 +73,9 @@ def expand_relations(relation_dicts, window_size=3):
                 result[i, result_index] = np.full(max_n_samples, -1, dtype=np.int32)
             else:
                 mapping = np.arange(max_n_samples)
-                for k in range(np.abs(j) + 1):
+                for k in range(0, j - 1, -1):
                     mapping = np.array(
-                        [reverse_relation_dicts[i + j - 1].get(n, -1) for n in mapping]
+                        [reverse_relation_dicts[i + k - 1].get(n, -1) for n in mapping]
                     )
                 result[i, result_index] = mapping
 
@@ -103,7 +103,8 @@ def build_neighborhood_similarities(graphs_indptr, graphs_indices, relations):
                 raw_base_graph_indices = base_graph_indices[
                     base_graph_indptr[k] : base_graph_indptr[k + 1]
                 ].copy()
-                base_indices = relations[i, j][raw_base_graph_indices]
+                base_indices = relations[i, j][raw_base_graph_indices[
+                    raw_base_graph_indices < relations.shape[2]]]
                 base_indices = base_indices[base_indices >= 0]
                 comparison_indices = comparison_graph_indices[
                     comparison_graph_indptr[comparison_index] : comparison_graph_indptr[
@@ -165,8 +166,14 @@ PARAM_NAMES = (
 def set_aligned_params(new_params, existing_params, n_models, param_names=PARAM_NAMES):
     for param in param_names:
         if param in new_params:
-            if type(existing_params[param]) in (list, tuple, np.ndarray):
-                existing_params[param] = existing_params[param] + (new_params[param],)
+            if isinstance(existing_params[param], list):
+                existing_params[param].append(new_params[param])
+            elif isinstance(existing_params[param], tuple):
+                existing_params[param] = existing_params[param] + \
+                    (new_params[param],)
+            elif isinstance(existing_params[param], np.ndarray):
+                existing_params[param] = np.append(existing_params[param],
+                                                   new_params[param])
             else:
                 if new_params[param] != existing_params[param]:
                     existing_params[param] = (existing_params[param],) * n_models + (
@@ -295,6 +302,12 @@ class AlignedUMAP(BaseEstimator):
         assert type(X) in (list, tuple, np.ndarray)
         assert (len(X) - 1) == (len(self.dict_relations_))
 
+        if y is not None:
+            assert type(y) in (list, tuple, np.ndarray)
+            assert (len(y) - 1) == (len(self.dict_relations_))
+        else:
+            y = [None] * len(X)
+
         # We need n_components to be constant or this won't work
         if type(self.n_components) in (list, tuple, np.ndarray):
             raise ValueError("n_components must be a single integer, and cannot vary")
@@ -329,7 +342,7 @@ class AlignedUMAP(BaseEstimator):
                 verbose=self.verbose,
                 a=self.a,
                 b=self.b,
-            ).fit(X[n])
+            ).fit(X[n], y[n])
             for n in range(self.n_models_)
         ]
 
@@ -438,7 +451,6 @@ class AlignedUMAP(BaseEstimator):
         X = check_array(X)
 
         self.__dict__ = set_aligned_params(fit_params, self.__dict__, self.n_models_)
-        self.n_models_ += 1
 
         new_mapper = UMAP(
             n_neighbors=get_nth_item_or_val(self.n_neighbors, self.n_models_),
@@ -460,8 +472,9 @@ class AlignedUMAP(BaseEstimator):
             n_components=self.n_components,
             random_state=self.random_state,
             transform_seed=self.transform_seed,
-        ).fit(X)
+        ).fit(X, y)
 
+        self.n_models_ += 1
         self.mappers_ += [new_mapper]
 
         # TODO: We can likely make this more efficient and not recompute each time
