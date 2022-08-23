@@ -151,7 +151,7 @@ def multi_component_layout(
     metric_kwds={},
 ):
     """Specialised layout algorithm for dealing with graphs with many connected components.
-    This will first fid relative positions for the components by spectrally embedding
+    This will first find relative positions for the components by spectrally embedding
     their centroids, then spectrally embed each individual connected component positioning
     them according to the centroid embeddings. This provides a decent embedding of each
     component while placing the components in good relative positions to one another.
@@ -163,7 +163,7 @@ def multi_component_layout(
         connected component of the graph.
 
     graph: sparse matrix
-        The adjacency matrix of the graph to be emebdded.
+        The adjacency matrix of the graph to be embedded.
 
     n_components: int
         The number of distinct components to be layed out.
