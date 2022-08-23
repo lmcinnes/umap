@@ -145,7 +145,7 @@ def csr_unique(matrix, return_index=True, return_inverse=True, return_counts=Tru
     return_index = bool, optional
         If true, return the row indices of 'matrix'
     return_inverse: bool, optional
-        If true, return the the indices of the unique array that can be
+        If true, return the indices of the unique array that can be
            used to reconstruct 'matrix'.
     return_counts = bool, optional
         If true, returns the number of times each unique item appears in 'matrix'

@@ -499,7 +499,7 @@ def points(
     to further control and tailor the plotting, you need only
     pass in the trained/fit umap model to get results. This plot
     utility will attempt to do the hard work of avoiding
-    overplotting issues, and make it easy to automatically
+    over-plotting issues, and make it easy to automatically
     colour points by a categorical labelling or numeric values.
 
     This method is intended to be used within a Jupyter
@@ -739,7 +739,7 @@ def connectivity(
     to further control and tailor the plotting, you need only
     pass in the trained/fit umap model to get results. This plot
     utility will attempt to do the hard work of avoiding
-    overplotting issues and provide options for plotting the
+    over-plotting issues and provide options for plotting the
     points as well as using edge bundling for graph visualization.
 
     Parameters
@@ -841,7 +841,7 @@ def connectivity(
     -------
     result: matplotlib axis
         The result is a matplotlib axis with the relevant plot displayed.
-        If you are using a notbooks and have ``%matplotlib inline`` set
+        If you are using a notebook and have ``%matplotlib inline`` set
         then this will simply display inline.
     """
     if theme is not None:
@@ -1002,7 +1002,7 @@ def diagnostic(
         as that which provides ``local_variance_threshold``
         or more of the ``variance_explained_ratio``.
 
-    ax: matlotlib axis (optional, default None)
+    ax: matplotlib axis (optional, default None)
         A matplotlib axis to plot to, or, if None, a new
         axis will be created and returned.
 
@@ -1020,7 +1020,7 @@ def diagnostic(
     -------
     result: matplotlib axis
         The result is a matplotlib axis with the relevant plot displayed.
-        If you are using a notbooks and have ``%matplotlib inline`` set
+        If you are using a notebook and have ``%matplotlib inline`` set
         then this will simply display inline.
     """
 
@@ -1230,7 +1230,7 @@ def interactive(
     """Create an interactive bokeh plot of a UMAP embedding.
     While static plots are useful, sometimes a plot that
     supports interactive zooming, and hover tooltips for
-    individual points is much more desireable. This function
+    individual points is much more desirable. This function
     provides a simple interface for creating such plots. The
     result is a bokeh plot that will be displayed in a notebook.
 
@@ -1519,11 +1519,11 @@ def interactive(
         if hover_data is not None:
             warn(
                 "Too many points for hover data -- tooltips will not"
-                "be displayed. Sorry; try subssampling your data."
+                "be displayed. Sorry; try subsampling your data."
             )
         if interactive_text_search:
             warn(
-                "Too many points for text search." "Sorry; try subssampling your data."
+                "Too many points for text search." "Sorry; try subsampling your data."
             )
         if alpha is not None:
             warn("Alpha parameter will not be applied on holoviews plots")
@@ -1580,7 +1580,7 @@ def nearest_neighbour_distribution(umap_object, bins=25, ax=None):
     bins: int (optional, default 25)
         Number of bins to put the points into
 
-    ax: matlotlib axis (optional, default None)
+    ax: matplotlib axis (optional, default None)
         A matplotlib axis to plot to, or, if None, a new
         axis will be created and returned.
 

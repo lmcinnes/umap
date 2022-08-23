@@ -211,7 +211,7 @@ class ParametricUMAP(UMAP):
                 )
             # prepare X for training the network
             self._X = X
-            # geneate the graph on precomputed distances
+            # generate the graph on precomputed distances
             return super().fit_transform(precomputed_distances, y)
         else:
             return super().fit_transform(X, y)
@@ -240,7 +240,7 @@ class ParametricUMAP(UMAP):
             return super().transform(X)
 
     def inverse_transform(self, X):
-        """ "Transform X in the existing embedded space back into the input
+        """ Transform X in the existing embedded space back into the input
         data space and return that transformed output.
         Parameters
         ----------
@@ -289,7 +289,7 @@ class ParametricUMAP(UMAP):
                 outputs["reconstruction"] = embedding_to_recon
 
         else:
-            # this is the sham input (its just a 0) to make keras think there is input data
+            # this is the sham input (it's just a 0) to make keras think there is input data
             batch_sample = tf.keras.layers.Input(
                 shape=(1), dtype=tf.int32, name="batch_sample"
             )
@@ -545,7 +545,7 @@ def get_graph_elements(graph_, n_epochs):
     weight np.array
         edge weight
     n_vertices int
-        number of verticies in graph
+        number of vertices in graph
     """
     ### should we remove redundancies () here??
     # graph_ = remove_redundant_edges(graph_)
@@ -668,7 +668,7 @@ def compute_cross_entropy(
     log_probabilities_distance : array
         low dimensional log probabilities
     EPS : float, optional
-        offset to to ensure log is taken of a positive number, by default 1e-4
+        offset to ensure log is taken of a positive number, by default 1e-4
     repulsion_strength : float, optional
         strength of repulsion between negative samples, by default 1.0
 
@@ -677,7 +677,7 @@ def compute_cross_entropy(
     attraction_term: tf.float32
         attraction term for cross entropy loss
     repellant_term: tf.float32
-        repellant term for cross entropy loss
+        repellent term for cross entropy loss
     cross_entropy: tf.float32
         cross entropy umap loss
 
@@ -686,7 +686,7 @@ def compute_cross_entropy(
     attraction_term = -probabilities_graph * tf.math.log_sigmoid(
         log_probabilities_distance
     )
-    # use numerically stable repellant term
+    # use numerically stable repellent term
     # Shi et al. 2022 (https://arxiv.org/abs/2111.08851)
     # log(1 - sigmoid(logits)) = log(sigmoid(logits)) - logits
     repellant_term = (
@@ -695,7 +695,7 @@ def compute_cross_entropy(
         * repulsion_strength
     )
 
-    # balance the expected losses between atrraction and repel
+    # balance the expected losses between attraction and repel
     CE = attraction_term + repellant_term
     return attraction_term, repellant_term, CE
 
@@ -710,7 +710,7 @@ def umap_loss(
     repulsion_strength=1.0,
 ):
     """
-    Generate a keras-ccompatible loss function for UMAP loss
+    Generate a keras-compatible loss function for UMAP loss
 
     Parameters
     ----------
@@ -720,12 +720,12 @@ def umap_loss(
         number of negative samples per positive samples to train on
     _a : float
         distance parameter in embedding space
-    _b : float float
+    _b : float
         distance parameter in embedding space
     edge_weights : array
         weights of all edges from sparse UMAP graph
     parametric_embedding : bool
-        whether the embeddding is parametric or nonparametric
+        whether the embedding is parametric or nonparametric
     repulsion_strength : float, optional
         strength of repulsion vs attraction for cross-entropy, by default 1.0
 

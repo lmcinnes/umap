@@ -157,7 +157,7 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
     Parameters
     ----------
     distances: array of shape (n_samples, n_neighbors)
-        Distances to nearest neighbors for each samples. Each row should be a
+        Distances to nearest neighbors for each sample. Each row should be a
         sorted list of distances to a given samples nearest neighbors.
 
     k: float
@@ -905,7 +905,7 @@ def make_epochs_per_sample(weights, n_epochs):
     Parameters
     ----------
     weights: array of shape (n_1_simplices)
-        The weights ofhow much we wish to sample each 1-simplex.
+        The weights of how much we wish to sample each 1-simplex.
 
     n_epochs: int
         The total number of epochs we want to train for.
@@ -1298,7 +1298,7 @@ def init_graph_transform(graph, embedding):
     Parameters
     ----------
     graph: csr_matrix (n_new_samples, n_samples)
-        A matrix indicating the the 1-simplices and their associated strengths.  These strengths should
+        A matrix indicating the 1-simplices and their associated strengths.  These strengths should
         be values between zero and one and not normalized.  One indicating that the new point was identical
         to one of our original points.
 
@@ -2486,7 +2486,7 @@ class UMAP(BaseEstimator):
                 self.verbose,
                 self.densmap or self.output_dens,
             )
-            # Report the number of vertices with degree 0 in our our umap.graph_
+            # Report the number of vertices with degree 0 in our umap.graph_
             # This ensures that they were properly disconnected.
             vertices_disconnected = np.sum(
                 np.array(self.graph_.sum(axis=1)).flatten() == 0
@@ -2555,7 +2555,7 @@ class UMAP(BaseEstimator):
                 self.verbose,
                 self.densmap or self.output_dens,
             )
-            # Report the number of vertices with degree 0 in our our umap.graph_
+            # Report the number of vertices with degree 0 in our umap.graph_
             # This ensures that they were properly disconnected.
             vertices_disconnected = np.sum(
                 np.array(self.graph_.sum(axis=1)).flatten() == 0
