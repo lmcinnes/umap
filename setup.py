@@ -49,7 +49,8 @@ configuration = {
         "scikit-learn >= 0.22",
         "numba >= 0.51.2",
         "pynndescent >= 0.5",
-        "tbb >= 2019.0" "tqdm",
+        "tbb >= 2019.0",
+        "tqdm",
     ],
     "extras_require": {
         "plot": [
