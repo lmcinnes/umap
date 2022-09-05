@@ -1,10 +1,13 @@
 from umap import UMAP
+from umap.umap_ import nearest_neighbors
 from scipy import sparse
 import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.metrics import adjusted_rand_score
 from sklearn.neighbors import KDTree
 from scipy.spatial.distance import cdist, pdist, squareform
+import pytest
+import warnings
 
 try:
     # works for sklearn>=0.22
@@ -214,3 +217,100 @@ def test_umap_inverse_transform_on_iris(iris, iris_model):
             highd_centroid, k=10, return_distance=False
         )
         assert np.intersect1d(near_points, highd_near_points[0]).shape[0] >= 3
+
+
+def create_iris_subset_model(iris, iris_selection, seed=42):
+    return UMAP(
+        n_neighbors=10,
+        min_dist=0.01,
+        random_state=seed,
+        force_approximation_algorithm=True,
+    ).fit(iris.data[iris_selection])
+
+
+def test_precomputed_knn_on_iris(iris, iris_selection, iris_subset_model):
+    # this to compare two similarity graphs which should be nearly the same
+    def rms(a, b):
+        return np.sqrt(np.mean(np.square(a - b)))
+
+    data = iris.data[iris_selection]
+    new_data = iris.data[~iris_selection]
+
+    knn = nearest_neighbors(
+        data,
+        n_neighbors=10,
+        metric="euclidean",
+        metric_kwds=None,
+        angular=False,
+        random_state=42,
+    )
+
+    # repeated UMAP arguments we don't want to mis-specify
+    umap_args = dict(
+        n_neighbors=iris_subset_model.n_neighbors,
+        random_state=iris_subset_model.random_state,
+        min_dist=iris_subset_model.min_dist,
+    )
+
+    # Trying to pass a precomputed knn with a small dataset gets a warning and the
+    # precomputed knn is ignored
+    with pytest.warns(Warning, match="your data is small") as record:
+        fitter_with_knn_ignored = UMAP(
+            **umap_args,
+            precomputed_knn=knn,
+        ).fit(data)
+        assert len(record) == 1
+    # you therefore get the same output as the iris subset model result
+    np.testing.assert_array_equal(
+        fitter_with_knn_ignored.embedding_, iris_subset_model.embedding_
+    )
+
+    # setting force_approximation_algorithm=True will suppress the warning and will
+    # use the knn we provide
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        fitter_with_precomputed_knn = UMAP(
+            **umap_args,
+            precomputed_knn=knn,
+            force_approximation_algorithm=True,
+        ).fit(data)
+    # embeddings and similarity graph are NOT the same due to choices of nearest
+    # neighbor in non-exact case: similarity graph is most stable for comparing output
+    # threshold for similarity in graph empirically chosen by comparing the iris subset
+    # model with force_approximation_algorithm=True and different random seeds
+    assert rms(fitter_with_precomputed_knn.graph_, iris_subset_model.graph_) < 0.005
+
+    # #848: you can pass only the indices and distances (typical precomputed knn case if
+    # you don't use UMAP's internals), this will give a warning but works as long as
+    # you don't want to transform new data
+    with pytest.warns(Warning, match="not an NNDescent object") as record:
+        fitter_with_no_index_knn = UMAP(
+            **umap_args,
+            precomputed_knn=(knn[0], knn[1]),
+            force_approximation_algorithm=True,
+        ).fit(data)
+        assert len(record) == 1
+    assert rms(fitter_with_no_index_knn.graph_, iris_subset_model.graph_) < 0.005
+    # should get the same output as when the knn includes the search index
+    np.testing.assert_array_equal(
+        fitter_with_no_index_knn.embedding_, fitter_with_precomputed_knn.embedding_
+    )
+
+    # #848 (continued): if you don't have a search index, attempting to transform
+    # will raise an error
+    with pytest.raises(NotImplementedError, match="search index"):
+        _ = fitter_with_no_index_knn.transform(new_data)
+
+    # passing a no-index-knn with small data will give the too-small warning
+    # this results in ignoring the provided knn just like the with-index-knn case
+    with pytest.warns(Warning, match="your data is small") as record:
+        fitter_with_no_index_knn_ignored = UMAP(
+            **umap_args,
+            precomputed_knn=(knn[0], knn[1]),
+            force_approximation_algorithm=False,
+        ).fit(data)
+        assert len(record) == 1
+    # you therefore get the same output as the iris subset model result
+    np.testing.assert_array_equal(
+        fitter_with_no_index_knn_ignored.embedding_, iris_subset_model.embedding_
+    )
