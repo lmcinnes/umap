@@ -219,15 +219,6 @@ def test_umap_inverse_transform_on_iris(iris, iris_model):
         assert np.intersect1d(near_points, highd_near_points[0]).shape[0] >= 3
 
 
-def create_iris_subset_model(iris, iris_selection, seed=42):
-    return UMAP(
-        n_neighbors=10,
-        min_dist=0.01,
-        random_state=seed,
-        force_approximation_algorithm=True,
-    ).fit(iris.data[iris_selection])
-
-
 def test_precomputed_knn_on_iris(iris, iris_selection, iris_subset_model):
     # this to compare two similarity graphs which should be nearly the same
     def rms(a, b):
