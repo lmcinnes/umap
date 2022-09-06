@@ -1001,6 +1001,7 @@ def simplicial_set_embedding(
         How to initialize the low dimensional embedding. Options are:
             * 'spectral': use a spectral embedding of the fuzzy 1-skeleton
             * 'random': assign initial embedding positions at random.
+            * 'pca': use the first n_components from PCA applied to the input data.
             * A numpy array of initial embedding positions.
 
     random_state: numpy RandomState or equivalent
@@ -1446,6 +1447,7 @@ class UMAP(BaseEstimator):
         How to initialize the low dimensional embedding. Options are:
             * 'spectral': use a spectral embedding of the fuzzy 1-skeleton
             * 'random': assign initial embedding positions at random.
+            * 'pca': use the first n_components from PCA applied to the input data.
             * A numpy array of initial embedding positions.
 
     min_dist: float (optional, default 0.1)
