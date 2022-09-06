@@ -22,3 +22,7 @@ venv
 
 # metadata from pip-installing repo
 umap_learn.egg-info
+
+# docs
+doc/auto_examples
+doc/_build
