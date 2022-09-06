@@ -155,11 +155,11 @@ Let’s look at a couple of sample documents:
     
     
     
-    |>The student of "regional killings" alias Davidian (not the Davidian religios sect) writes:
+    \|>The student of "regional killings" alias Davidian (not the Davidian religios sect) writes:
     
     
-    |>Greater Armenia would stretch from Karabakh, to the Black Sea, to the
-    |>Mediterranean, so if you use the term "Greater Armenia
+    \|>Greater Armenia would stretch from Karabakh, to the Black Sea, to the
+    \|>Mediterranean, so if you use the term "Greater Armenia
     ---------------------------
 
 

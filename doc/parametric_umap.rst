@@ -1,5 +1,5 @@
 Parametric (neural network) Embedding
-=============================
+=====================================
 
 .. role:: python(code)
    :language: python
@@ -228,4 +228,4 @@ If you use Parametric UMAP in your work, please cite our paper:
      year={2021},
      publisher={MIT Press One Rogers Street, Cambridge, MA 02142-1209, USA journals-info~…}
    }
-```
+

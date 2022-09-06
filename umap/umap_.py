@@ -302,7 +302,7 @@ def nearest_neighbors(
         The distances to the ``n_neighbors`` closest points in the dataset.
 
     rp_forest: list of trees
-        The random projection forest used for searching (if used, None otherwise)
+        The random projection forest used for searching (if used, None otherwise).
     """
     if verbose:
         print(ts(), "Finding Nearest Neighbors")
@@ -384,10 +384,10 @@ def compute_membership_strengths(
         The local connectivity adjustment.
 
     return_dists: bool (optional, default False)
-        Whether to return the pairwise distance associated with each edge
+        Whether to return the pairwise distance associated with each edge.
 
     bipartite: bool (optional, default False)
-        Does the nearest neighbour set represent a bipartite graph?  That is are the
+        Does the nearest neighbour set represent a bipartite graph? That is, are the
         nearest neighbour indices from the same point set as the row indices?
 
     Returns
@@ -480,30 +480,31 @@ def fuzzy_simplicial_set(
         returns a float can be provided. For performance purposes it is
         required that this be a numba jit'd function. Valid string metrics
         include:
-            * euclidean (or l2)
-            * manhattan (or l1)
-            * cityblock
-            * braycurtis
-            * canberra
-            * chebyshev
-            * correlation
-            * cosine
-            * dice
-            * hamming
-            * jaccard
-            * kulsinski
-            * ll_dirichlet
-            * mahalanobis
-            * matching
-            * minkowski
-            * rogerstanimoto
-            * russellrao
-            * seuclidean
-            * sokalmichener
-            * sokalsneath
-            * sqeuclidean
-            * yule
-            * wminkowski
+
+        * euclidean (or l2)
+        * manhattan (or l1)
+        * cityblock
+        * braycurtis
+        * canberra
+        * chebyshev
+        * correlation
+        * cosine
+        * dice
+        * hamming
+        * jaccard
+        * kulsinski
+        * ll_dirichlet
+        * mahalanobis
+        * matching
+        * minkowski
+        * rogerstanimoto
+        * russellrao
+        * seuclidean
+        * sokalmichener
+        * sokalsneath
+        * sqeuclidean
+        * yule
+        * wminkowski
 
         Metrics that take arguments (such as minkowski, mahalanobis etc.)
         can have arguments passed via the metric_kwds dictionary. At this
@@ -988,6 +989,7 @@ def simplicial_set_embedding(
 
     init: string
         How to initialize the low dimensional embedding. Options are:
+
             * 'spectral': use a spectral embedding of the fuzzy 1-skeleton
             * 'random': assign initial embedding positions at random.
             * A numpy array of initial embedding positions.
@@ -1288,7 +1290,7 @@ def init_transform(indices, weights, embedding):
 
 def init_graph_transform(graph, embedding):
     """Given a bipartite graph representing the 1-simplices and strengths between the
-     new points and the original data set along with an embedding of the original points
+    new points and the original data set along with an embedding of the original points
     initialize the positions of new points relative to the strengths (of their neighbors in the source data).
 
     If a point is in our original data set it embeds at the original points coordinates.
@@ -1390,29 +1392,31 @@ class UMAP(BaseEstimator):
         returns a float can be provided. For performance purposes it is
         required that this be a numba jit'd function. Valid string metrics
         include:
-            * euclidean
-            * manhattan
-            * chebyshev
-            * minkowski
-            * canberra
-            * braycurtis
-            * mahalanobis
-            * wminkowski
-            * seuclidean
-            * cosine
-            * correlation
-            * haversine
-            * hamming
-            * jaccard
-            * dice
-            * russelrao
-            * kulsinski
-            * ll_dirichlet
-            * hellinger
-            * rogerstanimoto
-            * sokalmichener
-            * sokalsneath
-            * yule
+
+        * euclidean
+        * manhattan
+        * chebyshev
+        * minkowski
+        * canberra
+        * braycurtis
+        * mahalanobis
+        * wminkowski
+        * seuclidean
+        * cosine
+        * correlation
+        * haversine
+        * hamming
+        * jaccard
+        * dice
+        * russelrao
+        * kulsinski
+        * ll_dirichlet
+        * hellinger
+        * rogerstanimoto
+        * sokalmichener
+        * sokalsneath
+        * yule
+
         Metrics that take arguments (such as minkowski, mahalanobis etc.)
         can have arguments passed via the metric_kwds dictionary. At this
         time care must be taken and dictionary elements must be ordered
@@ -1429,6 +1433,7 @@ class UMAP(BaseEstimator):
 
     init: string (optional, default 'spectral')
         How to initialize the low dimensional embedding. Options are:
+
             * 'spectral': use a spectral embedding of the fuzzy 1-skeleton
             * 'random': assign initial embedding positions at random.
             * A numpy array of initial embedding positions.
@@ -1478,7 +1483,7 @@ class UMAP(BaseEstimator):
         cost, but slightly more accuracy.
 
     transform_queue_size: float (optional, default 4.0)
-        For transform operations (embedding new points using a trained model_
+        For transform operations (embedding new points using a trained model
         this will control how aggressively to search for nearest neighbors.
         Larger values will result in slower performance but more accurate
         nearest neighbor evaluation.

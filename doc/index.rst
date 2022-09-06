@@ -73,6 +73,7 @@ PyPI install, presuming you have numba and sklearn and all its requirements
    aligned_umap_basic_usage
    aligned_umap_politics_demo
    precomputed_k-nn
+   benchmarking
    release_notes
    faq
 
