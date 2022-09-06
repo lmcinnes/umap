@@ -29,7 +29,7 @@ into your own repository, make changes there, and then submit a pull request.
 To build the docs locally, install the documentation tools requirements:
 
 ```bash
-sudo pip install -r docs_requirements.txt
+pip install -r docs_requirements.txt
 ```
 
 Then run:
