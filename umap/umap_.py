@@ -14,6 +14,7 @@ from sklearn.utils.validation import check_is_fitted
 from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import normalize
 from sklearn.neighbors import KDTree
+from sklearn.decomposition import PCA, TruncatedSVD
 
 try:
     import joblib
@@ -920,6 +921,16 @@ def make_epochs_per_sample(weights, n_epochs):
     return result
 
 
+# scale coords so that the largest coordinate is max_coords, then add normal-distributed
+# noise with standard deviation noise
+def noisy_scale_coords(coords, random_state, max_coord=10.0, noise=0.0001):
+    expansion = max_coord / np.abs(coords).max()
+    coords = (coords * expansion).astype(np.float32)
+    return coords + random_state.normal(scale=noise, size=coords.shape).astype(
+        np.float32
+    )
+
+
 def simplicial_set_embedding(
     data,
     graph,
@@ -1073,9 +1084,17 @@ def simplicial_set_embedding(
         embedding = random_state.uniform(
             low=-10.0, high=10.0, size=(graph.shape[0], n_components)
         ).astype(np.float32)
+    elif isinstance(init, str) and init == "pca":
+        if scipy.sparse.issparse(data):
+            pca = TruncatedSVD(n_components=n_components, random_state=random_state)
+        else:
+            pca = PCA(n_components=n_components, random_state=random_state)
+        embedding = pca.fit_transform(data).astype(np.float32)
+        embedding = noisy_scale_coords(
+            embedding, random_state, max_coord=10, noise=0.0001
+        )
     elif isinstance(init, str) and init == "spectral":
-        # We add a little noise to avoid local minima for optimization to come
-        initialisation = spectral_layout(
+        embedding = spectral_layout(
             data,
             graph,
             n_components,
@@ -1083,13 +1102,9 @@ def simplicial_set_embedding(
             metric=metric,
             metric_kwds=metric_kwds,
         )
-        expansion = 10.0 / np.abs(initialisation).max()
-        embedding = (initialisation * expansion).astype(
-            np.float32
-        ) + random_state.normal(
-            scale=0.0001, size=[graph.shape[0], n_components]
-        ).astype(
-            np.float32
+        # We add a little noise to avoid local minima for optimization to come
+        embedding = noisy_scale_coords(
+            embedding, random_state, max_coord=10, noise=0.0001
         )
     else:
         init_data = np.array(init)
@@ -1698,10 +1713,11 @@ class UMAP(BaseEstimator):
         if not isinstance(self.init, str) and not isinstance(self.init, np.ndarray):
             raise ValueError("init must be a string or ndarray")
         if isinstance(self.init, str) and self.init not in (
+            "pca",
             "spectral",
             "random",
         ):
-            raise ValueError('string init values must be "spectral" or "random"')
+            raise ValueError('string init values must be "pca", "spectral" or "random"')
         if (
             isinstance(self.init, np.ndarray)
             and self.init.shape[1] != self.n_components
