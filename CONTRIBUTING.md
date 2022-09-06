@@ -24,6 +24,23 @@ especially appreciated. To contribute to the documentation please
 [fork the project](https://github.com/lmcinnes/umap/issues#fork-destination-box)
 into your own repository, make changes there, and then submit a pull request.
 
+### Building the Documentation Locally
+
+To build the docs locally, install the documentation tools requirements:
+
+```bash
+pip install -r docs_requirements.txt
+```
+
+Then run:
+
+```bash
+sphinx-build -b html doc doc/_build
+```
+
+This will build the documentation in HTML format. You will be able to find the output
+in the `doc/_build` folder.
+
 ## Code
 
 Code contributions are always welcome, from simple bug fixes, to new features. To

@@ -222,7 +222,7 @@ sphinx_gallery_conf = {
 
 
 def setup(app):
-    app.add_javascript(
+    app.add_js_file(
         "https://cdnjs.cloudflare.com/ajax/libs/require.js/2.1.10/require.min.js"
     )
-    app.add_javascript("https://cdn.plot.ly/plotly-latest.min.js")
+    app.add_js_file("https://cdn.plot.ly/plotly-latest.min.js")
