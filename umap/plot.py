@@ -480,6 +480,7 @@ def show(plot_to_show):
 
 def points(
     umap_object,
+    points=None,
     labels=None,
     values=None,
     theme=None,
@@ -509,6 +510,12 @@ def points(
     ----------
     umap_object: trained UMAP object
         A trained UMAP object that has a 2D embedding.
+
+    points: array, shape (n_samples, dim) (optional, default None)
+        An array of points to be plotted. Usually this is None
+        and so the original embedding points of the umap_object
+        are used. However points can be passed explicitly instead
+        which is useful for points manually transformed.
 
     labels: array, shape (n_samples,) (optional, default None)
         An array of labels (assumed integer or categorical),
@@ -625,7 +632,8 @@ def points(
         if not 0.0 <= alpha <= 1.0:
             raise ValueError("Alpha must be between 0 and 1 inclusive")
 
-    points = _get_embedding(umap_object)
+    if points is None:
+        points = _get_embedding(umap_object)
 
     if subset_points is not None:
         if len(subset_points) != points.shape[0]:
