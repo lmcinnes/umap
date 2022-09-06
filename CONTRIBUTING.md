@@ -39,7 +39,7 @@ sphinx-build -b html doc doc/_build
 ```
 
 This will build the documentation in HTML format. You will be able to find the output
-in the `doc/build` folder.
+in the `doc/_build` folder.
 
 ## Code
 
