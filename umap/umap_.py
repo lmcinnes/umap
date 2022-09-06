@@ -1596,7 +1596,15 @@ class UMAP(BaseEstimator):
         neighbors in the precomputed_knn must be greater or equal to the
         n_neighbors parameter. This should be a tuple containing the output
         of the nearest_neighbors() function or attributes from a previously fit
-        UMAP object; (knn_indices, knn_dists,knn_search_index).
+        UMAP object; (knn_indices, knn_dists, knn_search_index). If you wish to use
+        k-nearest neighbors data calculated by another package then provide a tuple of
+        the form (knn_indices, knn_dists). The contents of the tuple should be two numpy
+        arrays of shape (N, n_neighbors) where N is the number of items in the
+        input data. The first array should be the integer indices of the nearest
+        neighbors, and the second array should be the corresponding distances. The
+        nearest neighbor of each item should be itself, e.g. the nearest neighbor of
+        item 0 should be 0, the nearest neighbor of item 1 is 1 and so on. Please note
+        that you will *not* be able to transform new data in this case.
     """
 
     def __init__(
@@ -1926,10 +1934,17 @@ class UMAP(BaseEstimator):
                     "precomputed_knn[0] and precomputed_knn[1]"
                     " must be numpy arrays of the same size."
                 )
-            if not isinstance(self.knn_search_index, NNDescent):
-                raise ValueError(
-                    "precomputed_knn[2] (knn_search_index)"
-                    " must be an NNDescent object."
+            # #848: warn but proceed if no search index is present...
+            # ...but actually don't warn if the data is small and
+            # force_approximation_algorithm=False because this knn data will get ignored
+            # later anyway
+            if not isinstance(self.knn_search_index, NNDescent) and (
+                self.knn_dists.shape[0] >= 4096 or self.force_approximation_algorithm
+            ):
+                warn(
+                    "precomputed_knn[2] (knn_search_index) "
+                    "is not an NNDescent object: transforming new data with transform "
+                    "will be unavailable."
                 )
             if self.knn_dists.shape[1] < self.n_neighbors:
                 warn(
@@ -2285,7 +2300,11 @@ class UMAP(BaseEstimator):
 
         self.knn_indices = self.precomputed_knn[0]
         self.knn_dists = self.precomputed_knn[1]
-        self.knn_search_index = self.precomputed_knn[2]
+        # #848: allow precomputed knn to not have a search index
+        if len(self.precomputed_knn) == 2:
+            self.knn_search_index = None
+        else:
+            self.knn_search_index = self.precomputed_knn[2]
 
         self._validate_parameters()
 
@@ -2820,6 +2839,14 @@ class UMAP(BaseEstimator):
         if self.densmap:
             raise NotImplementedError(
                 "Transforming data into an existing embedding not supported for densMAP."
+            )
+
+        # #848: knn_search_index is allowed to be None if not transforming new data,
+        # so now we must validate that if it exists it is not None
+        if hasattr(self, "_knn_search_index") and self._knn_search_index is None:
+            raise NotImplementedError(
+                "No search index available: transforming data"
+                " into an existing embedding is not supported"
             )
 
         # X = check_array(X, dtype=np.float32, order="C", accept_sparse="csr")
