@@ -45,10 +45,11 @@ configuration = {
     "packages": ["umap"],
     "install_requires": [
         "numpy >= 1.17",
+        "scipy >= 1.3.1",
         "scikit-learn >= 0.22",
-        "scipy >= 1.0",
-        "numba >= 0.49",
+        "numba >= 0.51.2",
         "pynndescent >= 0.5",
+        "tbb >= 2019.0",
         "tqdm",
     ],
     "extras_require": {
