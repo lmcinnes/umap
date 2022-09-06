@@ -234,5 +234,5 @@ def setup(app):
 
 
 # This prevents complaints autosummary stub files not being found for each method on
-# the class. See https://stackoverflow.com/questions/65198998/sphinx-warning-autosummary-stub-file-not-found-for-the-methods-of-the-class-c
+# the class. See https://stackoverflow.com/q/65198998
 numpydoc_show_class_members = False
