@@ -39,6 +39,7 @@ extensions = [
     "sphinx.ext.viewcode",
     #    'bokeh.sphinxext.bokeh_plot',
     "sphinx_gallery.gen_gallery",
+    "numpydoc",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -230,3 +231,8 @@ def setup(app):
         "https://cdnjs.cloudflare.com/ajax/libs/require.js/2.1.10/require.min.js"
     )
     app.add_js_file("https://cdn.plot.ly/plotly-latest.min.js")
+
+
+# This prevents complaints autosummary stub files not being found for each method on
+# the class. See https://stackoverflow.com/questions/65198998/sphinx-warning-autosummary-stub-file-not-found-for-the-methods-of-the-class-c
+numpydoc_show_class_members = False
