@@ -16,4 +16,5 @@ Useful Functions
 
 .. automodule:: umap.umap_
    :members:
+   :exclude-members: UMAP
 

@@ -39,6 +39,7 @@ extensions = [
     "sphinx.ext.viewcode",
     #    'bokeh.sphinxext.bokeh_plot',
     "sphinx_gallery.gen_gallery",
+    "numpydoc",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -72,7 +73,7 @@ release = "0.5"
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = None
+language = "en"
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -209,13 +210,17 @@ sphinx_gallery_conf = {
     "gallery_dirs": "auto_examples",
     "plot_gallery": False,  # Turn off running the examples for now
     "reference_url": {
+        # The commented-out URLs are supposed to have search.js files under them.
         "umap": None,
-        "python": "https://docs.python.org/{.major}".format(sys.version_info),
-        "numpy": "https://docs.scipy.org/doc/numpy/",
-        "scipy": "https://docs.scipy.org/doc/scipy/reference",
+        # "python": "https://docs.python.org/{.major}".format(sys.version_info),
+        # Numpy actually DOES have a search.js file but does return valid JSON
+        # (missing double quotes on some property names)
+        # "numpy": "https://docs.scipy.org/doc/numpy/",
+        # scipt ends up with  a 404 for a different URL
+        # "scipy": "https://docs.scipy.org/doc/scipy/reference",
         "matplotlib": "https://matplotlib.org/",
-        "pandas": "https://pandas.pydata.org/pandas-docs/stable/",
-        "sklearn": "http://scikit-learn.org/stable/",
+        # "pandas": "https://pandas.pydata.org/pandas-docs/stable/",
+        # "sklearn": "http://scikit-learn.org/stable/",
         "bokeh": "http://bokeh.pydata.org/en/latest/",
     },
 }
@@ -226,3 +231,8 @@ def setup(app):
         "https://cdnjs.cloudflare.com/ajax/libs/require.js/2.1.10/require.min.js"
     )
     app.add_js_file("https://cdn.plot.ly/plotly-latest.min.js")
+
+
+# This prevents complaints autosummary stub files not being found for each method on
+# the class. See https://stackoverflow.com/q/65198998
+numpydoc_show_class_members = False
