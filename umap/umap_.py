@@ -992,11 +992,14 @@ def simplicial_set_embedding(
         in greater repulsive force being applied, greater optimization
         cost, but slightly more accuracy.
 
-    n_epochs: int (optional, default 0)
+    n_epochs: int (optional, default 0), or list of int
         The number of training epochs to be used in optimizing the
         low dimensional embedding. Larger values result in more accurate
         embeddings. If 0 is specified a value will be selected based on
         the size of the input dataset (200 for large datasets, 500 for small).
+        If a list of int is specified, then the intermediate embeddings at the
+        different epochs specified in that list are returned in
+        ``aux_data["embedding_list"]``.
 
     init: string
         How to initialize the low dimensional embedding. Options are:
@@ -1076,8 +1079,11 @@ def simplicial_set_embedding(
     if n_epochs is None:
         n_epochs = default_epochs
 
-    if n_epochs > 10:
-        graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
+    # If n_epoch is a list, get the maximum epoch to reach
+    n_epochs_max = max(n_epochs) if isinstance(n_epochs, list) else n_epochs
+
+    if n_epochs_max > 10:
+        graph.data[graph.data < (graph.data.max() / float(n_epochs_max))] = 0.0
     else:
         graph.data[graph.data < (graph.data.max() / float(default_epochs))] = 0.0
 
@@ -1122,7 +1128,7 @@ def simplicial_set_embedding(
             else:
                 embedding = init_data
 
-    epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs)
+    epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs_max)
 
     head = graph.row
     tail = graph.col
@@ -1213,6 +1219,11 @@ def simplicial_set_embedding(
             tqdm_kwds=tqdm_kwds,
             move_other=True,
         )
+
+    if isinstance(embedding, list):
+        aux_data["embedding_list"] = embedding
+        embedding = embedding[-1].copy()
+
     if output_dens:
         if verbose:
             print(ts() + " Computing embedding densities")
@@ -1761,10 +1772,19 @@ class UMAP(BaseEstimator):
                 raise ValueError("n_components must be an int")
         if self.n_components < 1:
             raise ValueError("n_components must be greater than 0")
-        if self.n_epochs is not None and (
-            self.n_epochs < 0 or not isinstance(self.n_epochs, int)
+        self.n_epochs_list = None
+        if isinstance(self.n_epochs, list) or isinstance(self.n_epochs, tuple) or \
+                isinstance(self.n_epochs, np.ndarray):
+            if not issubclass(np.array(self.n_epochs).dtype.type, np.integer) or \
+                    not np.all(np.array(self.n_epochs) >= 0):
+                raise ValueError("n_epochs must be a nonnegative integer "
+                                 "or a list of nonnegative integers")
+            self.n_epochs_list = list(self.n_epochs)
+        elif self.n_epochs is not None and (
+                self.n_epochs < 0 or not isinstance(self.n_epochs, int)
         ):
-            raise ValueError("n_epochs must be a nonnegative integer")
+            raise ValueError("n_epochs must be a nonnegative integer "
+                             "or a list of nonnegative integers")
         if self.metric_kwds is None:
             self._metric_kwds = {}
         else:
@@ -2723,12 +2743,22 @@ class UMAP(BaseEstimator):
             print(ts(), "Construct embedding")
 
         if self.transform_mode == "embedding":
+            epochs = self.n_epochs_list if self.n_epochs_list is not None else self.n_epochs
             self.embedding_, aux_data = self._fit_embed_data(
                 self._raw_data[index],
-                self.n_epochs,
+                epochs,
                 init,
                 random_state,  # JH why raw data?
             )
+
+            if self.n_epochs_list is not None:
+                if "embedding_list" not in aux_data:
+                    raise KeyError("No list of embedding were found in 'aux_data'. "
+                                   "It is likely the layout optimization function "
+                                   "doesn't support the list of int for 'n_epochs'.")
+                else:
+                    self.embedding_list_ = [e[inverse] for e in aux_data["embedding_list"]]
+
             # Assign any points that are fully disconnected from our manifold(s) to have embedding
             # coordinates of np.nan.  These will be filtered by our plotting functions automatically.
             # They also prevent users from being deceived a distance query to one of these points.
