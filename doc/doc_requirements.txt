@@ -7,3 +7,4 @@ datashader>=0.6
 seaborn>=0.8
 tqdm
 sphinx-gallery
+numpydoc
