@@ -49,7 +49,7 @@ def test_umap_trustworthiness_random_init(nn_data):
     ).fit_transform(data)
     trust = trustworthiness(data, embedding, n_neighbors=10)
     assert (
-        trust >= 0.75
+        trust >= 0.8
     ), "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust)
 
 
