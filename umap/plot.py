@@ -1439,8 +1439,8 @@ def interactive(
 
     if points.shape[0] <= width * height // 10:
         tooltips = None
+        tooltip_needed = True
         if hover_data is not None:
-            tooltip_needed = True
             tooltip_dict = {}
             for col_name in hover_data:
                 data[col_name] = hover_data[col_name]
