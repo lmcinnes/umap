@@ -23,7 +23,7 @@ def test_umap_sparse_trustworthiness(sparse_test_data):
     embedding = UMAP(n_neighbors=10, n_epochs=100).fit_transform(sparse_test_data[:100])
     trust = trustworthiness(sparse_test_data[:100].toarray(), embedding, n_neighbors=10)
     assert (
-        trust >= 0.85
+        trust >= 0.88
     ), "Insufficiently trustworthy embedding for sparse test dataset: {}".format(trust)
 
 
