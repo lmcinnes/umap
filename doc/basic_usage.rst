@@ -34,7 +34,7 @@ visualise the results of UMAP, and pandas to make that a little easier.
 Penguin data
 ------------
 
-.. image:: https://github.com/allisonhorst/palmerpenguins/blob/c19a904462482430170bfe2c718775ddb7dbb885/man/figures/lter_penguins.png?raw=true
+.. image:: https://raw.githubusercontent.com/allisonhorst/palmerpenguins/c19a904462482430170bfe2c718775ddb7dbb885/man/figures/lter_penguins.png
    :width: 300px
    :align: center
    :alt: Penguins
@@ -183,7 +183,7 @@ this easy.
 
 .. code:: python3
 
-    sns.pairplot(penguins, hue='species');
+    sns.pairplot(penguins.drop("year", axis=1), hue='species');
 
 
 
