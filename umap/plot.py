@@ -1221,6 +1221,7 @@ def interactive(
     labels=None,
     values=None,
     hover_data=None,
+    tools=None,
     theme=None,
     cmap="Blues",
     color_key=None,
@@ -1274,6 +1275,14 @@ def interactive(
         should be a Series of length ``n_samples`` providing a value
         for each data point. Column names will be used for
         identifying information within the tooltip.
+
+    tools: List (optional, default None),
+        Defines the tools to be configured for interactive plots.
+        The list can be mixed type of string and tools objects defined by
+        Bokeh like HoverTool. Default tool list Bokeh uses is
+        ["pan","wheel_zoom","box_zoom","save","reset","help",].
+        When tools are specified, and includes hovertool, automatic tooltip
+        based on hover_data is not created.
 
     theme: string (optional, default None)
         A color theme to use for plotting. A small set of
@@ -1429,15 +1438,19 @@ def interactive(
             hover_data = hover_data[subset_points]
 
     if points.shape[0] <= width * height // 10:
-
+        tooltips = None
+        tooltip_needed = True
         if hover_data is not None:
             tooltip_dict = {}
             for col_name in hover_data:
                 data[col_name] = hover_data[col_name]
                 tooltip_dict[col_name] = "@{" + col_name + "}"
             tooltips = list(tooltip_dict.items())
-        else:
-            tooltips = None
+
+            for _tool in tools:
+                if _tool.__class__.__name__ == "HoverTool":
+                    tooltip_needed = False
+                    break
 
         if alpha is not None:
             data["alpha"] = alpha
@@ -1450,7 +1463,8 @@ def interactive(
         plot = bpl.figure(
             width=width,
             height=height,
-            tooltips=tooltips,
+            tooltips=None if not tooltip_needed else tooltips,
+            tools=tools,
             background_fill_color=background,
         )
         plot.circle(
