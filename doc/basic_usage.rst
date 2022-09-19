@@ -34,7 +34,7 @@ visualise the results of UMAP, and pandas to make that a little easier.
 Penguin data
 ------------
 
-.. image:: https://github.com/allisonhorst/palmerpenguins/raw/master/man/figures/lter_penguins.png
+.. image:: https://raw.githubusercontent.com/allisonhorst/palmerpenguins/c19a904462482430170bfe2c718775ddb7dbb885/man/figures/lter_penguins.png
    :width: 300px
    :align: center
    :alt: Penguins
@@ -48,7 +48,7 @@ of what the dimension reduction is doing.
 
 .. code:: python3
 
-    penguins = pd.read_csv("https://github.com/allisonhorst/palmerpenguins/raw/5b5891f01b52ae26ad8cb9755ec93672f49328a8/data/penguins_size.csv")
+    penguins = pd.read_csv("https://raw.githubusercontent.com/allisonhorst/palmerpenguins/c19a904462482430170bfe2c718775ddb7dbb885/inst/extdata/penguins.csv")
     penguins.head()
 
 
@@ -74,13 +74,14 @@ of what the dimension reduction is doing.
       <thead>
         <tr style="text-align: right;">
           <th></th>
-          <th>species_short</th>
+          <th>species</th>
           <th>island</th>
-          <th>culmen_length_mm</th>
-          <th>culmen_depth_mm</th>
+          <th>bill_length_mm</th>
+          <th>bill_depth_mm</th>
           <th>flipper_length_mm</th>
           <th>body_mass_g</th>
           <th>sex</th>
+          <th>year</th>
         </tr>
       </thead>
       <tbody>
@@ -92,7 +93,8 @@ of what the dimension reduction is doing.
           <td>18.7</td>
           <td>181.0</td>
           <td>3750.0</td>
-          <td>MALE</td>
+          <td>male</td>
+          <td>2007</td>
         </tr>
         <tr>
           <th>1</th>
@@ -102,7 +104,8 @@ of what the dimension reduction is doing.
           <td>17.4</td>
           <td>186.0</td>
           <td>3800.0</td>
-          <td>FEMALE</td>
+          <td>female</td>
+          <td>2007</td>
         </tr>
         <tr>
           <th>2</th>
@@ -112,7 +115,8 @@ of what the dimension reduction is doing.
           <td>18.0</td>
           <td>195.0</td>
           <td>3250.0</td>
-          <td>FEMALE</td>
+          <td>female</td>
+          <td>2007</td>
         </tr>
         <tr>
           <th>3</th>
@@ -123,6 +127,7 @@ of what the dimension reduction is doing.
           <td>NaN</td>
           <td>NaN</td>
           <td>NaN</td>
+          <td>2007</td>
         </tr>
         <tr>
           <th>4</th>
@@ -132,7 +137,8 @@ of what the dimension reduction is doing.
           <td>19.3</td>
           <td>193.0</td>
           <td>3450.0</td>
-          <td>FEMALE</td>
+          <td>female</td>
+          <td>2007</td>
         </tr>
       </tbody>
     </table>
@@ -147,7 +153,7 @@ proper handling of missing data.
 .. code:: python3
 
     penguins = penguins.dropna()
-    penguins.species_short.value_counts()
+    penguins.species.value_counts()
 
 
 
@@ -155,12 +161,12 @@ proper handling of missing data.
 .. parsed-literal::
 
     Adelie       146
-    Gentoo       120
+    Gentoo       119
     Chinstrap     68
-    Name: species_short, dtype: int64
+    Name: species, dtype: int64
 
 
-.. image:: https://github.com/allisonhorst/palmerpenguins/raw/master/man/figures/culmen_depth.png
+.. image:: https://github.com/allisonhorst/palmerpenguins/blob/c19a904462482430170bfe2c718775ddb7dbb885/man/figures/culmen_depth.png?raw=true
    :width: 300px
    :align: center
    :alt: Diagram of culmen measurements on a penguin
@@ -168,7 +174,7 @@ proper handling of missing data.
 See the `github repostiory <https://github.com/allisonhorst/penguins>`__
 for more details about the dataset itself. It consists of measurements
 of bill (culmen) and flippers and weights of three species of penguins,
-along with some other metadata about the penguins. In total we have 334
+along with some other metadata about the penguins. In total we have 333
 different penguins measured. Visualizing this data is a little bit
 tricky since we can't plot in 4 dimensions easily. Fortunately four is
 not that large a number, so we can just to a pairwise feature
@@ -177,7 +183,7 @@ this easy.
 
 .. code:: python3
 
-    sns.pairplot(penguins, hue='species_short')
+    sns.pairplot(penguins.drop("year", axis=1), hue='species');
 
 
 
@@ -216,8 +222,8 @@ deviations from the mean) for comparability.
 
     penguin_data = penguins[
         [
-            "culmen_length_mm",
-            "culmen_depth_mm",
+            "bill_length_mm",
+            "bill_depth_mm",
             "flipper_length_mm",
             "body_mass_g",
         ]
@@ -241,11 +247,11 @@ then returns the transformed data as a numpy array.
 
 .. parsed-literal::
 
-    (334, 2)
+    (333, 2)
 
 
 
-The result is an array with 334 samples, but only two feature columns
+The result is an array with 333 samples, but only two feature columns
 (instead of the four we started with). This is because, by default, UMAP
 reduces down to 2D. Each row of the array is a 2-dimensional
 representation of the corresponding penguin. Thus we can plot the
@@ -258,9 +264,9 @@ the original).
     plt.scatter(
         embedding[:, 0], 
         embedding[:, 1], 
-        c=[sns.color_palette()[x] for x in penguins.species_short.map({"Adelie":0, "Chinstrap":1, "Gentoo":2})])
+        c=[sns.color_palette()[x] for x in penguins.species.map({"Adelie":0, "Chinstrap":1, "Gentoo":2})])
     plt.gca().set_aspect('equal', 'datalim')
-    plt.title('UMAP projection of the Penguin dataset', fontsize=24)
+    plt.title('UMAP projection of the Penguin dataset', fontsize=24);
 
 
 
@@ -378,7 +384,7 @@ is not going to be sufficient for this data.
 
     digits_df = pd.DataFrame(digits.data[:,1:11])
     digits_df['digit'] = pd.Series(digits.target).map(lambda x: 'Digit {}'.format(x))
-    sns.pairplot(digits_df, hue='digit', palette='Spectral')
+    sns.pairplot(digits_df, hue='digit', palette='Spectral');
 
 
 .. image:: images/basic_usage_24_2.png
@@ -469,7 +475,7 @@ First we'll need to encode all the images for inclusion in a dataframe.
 
     def embeddable_image(data):
         img_data = 255 - 15 * data.astype(np.uint8)
-        image = Image.fromarray(img_data, mode='L').resize((64, 64), Image.BICUBIC)
+        image = Image.fromarray(img_data, mode='L').resize((64, 64), Image.Resampling.BICUBIC)
         buffer = BytesIO()
         image.save(buffer, format='png')
         for_encoding = buffer.getvalue()
