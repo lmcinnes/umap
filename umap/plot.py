@@ -1464,7 +1464,7 @@ def interactive(
             width=width,
             height=height,
             tooltips=None if not tooltip_needed else tooltips,
-            tools=tools,
+            tools=tools if tools is not None else "pan,wheel_zoom,box_zoom,save,reset,help",
             background_fill_color=background,
         )
         plot.circle(
