@@ -1342,22 +1342,18 @@ def init_graph_transform(graph, embedding):
     result = np.zeros((graph.shape[0], embedding.shape[1]), dtype=np.float32)
 
     for row_index in range(graph.shape[0]):
-        num_neighbours = len(graph[row_index].indices)
-        if num_neighbours == 0:
+        graph_row = graph[row_index]
+        if graph_row.nnz == 0:
             result[row_index] = np.nan
             continue
-        row_sum = np.sum(graph[row_index])
-        for col_index in graph[row_index].indices:
-            if graph[row_index, col_index] == 1:
+        row_sum = graph_row.sum()
+        for graph_value, col_index in zip(graph_row.data, graph_row.indices):
+            if graph_value == 1:
                 result[row_index, :] = embedding[col_index, :]
                 break
-            for d in range(embedding.shape[1]):
-                result[row_index, d] += (
-                    graph[row_index, col_index] / row_sum * embedding[col_index, d]
-                )
+            result[row_index] += graph_value / row_sum * embedding[col_index]
 
     return result
-
 
 @numba.njit()
 def init_update(current_init, n_original_samples, indices):
