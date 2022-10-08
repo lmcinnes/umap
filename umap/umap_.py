@@ -38,7 +38,7 @@ from umap.utils import (
     csr_unique,
     fast_knn_indices,
 )
-from umap.spectral import spectral_layout
+from umap.spectral import spectral_layout, tswspectral_layout
 from umap.layouts import (
     optimize_layout_euclidean,
     optimize_layout_generic,
@@ -1115,6 +1115,18 @@ def simplicial_set_embedding(
         embedding = noisy_scale_coords(
             embedding, random_state, max_coord=10, noise=0.0001
         )
+    elif isinstance(init, str) and init == "tswspectral":
+        embedding = tswspectral_layout(
+            data,
+            graph,
+            n_components,
+            random_state,
+            metric=metric,
+            metric_kwds=metric_kwds,
+        )
+        embedding = noisy_scale_coords(
+            embedding, random_state, max_coord=10, noise=0.0001
+        )
     else:
         init_data = np.array(init)
         if len(init_data.shape) == 2:
@@ -1463,7 +1475,13 @@ class UMAP(BaseEstimator):
 
             * 'spectral': use a spectral embedding of the fuzzy 1-skeleton
             * 'random': assign initial embedding positions at random.
-            * 'pca': use the first n_components from PCA applied to the input data.
+            * 'pca': use the first n_components from PCA applied to the
+            input data.
+            * 'twspectral': use a spectral embedding of the fuzzy
+            1-skeleton, using a truncated singular value decomposition to
+            "warm" up the eigensolver. This is intended as an alternative
+            to the 'spectral' method, if that takes an  excessively long
+            time to complete initialization (or fails to complete).
             * A numpy array of initial embedding positions.
 
     min_dist: float (optional, default 0.1)
@@ -1742,8 +1760,12 @@ class UMAP(BaseEstimator):
             "pca",
             "spectral",
             "random",
+            "tswspectral",
         ):
-            raise ValueError('string init values must be "pca", "spectral" or "random"')
+            raise ValueError(
+                'string init values must be one of: "pca", "tswspectral",'
+                ' "spectral" or "random"'
+            )
         if (
             isinstance(self.init, np.ndarray)
             and self.init.shape[1] != self.n_components
