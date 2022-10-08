@@ -1795,18 +1795,26 @@ class UMAP(BaseEstimator):
         if self.n_components < 1:
             raise ValueError("n_components must be greater than 0")
         self.n_epochs_list = None
-        if isinstance(self.n_epochs, list) or isinstance(self.n_epochs, tuple) or \
-                isinstance(self.n_epochs, np.ndarray):
-            if not issubclass(np.array(self.n_epochs).dtype.type, np.integer) or \
-                    not np.all(np.array(self.n_epochs) >= 0):
-                raise ValueError("n_epochs must be a nonnegative integer "
-                                 "or a list of nonnegative integers")
+        if (
+            isinstance(self.n_epochs, list)
+            or isinstance(self.n_epochs, tuple)
+            or isinstance(self.n_epochs, np.ndarray)
+        ):
+            if not issubclass(
+                np.array(self.n_epochs).dtype.type, np.integer
+            ) or not np.all(np.array(self.n_epochs) >= 0):
+                raise ValueError(
+                    "n_epochs must be a nonnegative integer "
+                    "or a list of nonnegative integers"
+                )
             self.n_epochs_list = list(self.n_epochs)
         elif self.n_epochs is not None and (
-                self.n_epochs < 0 or not isinstance(self.n_epochs, int)
+            self.n_epochs < 0 or not isinstance(self.n_epochs, int)
         ):
-            raise ValueError("n_epochs must be a nonnegative integer "
-                             "or a list of nonnegative integers")
+            raise ValueError(
+                "n_epochs must be a nonnegative integer "
+                "or a list of nonnegative integers"
+            )
         if self.metric_kwds is None:
             self._metric_kwds = {}
         else:
@@ -2765,7 +2773,9 @@ class UMAP(BaseEstimator):
             print(ts(), "Construct embedding")
 
         if self.transform_mode == "embedding":
-            epochs = self.n_epochs_list if self.n_epochs_list is not None else self.n_epochs
+            epochs = (
+                self.n_epochs_list if self.n_epochs_list is not None else self.n_epochs
+            )
             self.embedding_, aux_data = self._fit_embed_data(
                 self._raw_data[index],
                 epochs,
@@ -2775,11 +2785,15 @@ class UMAP(BaseEstimator):
 
             if self.n_epochs_list is not None:
                 if "embedding_list" not in aux_data:
-                    raise KeyError("No list of embedding were found in 'aux_data'. "
-                                   "It is likely the layout optimization function "
-                                   "doesn't support the list of int for 'n_epochs'.")
+                    raise KeyError(
+                        "No list of embedding were found in 'aux_data'. "
+                        "It is likely the layout optimization function "
+                        "doesn't support the list of int for 'n_epochs'."
+                    )
                 else:
-                    self.embedding_list_ = [e[inverse] for e in aux_data["embedding_list"]]
+                    self.embedding_list_ = [
+                        e[inverse] for e in aux_data["embedding_list"]
+                    ]
 
             # Assign any points that are fully disconnected from our manifold(s) to have embedding
             # coordinates of np.nan.  These will be filtered by our plotting functions automatically.

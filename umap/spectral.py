@@ -133,7 +133,7 @@ def component_layout(
                     component_centroids, metric=metric, **metric_kwds
                 )
 
-    affinity_matrix = np.exp(-(distance_matrix ** 2))
+    affinity_matrix = np.exp(-(distance_matrix**2))
 
     component_embedding = SpectralEmbedding(
         n_components=dim, affinity="precomputed", random_state=random_state
