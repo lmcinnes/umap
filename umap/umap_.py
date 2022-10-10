@@ -1977,13 +1977,8 @@ class UMAP(BaseEstimator):
                     "precomputed_knn[0] and precomputed_knn[1]"
                     " must be numpy arrays of the same size."
                 )
-            # #848: warn but proceed if no search index is present...
-            # ...but actually don't warn if the data is small and
-            # force_approximation_algorithm=False because this knn data will get ignored
-            # later anyway
-            if not isinstance(self.knn_search_index, NNDescent) and (
-                self.knn_dists.shape[0] >= 4096 or self.force_approximation_algorithm
-            ):
+            # #848: warn but proceed if no search index is present
+            if not isinstance(self.knn_search_index, NNDescent):
                 warn(
                     "precomputed_knn[2] (knn_search_index) "
                     "is not an NNDescent object: transforming new data with transform "
@@ -2011,11 +2006,9 @@ class UMAP(BaseEstimator):
                 self.knn_dists.shape[0] < 4096
                 and not self.force_approximation_algorithm
             ):
-                warn(
-                    "precomputed_knn is meant for large datasets. Since your"
-                    " data is small, precomputed_knn will be ignored and the"
-                    " k-nn will be computed normally."
-                )
+                # force_approximation_algorithm is irrelevant for pre-computed knn
+                # always set it to True which keeps downstream code paths working
+                self.force_approximation_algorithm = True
             elif self.knn_dists.shape[1] > self.n_neighbors:
                 # if k for precomputed_knn larger than n_neighbors we simply prune it
                 self.knn_indices = self.knn_indices[:, : self.n_neighbors]
