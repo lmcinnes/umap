@@ -63,11 +63,11 @@ darkpurple_cmap = matplotlib.colors.LinearSegmentedColormap.from_list(
     "darkpurple", colorcet.linear_bmw_5_95_c89
 )
 
-plt.register_cmap("fire", fire_cmap)
-plt.register_cmap("darkblue", darkblue_cmap)
-plt.register_cmap("darkgreen", darkgreen_cmap)
-plt.register_cmap("darkred", darkred_cmap)
-plt.register_cmap("darkpurple", darkpurple_cmap)
+plt.colormaps.register(fire_cmap, name="fire")
+plt.colormaps.register(darkblue_cmap, name="darkblue")
+plt.colormaps.register(darkgreen_cmap, name="darkgreen")
+plt.colormaps.register(darkred_cmap, name="darkred")
+plt.colormaps.register(darkpurple_cmap, name="darkpurple")
 
 
 def _to_hex(arr):
