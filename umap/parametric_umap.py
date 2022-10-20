@@ -483,7 +483,7 @@ class ParametricUMAP(UMAP):
         return dict(
             (k, v)
             for (k, v) in self.__dict__.items()
-            if should_pickle(k, v) and k not in ("optimizer", "encoder", "decoder", "parametric_model")
+            if k not in ("optimizer", "encoder", "decoder", "parametric_model") and should_pickle(k, v)
         )
 
     def save(self, save_location, verbose=True):
