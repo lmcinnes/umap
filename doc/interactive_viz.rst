@@ -68,7 +68,7 @@ handwritten digits down to 2 dimensions.
 
 `UMAP Explorer <https://grantcuster.github.io/umap-explorer/>`__
 
-Thanks for Grant Custer.
+Thanks to Grant Custer.
 
 Audio Explorer
 --------------
@@ -115,3 +115,24 @@ Fashion MNIST, thus more efficient and capable of showing all the 70k images.
 `Exploring Fashion MNIST <https://observablehq.com/@stwind/exploring-fashion-mnist/>`__
 
 Thanks to stwind.
+
+ESM Metagenomic Atlas
+---------------------
+The ESM Metagenomic Atlas contains over 600 million predicted protein structures, revealing the 
+metagenomic world in a way we have never seen before. The Explore page visualizes a sample of 1 
+million of these. (That’s about how much a browser can handle.) We represent each protein in this 
+dataset as a single point, and reveal the actual protein structure when zooming in or when hovering 
+over it. The color of each point corresponds to the similarity to the closest match we could find in 
+UniRef90, the reference database of known protein sequences. The position in the map is a 
+two-dimensional projection, which groups sequences by similarity, as determined by our language 
+model’s internal representation. The map reveals structure at different scales: local neighbors in 
+the same cluster tend to have similar structures, while nearby clusters preserve certain patterns 
+like secondary structure elements.
+
+.. image:: images/ESM_metagenomic_atlas.png
+   :width: 400px
+
+Thanks to the authors of "Evolutionary-scale prediction of atomic level protein structure
+with a language model".
+
+`ESM Metagenomic Atlas <https://esmatlas.com/explore>`__
