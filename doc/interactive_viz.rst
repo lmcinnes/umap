@@ -134,3 +134,5 @@ like secondary structure elements.
 
 Thanks to the authors of "Evolutionary-scale prediction of atomic level protein structure
 with a language model".
+
+`ESM Metagenomic Atlas <https://esmatlas.com/explore>`__
