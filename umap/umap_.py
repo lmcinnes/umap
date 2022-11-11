@@ -3454,6 +3454,17 @@ class UMAP(BaseEstimator):
             self.rad_orig_ = aux_data["rad_orig"]
             self.rad_emb_ = aux_data["rad_emb"]
 
+    def get_feature_names_out(self, feature_names_out=None):
+        """
+        Defines descriptive names for each output of the (fitted) estimator.
+        :param feature_names_out: Optional passthrough for feature names.
+        By default, feature names will be generated automatically.
+        :return: List of descriptive names for each output variable from the fitted estimator.
+        """
+        if feature_names_out is None:
+            feature_names_out = [f"umap_component_{i+1}" for i in range(self.n_components)]
+        return feature_names_out
+
     def __repr__(self):
         from sklearn.utils._pprint import _EstimatorPrettyPrinter
         import re
