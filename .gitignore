@@ -1,0 +1,28 @@
+# virtual environment
+venv
+
+# non-stylistic pycharm configs
+.idea/misc.xml
+.idea/modules.xml
+.idea/umap.iml
+.idea/vcs.xml
+.idea/workspace.xml
+.idea/dictionaries
+.idea/other.xml
+
+# Mac Finder layout
+.DS_Store
+
+# IPython/Jupyter notebook checkpoints
+*.ipynb_checkpoints
+
+# Python 2.x & 3.x bytecode cache
+*.pyc
+*__pycache__
+
+# metadata from pip-installing repo
+umap_learn.egg-info
+
+# docs
+doc/auto_examples
+doc/_build

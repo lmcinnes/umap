@@ -69,7 +69,6 @@ def make_trustworthiness_calculator(metric):  # pragma: no cover
     return trustworthiness_vector_lowmem
 
 
-@numba.jit()
 def trustworthiness_vector(
     source, embedding, max_k, metric="euclidean"
 ):  # pragma: no cover

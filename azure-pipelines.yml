@@ -1,0 +1,179 @@
+# Python package
+# Create and test a Python package on multiple Python versions.
+# Add steps that analyze code, save the dist with the build record, publish to a PyPI-compatible index, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/python
+
+trigger:
+- master
+
+jobs:
+  - job: Linux
+    pool:
+      vmImage: 'ubuntu-latest'
+    strategy:
+      matrix:
+        Python37:
+          python.version: '3.7'
+        Python38:
+          python.version: '3.8'
+        Python39:
+          python.version: '3.9'
+        Python310:
+          python.version: '3.10'
+    steps:
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '$(python.version)'
+        displayName: 'Use Python $(python.version)'
+
+      - script: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+        displayName: 'Install dependencies'
+
+      - script: |
+          pip install -e .
+          pip install .[plot]
+          pip install .[parametric_umap]
+        displayName: 'Install package'
+
+      - script: |
+          pip install pytest pytest-benchmark
+          pytest --show-capture=no -v --disable-warnings --junitxml=pytest.xml
+        displayName: 'Run tests'
+
+      - task: PublishTestResults@2
+        inputs:
+          testResultsFiles: 'pytest.xml'
+          testRunTitle: '$(Agent.OS) - $(Build.BuildNumber)[$(Agent.JobName)] - Python $(python.version)'
+        condition: succeededOrFailed()
+
+  - job: MacOS
+    pool:
+      vmImage: 'macOS-latest'
+    strategy:
+      matrix:
+        Python37:
+          python.version: '3.7'
+        Python38:
+          python.version: '3.8'
+        Python39:
+          python.version: '3.9'
+
+    steps:
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '$(python.version)'
+        displayName: 'Use Python $(python.version)'
+
+      - script: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+        displayName: 'Install dependencies'
+
+      - script: |
+          pip install -e .
+          pip install .[plot]
+          pip install .[parametric_umap]
+        displayName: 'Install package'
+
+      - script: |
+          pip install pytest pytest-benchmark
+          pytest --show-capture=no -v --disable-warnings --junitxml=pytest.xml
+        displayName: 'Run tests'
+
+      - task: PublishTestResults@2
+        inputs:
+          testResultsFiles: 'pytest.xml'
+          testRunTitle: '$(Agent.OS) - $(Build.BuildNumber)[$(Agent.JobName)] - Python $(python.version)'
+        condition: succeededOrFailed()
+
+  - job: Windows
+    pool:
+      vmImage: 'windows-latest'
+    strategy:
+      matrix:
+        Python37:
+          python.version: '3.7'
+        Python38:
+          python.version: '3.8'
+        Python39:
+          python.version: '3.9'
+
+    steps:
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '$(python.version)'
+        displayName: 'Use Python $(python.version)'
+
+      - script: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+        displayName: 'Install dependencies'
+
+      - script: |
+          pip install -e .
+          pip install .[plot]
+          pip install .[parametric_umap]
+        displayName: 'Install package'
+
+      - script: |
+          pip install pytest pytest-benchmark
+          pytest --show-capture=no -v --disable-warnings --junitxml=pytest.xml
+        displayName: 'Run tests'
+
+      - task: PublishTestResults@2
+        inputs:
+          testResultsFiles: 'pytest.xml'
+          testRunTitle: '$(Agent.OS) - $(Build.BuildNumber)[$(Agent.JobName)] - Python $(python.version)'
+        condition: succeededOrFailed()
+
+  - job: Coverage
+    pool:
+      vmImage: 'ubuntu-latest'
+    strategy:
+      matrix:
+        Python38:
+          python.version: '3.8'
+
+    steps:
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '$(python.version)'
+        displayName: 'Use Python $(python.version)'
+
+      - script: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+        displayName: 'Install dependencies'
+
+      - script: |
+          pip install -e .
+          pip install .[plot]
+          pip install .[parametric_umap]
+          pip install pytest pytest-benchmark
+          pip install pytest-cov
+          pip install coveralls
+        displayName: 'Install package'
+
+      - script: |
+          export NUMBA_DISABLE_JIT=1
+          pytest umap/tests --show-capture=no -v --disable-warnings --junitxml=pytest.xml --cov=umap/ --cov-report=xml --cov-report=html
+        displayName: 'Run tests'
+
+      - script: |
+          export COVERALLS_REPO_TOKEN=$(COVERALLS_REPO_TOKEN)
+          coveralls
+        displayName: 'Publish to coveralls'
+
+      - task: PublishTestResults@2
+        inputs:
+          testResultsFiles: 'coverage.xml'
+          testRunTitle: '$(Agent.OS) - $(Build.BuildNumber)[$(Agent.JobName)] - Python $(python.version)'
+        condition: succeededOrFailed()
+
+      - task: PublishCodeCoverageResults@1
+        inputs:
+          codeCoverageTool: Cobertura
+          summaryFileLocation: '$(System.DefaultWorkingDirectory)/**/coverage.xml'
+          reportDirectory: '$(System.DefaultWorkingDirectory)/**/htmlcov'

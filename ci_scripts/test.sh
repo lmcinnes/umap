@@ -1,14 +1,12 @@
 set -e
 
-# Get into a temp directory to run test from the installed scikit learn and
-# check if we do not leave artifacts
-mkdir -p $TEST_DIR
-
-cd $TEST_DIR
+#if [[ "$COVERAGE" == "true" ]]; then
+#    black --check $MODULE
+#fi
 
 if [[ "$COVERAGE" == "true" ]]; then
     export NUMBA_DISABLE_JIT=1
-    nosetests -s --with-coverage --cover-package=$MODULE $MODULE
+    pytest --cov=umap/ --cov-report=xml --cov-report=html --show-capture=no -v --disable-warnings
 else
-    nosetests -s $MODULE
+    pytest --show-capture=no -v --disable-warnings
 fi

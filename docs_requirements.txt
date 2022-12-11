@@ -1,5 +1,6 @@
-sphinx
+sphinx>=1.8
 sphinx_gallery
 matplotlib
 pillow
 sphinx_rtd_theme
+numpydoc

@@ -3,6 +3,10 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
+.. image:: logo_large.png
+  :width: 600
+  :align: center
+
 UMAP: Uniform Manifold Approximation and Projection for Dimension Reduction
 ===========================================================================
 
@@ -46,27 +50,47 @@ PyPI install, presuming you have numba and sklearn and all its requirements
     pip install umap-learn
 
 
-
 .. toctree::
    :maxdepth: 2
    :caption: User Guide / Tutorial:
 
    basic_usage
    parameters
+   plotting
+   reproducibility
    transform
+   inverse_transform
+   parametric_umap
+   sparse
    supervised
    clustering
-   auto_examples/index
+   outliers
+   composing_models
+   densmap_demo
+   mutual_nn_umap
+   document_embedding
+   embedding_space
+   aligned_umap_basic_usage
+   aligned_umap_politics_demo
+   precomputed_k-nn
+   benchmarking
+   release_notes
    faq
 
 .. toctree::
    :maxdepth: 2
    :caption: Background on UMAP:
 
-   dimension_reduction
    how_umap_works
-   benchmarking
+   performance
 
+.. toctree::
+   :maxdepth: 2
+   :caption: Examples of UMAP usage
+
+   interactive_viz
+   exploratory_analysis
+   scientific_papers
 
 .. toctree::
    :caption: API Reference:

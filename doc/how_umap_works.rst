@@ -1,3 +1,5 @@
+.. _how_umap_works:
+
 How UMAP Works
 ==============
 
@@ -28,7 +30,7 @@ Topological Data Analysis and Simplicial Complexes
 --------------------------------------------------
 
 Simplicial complexes are a means to construct topological spaces out of
-simple combinatorial components. This allows one to reduce to
+simple combinatorial components. This allows one to reduce the
 complexities of dealing with the continuous geometry of topological
 spaces to the task of relatively simple combinatorics and counting. This
 method of taming geometry and topology will be fundamental to our
@@ -37,7 +39,7 @@ reduction in particular.
 
 The first step is to provide some simple combinatorial building blocks
 called `*simplices* <https://en.wikipedia.org/wiki/Simplex>`__.
-Geometrically a simplex is a very simple way to build an
+Geometrically a simplex is a very simple way to build a
 :math:`k`-dimensional object. A :math:`k` dimensional simplex is called
 a :math:`k`-simplex, and it is formed by taking the convex hull of
 :math:`k+1` independent points. Thus a 0-simplex is a point, a 1-simplex
@@ -75,20 +77,20 @@ dimensions along their faces. A little further abstraction will get to
 `*simplicial sets* <https://en.wikipedia.org/wiki/Simplicial_set>`__
 which are purely combinatorial, have a nice category theoretic
 presentation, and can generate a much broader class of topological
-spaces, but that will take us to far afield for this article. The
+spaces, but that will take us too far afield for this article. The
 intuition of simplicial complexes will be enough to illustrate the
 relevant ideas and motivation.
 
 How does one apply these theoretical tools from topology to finite sets
 of data points? To start we'll look at how one might construct a
-simplicial complex from topological space. The tool we will consider is
+simplicial complex from a topological space. The tool we will consider is
 the construction of a `Čech
 complex <https://en.wikipedia.org/wiki/%C4%8Cech_cohomology>`__ given an
 open cover of a topological space. That's a lot of verbiage if you
 haven't done much topology, but we can break it down fairly easily for
-our use case. An open cover is essentially just a family sets whose
+our use case. An open cover is essentially just a family of sets whose
 union is the whole space, and a Čech complex is a combinatorial way to
-covert that into a simplicial complex. It works fairly simply: let each
+convert that into a simplicial complex. It works fairly simply: let each
 set in the cover be a 0-simplex; create a 1-simplex between two such
 sets if they have a non-empty intersection; create a 2-simplex between
 three such sets if the triple intersection of all three is non-empty;
@@ -97,7 +99,7 @@ intersections of sets. The key is that the background topological theory
 actually provides guarantees about how well this simple process can
 produce something that represents the topological space itself in a
 meaningful way (the `Nerve
-theorem <https://en.wikipedia.org/wiki/Nerve_theorem>`__ is the relevant
+theorem <https://en.wikipedia.org/wiki/Nerve_of_a_covering>`__ is the relevant
 result for those interested). Obviously the quality of the cover is
 important, and finer covers provide more accuracy, but the reality is
 that despite its simplicity the process captures much of the topology.
@@ -105,12 +107,12 @@ that despite its simplicity the process captures much of the topology.
 Next we need to understand how to apply that process to a finite set of
 data samples. If we assume that the data samples are drawn from some
 underlying topological space then to learn about the topology of that
-space we need to generate an open cover of it. If our data actually lies
+space we need to generate an open cover of it. If our data actually lie
 in a metric space (i.e. we can measure distance between points) then one
 way to approximate an open cover is to simply create balls of some fixed
 radius about each data point. Since we only have finite samples, and not
 the topological space itself, we cannot be sure it is truly an open
-cover, but it is might be as good an approximation as we could
+cover, but it might be as good an approximation as we could
 reasonably expect. This approach also has the advantage that the Čech
 complex associated to the cover will have a 0-simplex for each data
 point.
@@ -118,7 +120,7 @@ point.
 To demonstrate the process let's consider a test dataset like this
 
 .. figure:: images/how_umap_works_raw_data.png
-    :alt: Test data set of a noisy sine wave
+   :alt: Test data set of a noisy sine wave
 
    Test data set of a noisy sine wave
 
@@ -164,11 +166,11 @@ representation of the data that has a similar topological
 representation. If we only care about the 0- and 1-simplices then the
 topological representation is just a graph, and finding a low
 dimensional representation can be described as a `graph layout
-problem <>`__. If one wants to use, for example, spectral methods for
+problem <https://en.wikipedia.org/wiki/Graph_drawing>`__. If one wants to use, for example, spectral methods for
 graph layout then we arrive at algorithms like `Laplacian
-eigenmaps <>`__ and `Diffusion maps <>`__. Force directed layouts are
-also an option, and provide algorithms closer to `MDS <>`__ or `Sammon
-mapping <>`__ in flavour.
+eigenmaps <https://en.wikipedia.org/wiki/Nonlinear_dimensionality_reduction#Laplacian_eigenmaps>`__ and `Diffusion maps <https://en.wikipedia.org/wiki/Nonlinear_dimensionality_reduction#Diffusion_maps>`__. Force directed layouts are
+also an option, and provide algorithms closer to `MDS <https://en.wikipedia.org/wiki/Multidimensional_scaling>`__ or `Sammon
+mapping <https://en.wikipedia.org/wiki/Sammon_mapping>`__ in flavour.
 
 I would not blame those who have read this far to wonder why we took
 such an abstract roundabout road to simply building a neighborhood-graph
@@ -176,7 +178,7 @@ on the data and then laying out that graph. There are a couple of
 reasons. The first reason is that the topological approach, while
 abstract, provides sound theoretical justification for what we are
 doing. While building a neighborhood-graph and laying it out in lower
-dimensional space make heuristic sense and is computationally tractable,
+dimensional space makes heuristic sense and is computationally tractable,
 it doesn't provide the same underlying motivation of capturing the
 underlying topological structure of the data faithfully -- for that we
 need to appeal to the powerful topological machinery I've hinted lies in
@@ -206,12 +208,12 @@ one solve this?
 The dilemma is in part due to the theorem (called the `Nerve
 theorem <https://en.wikipedia.org/wiki/Nerve_of_a_covering>`__) that
 provides our justification that this process captures the topology.
-Specifically, the theorem says that the simplicial complex with be
-(homtopically) equivalent to the union of the cover. In our case,
+Specifically, the theorem says that the simplicial complex will be
+(homotopically) equivalent to the union of the cover. In our case,
 working with finite data, the cover, for certain radii, doesn't cover
 the whole of the manifold that we imagine underlies the data -- it is
 that lack of coverage that results in the disconnected components.
-Similarly, where the points are too bunched up, our cover does covers
+Similarly, where the points are too bunched up, our cover does cover
 "too much" and we end up with higher dimensional simplices than we might
 ideally like. If the data were *uniformly distributed* across the
 manifold then selecting a suitable radius would be easy -- the average
@@ -249,7 +251,7 @@ distributed on the manifold, and ask what that tells us about the
 manifold itself. If the data *looks* like it isn't uniformly distributed
 that must simply be because the notion of distance is varying across the
 manifold -- space itself is warping: stretching or shrinking according
-to where the data appears sparser or denser.
+to where the data appear sparser or denser.
 
 By assuming that the data is uniformly distributed we can actually
 compute (an approximation of) a local notion of distance for each point
@@ -274,7 +276,7 @@ graph based algorithms: a standard approach for such algorithms is to
 use a *k*-neighbor graph instead of using balls of some fixed radius to
 define connectivity. What this means is that each point in the dataset
 is given an edge to each of its *k* nearest neighbors -- the effective
-result of our locally varying metric with balls or radius one. Now,
+result of our locally varying metric with balls of radius one. Now,
 however, we can explain why this works in terms of simplicial complexes
 and the Nerve theorem.
 
@@ -288,7 +290,7 @@ dependent to some degree, there are reasonable default choices, such as
 the 10 nearest neighbors, that should work acceptably for most datasets.
 
 At the same time the topological interpretation of all of this gives us
-a more meaningful interpretation *k*. The choice of *k* determines how
+a more meaningful interpretation of *k*. The choice of *k* determines how
 locally we wish to estimate the Riemannian metric. A small choice of *k*
 means we want a very local interpretation which will more accurately
 capture fine detail structure and variation of the Riemannian metric.
@@ -301,7 +303,7 @@ We also get a further benefit from this Riemannian metric based
 approach: we actually have a local metric space associated to each
 point, and can meaningfully measure distance, and thus we could weight
 the edges of the graph we might generate by how far apart (in terms of
-the local metric) the points in the edges are. In slightly more
+the local metric) the points on the edges are. In slightly more
 mathematical terms we can think of this as working in a fuzzy topology
 where being in an open set in a cover is no longer a binary yes or no,
 but instead a fuzzy value between zero and one. Obviously the certainty
@@ -326,10 +328,10 @@ functors from algebraic topology and then adapting them to apply to
 metric spaces and fuzzy simplicial sets. The mathematics involved in
 this is outside the scope of this exposition, but for those interested
 you can look at the `original work on this by David
-Spivak <https://en.wikipedia.org/wiki/Riemannian_geometry>`__ and our
-`paper <https://arxiv.org/abs/1802.03426>`__. It will have to suffice to
-say that there is some mathematical machinery that lets us realize this
-intuition in a well defined way.
+Spivak <http://math.mit.edu/~dspivak/files/metric_realization.pdf>`__
+and our `paper <https://arxiv.org/abs/1802.03426>`__. It will have to
+suffice to say that there is some mathematical machinery that lets us
+realize this intuition in a well defined way.
 
 This resolves a number of issues, but a new problem presents itself when
 we apply this sort of process to real data, especially in higher
@@ -337,7 +339,7 @@ dimensions: a lot of points become essentially totally isolated. One
 would imagine that this shouldn't happen if the manifold the data was
 sampled from isn't pathological. So what property are we expecting that
 manifold to have that we are somehow missing with the current approach?
-We need to add is the idea of local connectivity.
+What we need to add is the idea of local connectivity.
 
 Note that this is not a requirement that the manifold as a whole be
 connected -- it can be made up of many connected components. Instead it
@@ -374,7 +376,7 @@ neighbors rather than the absolute distance (which shows little
 differentiation among neighbors).
 
 Just when we think we are almost there, having worked around some of the
-issues of real world data, we run aground on a new obstruction: out
+issues of real world data, we run aground on a new obstruction: our
 local metrics are not compatible! Each point has its own local metric
 associated to it, and from point *a*'s perspective the distance from
 point *a* to point *b* might be 1.5, but from the perspective of point
@@ -401,12 +403,11 @@ defined operation. There are a a few ways to define fuzzy unions,
 depending on the nature of the logic involved, but here we have
 relatively clear probabilistic semantics that make the choice
 straightforward. In graph terms what we get is the following: if we want
-the merge together two disagreeing edges with weight *a* and *b* then we
-should have a single edge with combined weight $ a + b -
-a:raw-latex:`\times `b. $ The way to think of this is that the weights
-are effectively the probabilities that an edge (1-simplex) exists. The
-combined weight is then the probability that at least one of the edges
-exists.
+to merge together two disagreeing edges with weight *a* and *b* then we
+should have a single edge with combined weight :math:`a + b - a \cdot b`. 
+The way to think of this is that the weights are effectively the 
+probabilities that an edge (1-simplex) exists. The combined weight is 
+then the probability that at least one of the edges exists.
 
 If we apply this process to union together all the fuzzy simplicial sets
 we end up with a single fuzzy simplicial complex, which we can again
@@ -440,8 +441,8 @@ dimensional representation?
 Finding a Low Dimensional Representation
 ----------------------------------------
 
-Ideally we want the low dimensional representation to have as similar as
-possible a fuzzy topological structure as possible. The first question
+Ideally we want the low dimensional representation to have as similar
+a fuzzy topological structure as possible. The first question
 is how do we determine the fuzzy topological structure of a low
 dimensional representation, and the second question is how do we find a
 good one.
@@ -469,13 +470,13 @@ representation', hinges on our ability to measure how "close" a match we
 have found in terms of fuzzy topological structures. Given such a
 measure we can turn this into an optimization problem of finding the low
 dimensional representation with the closest fuzzy topological structure.
-Obviously if our measure of closeness turns out to have the various
+Obviously if our measure of closeness turns out to have various
 properties the nature of the optimization techniques we can apply will
 differ.
 
 Going back to when we were merging together the conflicting weights
 associated to simplices, we interpreted the weights as the probability
-of the simplex existing. Thus, since both topological structure we are
+of the simplex existing. Thus, since both topological structures we are
 comparing share the same 0-simplices, we can imagine that we are
 comparing the two vectors of probabilities indexed by the 1-simplices.
 Given that these are Bernoulli variables (ultimately the simplex either
@@ -500,7 +501,7 @@ directed graph layout algorithm.
 The first term, :math:`w_h(e) \log\left(\frac{w_h(e)}{w_l(e)}\right)`,
 provides an attractive force between the points :math:`e` spans whenever
 there is a large weight associated to the high dimensional case. This is
-because this terms will be minimized when :math:`w_l(e)` is as large as
+because this term will be minimized when :math:`w_l(e)` is as large as
 possible, which will occur when the distance between the points is as
 small as possible.
 
@@ -513,7 +514,7 @@ making :math:`w_l(e)` as small as possible.
 On balance this process of pull and push, mediated by the weights on
 edges of the topological representation of the high dimensional data,
 will let the low dimensional representation settle into a state that
-that relatively accurately represents the overall topology of the source
+relatively accurately represents the overall topology of the source
 data.
 
 The UMAP Algorithm
@@ -522,8 +523,8 @@ The UMAP Algorithm
 Putting all these pieces together we can construct the UMAP algorithm.
 The first phase consists of constructing a fuzzy topological
 representation, essentially as described above. The second phase is
-simply optimizing the low dimensional representation to have as close as
-possible a fuzzy topological representation as measured by cross
+simply optimizing the low dimensional representation to have as close
+a fuzzy topological representation as possible as measured by cross
 entropy.
 
 When constructing the initial fuzzy topological representation we can
@@ -539,12 +540,12 @@ are thus very efficient.
 
 In optimizing the low dimensional embedding we can again take some
 shortcuts. We can use stochastic gradient descent for the optimization
-process. To make the gradient descent problem easier is is beneficial if
+process. To make the gradient descent problem easier it is beneficial if
 the final objective function is differentiable. We can arrange for that
 by using a smooth approximation of the actual membership strength
 function for the low dimensional representation, selecting from a
 suitably versatile family. In practice UMAP uses the family of curves of
-the for :math:`\frac{1}{1 + a x^{2b}}`. Equally we don't want to have to
+the form :math:`\frac{1}{1 + a x^{2b}}`. Equally we don't want to have to
 deal with all possible edges, so we can use the negative sampling trick
 (as used by word2vec and LargeVis), to simply sample negative examples
 as needed. Finally since the Laplacian of the topological representation

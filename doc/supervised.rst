@@ -15,7 +15,7 @@ seaborn for plotting.
 .. code:: python3
 
     import numpy as np
-    from mnist import MNIST
+    from mnist.loader import MNIST
     import matplotlib.pyplot as plt
     %matplotlib inline
     import seaborn as sns
@@ -24,7 +24,7 @@ seaborn for plotting.
 Our example dataset for this exploration will be the `Fashion-MNIST
 dataset from Zalando
 Research <https://github.com/zalandoresearch/fashion-mnist>`__. It is
-desgined to be a drop-in replacement for the classic MNIST digits
+designed to be a drop-in replacement for the classic MNIST digits
 dataset, but uses images of fashion items (dresses, coats, shoes, bags,
 etc.) instead of handwritten digits. Since the images are more complex
 it provides a greater challenge than MNIST digits. We can load it in
@@ -52,7 +52,7 @@ up the train and test sets into one large dataset, normalise the values
         'Bag',
         'Ankle boot']
 
-Next we'll load the ``umap`` library so we can do dimension reduction on
+Next we'll load the ``umap`` library so we can perform dimension reduction on
 this dataset.
 
 .. code:: python3
@@ -64,7 +64,7 @@ UMAP on Fashion MNIST
 
 First we'll just do standard unsupervised dimension reduction using UMAP
 so we have a baseline of what the results look like for later
-comparison. This is simply a matter of instiantiating a :class:`~umap.umap_.UMAP` object (in
+comparison. This is simply a matter of instantiating a :class:`~umap.umap_.UMAP` object (in
 this case setting the :attr:`~umap.umap_.UMAP.n_neighbors` parameter to be 5 -- we are
 interested mostly in very local information), then calling the
 :meth:`~umap.umap_.UMAP.fit_transform` method with the data we wish to reduce. By default
@@ -86,7 +86,7 @@ a scatterplot.
 That took a little time, but not all that long considering it is 70,000
 data points in 784 dimensional space. We can simply plot the results as
 a scatterplot, colored by the class of the fashion item. We can use
-matplotlibs colorbar with suitable tick-labels to give us the color key.
+matplotlib's colorbar with suitable tick-labels to give us the color key.
 
 .. code:: python3
 
@@ -109,7 +109,7 @@ separate quite so cleanly. In particular T-shirts, shirts, dresses,
 pullovers, and coats are all a little mixed. At the very least the
 dresses are largely separated, and the T-shirts are mostly in one large
 clump, but they are not well distinguished from the others. Worse still
-are the coats, shirts, and pullovers (somewhat unsruprisingly as these
+are the coats, shirts, and pullovers (somewhat unsurprisingly as these
 can certainly look very similar) which all have significant overlap with
 one another. Ideally we would like much better class separation. Since
 we have the label information we can actually give that to UMAP to use!
@@ -169,7 +169,7 @@ distinct banding pattern that was visible in the original unsupervised
 case; the pants, t-shirts and bags both retained their shape and
 internal structure; etc. The second point to note is that we have also
 retained the global structure. While the individual classes have been
-cleanly seprated from one another, the inter-relationships among the
+cleanly separated from one another, the inter-relationships among the
 classes have been preserved: footwear classes are all near one another;
 trousers and bags are at opposite sides of the plot; and the arc of
 pullover, shirts, t-shirts and dresses is still in place.
@@ -177,7 +177,7 @@ pullover, shirts, t-shirts and dresses is still in place.
 The key point is this: the important structural properties of the data
 have been retained while the known classes have been cleanly pulled
 apart and isolated. If you have data with known classes and want to
-seprate them while still having a meaningful embedding of individual
+separate them while still having a meaningful embedding of individual
 points then supervised UMAP can provide exactly what you need.
 
 Using Partial Labelling (Semi-Supervised UMAP)
@@ -186,9 +186,9 @@ Using Partial Labelling (Semi-Supervised UMAP)
 What if we only have some of our data labelled, however, and a number of
 items are without labels. Can we still make use of the label information
 we do have? This is now a semi-supervised learning problem, and yes, we
-can work with those cases to. To set up the example we'll mask some of
+can work with those cases too. To set up the example we'll mask some of
 the target information -- we'll do this by using the sklearn standard of
-having unlabelled point be given the label of -1 (such as, for example,
+giving unlabelled points a label of -1 (such as, for example,
 the noise points from a DBSCAN clustering).
 
 .. code:: python3
@@ -198,7 +198,7 @@ the noise points from a DBSCAN clustering).
 
 Now that we have randomly masked some of the labels we can try to
 perform supervised learning again. Everything works as before, but UMAP
-will interpret the -1 label as beingan unlabelled point and learn
+will interpret the -1 label as being an unlabelled point and learn
 accordingly.
 
 .. code:: python3
@@ -336,9 +336,162 @@ the :meth:`~umap.umap_.UMAP.transform` method.
 As you can see we have replicated the layout of the training data,
 including much of the internal structure of the classes. For the most
 part assignment of new points follows the classes well. The greatest
-source of confusion in some t-shirts that ended up in mixed with the
+source of confusion are some t-shirts that ended up mixed with the
 shirts, and some pullovers which are confused with the coats. Given the
-difficulty of the problemn this is a good result, particularly when
+difficulty of the problem this is a good result, particularly when
 compared with current state-of-the-art approaches such as `siamese and
 triplet
 networks <https://github.com/adambielski/siamese-triplet/blob/master/Experiments_FashionMNIST.ipynb>`__.
+
+
+Supervised UMAP on the Galaxy10SDSS dataset
+-------------------------------------------
+
+The `Galaxy10SDSS dataset <https://astronn.readthedocs.io/en/latest/galaxy10sdss.html>`__
+is a crowd sourced human labelled dataset of galaxy images,
+which have been separated in to ten classes. Umap can
+learn an embedding that partially separates the data. To
+keep runtime small, UMAP is applied to a subset of the
+data.
+
+.. code:: python3
+
+    import numpy as np
+    import h5py
+    import matplotlib.pyplot as plt
+    import umap
+    import os
+    import math
+    import requests
+
+    if not os.path.isfile("Galaxy10.h5"):
+        url = "http://astro.utoronto.ca/~bovy/Galaxy10/Galaxy10.h5"
+        r = requests.get(url, allow_redirects=True)
+        open("Galaxy10.h5", "wb").write(r.content)
+
+    # To get the images and labels from file
+    with h5py.File("Galaxy10.h5", "r") as F:
+        images = np.array(F["images"])
+        labels = np.array(F["ans"])
+
+    X_train = np.empty([math.floor(len(labels) / 100), 14283], dtype=np.float64)
+    y_train = np.empty([math.floor(len(labels) / 100)], dtype=np.float64)
+    X_test = X_train
+    y_test = y_train
+    # Get a subset of the data
+    for i in range(math.floor(len(labels) / 100)):
+        X_train[i, :] = np.array(np.ndarray.flatten(images[i, :, :, :]), dtype=np.float64)
+        y_train[i] = labels[i]
+        X_test[i, :] = np.array(
+            np.ndarray.flatten(images[i + math.floor(len(labels) / 100), :, :, :]),
+            dtype=np.float64,
+        )
+        y_test[i] = labels[i + math.floor(len(labels) / 100)]
+
+    # Plot distribution
+    classes, frequency = np.unique(y_train, return_counts=True)
+    fig = plt.figure(1, figsize=(4, 4))
+    plt.clf()
+    plt.bar(classes, frequency)
+    plt.xlabel("Class")
+    plt.ylabel("Frequency")
+    plt.title("Data Subset")
+    plt.savefig("galaxy10_subset.svg")
+
+
+
+.. image:: images/galaxy10_subset.svg
+
+
+The figure shows that the selected subset of the data set is 
+unbalanced, but the entire dataset is also unbalanced, so 
+this experiment will still use this subset. The next step is
+to examine the output of the standard UMAP algorithm.
+
+.. code:: python3
+    
+    reducer = umap.UMAP(
+        n_components=2, n_neighbors=5, random_state=42, transform_seed=42, verbose=False
+    )
+    reducer.fit(X_train)
+
+    galaxy10_umap = reducer.transform(X_train)
+    fig = plt.figure(1, figsize=(4, 4))
+    plt.clf()
+    plt.scatter(
+        galaxy10_umap[:, 0],
+        galaxy10_umap[:, 1],
+        c=y_train,
+        cmap=plt.cm.nipy_spectral,
+        edgecolor="k",
+        label=y_train,
+    )
+    plt.colorbar(boundaries=np.arange(11) - 0.5).set_ticks(np.arange(10))
+    plt.savefig("galaxy10_2D_umap.svg")
+    
+  
+
+.. image:: images/galaxy10_2D_umap.svg
+
+
+The standard UMAP algorithm does not separate the galaxies 
+according to their type. Supervised UMAP can do better.
+ 
+.. code:: python3
+ 
+    reducer = umap.UMAP(
+        n_components=2, n_neighbors=15, random_state=42, transform_seed=42, verbose=False
+    )
+    reducer.fit(X_train, y_train)
+
+    galaxy10_umap_supervised = reducer.transform(X_train)
+    fig = plt.figure(1, figsize=(4, 4))
+    plt.clf()
+    plt.scatter(
+        galaxy10_umap_supervised[:, 0],
+        galaxy10_umap_supervised[:, 1],
+        c=y_train,
+        cmap=plt.cm.nipy_spectral,
+        edgecolor="k",
+        label=y_train,
+    )
+    plt.colorbar(boundaries=np.arange(11) - 0.5).set_ticks(np.arange(10))
+    plt.savefig("galaxy10_2D_umap_supervised.svg")    
+    
+
+
+.. image:: images/galaxy10_2D_umap_supervised.svg
+
+
+Supervised UMAP does indeed do better. There is a litle overlap
+between some of the classes, but the original dataset
+also has some ambiguities in the classification.  The best
+check of this method is to project the testing data onto the
+learned embedding.
+    
+.. code:: python3
+    
+    galaxy10_umap_supervised_prediction = reducer.transform(X_test)
+    fig = plt.figure(1, figsize=(4, 4))
+    plt.clf()
+    plt.scatter(
+        galaxy10_umap_supervised_prediction[:, 0],
+        galaxy10_umap_supervised_prediction[:, 1],
+        c=y_test,
+        cmap=plt.cm.nipy_spectral,
+        edgecolor="k",
+        label=y_test,
+    )
+    plt.colorbar(boundaries=np.arange(11) - 0.5).set_ticks(np.arange(10))
+    plt.savefig("galaxy10_2D_umap_supervised_prediction.svg")
+      
+
+
+.. image:: images/galaxy10_2D_umap_supervised_prediction.svg
+
+
+This shows that the learned embedding can be used on new data
+sets, and so this method may be helpful for examining images
+of galaxies. Try out this method on the full 200 Mb dataset
+as well as the newer 2.54 Gb
+`Galaxy 10 DECals dataset <https://astronn.readthedocs.io/en/latest/galaxy10.html>`__

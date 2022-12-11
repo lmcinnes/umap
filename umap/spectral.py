@@ -1,16 +1,26 @@
 from warnings import warn
 
 import numpy as np
+
 import scipy.sparse
 import scipy.sparse.csgraph
+
 from sklearn.manifold import SpectralEmbedding
 from sklearn.metrics import pairwise_distances
+from sklearn.metrics.pairwise import _VALID_METRICS as SKLEARN_PAIRWISE_VALID_METRICS
 
-from umap.distances import pairwise_special_metric, named_distances
+from umap.distances import pairwise_special_metric, SPECIAL_METRICS
+from umap.sparse import SPARSE_SPECIAL_METRICS, sparse_named_distances
 
 
 def component_layout(
-    data, n_components, component_labels, dim, metric="euclidean", metric_kwds={}
+    data,
+    n_components,
+    component_labels,
+    dim,
+    random_state,
+    metric="euclidean",
+    metric_kwds={},
 ):
     """Provide a layout relating the separate connected components. This is done
     by taking the centroid of each component and then performing a spectral embedding
@@ -37,6 +47,8 @@ def component_layout(
 
     metric_kwds: dict (optional, default {})
         Keyword arguments to be passed to the metric function.
+        If metric is 'precomputed', 'linkage' keyword can be used to specify
+        'average', 'complete', or 'single' linkage. Default is 'average'
 
     Returns
     -------
@@ -44,25 +56,84 @@ def component_layout(
         The ``dim``-dimensional embedding of the ``n_components``-many
         connected components.
     """
+    if data is None:
+        # We don't have data to work with; just guess
+        return np.random.random(size=(n_components, dim)) * 10.0
 
     component_centroids = np.empty((n_components, data.shape[1]), dtype=np.float64)
 
-    for label in range(n_components):
-        component_centroids[label] = data[component_labels == label].mean(axis=0)
-
-    if metric in ("hellinger", "ll_dirichlet"):
-        distance_matrix = pairwise_special_metric(
-            component_centroids, metric=metric
-        )
+    if metric == "precomputed":
+        # cannot compute centroids from precomputed distances
+        # instead, compute centroid distances using linkage
+        distance_matrix = np.zeros((n_components, n_components), dtype=np.float64)
+        linkage = metric_kwds.get("linkage", "average")
+        if linkage == "average":
+            linkage = np.mean
+        elif linkage == "complete":
+            linkage = np.max
+        elif linkage == "single":
+            linkage = np.min
+        else:
+            raise ValueError(
+                "Unrecognized linkage '%s'. Please choose from "
+                "'average', 'complete', or 'single'" % linkage
+            )
+        for c_i in range(n_components):
+            dm_i = data[component_labels == c_i]
+            for c_j in range(c_i + 1, n_components):
+                dist = linkage(dm_i[:, component_labels == c_j])
+                distance_matrix[c_i, c_j] = dist
+                distance_matrix[c_j, c_i] = dist
     else:
-        distance_matrix = pairwise_distances(
-            component_centroids, metric=metric, **metric_kwds
-        )
+        for label in range(n_components):
+            component_centroids[label] = data[component_labels == label].mean(axis=0)
 
-    affinity_matrix = np.exp(-distance_matrix ** 2)
+        if scipy.sparse.isspmatrix(component_centroids):
+            warn(
+                "Forcing component centroids to dense; if you are running out of "
+                "memory then consider increasing n_neighbors."
+            )
+            component_centroids = component_centroids.toarray()
+
+        if metric in SPECIAL_METRICS:
+            distance_matrix = pairwise_special_metric(
+                component_centroids,
+                metric=metric,
+                kwds=metric_kwds,
+            )
+        elif metric in SPARSE_SPECIAL_METRICS:
+            distance_matrix = pairwise_special_metric(
+                component_centroids,
+                metric=SPARSE_SPECIAL_METRICS[metric],
+                kwds=metric_kwds,
+            )
+        else:
+            if callable(metric) and scipy.sparse.isspmatrix(data):
+                function_to_name_mapping = {
+                    sparse_named_distances[k]: k
+                    for k in set(SKLEARN_PAIRWISE_VALID_METRICS)
+                    & set(sparse_named_distances.keys())
+                }
+                try:
+                    metric_name = function_to_name_mapping[metric]
+                except KeyError:
+                    raise NotImplementedError(
+                        "Multicomponent layout for custom "
+                        "sparse metrics is not implemented at "
+                        "this time."
+                    )
+                distance_matrix = pairwise_distances(
+                    component_centroids, metric=metric_name, **metric_kwds
+                )
+            else:
+                distance_matrix = pairwise_distances(
+                    component_centroids, metric=metric, **metric_kwds
+                )
+
+    affinity_matrix = np.exp(-(distance_matrix ** 2))
 
     component_embedding = SpectralEmbedding(
-        n_components=dim, affinity="precomputed"
+        n_components=dim, affinity="precomputed", random_state=random_state
     ).fit_transform(affinity_matrix)
     component_embedding /= component_embedding.max()
 
@@ -80,7 +151,7 @@ def multi_component_layout(
     metric_kwds={},
 ):
     """Specialised layout algorithm for dealing with graphs with many connected components.
-    This will first fid relative positions for the components by spectrally embedding
+    This will first find relative positions for the components by spectrally embedding
     their centroids, then spectrally embed each individual connected component positioning
     them according to the centroid embeddings. This provides a decent embedding of each
     component while placing the components in good relative positions to one another.
@@ -92,7 +163,7 @@ def multi_component_layout(
         connected component of the graph.
 
     graph: sparse matrix
-        The adjacency matrix of the graph to be emebdded.
+        The adjacency matrix of the graph to be embedded.
 
     n_components: int
         The number of distinct components to be layed out.
@@ -125,6 +196,7 @@ def multi_component_layout(
             n_components,
             component_labels,
             dim,
+            random_state,
             metric=metric,
             metric_kwds=metric_kwds,
         )
@@ -140,7 +212,7 @@ def multi_component_layout(
         distances = pairwise_distances([meta_embedding[label]], meta_embedding)
         data_range = distances[distances > 0.0].min() / 2.0
 
-        if component_graph.shape[0] < 2 * dim:
+        if component_graph.shape[0] < 2 * dim or component_graph.shape[0] <= dim + 1:
             result[component_labels == label] = (
                 random_state.uniform(
                     low=-data_range,
@@ -231,11 +303,6 @@ def spectral_layout(data, graph, dim, random_state, metric="euclidean", metric_k
     n_components, labels = scipy.sparse.csgraph.connected_components(graph)
 
     if n_components > 1:
-        warn(
-            "Embedding a total of {} separate connected components using meta-embedding (experimental)".format(
-                n_components
-            )
-        )
         return multi_component_layout(
             data,
             graph,
@@ -273,10 +340,7 @@ def spectral_layout(data, graph, dim, random_state, metric="euclidean", metric_k
             )
         else:
             eigenvalues, eigenvectors = scipy.sparse.linalg.lobpcg(
-                L,
-                random_state.normal(size=(L.shape[0], k)) + 1,
-                largest=False,
-                tol=1e-8
+                L, random_state.normal(size=(L.shape[0], k)), largest=False, tol=1e-8
             )
         order = np.argsort(eigenvalues)[1:k]
         return eigenvectors[:, order]
