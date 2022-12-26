@@ -72,10 +72,10 @@ Documentation is `available via Read the Docs <https://umap-learn.readthedocs.io
 
 **New: this package now also provides support for densMAP.** The densMAP algorithm augments UMAP
 to preserve local density information in addition to the topological structure of the data.
-Details of this method are described in the following `paper <https://doi.org/10.1101/2020.05.12.077776>`_:
+Details of this method are described in the following `paper <https://doi.org/10.1038/s41587-020-00801-7>`_:
 
-Narayan, A, Berger, B, Cho, H, *Density-Preserving Data Visualization Unveils
-Dynamic Patterns of Single-Cell Transcriptomic Variability*, bioRxiv, 2020
+Narayan, A, Berger, B, Cho, H, *Assessing Single-Cell Transcriptomic Variability
+through Density-Preserving Data Visualization*, Nature Biotechnology, 2021
 
 ----------
 Installing
@@ -466,12 +466,12 @@ Additionally, if you use the densMAP algorithm in your work please cite the foll
 
     @article {NBC2020,
         author = {Narayan, Ashwin and Berger, Bonnie and Cho, Hyunghoon},
-        title = {Density-Preserving Data Visualization Unveils Dynamic Patterns of Single-Cell Transcriptomic Variability},
-        journal = {bioRxiv},
-        year = {2020},
-        doi = {10.1101/2020.05.12.077776},
-        publisher = {Cold Spring Harbor Laboratory},
-        URL = {https://www.biorxiv.org/content/early/2020/05/14/2020.05.12.077776},
+        title = {Assessing Single-Cell Transcriptomic Variability through Density-Preserving Data Visualization},
+        journal = {Nature Biotechnology},
+        year = {2021},
+        doi = {10.1038/s41587-020-00801-7},
+        publisher = {Springer Nature},
+        URL = {https://doi.org/10.1038/s41587-020-00801-7},
         eprint = {https://www.biorxiv.org/content/early/2020/05/14/2020.05.12.077776.full.pdf},
     }
 
@@ -479,7 +479,7 @@ If you use the Parametric UMAP algorithm in your work please cite the following 
 
 .. code:: bibtex
 
-    @article {NBC2020,
+    @article {SMG2020,
         author = {Sainburg, Tim and McInnes, Leland and Gentner, Timothy Q.},
         title = {Parametric UMAP: learning embeddings with deep neural networks for representation and semi-supervised learning},
         journal = {ArXiv e-prints},
