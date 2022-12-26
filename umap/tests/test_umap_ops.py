@@ -292,7 +292,7 @@ def test_component_layout_options(nn_data):
         n_components,
         component_labels,
         2,
-        np.random,
+        None,
         metric="precomputed",
         metric_kwds={"linkage": "single"},
     )
@@ -301,7 +301,7 @@ def test_component_layout_options(nn_data):
         n_components,
         component_labels,
         2,
-        np.random,
+        None,
         metric="precomputed",
         metric_kwds={"linkage": "average"},
     )
@@ -310,7 +310,7 @@ def test_component_layout_options(nn_data):
         n_components,
         component_labels,
         2,
-        np.random,
+        None,
         metric="precomputed",
         metric_kwds={"linkage": "complete"},
     )
