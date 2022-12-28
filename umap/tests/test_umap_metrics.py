@@ -122,7 +122,7 @@ def sparse_spatial_check(metric, sparse_spatial_data):
     assert (
         metric in spdist.sparse_named_distances
     ), f"{metric} not supported for sparse data"
-    dist_matrix = pairwise_distances(sparse_spatial_data.todense(), metric=metric)
+    dist_matrix = pairwise_distances(np.asarray(sparse_spatial_data.todense()), metric=metric)
 
     if metric in ("braycurtis", "dice", "sokalsneath", "yule"):
         dist_matrix[np.where(~np.isfinite(dist_matrix))] = 0.0
@@ -141,7 +141,7 @@ def sparse_binary_check(metric, sparse_binary_data):
     assert (
         metric in spdist.sparse_named_distances
     ), f"{metric} not supported for sparse data"
-    dist_matrix = pairwise_distances(sparse_binary_data.todense(), metric=metric)
+    dist_matrix = pairwise_distances(np.asarray(sparse_binary_data.todense()), metric=metric)
     if metric in ("jaccard", "dice", "sokalsneath", "yule"):
         dist_matrix[np.where(~np.isfinite(dist_matrix))] = 0.0
 

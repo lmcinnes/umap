@@ -25,12 +25,12 @@ def test_composite_trustworthiness(nn_data, iris_model):
     model3 = model1 * model2
     trust = trustworthiness(data, model3.embedding_, n_neighbors=10)
     assert (
-        trust >= 0.82
+        trust >= 0.80
     ), "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust)
     model4 = model1 + model2
     trust = trustworthiness(data, model4.embedding_, n_neighbors=10)
     assert (
-        trust >= 0.82
+        trust >= 0.80
     ), "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust)
 
     with pytest.raises(ValueError):
