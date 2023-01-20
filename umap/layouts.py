@@ -926,7 +926,7 @@ def _optimize_layout_aligned_euclidean_single_epoch(
                             if n_embeddings > neighbor_m >= 0 != offset:
                                 identified_index = relations[m, offset + window_size, k]
                                 if identified_index >= 0:
-                                    grad_d -= clip(
+                                    other_grad_d -= clip(
                                         (lambda_ * np.exp(-(np.abs(offset) - 1)))
                                         * regularisation_weights[
                                             m, offset + window_size, k
