@@ -8,7 +8,7 @@ be the case that one would like to preserve more information about the
 relative local density of data. A recent paper presented a technique
 called
 `DensMAP <https://www.biorxiv.org/content/10.1101/2020.05.12.077776v1>`__
-the computes estimates of the local density and uses those estimates as
+that computes estimates of the local density and uses those estimates as
 a regularizer in the optimization of the low dimensional representation.
 The details are well explained in `the
 paper <https://www.biorxiv.org/content/10.1101/2020.05.12.077776v1>`__
@@ -57,7 +57,7 @@ to compare to. We’ll start with MNIST digits.
 
 Now let’s try running DensMAP instead. In practice this is as easy as
 adding the parameter ``densmap=True`` to the UMAP constructor – this
-will cause UMAP use use DensMAP regularization with the default DensMAP
+will cause UMAP use DensMAP regularization with the default DensMAP
 parameters.
 
 .. code:: python3
