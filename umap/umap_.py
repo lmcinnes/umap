@@ -1534,12 +1534,12 @@ class UMAP(BaseEstimator):
     angular_rp_forest: bool (optional, default False)
         Whether to use an angular random projection forest to initialise
         the approximate nearest neighbor search. This can be faster, but is
-        mostly on useful for metric that use an angular style distance such
+        mostly only useful for a metric that uses an angular style distance such
         as cosine, correlation etc. In the case of those metrics angular forests
         will be chosen automatically.
 
     target_n_neighbors: int (optional, default -1)
-        The number of nearest neighbors to use to construct the target simplcial
+        The number of nearest neighbors to use to construct the target simplicial
         set. If set to -1 use the ``n_neighbors`` value.
 
     target_metric: string or callable (optional, default 'categorical')
@@ -1573,7 +1573,7 @@ class UMAP(BaseEstimator):
 
     unique: bool (optional, default False)
         Controls if the rows of your data should be uniqued before being
-        embedded.  If you have more duplicates than you have n_neighbour
+        embedded.  If you have more duplicates than you have ``n_neighbors``
         you can have the identical data points lying in different regions of
         your space.  It also violates the definition of a metric.
         For to map from internal structures back to your data use the variable

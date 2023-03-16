@@ -73,7 +73,7 @@ If you are unfamilar with Tensorflow/Keras and want to train your own model, we 
 Saving and loading your model
 -----------------------------
 
-Unlike non-parametric UMAP Parametric UMAP cannot be saved simply by pickling the UMAP object because of the Keras networks it contains. To save Parametric UMAP, there is a build in function:
+Unlike non-parametric UMAP Parametric UMAP cannot be saved simply by pickling the UMAP object because of the Keras networks it contains. To save Parametric UMAP, there is a built in function:
 
 .. code:: python3
 
