@@ -1,9 +1,12 @@
+import warnings
+
 from warnings import warn
 
 import numpy as np
 
 import scipy.sparse
 import scipy.sparse.csgraph
+import sklearn.decomposition
 
 from sklearn.manifold import SpectralEmbedding
 from sklearn.metrics import pairwise_distances
@@ -130,7 +133,7 @@ def component_layout(
                     component_centroids, metric=metric, **metric_kwds
                 )
 
-    affinity_matrix = np.exp(-(distance_matrix ** 2))
+    affinity_matrix = np.exp(-(distance_matrix**2))
 
     component_embedding = SpectralEmbedding(
         n_components=dim, affinity="precomputed", random_state=random_state
@@ -352,3 +355,106 @@ def spectral_layout(data, graph, dim, random_state, metric="euclidean", metric_k
             "Falling back to random initialisation!"
         )
         return random_state.uniform(low=-10.0, high=10.0, size=(graph.shape[0], dim))
+
+
+def tswspectral_layout(
+    data, graph, dim, random_state, metric="euclidean", metric_kwds={}
+):
+    """Given a graph compute the spectral embedding of the graph. This is
+    simply the eigenvectors of the laplacian of the graph. Here we use the
+    normalized laplacian and a truncated SVD-based guess of the
+    eigenvectors to "warm" up the lobpcg eigensolver. This function should
+    give results of similar accuracy to the spectral_layout function, but
+    may converge more quickly for graph Laplacians that cause
+    spectral_layout to take an excessive amount of time to complete.
+
+    Parameters
+    ----------
+    data: array of shape (n_samples, n_features)
+        The source data
+
+    graph: sparse matrix
+        The (weighted) adjacency matrix of the graph as a sparse matrix.
+
+    dim: int
+        The dimension of the space into which to embed.
+
+    random_state: numpy RandomState or equivalent
+        A state capable being used as a numpy random state.
+
+    metric: string or callable (optional, default 'euclidean')
+        The metric used to measure distances among the source data points.
+        Used only if the multiple connected components are found in the
+        graph.
+
+    metric_kwds: dict (optional, default {})
+        Keyword arguments to be passed to the metric function.
+        If metric is 'precomputed', 'linkage' keyword can be used to specify
+        'average', 'complete', or 'single' linkage. Default is 'average'.
+        Used only if the multiple connected components are found in the
+        graph.
+
+    Returns
+    -------
+    embedding: array of shape (n_vertices, dim)
+        The spectral embedding of the graph.
+    """
+    n_samples = graph.shape[0]
+    n_components, labels = scipy.sparse.csgraph.connected_components(graph)
+
+    if n_components > 1:
+        return multi_component_layout(
+            data,
+            graph,
+            n_components,
+            labels,
+            dim,
+            random_state,
+            metric=metric,
+            metric_kwds=metric_kwds,
+        )
+
+    diag_data = np.asarray(graph.sum(axis=0))
+    D = scipy.sparse.spdiags(1.0 / np.sqrt(diag_data), 0, n_samples, n_samples)
+    # L is a shifted version of what we will pass to the eigensolver (I - L)
+    # The eigenvectors of I - L coincide with the first few singular vectors
+    # of L so we can carry out truncated SVD on L to get a guess to pass to lobpcg
+    L = D * graph * D
+
+    k = dim + 1
+    tsvd = sklearn.decomposition.TruncatedSVD(
+        n_components=k, random_state=random_state, algorithm="arpack", tol=1e-2
+    )
+    guess = tsvd.fit_transform(L)
+
+    # for a normalized Laplacian, the first eigenvector is always sqrt(D) so replace
+    # the tsvd guess with the exact value. Scaling it to length one seems to help.
+    guess[:, 0] = np.sqrt(diag_data[0] / np.linalg.norm(diag_data[0]))
+
+    I = scipy.sparse.identity(n_samples, dtype=np.float64)
+
+    # lobpcg emits a UserWarning if convergence was not reached within `maxiter`
+    # so we will just have to catch that instead of an Error
+    # This will also trigger when lobpcg decides the problem size is too small
+    # for it to deal with but there is little chance that this would happen
+    # in most real use cases
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        try:
+            eigenvalues, eigenvectors = scipy.sparse.linalg.lobpcg(
+                I - L,
+                guess,
+                largest=False,
+                tol=1e-4,
+                maxiter=graph.shape[0] * 5,
+            )
+        except UserWarning:
+            warn(
+                "WARNING: spectral initialisation failed! The eigenvector solver\n"
+                "failed. This is likely due to too small an eigengap. Consider\n"
+                "adding some noise or jitter to your data.\n\n"
+                "Falling back to random initialisation!"
+            )
+            return random_state.uniform(low=-10.0, high=10.0, size=(n_samples, dim))
+    order = np.argsort(eigenvalues)[1:k]
+    return eigenvectors[:, order]

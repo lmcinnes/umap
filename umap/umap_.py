@@ -38,7 +38,7 @@ from umap.utils import (
     csr_unique,
     fast_knn_indices,
 )
-from umap.spectral import spectral_layout
+from umap.spectral import spectral_layout, tswspectral_layout
 from umap.layouts import (
     optimize_layout_euclidean,
     optimize_layout_generic,
@@ -1115,6 +1115,18 @@ def simplicial_set_embedding(
         embedding = noisy_scale_coords(
             embedding, random_state, max_coord=10, noise=0.0001
         )
+    elif isinstance(init, str) and init == "tswspectral":
+        embedding = tswspectral_layout(
+            data,
+            graph,
+            n_components,
+            random_state,
+            metric=metric,
+            metric_kwds=metric_kwds,
+        )
+        embedding = noisy_scale_coords(
+            embedding, random_state, max_coord=10, noise=0.0001
+        )
     else:
         init_data = np.array(init)
         if len(init_data.shape) == 2:
@@ -1459,7 +1471,13 @@ class UMAP(BaseEstimator):
 
             * 'spectral': use a spectral embedding of the fuzzy 1-skeleton
             * 'random': assign initial embedding positions at random.
-            * 'pca': use the first n_components from PCA applied to the input data.
+            * 'pca': use the first n_components from PCA applied to the
+            input data.
+            * 'tswspectral': use a spectral embedding of the fuzzy
+            1-skeleton, using a truncated singular value decomposition to
+            "warm" up the eigensolver. This is intended as an alternative
+            to the 'spectral' method, if that takes an  excessively long
+            time to complete initialization (or fails to complete).
             * A numpy array of initial embedding positions.
 
     min_dist: float (optional, default 0.1)
@@ -1738,8 +1756,12 @@ class UMAP(BaseEstimator):
             "pca",
             "spectral",
             "random",
+            "tswspectral",
         ):
-            raise ValueError('string init values must be "pca", "spectral" or "random"')
+            raise ValueError(
+                'string init values must be one of: "pca", "tswspectral",'
+                ' "spectral" or "random"'
+            )
         if (
             isinstance(self.init, np.ndarray)
             and self.init.shape[1] != self.n_components
@@ -1769,18 +1791,26 @@ class UMAP(BaseEstimator):
         if self.n_components < 1:
             raise ValueError("n_components must be greater than 0")
         self.n_epochs_list = None
-        if isinstance(self.n_epochs, list) or isinstance(self.n_epochs, tuple) or \
-                isinstance(self.n_epochs, np.ndarray):
-            if not issubclass(np.array(self.n_epochs).dtype.type, np.integer) or \
-                    not np.all(np.array(self.n_epochs) >= 0):
-                raise ValueError("n_epochs must be a nonnegative integer "
-                                 "or a list of nonnegative integers")
+        if (
+            isinstance(self.n_epochs, list)
+            or isinstance(self.n_epochs, tuple)
+            or isinstance(self.n_epochs, np.ndarray)
+        ):
+            if not issubclass(
+                np.array(self.n_epochs).dtype.type, np.integer
+            ) or not np.all(np.array(self.n_epochs) >= 0):
+                raise ValueError(
+                    "n_epochs must be a nonnegative integer "
+                    "or a list of nonnegative integers"
+                )
             self.n_epochs_list = list(self.n_epochs)
         elif self.n_epochs is not None and (
-                self.n_epochs < 0 or not isinstance(self.n_epochs, int)
+            self.n_epochs < 0 or not isinstance(self.n_epochs, int)
         ):
-            raise ValueError("n_epochs must be a nonnegative integer "
-                             "or a list of nonnegative integers")
+            raise ValueError(
+                "n_epochs must be a nonnegative integer "
+                "or a list of nonnegative integers"
+            )
         if self.metric_kwds is None:
             self._metric_kwds = {}
         else:
@@ -2742,7 +2772,9 @@ class UMAP(BaseEstimator):
             print(ts(), "Construct embedding")
 
         if self.transform_mode == "embedding":
-            epochs = self.n_epochs_list if self.n_epochs_list is not None else self.n_epochs
+            epochs = (
+                self.n_epochs_list if self.n_epochs_list is not None else self.n_epochs
+            )
             self.embedding_, aux_data = self._fit_embed_data(
                 self._raw_data[index],
                 epochs,
@@ -2752,11 +2784,15 @@ class UMAP(BaseEstimator):
 
             if self.n_epochs_list is not None:
                 if "embedding_list" not in aux_data:
-                    raise KeyError("No list of embedding were found in 'aux_data'. "
-                                   "It is likely the layout optimization function "
-                                   "doesn't support the list of int for 'n_epochs'.")
+                    raise KeyError(
+                        "No list of embedding were found in 'aux_data'. "
+                        "It is likely the layout optimization function "
+                        "doesn't support the list of int for 'n_epochs'."
+                    )
                 else:
-                    self.embedding_list_ = [e[inverse] for e in aux_data["embedding_list"]]
+                    self.embedding_list_ = [
+                        e[inverse] for e in aux_data["embedding_list"]
+                    ]
 
             # Assign any points that are fully disconnected from our manifold(s) to have embedding
             # coordinates of np.nan.  These will be filtered by our plotting functions automatically.
