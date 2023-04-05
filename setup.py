@@ -51,6 +51,8 @@ configuration = {
         "pynndescent >= 0.5",
         "tbb >= 2019.0",
         "tqdm",
+        "mkl-service",
+        "psutil"
     ],
     "extras_require": {
         "plot": [
