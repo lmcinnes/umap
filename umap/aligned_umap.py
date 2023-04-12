@@ -327,6 +327,7 @@ class AlignedUMAP(BaseEstimator):
                 n_epochs=get_nth_item_or_val(self.n_epochs, n),
                 repulsion_strength=get_nth_item_or_val(self.repulsion_strength, n),
                 learning_rate=get_nth_item_or_val(self.learning_rate, n),
+                init=self.init,
                 spread=get_nth_item_or_val(self.spread, n),
                 negative_sample_rate=get_nth_item_or_val(self.negative_sample_rate, n),
                 local_connectivity=get_nth_item_or_val(self.local_connectivity, n),
@@ -473,6 +474,7 @@ class AlignedUMAP(BaseEstimator):
                 self.repulsion_strength, self.n_models_
             ),
             learning_rate=get_nth_item_or_val(self.learning_rate, self.n_models_),
+	    init=self.init,
             spread=get_nth_item_or_val(self.spread, self.n_models_),
             negative_sample_rate=get_nth_item_or_val(
                 self.negative_sample_rate, self.n_models_
