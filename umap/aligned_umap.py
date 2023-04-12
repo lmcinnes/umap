@@ -449,9 +449,15 @@ class AlignedUMAP(BaseEstimator):
             )
 
         new_dict_relations = fit_params["relations"]
+        assert isinstance(new_dict_relations, dict)
+
         X = check_array(X)
 
         self.__dict__ = set_aligned_params(fit_params, self.__dict__, self.n_models_)
+
+        # We need n_components to be constant or this won't work
+        if type(self.n_components) in (list, tuple, np.ndarray):
+            raise ValueError("n_components must be a single integer, and cannot vary")
 
         if self.n_epochs is None:
             n_epochs = 200
