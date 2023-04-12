@@ -505,9 +505,6 @@ class AlignedUMAP(BaseEstimator):
 
         self.dict_relations_ += [new_dict_relations]
 
-        # TODO: We can likely make this more efficient and not recompute each time
-        new_dict_relations = invert_dict(new_dict_relations)
-
         window_size = fit_params.get("window_size", self.alignment_window_size)
         new_relations = expand_relations(self.dict_relations_, window_size)
 
@@ -537,8 +534,11 @@ class AlignedUMAP(BaseEstimator):
             new_relations,
         )
 
+        # TODO: We can likely make this more efficient and not recompute each time
+        inv_dict_relations = invert_dict(new_dict_relations)
+
         new_embedding = init_from_existing(
-            self.embeddings_[-1], new_mapper.graph_, new_dict_relations
+            self.embeddings_[-1], new_mapper.graph_, inv_dict_relations
         )
 
         self.embeddings_.append(new_embedding)
