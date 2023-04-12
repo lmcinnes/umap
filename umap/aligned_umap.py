@@ -314,6 +314,12 @@ class AlignedUMAP(BaseEstimator):
 
         self.n_models_ = len(X)
 
+        if self.n_epochs is None:
+            n_epochs = 200
+            self.n_epochs = 200
+        else:
+            n_epochs = self.n_epochs
+
         self.mappers_ = [
             UMAP(
                 n_neighbors=get_nth_item_or_val(self.n_neighbors, n),
@@ -345,11 +351,6 @@ class AlignedUMAP(BaseEstimator):
             ).fit(X[n], y[n])
             for n in range(self.n_models_)
         ]
-
-        if self.n_epochs is None:
-            n_epochs = 200
-        else:
-            n_epochs = self.n_epochs
 
         window_size = fit_params.get("window_size", self.alignment_window_size)
         relations = expand_relations(self.dict_relations_, window_size)
@@ -452,6 +453,12 @@ class AlignedUMAP(BaseEstimator):
 
         self.__dict__ = set_aligned_params(fit_params, self.__dict__, self.n_models_)
 
+        if self.n_epochs is None:
+            n_epochs = 200
+            self.n_epochs = 200
+        else:
+            n_epochs = self.n_epochs
+
         new_mapper = UMAP(
             n_neighbors=get_nth_item_or_val(self.n_neighbors, self.n_models_),
             min_dist=get_nth_item_or_val(self.min_dist, self.n_models_),
@@ -489,11 +496,6 @@ class AlignedUMAP(BaseEstimator):
 
         self.n_models_ += 1
         self.mappers_ += [new_mapper]
-
-        if self.n_epochs is None:
-            n_epochs = 200
-        else:
-            n_epochs = self.n_epochs
 
         self.dict_relations_ += [new_dict_relations]
 
