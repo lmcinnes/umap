@@ -315,10 +315,9 @@ class AlignedUMAP(BaseEstimator):
         self.n_models_ = len(X)
 
         if self.n_epochs is None:
-            n_epochs = 200
             self.n_epochs = 200
-        else:
-            n_epochs = self.n_epochs
+
+        n_epochs = self.n_epochs
 
         self.mappers_ = [
             UMAP(
@@ -461,10 +460,9 @@ class AlignedUMAP(BaseEstimator):
             raise ValueError("n_components must be a single integer, and cannot vary")
 
         if self.n_epochs is None:
-            n_epochs = 200
             self.n_epochs = 200
-        else:
-            n_epochs = self.n_epochs
+
+        n_epochs = self.n_epochs
 
         new_mapper = UMAP(
             n_neighbors=get_nth_item_or_val(self.n_neighbors, self.n_models_),
