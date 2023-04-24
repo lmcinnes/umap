@@ -1,6 +1,7 @@
 import numpy as np
 import numba
 import umap.distances as dist
+import umap_extend
 from umap.utils import tau_rand_int
 from tqdm.auto import tqdm
 
@@ -346,7 +347,6 @@ def optimize_layout_euclidean(
         tqdm_kwds["disable"] = not verbose
 
     for n in tqdm(range(n_epochs), **tqdm_kwds):
-
         densmap_flag = (
             densmap
             and (densmap_kwds["lambda"] > 0)
@@ -376,7 +376,7 @@ def optimize_layout_euclidean(
             dens_re_mean = 0
             dens_re_cov = 0
 
-        optimize_fn(
+    umap_extend.cpp_optimize_layout_euclidean_single_epoch(
             head_embedding,
             tail_embedding,
             head,
@@ -405,13 +405,42 @@ def optimize_layout_euclidean(
             dens_mu,
             dens_mu_tot,
         )
+        # optimize_fn(
+        #     head_embedding,
+        #     tail_embedding,
+        #     head,
+        #     tail,
+        #     n_vertices,
+        #     epochs_per_sample,
+        #     a,
+        #     b,
+        #     rng_state,
+        #     gamma,
+        #     dim,
+        #     move_other,
+        #     alpha,
+        #     epochs_per_negative_sample,
+        #     epoch_of_next_negative_sample,
+        #     epoch_of_next_sample,
+        #     n,
+        #     densmap_flag,
+        #     dens_phi_sum,
+        #     dens_re_sum,
+        #     dens_re_cov,
+        #     dens_re_std,
+        #     dens_re_mean,
+        #     dens_lambda,
+        #     dens_R,
+        #     dens_mu,
+        #     dens_mu_tot,
+        # )
 
-        alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
+    alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
 
-        if verbose and n % int(n_epochs / 10) == 0:
+    if verbose and n % int(n_epochs / 10) == 0:
             print("\tcompleted ", n, " / ", n_epochs, "epochs")
 
-        if epochs_list is not None and n in epochs_list:
+    if epochs_list is not None and n in epochs_list:
             embedding_list.append(head_embedding.copy())
 
     # Add the last embedding to the list as well
