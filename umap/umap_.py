@@ -659,7 +659,7 @@ def fast_intersection(rows, cols, values, target, unknown_dist=1.0, far_dist=5.0
     return
 
 
-@numba.jit()
+@numba.njit()
 def fast_metric_intersection(
     rows, cols, values, discrete_space, metric, metric_args, scale
 ):

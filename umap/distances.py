@@ -1060,7 +1060,7 @@ def get_discrete_params(data, metric):
         return {}
 
 
-@numba.jit()
+@numba.njit()
 def categorical_distance(x, y):
     if x == y:
         return 0.0
@@ -1068,7 +1068,7 @@ def categorical_distance(x, y):
         return 1.0
 
 
-@numba.jit()
+@numba.njit()
 def hierarchical_categorical_distance(x, y, cat_hierarchy=[{}]):
     n_levels = float(len(cat_hierarchy))
     for level, cats in enumerate(cat_hierarchy):
@@ -1083,7 +1083,7 @@ def ordinal_distance(x, y, support_size=1.0):
     return abs(x - y) / support_size
 
 
-@numba.jit()
+@numba.njit()
 def count_distance(x, y, poisson_lambda=1.0, normalisation=1.0):
     lo = int(min(x, y))
     hi = int(max(x, y))
