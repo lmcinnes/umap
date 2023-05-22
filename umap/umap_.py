@@ -2462,7 +2462,7 @@ class UMAP(BaseEstimator):
                 raise ValueError("Non-zero distances from samples to themselves!")
             if self.knn_dists is None:
                 self._knn_indices = np.zeros(
-                    (X.shape[0], self.n_neighbors), dtype=np.int
+                    (X.shape[0], self.n_neighbors), dtype=int
                 )
                 self._knn_dists = np.zeros(self._knn_indices.shape, dtype=np.float)
                 for row_id in range(X.shape[0]):
