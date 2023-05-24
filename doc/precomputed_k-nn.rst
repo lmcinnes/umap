@@ -141,7 +141,7 @@ Standard Case
 ~~~~~~~~~~~~~~~
 
 Out of the box, UMAP with precomputed_knn supports creating reproducible
-results. This works inexactly the same way as regular UMAP, where, the
+results. This works in exactly the same way as regular UMAP, where, the
 user can set a random seed state to ensure that results can be reproduced
 exactly. However, some important considerations must be taken into account.
 
