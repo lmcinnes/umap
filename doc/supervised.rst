@@ -326,7 +326,7 @@ the :meth:`~umap.umap_.UMAP.transform` method.
     cbar = plt.colorbar(boundaries=np.arange(11)-0.5)
     cbar.set_ticks(np.arange(10))
     cbar.set_ticklabels(classes)
-    plt.title('Fashion MNIST Train Digits Embedded via UMAP');
+    plt.title('Fashion MNIST Test Digits Embedded via UMAP');
 
 
 
