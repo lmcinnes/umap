@@ -94,20 +94,16 @@ Requirements:
 * scikit-learn
 * numba
 * tqdm
+* `pynndescent <https://github.com/lmcinnes/pynndescent>`_
 
 Recommended packages:
 
-* `pynndescent <https://github.com/lmcinnes/pynndescent>`_
 * For plotting
    * matplotlib
    * datashader
    * holoviews
 * for Parametric UMAP  
    * tensorflow > 2.0.0
-
-
-Installing pynndescent can significantly increase performance, and in later versions
-it will become a hard dependency.
 
 **Install Options**
 
