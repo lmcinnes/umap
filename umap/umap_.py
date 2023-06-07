@@ -1472,12 +1472,12 @@ class UMAP(BaseEstimator):
             * 'spectral': use a spectral embedding of the fuzzy 1-skeleton
             * 'random': assign initial embedding positions at random.
             * 'pca': use the first n_components from PCA applied to the
-            input data.
+                input data.
             * 'tswspectral': use a spectral embedding of the fuzzy
-            1-skeleton, using a truncated singular value decomposition to
-            "warm" up the eigensolver. This is intended as an alternative
-            to the 'spectral' method, if that takes an  excessively long
-            time to complete initialization (or fails to complete).
+                1-skeleton, using a truncated singular value decomposition to
+                "warm" up the eigensolver. This is intended as an alternative
+                to the 'spectral' method, if that takes an  excessively long
+                time to complete initialization (or fails to complete).
             * A numpy array of initial embedding positions.
 
     min_dist: float (optional, default 0.1)
