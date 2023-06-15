@@ -468,7 +468,7 @@ def show(plot_to_show):
     """
     if isinstance(plot_to_show, plt.Axes):
         show_static()
-    elif isinstance(plot_to_show, bpl.Figure):
+    elif isinstance(plot_to_show, bpl.figure):
         show_interactive(plot_to_show)
     elif isinstance(plot_to_show, hv.core.spaces.DynamicMap):
         show_interactive(hv.render(plot_to_show), backend="bokeh")
