@@ -5,9 +5,11 @@ import umap.sparse as spdist
 
 from sklearn.metrics import pairwise_distances
 from sklearn.neighbors import BallTree
-from scipy.version import full_version as scipy_full_version
+from scipy.version import full_version as scipy_full_version_
 import pytest
 
+
+scipy_full_version = tuple(int(n) for n in scipy_full_version_.split("."))
 
 
 # ===================================================
@@ -212,6 +214,9 @@ def test_dice(binary_data, binary_distances):
     binary_check("dice", binary_data, binary_distances)
 
 
+@pytest.mark.skipif(
+    scipy_full_version >= (1, 9), reason="deprecated in SciPy 1.9, removed in 1.11"
+)
 def test_kulsinski(binary_data, binary_distances):
     binary_check("kulsinski", binary_data, binary_distances)
 
@@ -294,6 +299,9 @@ def test_sparse_dice(sparse_binary_data):
     sparse_binary_check("dice", sparse_binary_data)
 
 
+@pytest.mark.skipif(
+    scipy_full_version >= (1, 9), reason="deprecated in SciPy 1.9, removed in 1.11"
+)
 def test_sparse_kulsinski(sparse_binary_data):
     sparse_binary_check("kulsinski", sparse_binary_data)
 
@@ -336,7 +344,7 @@ def test_seuclidean(spatial_data):
     )
 
 @pytest.mark.skipif(
-    scipy_full_version < "1.8", reason="incorrect function in scipy<1.8"
+    scipy_full_version < (1, 8), reason="incorrect function in scipy<1.8"
 )
 def test_weighted_minkowski(spatial_data):
     v = np.abs(np.random.randn(spatial_data.shape[1]))
@@ -493,7 +501,7 @@ def test_grad_metrics_match_metrics(spatial_data, spatial_distances):
         err_msg="Distances don't match " "for metric seuclidean",
     )
 
-    if scipy_full_version >= "1.8":
+    if scipy_full_version >= (1, 8):
         # Weighted minkowski
         dist_matrix = pairwise_distances(spatial_data, metric="minkowski", w=v, p=3)
         test_matrix = np.array(
