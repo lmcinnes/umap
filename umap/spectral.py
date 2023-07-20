@@ -438,23 +438,22 @@ def tswspectral_layout(
     # This will also trigger when lobpcg decides the problem size is too small
     # for it to deal with but there is little chance that this would happen
     # in most real use cases
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        try:
-            eigenvalues, eigenvectors = scipy.sparse.linalg.lobpcg(
-                I - L,
-                guess,
-                largest=False,
-                tol=1e-4,
-                maxiter=graph.shape[0] * 5,
-            )
-        except UserWarning:
-            warn(
-                "WARNING: spectral initialisation failed! The eigenvector solver\n"
-                "failed. This is likely due to too small an eigengap. Consider\n"
-                "adding some noise or jitter to your data.\n\n"
-                "Falling back to random initialisation!"
-            )
-            return random_state.uniform(low=-10.0, high=10.0, size=(n_samples, dim))
+    with warnings.catch_warnings(record=True, category=UserWarning) as warnings_caught:
+        eigenvalues, eigenvectors = scipy.sparse.linalg.lobpcg(
+            np.array(I - L),
+            guess,
+            largest=False,
+            tol=1e-4,
+            maxiter=graph.shape[0] * 5,
+        )
+    if warnings_caught:
+        warn(
+            "WARNING: spectral initialisation failed! The eigenvector solver\n"
+            "failed. This is likely due to too small an eigengap. Consider\n"
+            "adding some noise or jitter to your data.\n\n"
+            "Falling back to random initialisation!"
+        )
+        return random_state.uniform(low=-10.0, high=10.0, size=(n_samples, dim))
+
     order = np.argsort(eigenvalues)[1:k]
     return eigenvectors[:, order]
