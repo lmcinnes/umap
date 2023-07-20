@@ -47,7 +47,7 @@ def test_blobs_cluster():
 # Multi-components Layout
 def test_multi_component_layout():
     data, labels = make_blobs(
-        100, 2, centers=5, cluster_std=0.5, center_box=[-20, 20], random_state=42
+        100, 2, centers=5, cluster_std=0.5, center_box=(-20, 20), random_state=42
     )
 
     true_centroids = np.empty((labels.max() + 1, data.shape[1]), dtype=np.float64)
@@ -74,7 +74,7 @@ def test_multi_component_layout():
 # Multi-components Layout
 def test_multi_component_layout_precomputed():
     data, labels = make_blobs(
-        100, 2, centers=5, cluster_std=0.5, center_box=[-20, 20], random_state=42
+        100, 2, centers=5, cluster_std=0.5, center_box=(-20, 20), random_state=42
     )
     dmat = pairwise_distances(data)
 
