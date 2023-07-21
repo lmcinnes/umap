@@ -151,6 +151,9 @@ def multi_component_layout(
     random_state,
     metric="euclidean",
     metric_kwds={},
+    init="random",
+    tol=0.0,
+    maxiter=0
 ):
     """Specialised layout algorithm for dealing with graphs with many connected components.
     This will first find relative positions for the components by spectrally embedding
@@ -183,6 +186,19 @@ def multi_component_layout(
     metric_kwds: dict (optional, default {})
         Keyword arguments to be passed to the metric function.
 
+    init: string, either "random" or "tsvd"
+        Indicates to initialize the eigensolver. Use "random" (the default) to
+        use uniformly distributed random initialization; use "tsvd" to warm-start the
+        eigensolver with singular vectors of the Laplacian associated to the largest
+        singular values. This latter option also forces usage of the LOBPCG eigensolver;
+        with the former, ARPACK's solver ``eigsh`` will be used for smaller Laplacians.
+
+    tol: float, default chosen by implementation
+        Stopping tolerance for the numerical algorithm computing the embedding.
+
+    maxiter: int, default chosen by implementation
+        Number of iterations the numerical algorithm will go through at most as it
+        attempts to compute the embedding.
 
     Returns
     -------
@@ -223,55 +239,22 @@ def multi_component_layout(
                 )
                 + meta_embedding[label]
             )
-            continue
-
-        diag_data = np.asarray(component_graph.sum(axis=0)).squeeze()
-        # standard Laplacian
-        # D = scipy.sparse.spdiags(diag_data, 0, graph.shape[0], graph.shape[0])
-        # L = D - graph
-        # Normalized Laplacian
-        I = scipy.sparse.identity(component_graph.shape[0], dtype=np.float64)
-        D = scipy.sparse.spdiags(
-            1.0 / np.sqrt(diag_data),
-            0,
-            component_graph.shape[0],
-            component_graph.shape[0],
-        )
-        L = I - D * component_graph * D
-
-        k = dim + 1
-        num_lanczos_vectors = max(2 * k + 1, int(np.sqrt(component_graph.shape[0])))
-        try:
-            eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
-                L,
-                k,
-                which="SM",
-                ncv=num_lanczos_vectors,
-                tol=1e-4,
-                v0=np.ones(L.shape[0]),
-                maxiter=graph.shape[0] * 5,
+        else:
+            component_embedding = _spectral_layout(
+                data=None,
+                graph=component_graph,
+                dim=dim,
+                random_state=random_state,
+                metric=metric,
+                metric_kwds=metric_kwds,
+                init=init,
+                tol=tol,
+                maxiter=maxiter
             )
-            order = np.argsort(eigenvalues)[1:k]
-            component_embedding = eigenvectors[:, order]
             expansion = data_range / np.max(np.abs(component_embedding))
             component_embedding *= expansion
             result[component_labels == label] = (
                 component_embedding + meta_embedding[label]
-            )
-        except scipy.sparse.linalg.ArpackError:
-            warn(
-                "WARNING: spectral initialisation failed! The eigenvector solver\n"
-                "failed. This is likely due to too small an eigengap. Consider\n"
-                "adding some noise or jitter to your data.\n\n"
-                "Falling back to random initialisation!"
-            )
-            result[component_labels == label] = (
-                random_state.uniform(
-                    low=-data_range,
-                    high=data_range,
-                    size=(component_graph.shape[0], dim),
-                )
-                + meta_embedding[label]
             )
 
     return result
@@ -429,6 +412,18 @@ def _spectral_layout(
     random_state: numpy RandomState or equivalent
         A state capable being used as a numpy random state.
 
+    metric: string or callable (optional, default 'euclidean')
+        The metric used to measure distances among the source data points.
+        Used only if the multiple connected components are found in the
+        graph.
+
+    metric_kwds: dict (optional, default {})
+        Keyword arguments to be passed to the metric function.
+        If metric is 'precomputed', 'linkage' keyword can be used to specify
+        'average', 'complete', or 'single' linkage. Default is 'average'.
+        Used only if the multiple connected components are found in the
+        graph.
+
     init: string, either "random" or "tsvd"
         Indicates to initialize the eigensolver. Use "random" (the default) to
         use uniformly distributed random initialization; use "tsvd" to warm-start the
@@ -478,7 +473,11 @@ def _spectral_layout(
 
     k = dim + 1
     num_lanczos_vectors = max(2 * k + 1, int(np.sqrt(graph.shape[0])))
-    gen = np.random.default_rng(seed=random_state)
+    gen = (
+        random_state
+        if isinstance(random_state, (np.random.Generator, np.random.RandomState))
+        else np.random.default_rng(seed=random_state)
+    )
     try:
         if L.shape[0] < 2000000 and init == "random":
             eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
