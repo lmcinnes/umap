@@ -7,13 +7,20 @@ import numpy as np
 import scipy.sparse
 import scipy.sparse.csgraph
 import sklearn.decomposition
-
+import os
+import mkl
+import numpy.ctypeslib as npct
+import ctypes
+import psutil
 from sklearn.manifold import SpectralEmbedding
 from sklearn.metrics import pairwise_distances
 from sklearn.metrics.pairwise import _VALID_METRICS as SKLEARN_PAIRWISE_VALID_METRICS
 
 from umap.distances import pairwise_special_metric, SPECIAL_METRICS
 from umap.sparse import SPARSE_SPECIAL_METRICS, sparse_named_distances
+
+proc = psutil.Process(os.getpid())
+mkl_rtc = [lib.path for lib in proc.memory_maps() if 'mkl_rt' in lib.path][0]
 
 
 def component_layout(
@@ -278,6 +285,285 @@ def multi_component_layout(
     return result
 
 
+def mkl_eigenvalue(*args, **kwargs):
+    print("Inside mkl_eigenvalue")
+    use_fp32 = os.environ.get("UMAP_MKL_FP32", "1") != "0"
+    if use_fp32:
+        return mkl_eigenvalue_s(*args, **kwargs)
+    return mkl_eigenvalue_d(*args, **kwargs)
+
+
+def mkl_eigenvalue_d(spM, k0, whichE, ncv, tol, maxiter):
+    
+    
+    #mkl_rt = ctypes.cdll.LoadLibrary(mkl_rtc)
+    mkl_rt = ctypes.CDLL(mkl_rtc)
+    # types
+    # MKL_INT is  np.intc if MKL_INTERFACE is LP64
+    array_1d_mkl_int_t = npct.ndpointer(dtype=np.intc, ndim=1, flags="CONTIGUOUS")
+    array_1d_double_t = npct.ndpointer(dtype=np.double, ndim=1, flags="CONTIGUOUS")
+
+    # set up function mkl_sparse_ee_init
+    py_mkl_sparse_ee_init = mkl_rt.mkl_sparse_ee_init
+    py_mkl_sparse_ee_init.restupe = None
+    py_mkl_sparse_ee_init.argtypes = [array_1d_mkl_int_t]
+
+    sparse_matrix_t = ctypes.c_void_p
+    sparse_status_t = ctypes.c_int  # enum
+    sparse_operation_t = ctypes.c_int  # enum
+    sparse_matrix_type_t = ctypes.c_int  # enum
+    sparse_index_base_t = ctypes.c_int  # enum
+    sparse_fill_mode_t = ctypes.c_int  # enum
+    sparse_diag_type_t = ctypes.c_int  # enum
+    sparse_layout_t = ctypes.c_int  # enum
+    verbose_mode_t = ctypes.c_int  # enum
+    sparse_memory_usage = ctypes.c_int  # enum
+    sparse_request_t = ctypes.c_int  # enum
+
+    class SparseMatrixDescr(ctypes.Structure):
+        _fields_ = [
+            ("type", sparse_matrix_type_t),
+            ("mode", sparse_fill_mode_t),
+            ("diag", sparse_diag_type_t),
+        ]
+
+    # setup mkl_sparse_d_create_csr
+    py_mkl_sparse_d_create_csr = mkl_rt.mkl_sparse_d_create_csr
+    py_mkl_sparse_d_create_csr.restype = sparse_status_t
+    py_mkl_sparse_d_create_csr.argtypes = [
+        ctypes.POINTER(ctypes.c_void_p),  # sparse_matrix_t *A
+        sparse_index_base_t,  # enum
+        ctypes.c_int,  # MKL_INT rows
+        ctypes.c_int,  # MKL_INT cols
+        array_1d_mkl_int_t,  # MKL_INT *row_start
+        array_1d_mkl_int_t,  # MKL_INT *row_end
+        array_1d_mkl_int_t,  # MKL_INT *col_indx
+        array_1d_double_t,  # double * vals
+    ]
+
+    py_mkl_sparse_d_ev = mkl_rt.mkl_sparse_d_ev
+    py_mkl_sparse_d_ev.restype = ctypes.c_int
+    py_mkl_sparse_d_ev.argtypes = [
+        ctypes.c_char_p,  # char * whichE
+        array_1d_mkl_int_t,  # MKL_INT * pm
+        sparse_matrix_t,  # sparse_matrix_t A,
+        SparseMatrixDescr,  # matrix_desc
+        ctypes.c_int,  # k0
+        ctypes.POINTER(ctypes.c_int),  # MKL_INT *k,
+        array_1d_double_t,  # double * E
+        array_1d_double_t,  # double * X
+        array_1d_double_t,  # double * res
+    ]
+
+    py_mkl_sparse_destroy = mkl_rt.mkl_sparse_destroy
+    py_mkl_sparse_destroy.returntype = None
+    py_mkl_sparse_destroy.argtypes = [sparse_matrix_t]
+
+    one = ctypes.c_double(1.0)
+    zero = ctypes.c_double(0.0)
+    tol = ctypes.c_int(int(tol))
+    compute_vectors = ctypes.c_int(1)
+    xgemmC = ctypes.c_char(b"T")
+    xgemmN = ctypes.c_char(b"N")
+    # whichE = ctypes.c_char(b'S')
+    whichE = ctypes.c_char(whichE)
+    whichV = ctypes.c_char(b"L")
+    num_lanczos_vectors = ctypes.c_int(int(ncv))
+    maxiter = ctypes.c_int(int(maxiter))
+
+    k = ctypes.c_int(0)  # to be computed by MKL
+    SPARSE_MATRIX_TYPE_GENERAL = 20
+    descr = SparseMatrixDescr(type=SPARSE_MATRIX_TYPE_GENERAL)
+    mkl_csrA = sparse_matrix_t()
+
+    pm = np.zeros((128,), dtype=np.intc)
+    py_mkl_sparse_ee_init(pm)
+    pm[1] = tol.value
+    pm[2] = 1
+    pm[3] = num_lanczos_vectors.value
+    pm[4] = maxiter.value
+    pm[6] = compute_vectors.value
+    pm[
+        7
+    ] = 1  # 0 = relative,  1 = Use absolute stopping critertia. Iteration is stopped if norm(Ax - lambda*x) < 10^(-pm[1])
+
+    k0 = ctypes.c_int(int(k0))  # how many eigenvalues to compute
+
+    SPARSE_INDEX_BASE_ZERO = 0
+    # mkl_sparse_d_create_csr ( &mkl_csrA, SPARSE_INDEX_BASE_ONE, N, M, ia, ia+1, ja, a );
+    csr_create_status = py_mkl_sparse_d_create_csr(
+        ctypes.byref(mkl_csrA),
+        SPARSE_INDEX_BASE_ZERO,
+        spM.shape[0],
+        spM.shape[1],
+        spM.indptr[:-1],
+        spM.indptr[1:],
+        spM.indices,
+        spM.data,
+    )
+
+    eigenvals = np.zeros((np.max(k0.value),), dtype=np.float64)
+    resid = np.empty_like(eigenvals)
+    X = np.empty((k0.value, spM.shape[0]), dtype=np.float64)
+    X_flat = X.reshape((-1))
+    # X_flat = np.ones((k0.value * spM.shape[0]), dtype=np.double)
+
+    info = py_mkl_sparse_d_ev(
+        ctypes.byref(whichE),  # 1
+        pm,  # 3
+        mkl_csrA,  # 4
+        descr,
+        k0,
+        ctypes.byref(k),
+        eigenvals,
+        X_flat,
+        resid,
+    )
+
+    X = X_flat.reshape((k0.value, int(X_flat.shape[0] / k0.value)))
+    X = X.T
+    X[:, 0] = -X[:, 0]
+    X[:, 1] = -X[:, 1]
+    return eigenvals, X
+
+
+def mkl_eigenvalue_s(spM, k0, whichE, ncv, tol, maxiter):  # single-precision version
+    
+
+   # mkl_rt = ctypes.cdll.LoadLibrary(mkl_rtc)
+    mkl_rt = ctypes.CDLL(mkl_rtc)
+    # types
+    # MKL_INT is  np.intc if MKL_INTERFACE is LP64
+    array_1d_mkl_int_t = npct.ndpointer(dtype=np.intc, ndim=1, flags="CONTIGUOUS")
+    array_1d_float_t = npct.ndpointer(dtype=np.float32, ndim=1, flags="CONTIGUOUS")
+
+    # set up function mkl_sparse_ee_init
+    py_mkl_sparse_ee_init = mkl_rt.mkl_sparse_ee_init
+    py_mkl_sparse_ee_init.restupe = None
+    py_mkl_sparse_ee_init.argtypes = [array_1d_mkl_int_t]
+
+    sparse_matrix_t = ctypes.c_void_p
+    sparse_status_t = ctypes.c_int  # enum
+    sparse_operation_t = ctypes.c_int  # enum
+    sparse_matrix_type_t = ctypes.c_int  # enum
+    sparse_index_base_t = ctypes.c_int  # enum
+    sparse_fill_mode_t = ctypes.c_int  # enum
+    sparse_diag_type_t = ctypes.c_int  # enum
+    sparse_layout_t = ctypes.c_int  # enum
+    verbose_mode_t = ctypes.c_int  # enum
+    sparse_memory_usage = ctypes.c_int  # enum
+    sparse_request_t = ctypes.c_int  # enum
+
+    class SparseMatrixDescr(ctypes.Structure):
+        _fields_ = [
+            ("type", sparse_matrix_type_t),
+            ("mode", sparse_fill_mode_t),
+            ("diag", sparse_diag_type_t),
+        ]
+
+    # setup mkl_sparse_d_create_csr
+    py_mkl_sparse_s_create_csr = mkl_rt.mkl_sparse_s_create_csr
+    py_mkl_sparse_s_create_csr.restype = sparse_status_t
+    py_mkl_sparse_s_create_csr.argtypes = [
+        ctypes.POINTER(ctypes.c_void_p),  # sparse_matrix_t *A
+        sparse_index_base_t,  # enum
+        ctypes.c_int,  # MKL_INT rows
+        ctypes.c_int,  # MKL_INT cols
+        array_1d_mkl_int_t,  # MKL_INT *row_start
+        array_1d_mkl_int_t,  # MKL_INT *row_end
+        array_1d_mkl_int_t,  # MKL_INT *col_indx
+        array_1d_float_t,  # float * vals
+    ]
+
+    py_mkl_sparse_s_ev = mkl_rt.mkl_sparse_s_ev
+    py_mkl_sparse_s_ev.restype = ctypes.c_int
+    py_mkl_sparse_s_ev.argtypes = [
+        ctypes.c_char_p,  # char * whichE
+        array_1d_mkl_int_t,  # MKL_INT * pm
+        sparse_matrix_t,  # sparse_matrix_t A,
+        SparseMatrixDescr,  # matrix_desc
+        ctypes.c_int,  # k0
+        ctypes.POINTER(ctypes.c_int),  # MKL_INT *k,
+        array_1d_float_t,  # float * E
+        array_1d_float_t,  # float * X
+        array_1d_float_t,  # float * res
+    ]
+
+    py_mkl_sparse_destroy = mkl_rt.mkl_sparse_destroy
+    py_mkl_sparse_destroy.returntype = None
+    py_mkl_sparse_destroy.argtypes = [sparse_matrix_t]
+
+    one = ctypes.c_float(1.0)
+    zero = ctypes.c_float(0.0)
+    tol = ctypes.c_int(int(tol))
+    compute_vectors = ctypes.c_int(1)
+    xgemmC = ctypes.c_char(b"T")
+    xgemmN = ctypes.c_char(b"N")
+    # whichE = ctypes.c_char(b'S')
+    whichE = ctypes.c_char(whichE)
+    whichV = ctypes.c_char(b"L")
+    num_lanczos_vectors = ctypes.c_int(int(ncv))
+    maxiter = ctypes.c_int(int(maxiter))
+
+    k = ctypes.c_int(0)  # to be computed by MKL
+    SPARSE_MATRIX_TYPE_GENERAL = 20
+    descr = SparseMatrixDescr(type=SPARSE_MATRIX_TYPE_GENERAL)
+    mkl_csrA = sparse_matrix_t()
+
+    pm = np.zeros((128,), dtype=np.intc)
+    py_mkl_sparse_ee_init(pm)
+    pm[1] = tol.value
+    pm[2] = 1
+    pm[3] = num_lanczos_vectors.value
+    pm[4] = maxiter.value
+    pm[6] = compute_vectors.value
+    pm[
+        7
+    ] = 1  # 0 = relative,  1 = Use absolute stopping critertia. Iteration is stopped if norm(Ax - lambda*x) < 10^(-pm[1])
+
+    k0 = ctypes.c_int(int(k0))  # how many eigenvalues to compute
+
+    tmp = np.empty(spM.data.shape, dtype=np.float32)
+    tmp[:] = spM.data.astype(np.float32)
+
+    SPARSE_INDEX_BASE_ZERO = 0
+    # mkl_sparse_d_create_csr ( &mkl_csrA, SPARSE_INDEX_BASE_ONE, N, M, ia, ia+1, ja, a );
+    csr_create_status = py_mkl_sparse_s_create_csr(
+        ctypes.byref(mkl_csrA),
+        SPARSE_INDEX_BASE_ZERO,
+        spM.shape[0],
+        spM.shape[1],
+        spM.indptr[:-1],
+        spM.indptr[1:],
+        spM.indices,
+        tmp,  # spM.data.astype(np.float32)
+    )
+
+    eigenvals = np.zeros((np.max(k0.value),), dtype=np.float32)
+    resid = np.empty_like(eigenvals)
+    X = np.empty((k0.value, spM.shape[0]), dtype=np.float32)
+    X_flat = X.reshape((-1))
+    # X_flat = np.ones((k0.value * spM.shape[0]), dtype=np.double)
+
+    info = py_mkl_sparse_s_ev(
+        ctypes.byref(whichE),  # 1
+        pm,  # 3
+        mkl_csrA,  # 4
+        descr,
+        k0,
+        ctypes.byref(k),
+        eigenvals,
+        X_flat,
+        resid,
+    )
+
+    X = X_flat.reshape((k0.value, int(X_flat.shape[0] / k0.value)))
+    X = X.T
+    X[:, 0] = -X[:, 0]
+    X[:, 1] = -X[:, 1]
+    return eigenvals, X
+
+
 def spectral_layout(data, graph, dim, random_state, metric="euclidean", metric_kwds={}):
     """Given a graph compute the spectral embedding of the graph. This is
     simply the eigenvectors of the laplacian of the graph. Here we use the
@@ -332,13 +618,21 @@ def spectral_layout(data, graph, dim, random_state, metric="euclidean", metric_k
     num_lanczos_vectors = max(2 * k + 1, int(np.sqrt(graph.shape[0])))
     try:
         if L.shape[0] < 2000000:
-            eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
+            # eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
+            #    L,
+            #    k,
+            #    which="SM",
+            #    ncv=num_lanczos_vectors,
+            #    tol=1e-4,
+            #    v0=np.ones(L.shape[0]),
+            #    maxiter=graph.shape[0] * 5,
+            # )
+            eigenvalues, eigenvectors = mkl_eigenvalue(
                 L,
                 k,
-                which="SM",
+                whichE=b"S",
                 ncv=num_lanczos_vectors,
-                tol=1e-4,
-                v0=np.ones(L.shape[0]),
+                tol=5,
                 maxiter=graph.shape[0] * 5,
             )
         else:
