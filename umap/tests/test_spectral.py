@@ -26,7 +26,7 @@ def test_tsw_spectral_init(iris):
     tsw_spec = tswspectral_layout(None, graph, 2, random_state=seed ** 2, tol=1e-4)
 
     # make sure the two methods produce matrices that are close in values
-    rmsd = np.sqrt(np.mean(np.sum((np.abs(spec) - np.abs(tsw_spec)) ** 2, axis=1)))
+    rmsd = np.mean(np.sum((spec - tsw_spec) ** 2, axis=1))
     assert (
         rmsd < 1e-6
     ), "tsvd-warmed spectral init insufficiently close to standard spectral init"
