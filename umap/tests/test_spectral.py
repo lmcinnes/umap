@@ -2,7 +2,11 @@ from umap.spectral import spectral_layout, tswspectral_layout
 
 import numpy as np
 import pytest
+from scipy.version import full_version as scipy_full_version_
 from warnings import catch_warnings
+
+
+scipy_full_version = tuple(int(n) for n in scipy_full_version_.split("."))
 
 
 def test_tsw_spectral_init(iris):
@@ -24,6 +28,10 @@ def test_tsw_spectral_init(iris):
     ), "tsvd-warmed spectral init insufficiently close to standard spectral init"
 
 
+@pytest.mark.skipif(
+    scipy_full_version < (1, 10),
+    reason="SciPy installing with Py 3.7 does not warn reliably on convergence failure"
+)
 def test_ensure_fallback_to_random_on_spectral_failure():
     dim = 1000
     k = 10
