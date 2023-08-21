@@ -259,7 +259,7 @@ def test_umap_update_large(
 
     error = np.sum(np.abs((new_model.graph_ - comparison_graph).data))
 
-    assert error < 3.0 # Higher error tolerance based on approx nearest neighbors
+    assert error < 3.0  # Higher error tolerance based on approx nearest neighbors
 
 
 # -----------------

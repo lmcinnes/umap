@@ -240,6 +240,7 @@ def test_precomputed_knn_on_iris(iris, iris_selection, iris_subset_model):
     umap_args = dict(
         n_neighbors=iris_subset_model.n_neighbors,
         random_state=iris_subset_model.random_state,
+        n_jobs=1,
         min_dist=iris_subset_model.min_dist,
     )
 
