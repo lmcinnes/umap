@@ -9,6 +9,10 @@ from warnings import catch_warnings
 scipy_full_version = tuple(int(n) for n in scipy_full_version_.split("."))
 
 
+@pytest.mark.skipif(
+    scipy_full_version < (1, 10),
+    reason="SciPy installing with Python 3.7 does not converge under same circumstances"
+)
 def test_tsw_spectral_init(iris):
     # create an arbitrary (dense) random affinity matrix
     seed = 42
