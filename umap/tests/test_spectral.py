@@ -23,9 +23,9 @@ def test_tsw_spectral_init(iris):
     graph = graph.T * graph
 
     spec = spectral_layout(None, graph, 2, random_state=seed ** 2)
-    tsw_spec = tswspectral_layout(None, graph, 2, random_state=seed ** 2, tol=1e-4)
+    tsw_spec = tswspectral_layout(None, graph, 2, random_state=seed ** 2, tol=1e-8)
 
-    # make sure the two methods produce matrices that are close in values
+    # Make sure the two methods produce similar embeddings.
     rmsd = np.mean(np.sum((spec - tsw_spec) ** 2, axis=1))
     assert (
         rmsd < 1e-6
@@ -48,4 +48,4 @@ def test_ensure_fallback_to_random_on_spectral_failure():
         UserWarning,
         match="Spectral initialisation failed!"
     ):
-        tswspectral_layout(u, graph, k, random_state=42, maxiter=2)
+        tswspectral_layout(u, graph, k, random_state=42, maxiter=2, method="lobpcg")
