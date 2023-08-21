@@ -479,7 +479,26 @@ def _spectral_layout(
         else np.random.default_rng(seed=random_state)
     )
     try:
-        if L.shape[0] < 2000000 and init == "random":
+        gen = np.random.default_rng(seed=random_state)
+        if init == "random":
+            X = gen.normal(size=(L.shape[0], k))
+        elif init == "tsvd":
+            X = TruncatedSVD(
+                n_components=k,
+                random_state=random_state,
+                # algorithm="arpack"
+            ).fit_transform(L)
+        else:
+            raise ValueError(
+                "The init parameter must be either 'random' or 'tsvd': "
+                f"{init} is invalid."
+            )
+        # For such a normalized Laplacian, the first eigenvector is always
+        # proportional to sqrt(degrees). We thus replace the first t-SVD guess
+        # with the exact value.
+        X[:, 0] = sqrt_deg / np.linalg.norm(sqrt_deg)
+
+        if L.shape[0] < 2000000:
             eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
                 L,
                 k,
@@ -490,25 +509,6 @@ def _spectral_layout(
                 maxiter=maxiter or graph.shape[0] * 5,
             )
         else:
-            gen = np.random.default_rng(seed=random_state)
-            if init == "random":
-                X = gen.normal(size=(L.shape[0], k))
-            elif init == "tsvd":
-                X = TruncatedSVD(
-                    n_components=k,
-                    random_state=random_state,
-                    # algorithm="arpack"
-                ).fit_transform(L)
-                # For such a normalized Laplacian, the first eigenvector is always
-                # proportional to sqrt(degrees). We thus replace the first t-SVD guess
-                # with the exact value.
-                X[:, 0] = sqrt_deg / np.linalg.norm(sqrt_deg)
-            else:
-                raise ValueError(
-                    "The init parameter must be either 'random' or 'tsvd': "
-                    f"{init} is invalid."
-                )
-
             with warnings.catch_warnings():
                 warnings.filterwarnings(
                     category=UserWarning,
