@@ -162,7 +162,7 @@ jobs:
         displayName: 'Run tests'
 
       - script: |
-          export COVERALLS_REPO_TOKEN=$(COVERALLS_TOKEN)
+          export COVERALLS_REPO_TOKEN=$COVERALLS_TOKEN
           coveralls
         displayName: 'Publish to coveralls'
 
