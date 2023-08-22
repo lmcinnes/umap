@@ -321,6 +321,7 @@ def tswspectral_layout(
     random_state,
     metric="euclidean",
     metric_kwds={},
+    method=None,
     tol=0.0,
     maxiter=0
 ):
@@ -358,6 +359,13 @@ def tswspectral_layout(
         Used only if the multiple connected components are found in the
         graph.
 
+    method: str (optional, default None, values either 'eigsh' or 'lobpcg')
+        Name of the eigenvalue computation method to use to compute the spectral
+        embedding. If left to None (or empty string), as by default, the method is
+        chosen from the number of vectors in play: larger vector collections are
+        handled with lobpcg, smaller collections with eigsh. Method names correspond
+        to SciPy routines in scipy.sparse.linalg.
+
     tol: float, default chosen by implementation
         Stopping tolerance for the numerical algorithm computing the embedding.
 
@@ -378,6 +386,7 @@ def tswspectral_layout(
         metric=metric,
         metric_kwds=metric_kwds,
         init="tsvd",
+        method=method,
         tol=tol,
         maxiter=maxiter
     )
@@ -391,6 +400,7 @@ def _spectral_layout(
     metric="euclidean",
     metric_kwds={},
     init="random",
+    method=None,
     tol=0.0,
     maxiter=0
 ):
@@ -430,6 +440,13 @@ def _spectral_layout(
         eigensolver with singular vectors of the Laplacian associated to the largest
         singular values. This latter option also forces usage of the LOBPCG eigensolver;
         with the former, ARPACK's solver ``eigsh`` will be used for smaller Laplacians.
+
+    method: string -- either "eigsh" or "lobpcg" -- or None
+        Name of the eigenvalue computation method to use to compute the spectral
+        embedding. If left to None (or empty string), as by default, the method is
+        chosen from the number of vectors in play: larger vector collections are
+        handled with lobpcg, smaller collections with eigsh. Method names correspond
+        to SciPy routines in scipy.sparse.linalg.
 
     tol: float, default chosen by implementation
         Stopping tolerance for the numerical algorithm computing the embedding.
@@ -478,8 +495,29 @@ def _spectral_layout(
         if isinstance(random_state, (np.random.Generator, np.random.RandomState))
         else np.random.default_rng(seed=random_state)
     )
+    if not method:
+        method = "eigsh" if L.shape[0] < 2000000 else "lobpcg"
+
     try:
-        if L.shape[0] < 2000000 and init == "random":
+        if init == "random":
+            X = gen.normal(size=(L.shape[0], k))
+        elif init == "tsvd":
+            X = TruncatedSVD(
+                n_components=k,
+                random_state=random_state,
+                # algorithm="arpack"
+            ).fit_transform(L)
+        else:
+            raise ValueError(
+                "The init parameter must be either 'random' or 'tsvd': "
+                f"{init} is invalid."
+            )
+        # For such a normalized Laplacian, the first eigenvector is always
+        # proportional to sqrt(degrees). We thus replace the first t-SVD guess
+        # with the exact value.
+        X[:, 0] = sqrt_deg / np.linalg.norm(sqrt_deg)
+
+        if method == "eigsh":
             eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
                 L,
                 k,
@@ -489,26 +527,7 @@ def _spectral_layout(
                 v0=np.ones(L.shape[0]),
                 maxiter=maxiter or graph.shape[0] * 5,
             )
-        else:
-            gen = np.random.default_rng(seed=random_state)
-            if init == "random":
-                X = gen.normal(size=(L.shape[0], k))
-            elif init == "tsvd":
-                X = TruncatedSVD(
-                    n_components=k,
-                    random_state=random_state,
-                    # algorithm="arpack"
-                ).fit_transform(L)
-                # For such a normalized Laplacian, the first eigenvector is always
-                # proportional to sqrt(degrees). We thus replace the first t-SVD guess
-                # with the exact value.
-                X[:, 0] = sqrt_deg / np.linalg.norm(sqrt_deg)
-            else:
-                raise ValueError(
-                    "The init parameter must be either 'random' or 'tsvd': "
-                    f"{init} is invalid."
-                )
-
+        elif method == "lobpcg":
             with warnings.catch_warnings():
                 warnings.filterwarnings(
                     category=UserWarning,
@@ -522,6 +541,8 @@ def _spectral_layout(
                     tol=tol or 1e-4,
                     maxiter=maxiter or 5 * graph.shape[0]
                 )
+        else:
+            raise ValueError("Method should either be None, 'eigsh' or 'lobpcg'")
 
         order = np.argsort(eigenvalues)[1:k]
         return eigenvectors[:, order]

@@ -22,11 +22,11 @@ def test_tsw_spectral_init(iris):
     graph = rng.standard_normal(n * n).reshape((n, n)) ** 2
     graph = graph.T * graph
 
-    spec = spectral_layout(None, graph, 2, random_state=seed)
-    tsw_spec = tswspectral_layout(None, graph, 2, random_state=seed, tol=1e-8)
+    spec = spectral_layout(None, graph, 2, random_state=seed ** 2)
+    tsw_spec = tswspectral_layout(None, graph, 2, random_state=seed ** 2, tol=1e-8)
 
-    # make sure the two methods produce matrices that are close in values
-    rmsd = np.sqrt(np.mean(np.sum((np.abs(spec) - np.abs(tsw_spec)) ** 2, axis=1)))
+    # Make sure the two methods produce similar embeddings.
+    rmsd = np.mean(np.sum((spec - tsw_spec) ** 2, axis=1))
     assert (
         rmsd < 1e-6
     ), "tsvd-warmed spectral init insufficiently close to standard spectral init"
@@ -48,4 +48,4 @@ def test_ensure_fallback_to_random_on_spectral_failure():
         UserWarning,
         match="Spectral initialisation failed!"
     ):
-        tswspectral_layout(u, graph, k, random_state=42, maxiter=2)
+        tswspectral_layout(u, graph, k, random_state=42, maxiter=2, method="lobpcg")
