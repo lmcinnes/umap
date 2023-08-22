@@ -28,14 +28,10 @@ jobs:
 
       - script: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-        displayName: 'Install dependencies'
-
-      - script: |
           pip install -e .
           pip install .[plot]
           pip install .[parametric_umap]
-        displayName: 'Install package'
+        displayName: 'Install package and its dependencies'
 
       - script: |
           pip install pytest pytest-benchmark
@@ -68,14 +64,10 @@ jobs:
 
       - script: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-        displayName: 'Install dependencies'
-
-      - script: |
           pip install -e .
           pip install .[plot]
           pip install .[parametric_umap]
-        displayName: 'Install package'
+        displayName: 'Install package and its dependencies'
 
       - script: |
           pip install pytest pytest-benchmark
@@ -108,14 +100,10 @@ jobs:
 
       - script: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-        displayName: 'Install dependencies'
-
-      - script: |
           pip install -e .
           pip install .[plot]
           pip install .[parametric_umap]
-        displayName: 'Install package'
+        displayName: 'Install package and its dependencies'
 
       - script: |
           pip install pytest pytest-benchmark
@@ -144,17 +132,13 @@ jobs:
 
       - script: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-        displayName: 'Install dependencies'
-
-      - script: |
           pip install -e .
           pip install .[plot]
           pip install .[parametric_umap]
           pip install pytest pytest-benchmark
           pip install pytest-cov
           pip install coveralls
-        displayName: 'Install package'
+        displayName: 'Install package and its dependencies'
 
       - script: |
           export NUMBA_DISABLE_JIT=1
@@ -162,7 +146,7 @@ jobs:
         displayName: 'Run tests'
 
       - script: |
-          export COVERALLS_REPO_TOKEN=$(COVERALLS_REPO_TOKEN)
+          export COVERALLS_REPO_TOKEN=$COVERALLS_TOKEN
           coveralls
         displayName: 'Publish to coveralls'
 
