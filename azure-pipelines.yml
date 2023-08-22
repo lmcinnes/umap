@@ -146,9 +146,11 @@ jobs:
         displayName: 'Run tests'
 
       - script: |
-          export COVERALLS_REPO_TOKEN=$COVERALLS_TOKEN
           coveralls
         displayName: 'Publish to coveralls'
+        condition: and(succeeded(), eq(variables.triggeredByPullRequest, false)) # Don't run this for PRs because they can't access pipeline secrets
+        env:
+          COVERALLS_REPO_TOKEN: $(COVERALLS_TOKEN)
 
       - task: PublishTestResults@2
         inputs:
