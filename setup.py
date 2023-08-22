@@ -1,3 +1,4 @@
+import platform
 from setuptools import setup
 
 
@@ -49,9 +50,8 @@ configuration = {
         "scikit-learn >= 0.22",
         "numba >= 0.51.2",
         "pynndescent >= 0.5",
-        "tbb >= 2019.0",
         "tqdm",
-    ],
+    ] + (["tbb >= 2019.0"] if platform.machine().lower().startswith("x86") else []),
     "extras_require": {
         "plot": [
             "pandas",
