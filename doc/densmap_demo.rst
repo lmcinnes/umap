@@ -57,7 +57,7 @@ to compare to. We’ll start with MNIST digits.
 
 Now let’s try running DensMAP instead. In practice this is as easy as
 adding the parameter ``densmap=True`` to the UMAP constructor – this
-will cause UMAP use DensMAP regularization with the default DensMAP
+will cause UMAP to use DensMAP regularization with the default DensMAP
 parameters.
 
 .. code:: python3

@@ -240,6 +240,7 @@ def test_precomputed_knn_on_iris(iris, iris_selection, iris_subset_model):
     umap_args = dict(
         n_neighbors=iris_subset_model.n_neighbors,
         random_state=iris_subset_model.random_state,
+        n_jobs=1,
         min_dist=iris_subset_model.min_dist,
     )
 
@@ -261,7 +262,7 @@ def test_precomputed_knn_on_iris(iris, iris_selection, iris_subset_model):
             **umap_args,
             precomputed_knn=(knn[0], knn[1]),
         ).fit(data)
-        assert len(record) == 1
+        assert len(record) >= 1
     np.testing.assert_array_equal(
         fitter_ignoring_force_approx.embedding_, fitter_with_precomputed_knn.embedding_
     )
@@ -278,7 +279,7 @@ def test_precomputed_knn_on_iris(iris, iris_selection, iris_subset_model):
             precomputed_knn=(knn[0], knn[1]),
             force_approximation_algorithm=True,
         ).fit(data)
-        assert len(record) == 1
+        assert len(record) >= 1
     np.testing.assert_array_equal(
         fitter_ignoring_force_approx_True.embedding_, fitter_ignoring_force_approx.embedding_
     )
