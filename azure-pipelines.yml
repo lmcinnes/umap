@@ -105,7 +105,7 @@ stages:
 
   - stage: BuildPublishArtifact
     dependsOn: RunAllTests
-    condition: and(startsWith(variables['Build.SourceBranch'], 'refs/tags/'), eq(variables.triggeredByPullRequest, false))
+    condition: and(succeeded(), startsWith(variables['Build.SourceBranch'], 'refs/tags/'), eq(variables.triggeredByPullRequest, false))
     jobs:
       - job: BuildArtifacts
         displayName: Build source dists and wheels    
@@ -144,15 +144,15 @@ stages:
           displayName: Raise error if version doesnt match tag
           condition: and(succeeded(), ne(variables['Build.SourceBranchName'], variables['packageVersionFormatted']))
 
-        # - task: DownloadSecureFile@1
-        #   name: PYPIRC_CONFIG
-        #   displayName: 'Download pypirc'
-        #   inputs:
-        #     secureFile: 'pypirc'  
+        - task: DownloadSecureFile@1
+          name: PYPIRC_CONFIG
+          displayName: 'Download pypirc'
+          inputs:
+            secureFile: 'pypirc'  
 
-        # - script: |
-        #     pip install twine
-        #     twine upload --repository pypi --config-file $(PYPIRC_CONFIG.secureFilePath) dist/*
-        #   displayName: 'Upload to PyPI'
-        #   condition: and(succeeded(), eq(variables['Build.SourceBranchName'], variables['packageVersionFormatted']))
+        - script: |
+            pip install twine
+            twine upload --repository pypi --config-file $(PYPIRC_CONFIG.secureFilePath) dist/*
+          displayName: 'Upload to PyPI'
+          condition: and(succeeded(), eq(variables['Build.SourceBranchName'], variables['packageVersionFormatted']))
 
