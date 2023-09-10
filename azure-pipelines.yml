@@ -75,14 +75,10 @@ stages:
 
         - script: |
             python -m pip install --upgrade pip
-            pip install -r requirements.txt
-          displayName: 'Install dependencies'
-
-        - script: |
             pip install -e .
             pip install .[plot]
             pip install .[parametric_umap]
-            pip install pytest  pytest-azurepipelines pytest-cov coveralls
+            pip install pytest  pytest-azurepipelines pytest-cov pytest-benchmark coveralls
           displayName: 'Install package'
 
         - script: |
@@ -120,10 +116,6 @@ stages:
         - script: |
             python -m pip install --upgrade pip
             pip install wheel
-            pip install -r requirements.txt
-          displayName: 'Install dependencies'
-
-        - script: |
             pip install -e .
           displayName: 'Install package locally'
         
