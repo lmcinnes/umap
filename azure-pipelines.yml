@@ -1,165 +1,150 @@
-# Python package
-# Create and test a Python package on multiple Python versions.
-# Add steps that analyze code, save the dist with the build record, publish to a PyPI-compatible index, and more:
-# https://docs.microsoft.com/azure/devops/pipelines/languages/python
-
+# Trigger a build when there is a push to the main branch or a tag starts with release-
 trigger:
-- master
+  branches:
+    include:
+    - master
+  tags:
+    include:
+    - '*'
 
-jobs:
-  - job: Linux
-    pool:
-      vmImage: 'ubuntu-latest'
-    strategy:
-      matrix:
-        Python37:
-          python.version: '3.7'
-        Python38:
-          python.version: '3.8'
-        Python39:
-          python.version: '3.9'
-        Python310:
-          python.version: '3.10'
-    steps:
-      - task: UsePythonVersion@0
-        inputs:
-          versionSpec: '$(python.version)'
-        displayName: 'Use Python $(python.version)'
+# Trigger a build when there is a pull request to the main branch
+# Ignore PRs that are just updating the docs
+pr:
+  branches:
+    include:
+    - master
+    exclude:
+    - doc/*
+    - README.rst
 
-      - script: |
-          python -m pip install --upgrade pip
-          pip install -e .
-          pip install .[plot]
-          pip install .[parametric_umap]
-        displayName: 'Install package and its dependencies'
+variables:
+  triggeredByPullRequest: $[eq(variables['Build.Reason'], 'PullRequest')]
 
-      - script: |
-          pip install pytest pytest-benchmark
-          pytest --show-capture=no -v --disable-warnings --junitxml=pytest.xml
-        displayName: 'Run tests'
+stages:
+  - stage: RunAllTests
+    displayName: Run test suite
+    jobs:
+      - job: run_platform_tests
+        strategy:
+          matrix:
+            mac_py37:
+              imageName: 'macOS-latest'
+              python.version: '3.7'
+            linux_py37:
+              imageName: 'ubuntu-latest'
+              python.version: '3.7'
+            windows_py37:
+              imageName: 'windows-latest'
+              python.version: '3.7'
+            mac_py38:
+              imageName: 'macOS-latest'
+              python.version: '3.8'
+            linux_py38:
+              imageName: 'ubuntu-latest'
+              python.version: '3.8'
+            windows_py38:
+              imageName: 'windows-latest'
+              python.version: '3.8'
+            mac_py39:
+              imageName: 'macOS-latest'
+              python.version: '3.9'
+            linux_py39:
+              imageName: 'ubuntu-latest'
+              python.version: '3.9'
+            windows_py39:
+              imageName: 'windows-latest'
+              python.version: '3.9'
+            mac_py310:
+              imageName: 'macOS-latest'
+              python.version: '3.10'
+            linux_py310:
+              imageName: 'ubuntu-latest'
+              python.version: '3.10'
+            windows_py310:
+              imageName: 'windows-latest'
+              python.version: '3.10'
 
-      - task: PublishTestResults@2
-        inputs:
-          testResultsFiles: 'pytest.xml'
-          testRunTitle: '$(Agent.OS) - $(Build.BuildNumber)[$(Agent.JobName)] - Python $(python.version)'
-        condition: succeededOrFailed()
+        pool:
+          vmImage: $(imageName)
 
-  - job: MacOS
-    pool:
-      vmImage: 'macOS-latest'
-    strategy:
-      matrix:
-        Python37:
-          python.version: '3.7'
-        Python38:
-          python.version: '3.8'
-        Python39:
-          python.version: '3.9'
+        steps:
+        - task: UsePythonVersion@0
+          inputs:
+            versionSpec: '$(python.version)'
+          displayName: 'Use Python $(python.version)'
 
-    steps:
-      - task: UsePythonVersion@0
-        inputs:
-          versionSpec: '$(python.version)'
-        displayName: 'Use Python $(python.version)'
+        - script: |
+            python -m pip install --upgrade pip
+            pip install -e .
+            pip install .[plot]
+            pip install .[parametric_umap]
+            pip install pytest  pytest-azurepipelines pytest-cov pytest-benchmark coveralls
+          displayName: 'Install package'
 
-      - script: |
-          python -m pip install --upgrade pip
-          pip install -e .
-          pip install .[plot]
-          pip install .[parametric_umap]
-        displayName: 'Install package and its dependencies'
+        - script: |
+            export NUMBA_DISABLE_JIT=1
+            pytest umap/tests --show-capture=no -v --disable-warnings --junitxml=junit/test-results.xml --cov=umap/ --cov-report=xml --cov-report=html
+          displayName: 'Run tests'
 
-      - script: |
-          pip install pytest pytest-benchmark
-          pytest --show-capture=no -v --disable-warnings --junitxml=pytest.xml
-        displayName: 'Run tests'
+        - bash: |
+            coveralls
+          displayName: 'Publish to coveralls'
+          condition: and(succeeded(), eq(variables.triggeredByPullRequest, false)) # Don't run this for PRs because they can't access pipeline secrets
+          env:
+            COVERALLS_REPO_TOKEN: $(COVERALLS_TOKEN)
 
-      - task: PublishTestResults@2
-        inputs:
-          testResultsFiles: 'pytest.xml'
-          testRunTitle: '$(Agent.OS) - $(Build.BuildNumber)[$(Agent.JobName)] - Python $(python.version)'
-        condition: succeededOrFailed()
+        - task: PublishTestResults@2
+          inputs:
+            testResultsFiles: '$(System.DefaultWorkingDirectory)/**/coverage.xml'
+            testRunTitle: '$(Agent.OS) - $(Build.BuildNumber)[$(Agent.JobName)] - Python $(python.version)'
+          condition: succeededOrFailed()
 
-  - job: Windows
-    pool:
-      vmImage: 'windows-latest'
-    strategy:
-      matrix:
-        Python37:
-          python.version: '3.7'
-        Python38:
-          python.version: '3.8'
-        Python39:
-          python.version: '3.9'
+  - stage: BuildPublishArtifact
+    dependsOn: RunAllTests
+    condition: and(succeeded(), startsWith(variables['Build.SourceBranch'], 'refs/tags/'), eq(variables.triggeredByPullRequest, false))
+    jobs:
+      - job: BuildArtifacts
+        displayName: Build source dists and wheels    
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+        - task: UsePythonVersion@0
+          inputs:
+            versionSpec: '3.10'
+          displayName: 'Use Python 3.10'
 
-    steps:
-      - task: UsePythonVersion@0
-        inputs:
-          versionSpec: '$(python.version)'
-        displayName: 'Use Python $(python.version)'
+        - script: |
+            python -m pip install --upgrade pip
+            pip install wheel
+            pip install -e .
+          displayName: 'Install package locally'
+        
+        - bash: |
+            python setup.py sdist bdist_wheel
+            ls -l dist/
+          displayName: 'Build package'
 
-      - script: |
-          python -m pip install --upgrade pip
-          pip install -e .
-          pip install .[plot]
-          pip install .[parametric_umap]
-        displayName: 'Install package and its dependencies'
+        - bash: |
+            export PACKAGE_VERSION="$(python setup.py --version)"
+            echo "Package Version: ${PACKAGE_VERSION}"
+            echo "##vso[task.setvariable variable=packageVersionFormatted;]${PACKAGE_VERSION}"
+          displayName: 'Get package version'
 
-      - script: |
-          pip install pytest pytest-benchmark
-          pytest --show-capture=no -v --disable-warnings --junitxml=pytest.xml
-        displayName: 'Run tests'
+        - script: |
+            echo "Version in git tag $(Build.SourceBranchName) does not match version derived from setup.py $(packageVersionFormatted)"
+            exit 1
+          displayName: Raise error if version doesnt match tag
+          condition: and(succeeded(), ne(variables['Build.SourceBranchName'], variables['packageVersionFormatted']))
 
-      - task: PublishTestResults@2
-        inputs:
-          testResultsFiles: 'pytest.xml'
-          testRunTitle: '$(Agent.OS) - $(Build.BuildNumber)[$(Agent.JobName)] - Python $(python.version)'
-        condition: succeededOrFailed()
+        - task: DownloadSecureFile@1
+          name: PYPIRC_CONFIG
+          displayName: 'Download pypirc'
+          inputs:
+            secureFile: 'pypirc'  
 
-  - job: Coverage
-    pool:
-      vmImage: 'ubuntu-latest'
-    strategy:
-      matrix:
-        Python38:
-          python.version: '3.8'
+        - script: |
+            pip install twine
+            twine upload --repository testpypi --config-file $(PYPIRC_CONFIG.secureFilePath) dist/*
+          displayName: 'Upload to PyPI'
+          condition: and(succeeded(), eq(variables['Build.SourceBranchName'], variables['packageVersionFormatted']))
 
-    steps:
-      - task: UsePythonVersion@0
-        inputs:
-          versionSpec: '$(python.version)'
-        displayName: 'Use Python $(python.version)'
-
-      - script: |
-          python -m pip install --upgrade pip
-          pip install -e .
-          pip install .[plot]
-          pip install .[parametric_umap]
-          pip install pytest pytest-benchmark
-          pip install pytest-cov
-          pip install coveralls
-        displayName: 'Install package and its dependencies'
-
-      - script: |
-          export NUMBA_DISABLE_JIT=1
-          pytest umap/tests --show-capture=no -v --disable-warnings --junitxml=pytest.xml --cov=umap/ --cov-report=xml --cov-report=html
-        displayName: 'Run tests'
-
-      - script: |
-          coveralls
-        displayName: 'Publish to coveralls'
-        condition: and(succeeded(), eq(variables.triggeredByPullRequest, false)) # Don't run this for PRs because they can't access pipeline secrets
-        env:
-          COVERALLS_REPO_TOKEN: $(COVERALLS_TOKEN)
-
-      - task: PublishTestResults@2
-        inputs:
-          testResultsFiles: 'coverage.xml'
-          testRunTitle: '$(Agent.OS) - $(Build.BuildNumber)[$(Agent.JobName)] - Python $(python.version)'
-        condition: succeededOrFailed()
-
-      - task: PublishCodeCoverageResults@1
-        inputs:
-          codeCoverageTool: Cobertura
-          summaryFileLocation: '$(System.DefaultWorkingDirectory)/**/coverage.xml'
-          reportDirectory: '$(System.DefaultWorkingDirectory)/**/htmlcov'
