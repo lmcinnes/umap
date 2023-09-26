@@ -1446,7 +1446,7 @@ def interactive(
                 data[col_name] = hover_data[col_name]
                 tooltip_dict[col_name] = "@{" + col_name + "}"
             tooltips = list(tooltip_dict.items())
-            
+
             if tools is not None:
                 for _tool in tools:
                     if _tool.__class__.__name__ == "HoverTool":
