@@ -51,7 +51,7 @@ configuration = {
         "numba >= 0.51.2",
         "pynndescent >= 0.5",
         "tqdm",
-    ] + (["tbb >= 2019.0"] if platform.machine().lower().startswith("x86") else []),
+    ],
     "extras_require": {
         "plot": [
             "pandas",
@@ -64,6 +64,7 @@ configuration = {
             "scikit-image",
         ],
         "parametric_umap": ["tensorflow >= 2.1", "tensorflow-probability >= 0.10"],
+        "x86": ["tbb >= 2019.0"],
     },
     "ext_modules": [],
     "cmdclass": {},
