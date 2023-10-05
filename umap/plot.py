@@ -200,7 +200,7 @@ def _nhood_search(umap_object, nhood_size):
     return indices, dists
 
 
-@numba.jit(nopython=False)
+@numba.njit()
 def _nhood_compare(indices_left, indices_right):
     """Compute Jaccard index of two neighborhoods"""
     result = np.empty(indices_left.shape[0])
