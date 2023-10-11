@@ -64,7 +64,7 @@ configuration = {
             "scikit-image",
         ],
         "parametric_umap": ["tensorflow >= 2.1", "tensorflow-probability >= 0.10"],
-        "x86": ["tbb >= 2019.0"],
+        "tbb": ["tbb >= 2019.0"],
     },
     "ext_modules": [],
     "cmdclass": {},
