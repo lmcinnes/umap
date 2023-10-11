@@ -78,7 +78,10 @@ stages:
             pip install -e .
             pip install .[plot]
             pip install .[parametric_umap]
-            if [ `uname -m` = x86_64 ]; then; pip install .[tbb]; fi
+            if [ `uname -m` = x86_64 ]
+            then
+            pip install .[tbb]
+            fi
             pip install pytest  pytest-azurepipelines pytest-cov pytest-benchmark coveralls
           displayName: 'Install package'
 
