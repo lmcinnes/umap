@@ -522,8 +522,8 @@ that are hard even for humans to classify correctly).
     
     plot_figure = figure(
         title='UMAP projection of the Digits dataset',
-        plot_width=600,
-        plot_height=600,
+        width=600,
+        height=600,
         tools=('pan, wheel_zoom, reset')
     )
     
