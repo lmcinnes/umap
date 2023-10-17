@@ -140,6 +140,13 @@ installed either using the instructions at https://www.tensorflow.org/install
 
 for a CPU-only version of Tensorflow.
 
+If you're on an x86 processor, you can also optionally install `tbb`, which will
+provide additional CPU optimizations:
+
+.. code:: bash
+
+    pip install umap-learn[tbb]
+
 If pip is having difficulties pulling the dependencies then we'd suggest installing
 the dependencies manually using anaconda followed by pulling umap from pip:
 
