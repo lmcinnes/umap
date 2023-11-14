@@ -27,15 +27,6 @@ stages:
       - job: run_platform_tests
         strategy:
           matrix:
-            mac_py37:
-              imageName: 'macOS-latest'
-              python.version: '3.7'
-            linux_py37:
-              imageName: 'ubuntu-latest'
-              python.version: '3.7'
-            windows_py37:
-              imageName: 'windows-latest'
-              python.version: '3.7'
             mac_py38:
               imageName: 'macOS-latest'
               python.version: '3.8'
@@ -63,7 +54,16 @@ stages:
             windows_py310:
               imageName: 'windows-latest'
               python.version: '3.10'
-
+            mac_py311:
+              imageName: 'macOS-latest'
+              python.version: '3.11'
+            linux_py311:
+              imageName: 'ubuntu-latest'
+              python.version: '3.11'
+            windows_py311:
+              imageName: 'windows-latest'
+              python.version: '3.11'
+              
         pool:
           vmImage: $(imageName)
 
