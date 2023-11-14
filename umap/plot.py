@@ -1399,7 +1399,7 @@ def interactive(
     data = pd.DataFrame(_get_embedding(umap_object), columns=("x", "y"))
 
     if labels is not None:
-        data["label"] = labels
+        data["label"] = np.asarray(labels)
 
         if color_key is None:
             unique_labels = np.unique(labels)
@@ -1423,7 +1423,7 @@ def interactive(
         colors = "color"
 
     elif values is not None:
-        data["value"] = values
+        data["value"] = np.asarray(values)
         palette = _to_hex(plt.get_cmap(cmap)(np.linspace(0, 1, 256)))
         colors = btr.linear_cmap(
             "value", palette, low=np.min(values), high=np.max(values)
