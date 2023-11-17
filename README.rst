@@ -28,8 +28,8 @@
 .. |License| image:: https://img.shields.io/pypi/l/umap-learn.svg
 .. _License: https://github.com/lmcinnes/umap/blob/master/LICENSE.txt
 
-.. |build_status| image:: https://dev.azure.com/lelandmcinnes/UMAP%20project%20builds/_apis/build/status/lmcinnes.umap?branchName=master
-.. _build_status: https://dev.azure.com/lelandmcinnes/UMAP%20project%20builds/_build/latest?definitionId=2&branchName=master
+.. |build_status| image:: https://dev.azure.com/TutteInstitute/build-pipelines/_apis/build/status/lmcinnes.umap?branchName=master
+.. _build_status: https://dev.azure.com/TutteInstitute/build-pipelines/_build/latest?definitionId=2&branchName=master
 
 .. |Coverage| image:: https://coveralls.io/repos/github/lmcinnes/umap/badge.svg
 .. _Coverage: https://coveralls.io/github/lmcinnes/umap
