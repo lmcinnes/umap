@@ -16,7 +16,7 @@ def readme():
 
 configuration = {
     "name": "umap-learn",
-    "version": "0.5.4",
+    "version": "0.5.5",
     "description": "Uniform Manifold Approximation and Projection",
     "long_description": readme(),
     "long_description_content_type": "text/x-rst",
