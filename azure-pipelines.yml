@@ -5,7 +5,7 @@ trigger:
     - master
   tags:
     include:
-    - '*'
+    - release-*
 
 # Trigger a build when there is a pull request to the main branch
 # Ignore PRs that are just updating the docs
@@ -127,7 +127,7 @@ stages:
         - bash: |
             export PACKAGE_VERSION="$(python setup.py --version)"
             echo "Package Version: ${PACKAGE_VERSION}"
-            echo "##vso[task.setvariable variable=packageVersionFormatted;]${PACKAGE_VERSION}"
+            echo "##vso[task.setvariable variable=packageVersionFormatted;]release-${PACKAGE_VERSION}"
           displayName: 'Get package version'
 
         - script: |
@@ -144,7 +144,7 @@ stages:
 
         - script: |
             pip install twine
-            twine upload --repository testpypi --config-file $(PYPIRC_CONFIG.secureFilePath) dist/*
+            twine upload --repository pypi --config-file $(PYPIRC_CONFIG.secureFilePath) dist/*
           displayName: 'Upload to PyPI'
           condition: and(succeeded(), eq(variables['Build.SourceBranchName'], variables['packageVersionFormatted']))
 
