@@ -75,7 +75,7 @@ class ParametricUMAP(UMAP):
         parametric_reconstruction_loss_weight=1.0,
         autoencoder_loss=False,
         reconstruction_validation=None,
-        loss_report_frequency=10,
+        loss_report_frequency=1,
         n_training_epochs=1,
         global_correlation_loss_weight=0,
         run_eagerly=False,
