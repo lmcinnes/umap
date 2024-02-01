@@ -45,9 +45,34 @@ from umap.layouts import (
     optimize_layout_inverse,
 )
 
-from pynndescent import NNDescent
-from pynndescent.distances import named_distances as pynn_named_distances
-from pynndescent.sparse import sparse_named_distances as pynn_sparse_named_distances
+
+class PynndescentWrapper:
+    def __init__(self):
+        self._module = None
+
+    @property
+    def _get(self):
+        if self._module is None:
+            import pynndescent
+
+            self._module = pynndescent
+        return self._module
+
+    @property
+    def NNDescent(self):
+        return self._get.NNDescent
+
+    @property
+    def named_distances(self):
+        return self._get.distances.named_distances
+
+    @property
+    def sparse_named_distances(self):
+        return self._get.sparse.named_distances
+
+
+pynn = PynndescentWrapper()
+
 
 locale.setlocale(locale.LC_NUMERIC, "C")
 
@@ -326,7 +351,7 @@ def nearest_neighbors(
         n_trees = min(64, 5 + int(round((X.shape[0]) ** 0.5 / 20.0)))
         n_iters = max(5, int(round(np.log2(X.shape[0]))))
 
-        knn_search_index = NNDescent(
+        knn_search_index = pynn.NNDescent(
             X,
             n_neighbors=n_neighbors,
             metric=metric,
@@ -1881,16 +1906,16 @@ class UMAP(BaseEstimator):
                     "inverse_transform will be unavailable".format(self.metric)
                 )
                 self._inverse_distance_func = None
-        elif self.metric in pynn_named_distances:
+        elif self.metric in pynn.named_distances:
             if self._sparse_data:
-                if self.metric in pynn_sparse_named_distances:
-                    self._input_distance_func = pynn_sparse_named_distances[self.metric]
+                if self.metric in pynn.sparse_named_distances:
+                    self._input_distance_func = pynn.sparse_named_distances[self.metric]
                 else:
                     raise ValueError(
                         "Metric {} is not supported for sparse data".format(self.metric)
                     )
             else:
-                self._input_distance_func = pynn_named_distances[self.metric]
+                self._input_distance_func = pynn.named_distances[self.metric]
 
             warn(
                 "gradient function is not yet implemented for {} distance metric; "
@@ -2007,7 +2032,7 @@ class UMAP(BaseEstimator):
                     " must be numpy arrays of the same size."
                 )
             # #848: warn but proceed if no search index is present
-            if not isinstance(self.knn_search_index, NNDescent):
+            if not isinstance(self.knn_search_index, pynn.NNDescent):
                 warn(
                     "precomputed_knn[2] (knn_search_index) "
                     "is not an NNDescent object: transforming new data with transform "
@@ -2595,9 +2620,9 @@ class UMAP(BaseEstimator):
             # Standard case
             self._small_data = False
             # Standard case
-            if self._sparse_data and self.metric in pynn_sparse_named_distances:
+            if self._sparse_data and self.metric in pynn.sparse_named_distances:
                 nn_metric = self.metric
-            elif not self._sparse_data and self.metric in pynn_named_distances:
+            elif not self._sparse_data and self.metric in pynn.named_distances:
                 nn_metric = self.metric
             else:
                 nn_metric = self._input_distance_func
@@ -3369,9 +3394,9 @@ class UMAP(BaseEstimator):
             else:
                 # now large data
                 self._small_data = False
-                if self._sparse_data and self.metric in pynn_sparse_named_distances:
+                if self._sparse_data and self.metric in pynn.sparse_named_distances:
                     nn_metric = self.metric
-                elif not self._sparse_data and self.metric in pynn_named_distances:
+                elif not self._sparse_data and self.metric in pynn.named_distances:
                     nn_metric = self.metric
                 else:
                     nn_metric = self._input_distance_func
@@ -3454,9 +3479,9 @@ class UMAP(BaseEstimator):
                 self._knn_dists,
             ) = self._knn_search_index.neighbor_graph
 
-            if self._sparse_data and self.metric in pynn_sparse_named_distances:
+            if self._sparse_data and self.metric in pynn.sparse_named_distances:
                 nn_metric = self.metric
-            elif not self._sparse_data and self.metric in pynn_named_distances:
+            elif not self._sparse_data and self.metric in pynn.named_distances:
                 nn_metric = self.metric
             else:
                 nn_metric = self._input_distance_func
