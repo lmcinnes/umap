@@ -92,7 +92,8 @@ class ParametricUMAP(UMAP):
         parametric_reconstruction : bool, optional
             Whether the decoder is parametric or non-parametric, by default False
         parametric_reconstruction_loss_fcn : bool, optional
-            What loss function to use for parametric reconstruction, by default keras.losses.BinaryCrossentropy
+            What loss function to use for parametric reconstruction,
+            by default keras.losses.BinaryCrossentropy
         parametric_reconstruction_loss_weight : float, optional
             How to weight the parametric reconstruction loss relative to umap loss, by default 1.0
         autoencoder_loss : bool, optional
@@ -292,7 +293,8 @@ class ParametricUMAP(UMAP):
             inputs = [batch_sample]
 
         # concatenate to/from projections for loss computation
-        embedding_to_from = keras.layers.Concatenate(axis=1)([embedding_to, embedding_from])
+        embedding_to_from = keras.layers.Concatenate(axis=1)(
+            [embedding_to, embedding_from])
         outputs["umap"] = embedding_to_from
 
         if self.global_correlation_loss_weight > 0:
@@ -786,7 +788,7 @@ def distance_loss_corr(x, z_x):
 
     # compute correlation
     corr_d = tf.squeeze(
-        tensorflow_probability.stats.correlation(
+        correlation(
             x=tf.expand_dims(dx, -1), y=tf.expand_dims(dz, -1)
         )
     )
