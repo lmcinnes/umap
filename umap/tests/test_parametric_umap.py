@@ -77,7 +77,7 @@ def test_custom_encoder_decoder(moon_dataset):
     n_components = 2
     encoder = tf.keras.Sequential(
         [
-            tf.keras.layers.InputLayer(input_shape=dims),
+            tf.keras.layers.Input(shape=dims),
             tf.keras.layers.Flatten(),
             tf.keras.layers.Dense(units=100, activation="relu"),
             tf.keras.layers.Dense(units=100, activation="relu"),
@@ -88,7 +88,7 @@ def test_custom_encoder_decoder(moon_dataset):
 
     decoder = tf.keras.Sequential(
         [
-            tf.keras.layers.InputLayer(input_shape=n_components),
+            tf.keras.layers.Input(shape=(n_components,)),
             tf.keras.layers.Dense(units=100, activation="relu"),
             tf.keras.layers.Dense(units=100, activation="relu"),
             tf.keras.layers.Dense(units=100, activation="relu"),
