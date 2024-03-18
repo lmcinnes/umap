@@ -55,7 +55,6 @@ class ParametricUMAP(UMAP):
         dims=None,
         encoder=None,
         decoder=None,
-        parametric_embedding=True,
         parametric_reconstruction=False,
         parametric_reconstruction_loss_fcn=keras.losses.BinaryCrossentropy(
             from_logits=True
@@ -87,8 +86,6 @@ class ParametricUMAP(UMAP):
             The encoder Keras network
         decoder : keras.Sequential, optional
             the decoder Keras network
-        parametric_embedding : bool, optional
-            Whether the embedder is parametric or non-parametric, by default True
         parametric_reconstruction : bool, optional
             Whether the decoder is parametric or non-parametric, by default False
         parametric_reconstruction_loss_fcn : bool, optional
@@ -123,9 +120,6 @@ class ParametricUMAP(UMAP):
         self.dims = dims  # if this is an image, we should reshape for network
         self.encoder = encoder  # neural network used for embedding
         self.decoder = decoder  # neural network used for decoding
-        self.parametric_embedding = (
-            parametric_embedding  # nonparametric vs parametric embedding
-        )
         self.parametric_reconstruction = parametric_reconstruction
         self.parametric_reconstruction_loss_fcn = parametric_reconstruction_loss_fcn
         self.parametric_reconstruction_loss_weight = (
@@ -149,20 +143,10 @@ class ParametricUMAP(UMAP):
         self.n_training_epochs = n_training_epochs
         # set optimizer
         if optimizer is None:
-            if parametric_embedding:
-                # Adam is better for parametric_embedding
-                self.optimizer = keras.optimizers.Adam(1e-3)
-            else:
-                # Larger learning rate can be used for embedding
-                self.optimizer = keras.optimizers.Adam(1e-1)
+            # Adam is better for parametric_embedding
+            self.optimizer = keras.optimizers.Adam(1e-3)
         else:
             self.optimizer = optimizer
-        if parametric_reconstruction and not parametric_embedding:
-            warn(
-                "Parametric decoding is not implemented with nonparametric \
-            embedding. Turning off parametric decoding"
-            )
-            self.parametric_reconstruction = False
 
         if self.encoder is not None:
             if encoder.outputs[0].shape[-1] != self.n_components:
@@ -216,16 +200,9 @@ class ParametricUMAP(UMAP):
         X_new : array, shape (n_samples, n_components)
             Embedding of the new data in low-dimensional space.
         """
-        if self.parametric_embedding:
-            return self.encoder.predict(
-                np.asanyarray(X), batch_size=self.batch_size, verbose=self.verbose
-            )
-        else:
-            warn(
-                "Embedding new data is not supported by ParametricUMAP. \
-                Using original embedder."
-            )
-            return super().transform(X)
+        return self.encoder.predict(
+            np.asanyarray(X), batch_size=self.batch_size, verbose=self.verbose
+        )
 
     def inverse_transform(self, X):
         """ Transform X in the existing embedded space back into the input
@@ -253,51 +230,27 @@ class ParametricUMAP(UMAP):
         outputs = {}
 
         # inputs
-        if self.parametric_embedding:
-            to_x = keras.layers.Input(shape=self.dims, name="to_x")
-            from_x = keras.layers.Input(shape=self.dims, name="from_x")
-            inputs = [to_x, from_x]
+        to_x = keras.layers.Input(shape=self.dims, name="to_x")
+        from_x = keras.layers.Input(shape=self.dims, name="from_x")
+        inputs = [to_x, from_x]
 
-            # parametric embedding
-            embedding_to = self.encoder(to_x)
-            embedding_from = self.encoder(from_x)
+        # parametric embedding
+        embedding_to = self.encoder(to_x)
+        embedding_from = self.encoder(from_x)
 
-            if self.parametric_reconstruction:
-                # parametric reconstruction
-                if self.autoencoder_loss:
-                    embedding_to_recon = self.decoder(embedding_to)
-                else:
-                    # stop gradient of reconstruction loss before it reaches the encoder
-                    embedding_to_recon = self.decoder(StopGradient()(embedding_to))
+        if self.parametric_reconstruction:
+            # parametric reconstruction
+            if self.autoencoder_loss:
+                embedding_to_recon = self.decoder(embedding_to)
+            else:
+                # stop gradient of reconstruction loss before it reaches the encoder
+                embedding_to_recon = self.decoder(StopGradient()(embedding_to))
 
-                embedding_to_recon = keras.layers.Lambda(
-                    lambda x: x, name="reconstruction"
-                )(embedding_to_recon)
+            embedding_to_recon = keras.layers.Lambda(
+                lambda x: x, name="reconstruction"
+            )(embedding_to_recon)
 
-                outputs["reconstruction"] = embedding_to_recon
-
-        else:
-
-            class NonParametricEmbedding(keras.layers.Layer):
-                def __init__(self, encoder, head, tail):
-                    super().__init__()
-                    self.encoder = encoder
-                    self.head = head
-                    self.tail = tail
-
-                def call(self, batch_sample):
-                    to_x = tf.gather(self.head, batch_sample[0])
-                    from_x = tf.gather(self.tail, batch_sample[0])
-                    embedding_to = self.encoder(to_x)[:, -1, :]
-                    embedding_from = self.encoder(from_x)[:, -1, :]
-                    return embedding_to, embedding_from
-
-            batch_sample = keras.layers.Input(
-                shape=(1,), dtype="int32", name="batch_sample"
-            )
-            embedding_to, embedding_from = NonParametricEmbedding(
-                self.encoder, self.head, self.tail)(batch_sample)
-            inputs = [batch_sample]
+            outputs["reconstruction"] = embedding_to_recon
 
         # concatenate to/from projections for loss computation
         embedding_to_from = keras.layers.Concatenate(axis=1)(
@@ -320,7 +273,6 @@ class ParametricUMAP(UMAP):
             self._a,
             self._b,
             self.edge_weight,
-            self.parametric_embedding,
         )
         losses["umap"] = umap_loss_fn
         loss_weights["umap"] = 1.0
@@ -373,25 +325,13 @@ class ParametricUMAP(UMAP):
             self.graph_,
             self.n_epochs,
             self.batch_size,
-            self.parametric_embedding,
             self.parametric_reconstruction,
             self.global_correlation_loss_weight,
         )
         self.head = tf.constant(tf.expand_dims(head.astype(np.int64), 0))
         self.tail = tf.constant(tf.expand_dims(tail.astype(np.int64), 0))
 
-        if self.parametric_embedding:
-            init_embedding = None
-        else:
-            init_embedding = init_embedding_from_graph(
-                X,
-                self.graph_,
-                self.n_components,
-                self.random_state,
-                self.metric,
-                self._metric_kwds,
-                init="spectral",
-            )
+        init_embedding = None
 
         # create encoder and decoder model
         n_data = len(X)
@@ -401,7 +341,6 @@ class ParametricUMAP(UMAP):
             self.n_components,
             self.dims,
             n_data,
-            self.parametric_embedding,
             self.parametric_reconstruction,
             init_embedding,
         )
@@ -411,13 +350,9 @@ class ParametricUMAP(UMAP):
         self._compile_model()
 
         # report every loss_report_frequency subdivision of an epochs
-        if self.parametric_embedding:
-            steps_per_epoch = int(
-                n_edges / self.batch_size / self.loss_report_frequency
-            )
-        else:
-            # all edges are trained simultaneously with nonparametric, so this is arbitrary
-            steps_per_epoch = 100
+        steps_per_epoch = int(
+            n_edges / self.batch_size / self.loss_report_frequency
+        )
 
         # Validation dataset for reconstruction
         if (
@@ -454,10 +389,7 @@ class ParametricUMAP(UMAP):
         self._history = history.history
 
         # get the final embedding
-        if self.parametric_embedding:
-            embedding = self.encoder.predict(X, verbose=self.verbose)
-        else:
-            embedding = self.encoder.trainable_variables[0].numpy()
+        embedding = self.encoder.predict(X, verbose=self.verbose)
 
         return embedding, {}
 
@@ -687,7 +619,6 @@ def umap_loss(
     _a,
     _b,
     edge_weights,
-    parametric_embedding,
     repulsion_strength=1.0,
 ):
     """
@@ -705,8 +636,6 @@ def umap_loss(
         distance parameter in embedding space
     edge_weights : array
         weights of all edges from sparse UMAP graph
-    parametric_embedding : bool
-        whether the embedding is parametric or nonparametric
     repulsion_strength : float, optional
         strength of repulsion vs attraction for cross-entropy, by default 1.0
 
@@ -715,10 +644,6 @@ def umap_loss(
     loss : function
         loss function that takes in a placeholder (0) and the output of the keras network
     """
-
-    if not parametric_embedding:
-        # multiply loss by weights for nonparametric
-        weights_tiled = np.tile(edge_weights, negative_sample_rate + 1)
 
     def loss(placeholder_y, embed_to_from):
         # split out to/from
@@ -758,9 +683,6 @@ def umap_loss(
             log_probabilities_distance,
             repulsion_strength=repulsion_strength,
         )
-
-        if not parametric_embedding:
-            ce_loss = ce_loss * weights_tiled
 
         return tf.reduce_mean(ce_loss)
 
@@ -806,7 +728,6 @@ def prepare_networks(
     n_components,
     dims,
     n_data,
-    parametric_embedding,
     parametric_reconstruction,
     init_embedding=None,
 ):
@@ -826,8 +747,6 @@ def prepare_networks(
         dimensionality of data
     n_data : number of elements in dataset
         # of elements in training dataset
-    parametric_embedding : bool
-        Whether the embedder is parametric or non-parametric
     parametric_reconstruction : bool
         Whether the decoder is parametric or non-parametric
     init_embedding : array (optional, default None)
@@ -841,25 +760,17 @@ def prepare_networks(
         decoder keras network
     """
 
-    if parametric_embedding:
-        if encoder is None:
-            encoder = keras.Sequential(
-                [
-                    keras.layers.Input(shape=dims),
-                    keras.layers.Flatten(),
-                    keras.layers.Dense(units=100, activation="relu"),
-                    keras.layers.Dense(units=100, activation="relu"),
-                    keras.layers.Dense(units=100, activation="relu"),
-                    keras.layers.Dense(units=n_components, name="z"),
-                ]
-            )
-    else:
-        embedding_layer = keras.layers.Embedding(
-            n_data, n_components,
+    if encoder is None:
+        encoder = keras.Sequential(
+            [
+                keras.layers.Input(shape=dims),
+                keras.layers.Flatten(),
+                keras.layers.Dense(units=100, activation="relu"),
+                keras.layers.Dense(units=100, activation="relu"),
+                keras.layers.Dense(units=100, activation="relu"),
+                keras.layers.Dense(units=n_components, name="z"),
+            ]
         )
-        embedding_layer.build(input_shape=(1,))
-        embedding_layer.set_weights([init_embedding])
-        encoder = keras.Sequential([embedding_layer])
 
     if decoder is None:
         if parametric_reconstruction:
@@ -884,7 +795,6 @@ def construct_edge_dataset(
     graph_,
     n_epochs,
     batch_size,
-    parametric_embedding,
     parametric_reconstruction,
     global_correlation_loss_weight,
 ):
@@ -901,8 +811,6 @@ def construct_edge_dataset(
         # of epochs to train each edge
     batch_size : int
         batch size
-    parametric_embedding : bool
-        Whether the embedder is parametric or non-parametric
     parametric_reconstruction : bool
         Whether the decoder is parametric or non-parametric
     """
@@ -955,10 +863,7 @@ def construct_edge_dataset(
     # number of elements per batch for embedding
     if batch_size is None:
         # batch size can be larger if its just over embeddings
-        if parametric_embedding:
-            batch_size = np.min([n_vertices, 1000])
-        else:
-            batch_size = len(head)
+        batch_size = np.min([n_vertices, 1000])
 
     edges_to_exp, edges_from_exp = (
         np.repeat(head, epochs_per_sample.astype("int")),
@@ -971,28 +876,20 @@ def construct_edge_dataset(
     edges_from_exp = edges_from_exp[shuffle_mask].astype(np.int64)
 
     # create edge iterator
-    if parametric_embedding:
-        edge_dataset = tf.data.Dataset.from_tensor_slices(
-            (edges_to_exp, edges_from_exp)
-        )
-        edge_dataset = edge_dataset.repeat()
-        edge_dataset = edge_dataset.shuffle(10000)
-        edge_dataset = edge_dataset.batch(batch_size, drop_remainder=True)
-        edge_dataset = edge_dataset.map(
-            gather_X, num_parallel_calls=tf.data.experimental.AUTOTUNE
-        )
-        edge_dataset = edge_dataset.map(
-            get_outputs, num_parallel_calls=tf.data.experimental.AUTOTUNE
-        )
-        edge_dataset = edge_dataset.prefetch(10)
-    else:
-        # nonparametric embedding uses a sham dataset
-        gen = make_sham_generator()
-        edge_dataset = tf.data.Dataset.from_generator(
-            gen,
-            (tf.int32, tf.int32),
-            output_shapes=(tf.TensorShape(1), tf.TensorShape((1,))),
-        )
+    edge_dataset = tf.data.Dataset.from_tensor_slices(
+        (edges_to_exp, edges_from_exp)
+    )
+    edge_dataset = edge_dataset.repeat()
+    edge_dataset = edge_dataset.shuffle(10000)
+    edge_dataset = edge_dataset.batch(batch_size, drop_remainder=True)
+    edge_dataset = edge_dataset.map(
+        gather_X, num_parallel_calls=tf.data.experimental.AUTOTUNE
+    )
+    edge_dataset = edge_dataset.map(
+        get_outputs, num_parallel_calls=tf.data.experimental.AUTOTUNE
+    )
+    edge_dataset = edge_dataset.prefetch(10)
+
     return edge_dataset, batch_size, len(edges_to_exp), head, tail, weight
 
 
@@ -1081,7 +978,6 @@ def load_ParametricUMAP(save_location, verbose=True):
         model._a,
         model._b,
         model.edge_weight,
-        model.parametric_embedding,
     )
 
     # save parametric_model

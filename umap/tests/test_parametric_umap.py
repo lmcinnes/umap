@@ -59,17 +59,6 @@ def test_inverse_transform(moon_dataset):
     assert X_r is not None
     assert X_r.shape == X.shape
 
-
-@tf_only
-def test_nonparametric(moon_dataset):
-    """test nonparametric embedding"""
-    embedder = ParametricUMAP(parametric_embedding=False)
-    embedding = embedder.fit_transform(moon_dataset)
-    # completes successfully
-    assert embedding is not None
-    assert embedding.shape == (moon_dataset.shape[0], 2)
-
-
 @tf_only
 def test_custom_encoder_decoder(moon_dataset):
     """test using a custom encoder / decoder"""
