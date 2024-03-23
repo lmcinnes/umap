@@ -21,7 +21,7 @@ except ImportError:
     warn(
         """The umap.torch package requires PyTorch to be installed.
     You can install PyTorch at https://pytorch.org/
-    
+
 
     """
     )
@@ -86,7 +86,7 @@ def umap_loss(embedding_to, embedding_from, _a, _b, batch_size, negative_sample_
 def get_umap_graph(
     X, n_neighbors=10, metric="cosine", random_state=None, verbose=False
 ):
-    random_state = check_random_state(None) if random_state == None else random_state
+    random_state = check_random_state(None) if random_state is None else random_state
     # number of trees in random projection forest
     n_trees = 5 + int(round((X.shape[0]) ** 0.5 / 20.0))
     # max number of nearest neighbor iters to perform
@@ -278,7 +278,8 @@ class ParametricUMAP:
             * yule
 
             TODO: The torch implimentation currently does not support additional
-            arguments that should be passed to the metric (e.g. minkowski, mahalanobis etc.)
+            arguments that should be passed to the metric (e.g. minkowski,
+            mahalanobis etc.)
 
         n_epochs: int (optional, default 3)
             The number of training epochs to be used in optimizing the
@@ -408,11 +409,14 @@ class ParametricUMAP:
         # Use tqdm for nice loading bars if verbose flag set
         # otherwise run silently
         if self.verbose:
-            wrapper = lambda loader: tq(
-                enumerate(loader), total=len(loader), leave=False
-            )
+
+            def wrapper(loader):
+                return tq(enumerate(loader), total=len(loader), leave=False)
+
         else:
-            wrapper = lambda loader: enumerate(loader)
+
+            def wrapper(loader):
+                return enumerate(loader)
 
         for epoch in range(self.n_epochs):
 
@@ -438,7 +442,7 @@ class ParametricUMAP:
 
                 total_loss += encoder_loss
 
-                if self.decoder != None:
+                if self.decoder is not None:
                     recon = self.decoder(embedding_to)
                     recon_loss = torch.nn.functional.mse_loss(recon, edges_to_exp)
                     total_loss += self.beta * recon_loss
@@ -449,7 +453,7 @@ class ParametricUMAP:
 
                 if self.verbose:
                     desc = f"Batch: {ib}  Training loss: {total_loss.item():5.3f}"
-                    if self.decoder != None:
+                    if self.decoder is not None:
                         desc += f" | Umap loss: {encoder_loss.item():5.3f}"
                         desc += f" | Reconstruction loss: {recon_loss.item():5.3f}"
                     batch_pbar.set_description(desc)
