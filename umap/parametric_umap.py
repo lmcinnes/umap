@@ -105,7 +105,8 @@ class ParametricUMAP(UMAP):
         self.keras_fit_kwargs = keras_fit_kwargs  # arguments for model.fit
         self.parametric_model = None
 
-        # How many epochs to train for (different than n_epochs which is specific to each sample)
+        # How many epochs to train for
+        # (different than n_epochs which is specific to each sample)
         self.n_training_epochs = 1
 
         # Set optimizer.
@@ -622,7 +623,7 @@ def umap_loss(
             )
         else:
             embedding_neg_from = repeat_neg[shuffled_indices]
-            
+
         # embedding_neg_from = keras.random.shuffle(repeat_neg, axis=0)
 
         #  distances between samples (and negative samples)
@@ -641,7 +642,11 @@ def umap_loss(
 
         # set true probabilities based on negative sampling
         probabilities_graph = ops.concatenate(
-            [ops.ones((batch_size,)), ops.zeros((batch_size * negative_sample_rate,))], axis=0
+            [
+                ops.ones((batch_size,)),
+                ops.zeros((batch_size * negative_sample_rate,)),
+            ],
+            axis=0
         )
 
         # compute cross entropy
