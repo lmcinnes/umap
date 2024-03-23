@@ -132,9 +132,9 @@ def get_graph_elements(graph_, n_epochs):
     if n_epochs is None:
         # For smaller datasets we can use more epochs
         if graph.shape[0] <= 10_000:
-            n_epochs = 25
+            n_epochs = 50
         else:
-            n_epochs = 10
+            n_epochs = 20
 
     # remove elements with very low probability
     graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
@@ -215,8 +215,9 @@ class ParametricUMAP:
         n_components=2,
         n_neighbors=15,
         metric="euclidean",
-        n_epochs=3,
-        n_subepochs=None,
+        n_training_epochs=1,
+        n_epochs=None,
+        negative_sample_rate=5,
         lr=1e-3,
         min_dist=0.1,
         encoder=None,
@@ -281,18 +282,24 @@ class ParametricUMAP:
             arguments that should be passed to the metric (e.g. minkowski,
             mahalanobis etc.)
 
-        n_epochs: int (optional, default 3)
+        n_training_epochs: int (optional, default 1)
             The number of training epochs to be used in optimizing the
             low dimensional embedding. Corresponds to the number of times
             we optimisze over the training dataloader.
 
-        n_subepochs: int (optional, default None)
+        n_epochs: int (optional, default None)
             The number of epochs used in constructing the UMAP dataset.
             The highest probability edge in the umap graph will appear in
-            the train dataset n_subepochs times. edges with lower probability
+            the train dataset n_epochs times. edges with lower probability
             are represented proportionally. A larger value will result in
             a larger, but more accurate dataset.
-            Defaults to 25 for small datasets, 10 for large.
+            Defaults to 50 for small datasets, 20 for large.
+        
+        negative_sample_rate: int (optional, default 5)
+            The number of negative samples to select per positive sample
+            in the optimization process. Increasing this value will result
+            in greater repulsive force being applied, greater optimization
+            cost, but slightly more accuracy.
 
         lr: float (optional, default 1e-3)
             The learning rate for the embedding optimization.
@@ -351,8 +358,9 @@ class ParametricUMAP:
         self.beta = beta
         self.metric = metric
         self.lr = lr
+        self.n_training_epochs = n_training_epochs
         self.n_epochs = n_epochs
-        self.n_subepochs = n_subepochs
+        self.negative_sample_rate = negative_sample_rate
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.random_state = random_state
@@ -389,7 +397,7 @@ class ParametricUMAP:
             random_state=self.random_state,
         )
 
-        dataset = UMAPDataset(graph, data=X, n_epochs=self.n_subepochs)
+        dataset = UMAPDataset(graph, data=X, n_epochs=self.n_epochs)
 
         dataloader = DataLoader(
             dataset=dataset,
@@ -418,7 +426,7 @@ class ParametricUMAP:
             def wrapper(loader):
                 return enumerate(loader)
 
-        for epoch in range(self.n_epochs):
+        for epoch in range(self.n_training_epochs):
 
             for ib, batch in (batch_pbar := wrapper(dataloader)):
 
@@ -437,7 +445,7 @@ class ParametricUMAP:
                     self._a,
                     self._b,
                     edges_to_exp.shape[0],
-                    negative_sample_rate=5,
+                    negative_sample_rate=self.negative_sample_rate,
                 )
 
                 total_loss += encoder_loss
