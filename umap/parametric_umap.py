@@ -196,7 +196,7 @@ class ParametricUMAP(UMAP):
             decoder=self.decoder,
             parametric_reconstruction_loss_fn=self.parametric_reconstruction_loss_fcn,
             parametric_reconstruction=self.parametric_reconstruction,
-            parametric_reconstruction_loss_weight=self.parametric_reconstruction_loss_weight,
+            reconstruction_loss_weight=self.parametric_reconstruction_loss_weight,
             global_correlation_loss_weight=self.global_correlation_loss_weight,
             autoencoder_loss=self.autoencoder_loss,
         )
@@ -849,7 +849,6 @@ class StopGradient(keras.layers.Layer):
         return ops.stop_gradient(x)
 
 
-
 class UMAPModel(keras.Model):
     def __init__(self,
                  umap_loss_a,
@@ -860,7 +859,7 @@ class UMAPModel(keras.Model):
                  optimizer=None,
                  parametric_reconstruction_loss_fn=None,
                  parametric_reconstruction=False,
-                 parametric_reconstruction_loss_weight=1.,
+                 reconstruction_loss_weight=1.,
                  global_correlation_loss_weight=0.,
                  autoencoder_loss=False,
                  name="umap_model"):
@@ -870,7 +869,7 @@ class UMAPModel(keras.Model):
         self.decoder = decoder
         self.parametric_reconstruction = parametric_reconstruction
         self.global_correlation_loss_weight = global_correlation_loss_weight
-        self.parametric_reconstruction_loss_weight = parametric_reconstruction_loss_weight
+        self.reconstruction_loss_weight = reconstruction_loss_weight
         self.negative_sample_rate = negative_sample_rate
         self.umap_loss_a = umap_loss_a
         self.umap_loss_b = umap_loss_b
@@ -927,7 +926,7 @@ class UMAPModel(keras.Model):
             losses.append(self._parametric_reconstruction_loss(y, y_pred))
 
         return ops.sum(losses)
-    
+
     def _umap_loss(self, y_pred, repulsion_strength=1.0):
         # split out to/from
         embedding_to = y_pred["embedding_to"]
@@ -938,7 +937,8 @@ class UMAPModel(keras.Model):
         repeat_neg = ops.repeat(embedding_from, self.negative_sample_rate, axis=0)
 
         repeat_neg_batch_dim = ops.shape(repeat_neg)[0]
-        shuffled_indices = keras.random.shuffle(ops.arange(repeat_neg_batch_dim), seed=self.seed_generator)
+        shuffled_indices = keras.random.shuffle(
+            ops.arange(repeat_neg_batch_dim), seed=self.seed_generator)
 
         if keras.config.backend() == "tensorflow":
             embedding_neg_from = tf.gather(
@@ -987,7 +987,7 @@ class UMAPModel(keras.Model):
         x = self.flatten(y["global_correlation"])
         z_x = self.flatten(y_pred["embedding_to"])
 
-        ## z score data
+        # z score data
         def z_score(x):
             return (x - ops.mean(x)) / ops.std(x)
 
