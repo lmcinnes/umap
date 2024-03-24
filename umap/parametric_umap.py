@@ -188,6 +188,7 @@ class ParametricUMAP(UMAP):
 
     def _define_model(self):
         """Define the model in keras"""
+        prlw = self.parametric_reconstruction_loss_weight
         self.parametric_model = UMAPModel(
             self._a,
             self._b,
@@ -196,7 +197,7 @@ class ParametricUMAP(UMAP):
             decoder=self.decoder,
             parametric_reconstruction_loss_fn=self.parametric_reconstruction_loss_fcn,
             parametric_reconstruction=self.parametric_reconstruction,
-            parametric_reconstruction_loss_weight=self.parametric_reconstruction_loss_weight,
+            parametric_reconstruction_loss_weight=prlw,
             global_correlation_loss_weight=self.global_correlation_loss_weight,
             autoencoder_loss=self.autoencoder_loss,
         )
@@ -991,7 +992,7 @@ class UMAPModel(keras.Model):
         x = self.flatten(y["global_correlation"])
         z_x = self.flatten(y_pred["embedding_to"])
 
-        ## z score data
+        # z score data
         def z_score(x):
             return (x - ops.mean(x)) / ops.std(x)
 
