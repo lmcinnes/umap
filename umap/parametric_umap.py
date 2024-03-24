@@ -196,7 +196,7 @@ class ParametricUMAP(UMAP):
             decoder=self.decoder,
             parametric_reconstruction_loss_fn=self.parametric_reconstruction_loss_fcn,
             parametric_reconstruction=self.parametric_reconstruction,
-            reconstruction_loss_weight=self.parametric_reconstruction_loss_weight,
+            parametric_reconstruction_loss_weight=self.parametric_reconstruction_loss_weight,
             global_correlation_loss_weight=self.global_correlation_loss_weight,
             autoencoder_loss=self.autoencoder_loss,
         )
@@ -859,7 +859,7 @@ class UMAPModel(keras.Model):
                  optimizer=None,
                  parametric_reconstruction_loss_fn=None,
                  parametric_reconstruction=False,
-                 reconstruction_loss_weight=1.,
+                 parametric_reconstruction_loss_weight=1.,
                  global_correlation_loss_weight=0.,
                  autoencoder_loss=False,
                  name="umap_model"):
@@ -869,7 +869,9 @@ class UMAPModel(keras.Model):
         self.decoder = decoder
         self.parametric_reconstruction = parametric_reconstruction
         self.global_correlation_loss_weight = global_correlation_loss_weight
-        self.reconstruction_loss_weight = reconstruction_loss_weight
+        self.parametric_reconstruction_loss_weight = (
+            parametric_reconstruction_loss_weight
+        )
         self.negative_sample_rate = negative_sample_rate
         self.umap_loss_a = umap_loss_a
         self.umap_loss_b = umap_loss_b
@@ -885,7 +887,9 @@ class UMAPModel(keras.Model):
                 from_logits=True
             )
         else:
-            self.parametric_reconstruction_loss_fn = parametric_reconstruction_loss_fn
+            self.parametric_reconstruction_loss_fn = (
+                parametric_reconstruction_loss_fn
+            )
 
     def call(self, inputs):
         to_x, from_x = inputs
@@ -987,7 +991,7 @@ class UMAPModel(keras.Model):
         x = self.flatten(y["global_correlation"])
         z_x = self.flatten(y_pred["embedding_to"])
 
-        # z score data
+        ## z score data
         def z_score(x):
             return (x - ops.mean(x)) / ops.std(x)
 
