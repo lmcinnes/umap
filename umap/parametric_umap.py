@@ -952,8 +952,6 @@ class UMAPModel(keras.Model):
         else:
             embedding_neg_from = repeat_neg[shuffled_indices]
 
-        # embedding_neg_from = keras.random.shuffle(repeat_neg, axis=0)
-
         #  distances between samples (and negative samples)
         distance_embedding = ops.concatenate(
             [
