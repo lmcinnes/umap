@@ -472,6 +472,8 @@ class ParametricUMAP:
 
     @torch.no_grad()
     def transform(self, X):
+        if type(X) is np.ndarray:
+            X = torch.from_numpy(X).float()
         self.embedding_ = self.encoder(X.to(self.device)).detach().cpu().numpy()
         return self.embedding_
 
