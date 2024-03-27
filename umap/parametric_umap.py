@@ -8,8 +8,8 @@ from sklearn.utils import check_random_state
 import codecs, pickle
 from sklearn.neighbors import KDTree
 
-
 try:
+    # Used for tf.data.
     import tensorflow as tf
 except ImportError:
     warn(
@@ -24,25 +24,12 @@ except ImportError:
     )
     raise ImportError("umap.parametric_umap requires Tensorflow >= 2.0") from None
 
-TF_MAJOR_VERSION = int(tf.__version__.split(".")[0])
-if TF_MAJOR_VERSION < 2:
-    warn(
-        """The umap.parametric_umap package requires Tensorflow > 2.0 to be installed.
-    You can install Tensorflow at https://www.tensorflow.org/install
-    
-    or you can install the CPU version of Tensorflow using 
-
-    pip install umap-learn[parametric_umap]
-
-    """
-    )
-    raise ImportError("umap.parametric_umap requires Tensorflow >= 2.0") from None
-
 try:
     import keras
+    from keras import ops
 except ImportError:
     warn(
-        """The umap.parametric_umap package requires Keras to be installed."""
+        """The umap.parametric_umap package requires Keras >= 3 to be installed."""
     )
     raise ImportError("umap.parametric_umap requires Keras") from None
 
@@ -50,22 +37,16 @@ except ImportError:
 class ParametricUMAP(UMAP):
     def __init__(
         self,
-        optimizer=None,
         batch_size=None,
         dims=None,
         encoder=None,
         decoder=None,
         parametric_reconstruction=False,
-        parametric_reconstruction_loss_fcn=keras.losses.BinaryCrossentropy(
-            from_logits=True
-        ),
+        parametric_reconstruction_loss_fcn=None,
         parametric_reconstruction_loss_weight=1.0,
         autoencoder_loss=False,
         reconstruction_validation=None,
-        loss_report_frequency=10,
-        n_training_epochs=1,
         global_correlation_loss_weight=0,
-        run_eagerly=False,
         keras_fit_kwargs={},
         **kwargs
     ):
@@ -76,8 +57,6 @@ class ParametricUMAP(UMAP):
 
         Parameters
         ----------
-        optimizer : keras.optimizers, optional
-            The tensorflow optimizer used for embedding, by default None
         batch_size : int, optional
             size of batch used for batch training, by default None
         dims :  tuple, optional
@@ -97,23 +76,11 @@ class ParametricUMAP(UMAP):
             [description], by default False
         reconstruction_validation : array, optional
             validation X data for reconstruction loss, by default None
-        loss_report_frequency : int, optional
-            how many times per epoch to report loss, by default 1
-        n_training_epochs : int, optional
-            number of epochs to train for, by default 1
         global_correlation_loss_weight : float, optional
             Whether to additionally train on correlation of global pairwise relationships (>0), by default 0
-        run_eagerly : bool, optional
-            Whether to run tensorflow eagerly
         keras_fit_kwargs : dict, optional
             additional arguments for model.fit (like callbacks), by default {}
         """
-        if keras.backend.backend() != "tensorflow":
-            raise ValueError(
-                "For the time being, ParametricUMAP "
-                "requires Keras to use the TensorFlow backend. "
-                f"Your backend: {keras.backend.backend()}"
-            )
         super().__init__(**kwargs)
 
         # add to network
@@ -121,16 +88,13 @@ class ParametricUMAP(UMAP):
         self.encoder = encoder  # neural network used for embedding
         self.decoder = decoder  # neural network used for decoding
         self.parametric_reconstruction = parametric_reconstruction
-        self.parametric_reconstruction_loss_fcn = parametric_reconstruction_loss_fcn
         self.parametric_reconstruction_loss_weight = (
             parametric_reconstruction_loss_weight
         )
-        self.run_eagerly = run_eagerly
+        self.parametric_reconstruction_loss_fcn = parametric_reconstruction_loss_fcn
         self.autoencoder_loss = autoencoder_loss
         self.batch_size = batch_size
-        self.loss_report_frequency = (
-            loss_report_frequency  # how many times per epoch to report loss in keras
-        )
+        self.loss_report_frequency = 10
         self.global_correlation_loss_weight = global_correlation_loss_weight
 
         self.reconstruction_validation = (
@@ -139,14 +103,13 @@ class ParametricUMAP(UMAP):
         self.keras_fit_kwargs = keras_fit_kwargs  # arguments for model.fit
         self.parametric_model = None
 
-        # how many epochs to train for (different than n_epochs which is specific to each sample)
-        self.n_training_epochs = n_training_epochs
-        # set optimizer
-        if optimizer is None:
-            # Adam is better for parametric_embedding
-            self.optimizer = keras.optimizers.Adam(1e-3)
-        else:
-            self.optimizer = optimizer
+        # How many epochs to train for
+        # (different than n_epochs which is specific to each sample)
+        self.n_training_epochs = 1
+
+        # Set optimizer.
+        # Adam is better for parametric_embedding. Use gradient clipping by value.
+        self.optimizer = keras.optimizers.Adam(1e-3, clipvalue=4.0)
 
         if self.encoder is not None:
             if encoder.outputs[0].shape[-1] != self.n_components:
@@ -225,73 +188,18 @@ class ParametricUMAP(UMAP):
 
     def _define_model(self):
         """Define the model in keras"""
-
-        # network outputs
-        outputs = {}
-
-        # inputs
-        to_x = keras.layers.Input(shape=self.dims, name="to_x")
-        from_x = keras.layers.Input(shape=self.dims, name="from_x")
-        inputs = [to_x, from_x]
-
-        # parametric embedding
-        embedding_to = self.encoder(to_x)
-        embedding_from = self.encoder(from_x)
-
-        if self.parametric_reconstruction:
-            # parametric reconstruction
-            if self.autoencoder_loss:
-                embedding_to_recon = self.decoder(embedding_to)
-            else:
-                # stop gradient of reconstruction loss before it reaches the encoder
-                embedding_to_recon = self.decoder(StopGradient()(embedding_to))
-
-            embedding_to_recon = keras.layers.Lambda(
-                lambda x: x, name="reconstruction"
-            )(embedding_to_recon)
-
-            outputs["reconstruction"] = embedding_to_recon
-
-        # concatenate to/from projections for loss computation
-        embedding_to_from = keras.layers.Concatenate(axis=1)(
-            [embedding_to, embedding_from])
-        outputs["umap"] = embedding_to_from
-
-        if self.global_correlation_loss_weight > 0:
-            outputs["global_correlation"] = keras.layers.Lambda(
-                lambda x: x, name="global_correlation"
-            )(embedding_to)
-
-        # create model
-
-        losses = {}
-        loss_weights = {}
-
-        umap_loss_fn = umap_loss(
-            self.batch_size,
-            self.negative_sample_rate,
+        prlw = self.parametric_reconstruction_loss_weight
+        self.parametric_model = UMAPModel(
             self._a,
             self._b,
-            self.edge_weight,
-        )
-        losses["umap"] = umap_loss_fn
-        loss_weights["umap"] = 1.0
-
-        if self.global_correlation_loss_weight > 0:
-            losses["global_correlation"] = distance_loss_corr
-            loss_weights["global_correlation"] = self.global_correlation_loss_weight
-
-        if self.parametric_reconstruction:
-            losses["reconstruction"] = self.parametric_reconstruction_loss_fcn
-            loss_weights["reconstruction"] = self.parametric_reconstruction_loss_weight
-        self.parametric_model = GradientClippedModel(
-            inputs=inputs, outputs=outputs, losses=losses, loss_weights=loss_weights)
-
-    def _compile_model(self):
-
-        self.parametric_model.compile(
-            optimizer=self.optimizer,
-            run_eagerly=self.run_eagerly,
+            negative_sample_rate=self.negative_sample_rate,
+            encoder=self.encoder,
+            decoder=self.decoder,
+            parametric_reconstruction_loss_fn=self.parametric_reconstruction_loss_fcn,
+            parametric_reconstruction=self.parametric_reconstruction,
+            parametric_reconstruction_loss_weight=prlw,
+            global_correlation_loss_weight=self.global_correlation_loss_weight,
+            autoencoder_loss=self.autoencoder_loss,
         )
 
     def _fit_embed_data(self, X, n_epochs, init, random_state):
@@ -328,8 +236,8 @@ class ParametricUMAP(UMAP):
             self.parametric_reconstruction,
             self.global_correlation_loss_weight,
         )
-        self.head = tf.constant(tf.expand_dims(head.astype(np.int64), 0))
-        self.tail = tf.constant(tf.expand_dims(tail.astype(np.int64), 0))
+        self.head = ops.array(ops.expand_dims(head.astype(np.int64), 0))
+        self.tail = ops.array(ops.expand_dims(tail.astype(np.int64), 0))
 
         init_embedding = None
 
@@ -347,7 +255,6 @@ class ParametricUMAP(UMAP):
 
         # create the model
         self._define_model()
-        self._compile_model()
 
         # report every loss_report_frequency subdivision of an epochs
         steps_per_epoch = int(
@@ -370,7 +277,7 @@ class ParametricUMAP(UMAP):
             validation_data = (
                 (
                     self.reconstruction_validation,
-                    tf.zeros_like(self.reconstruction_validation),
+                    ops.zeros_like(self.reconstruction_validation),
                 ),
                 {"reconstruction": self.reconstruction_validation},
             )
@@ -565,7 +472,7 @@ def convert_distance_to_log_probability(distances, a=1.0, b=1.0):
     float
         log probability in embedding space
     """
-    return -tf.math.log1p(a * distances ** (2 * b))
+    return -ops.log1p(a * distances ** (2 * b))
 
 
 def compute_cross_entropy(
@@ -587,16 +494,16 @@ def compute_cross_entropy(
 
     Returns
     -------
-    attraction_term: tf.float32
+    attraction_term: float
         attraction term for cross entropy loss
-    repellant_term: tf.float32
+    repellant_term: float
         repellent term for cross entropy loss
-    cross_entropy: tf.float32
+    cross_entropy: float
         cross entropy umap loss
 
     """
     # cross entropy
-    attraction_term = -probabilities_graph * tf.math.log_sigmoid(
+    attraction_term = -probabilities_graph * ops.log_sigmoid(
         log_probabilities_distance
     )
     # use numerically stable repellent term
@@ -604,7 +511,7 @@ def compute_cross_entropy(
     # log(1 - sigmoid(logits)) = log(sigmoid(logits)) - logits
     repellant_term = (
         -(1.0 - probabilities_graph)
-        * (tf.math.log_sigmoid(log_probabilities_distance) - log_probabilities_distance)
+        * (ops.log_sigmoid(log_probabilities_distance) - log_probabilities_distance)
         * repulsion_strength
     )
 
@@ -612,114 +519,6 @@ def compute_cross_entropy(
     CE = attraction_term + repellant_term
     return attraction_term, repellant_term, CE
 
-
-def umap_loss(
-    batch_size,
-    negative_sample_rate,
-    _a,
-    _b,
-    edge_weights,
-    repulsion_strength=1.0,
-):
-    """
-    Generate a keras-compatible loss function for UMAP loss
-
-    Parameters
-    ----------
-    batch_size : int
-        size of mini-batches
-    negative_sample_rate : int
-        number of negative samples per positive samples to train on
-    _a : float
-        distance parameter in embedding space
-    _b : float
-        distance parameter in embedding space
-    edge_weights : array
-        weights of all edges from sparse UMAP graph
-    repulsion_strength : float, optional
-        strength of repulsion vs attraction for cross-entropy, by default 1.0
-
-    Returns
-    -------
-    loss : function
-        loss function that takes in a placeholder (0) and the output of the keras network
-    """
-
-    def loss(placeholder_y, embed_to_from):
-        # split out to/from
-        embedding_to, embedding_from = tf.split(
-            embed_to_from, num_or_size_splits=2, axis=1
-        )
-
-        # get negative samples
-        embedding_neg_to = tf.repeat(embedding_to, negative_sample_rate, axis=0)
-        repeat_neg = tf.repeat(embedding_from, negative_sample_rate, axis=0)
-        embedding_neg_from = tf.gather(
-            repeat_neg, tf.random.shuffle(tf.range(tf.shape(repeat_neg)[0]))
-        )
-
-        #  distances between samples (and negative samples)
-        distance_embedding = tf.concat(
-            [
-                tf.norm(embedding_to - embedding_from, axis=1),
-                tf.norm(embedding_neg_to - embedding_neg_from, axis=1),
-            ],
-            axis=0,
-        )
-
-        # convert distances to probabilities
-        log_probabilities_distance = convert_distance_to_log_probability(
-            distance_embedding, _a, _b
-        )
-
-        # set true probabilities based on negative sampling
-        probabilities_graph = tf.concat(
-            [tf.ones(batch_size), tf.zeros(batch_size * negative_sample_rate)], axis=0
-        )
-
-        # compute cross entropy
-        (attraction_loss, repellant_loss, ce_loss) = compute_cross_entropy(
-            probabilities_graph,
-            log_probabilities_distance,
-            repulsion_strength=repulsion_strength,
-        )
-
-        return tf.reduce_mean(ce_loss)
-
-    return loss
-
-
-def distance_loss_corr(x, z_x):
-    """Loss based on the distance between elements in a batch"""
-
-    # flatten data
-    x = keras.layers.Flatten()(x)
-    z_x = keras.layers.Flatten()(z_x)
-
-    ## z score data
-    def z_score(x):
-        return (x - tf.reduce_mean(x)) / tf.math.reduce_std(x)
-
-    x = z_score(x)
-    z_x = z_score(z_x)
-
-    # clip distances to 10 standard deviations for stability
-    x = tf.clip_by_value(x, -10, 10)
-    z_x = tf.clip_by_value(z_x, -10, 10)
-
-    dx = tf.math.reduce_euclidean_norm(x[1:] - x[:-1], axis=1)
-    dz = tf.math.reduce_euclidean_norm(z_x[1:] - z_x[:-1], axis=1)
-
-    # jitter dz to prevent mode collapse
-    dz = dz + tf.random.uniform(dz.shape) * 1e-10
-
-    # compute correlation
-    corr_d = tf.squeeze(
-        correlation(
-            x=tf.expand_dims(dx, -1), y=tf.expand_dims(dz, -1)
-        )
-    )
-    return -corr_d
 
 
 def prepare_networks(
@@ -814,7 +613,6 @@ def construct_edge_dataset(
     parametric_reconstruction : bool
         Whether the decoder is parametric or non-parametric
     """
-
     def gather_index(index):
         return X[index]
 
@@ -833,37 +631,24 @@ def construct_edge_dataset(
         return edge_to_batch, edge_from_batch
 
     def get_outputs(edge_to_batch, edge_from_batch):
-        outputs = {"umap": tf.repeat(0, batch_size)}
+        outputs = {"umap": ops.repeat(0, batch_size)}
         if global_correlation_loss_weight > 0:
             outputs["global_correlation"] = edge_to_batch
         if parametric_reconstruction:
             # add reconstruction to iterator output
-            # edge_out = tf.concat([edge_to_batch, edge_from_batch], axis=0)
+            # edge_out = ops.concatenate([edge_to_batch, edge_from_batch], axis=0)
             outputs["reconstruction"] = edge_to_batch
         return (edge_to_batch, edge_from_batch), outputs
 
-    def make_sham_generator():
-        """
-        The sham generator is a placeholder when all data is already intrinsic to
-        the model, but keras wants some input data. Used for non-parametric
-        embedding.
-        """
-
-        def sham_generator():
-            while True:
-                yield tf.zeros(1, dtype=tf.int32), tf.zeros(1, dtype=tf.int32)
-
-        return sham_generator
-
     # get data from graph
-    graph, epochs_per_sample, head, tail, weight, n_vertices = get_graph_elements(
+    _, epochs_per_sample, head, tail, weight, n_vertices = get_graph_elements(
         graph_, n_epochs
     )
 
     # number of elements per batch for embedding
     if batch_size is None:
         # batch size can be larger if its just over embeddings
-        batch_size = np.min([n_vertices, 1000])
+        batch_size = int(np.min([n_vertices, 1000]))
 
     edges_to_exp, edges_from_exp = (
         np.repeat(head, epochs_per_sample.astype("int")),
@@ -914,7 +699,7 @@ def should_pickle(key, val):
         # pickle object
         pickled = codecs.encode(pickle.dumps(val), "base64").decode()
         # unpickle object
-        unpickled = pickle.loads(codecs.decode(pickled.encode(), "base64"))
+        _ = pickle.loads(codecs.decode(pickled.encode(), "base64"))
     except (
         pickle.PicklingError,
         tf.errors.InvalidArgumentError,
@@ -971,175 +756,89 @@ def load_ParametricUMAP(save_location, verbose=True):
         model.decoder = keras.models.load_model(decoder_output)
         print("Keras decoder model loaded from {}".format(decoder_output))
 
-    # get the custom loss function
-    umap_loss_fn = umap_loss(
-        model.batch_size,
-        model.negative_sample_rate,
-        model._a,
-        model._b,
-        model.edge_weight,
-    )
-
     # save parametric_model
     parametric_model_output = os.path.join(save_location, "parametric_model")
     if os.path.exists(parametric_model_output):
         model.parametric_model = keras.models.load_model(
-            parametric_model_output, custom_objects={"loss": umap_loss_fn}
+            parametric_model_output
         )
         print("Keras full model loaded from {}".format(parametric_model_output))
 
     return model
 
 
-class GradientClippedModel(keras.Model):
-    """
-    We need to define a custom keras model here for gradient clipping,
-    to stabilize training.
-    """
-    def __init__(self, inputs, outputs, losses, loss_weights):
-        super().__init__(inputs, outputs)
-        self._umap_loss_tracker = keras.metrics.Mean(name="loss")
-        self._umap_losses = losses
-        self._umap_loss_weights = loss_weights
-
-    def compute_loss(
-        self, x=None, y=None, y_pred=None, sample_weight=None, allow_empty=False
-    ):
-        losses = []
-        # Regularization losses.
-        for loss in self.losses:
-            losses.append(tf.cast(loss, dtype=keras.backend.floatx()))
-
-        for key in self._umap_losses.keys():
-            loss_fn = self._umap_losses[key]
-            weight = self._umap_loss_weights[key]
-            if key in y:
-                loss = loss_fn(y[key], y_pred[key])
-                losses.append(tf.reduce_mean(loss) * weight)
-        return tf.reduce_sum(losses)
-
-    def train_step(self, data):
-        # Unpack the data. Its structure depends on your model and
-        # on what you pass to `fit()`.
-        x, y = data
-
-        with tf.GradientTape() as tape:
-            y_pred = self(x, training=True)  # Forward pass
-            # Compute the loss value
-            # (the loss function is configured in `compile()`)
-            loss = self.compute_loss(y=y, y_pred=y_pred)
-
-        # Compute gradients
-        trainable_vars = self.trainable_variables
-        gradients = tape.gradient(loss, trainable_vars)
-        gradients = [tf.clip_by_value(grad, -4.0, 4.0) for grad in gradients]
-        gradients = [
-            (tf.where(tf.math.is_nan(grad), tf.zeros_like(grad), grad))
-            for grad in gradients
-        ]
-
-        # Update weights
-        self.optimizer.apply_gradients(zip(gradients, trainable_vars))
-        self._umap_loss_tracker.update_state(loss)
-        return {"loss": self._umap_loss_tracker.result()}
-
-
 def covariance(x,
                y=None,
                keepdims=False):
     """Adapted from TF Probability."""
-    x = tf.convert_to_tensor(x, name='x')
+    x = ops.convert_to_tensor(x)
     # Covariance *only* uses the centered versions of x (and y).
-    x = x - tf.reduce_mean(x, axis=0, keepdims=True)
+    x = x - ops.mean(x, axis=0, keepdims=True)
 
     if y is None:
         y = x
-        event_axis = tf.reduce_mean(
-          x * tf.math.conj(y), axis=0, keepdims=keepdims)
+        event_axis = ops.mean(
+          x * ops.conj(y), axis=0, keepdims=keepdims)
     else:
-        y = tf.convert_to_tensor(y, name='y', dtype=x.dtype)
-        y = y - tf.reduce_mean(y, axis=0, keepdims=True)
+        y = ops.convert_to_tensor(y, dtype=x.dtype)
+        y = y - ops.mean(y, axis=0, keepdims=True)
         event_axis = [len(x.shape) - 1]
     sample_axis = [0]
-    batch_axis = []
 
-    event_axis = tf.cast(event_axis, dtype=tf.int32)
-    sample_axis = tf.cast(sample_axis, dtype=tf.int32)
-    batch_axis = tf.cast(batch_axis, dtype=tf.int32)
+    event_axis = ops.cast(event_axis, dtype="int32")
+    sample_axis = ops.cast(sample_axis, dtype="int32")
 
-    x_permed = tf.transpose(x)
-    y_permed = tf.transpose(y)
+    x_permed = ops.transpose(x)
+    y_permed = ops.transpose(y)
 
-    batch_ndims = tf.size(batch_axis)
-    batch_shape = tf.shape(x_permed)[:batch_ndims]
-    event_ndims = tf.size(event_axis)
-    event_shape = tf.shape(x_permed)[batch_ndims:batch_ndims + event_ndims]
-    sample_shape = tf.shape(x_permed)[batch_ndims + event_ndims:]
-    sample_ndims = tf.size(sample_shape)
-    n_samples = tf.reduce_prod(sample_shape)
-    n_events = tf.reduce_prod(event_shape)
+    n_events = ops.shape(x_permed)[0]
+    n_samples = ops.shape(x_permed)[1]
 
     # Flatten sample_axis into one long dim.
-    x_permed_flat = tf.reshape(
-        x_permed, tf.concat((batch_shape, event_shape, [n_samples]), 0))
-    y_permed_flat = tf.reshape(
-        y_permed, tf.concat((batch_shape, event_shape, [n_samples]), 0))
+    x_permed_flat = ops.reshape(
+        x_permed, (n_events, n_samples))
+    y_permed_flat = ops.reshape(
+        y_permed, (n_events, n_samples))
     # Do the same for event_axis.
-    x_permed_flat = tf.reshape(
-        x_permed, tf.concat((batch_shape, [n_events], [n_samples]), 0))
-    y_permed_flat = tf.reshape(
-        y_permed, tf.concat((batch_shape, [n_events], [n_samples]), 0))
+    x_permed_flat = ops.reshape(
+        x_permed, (n_events, n_samples))
+    y_permed_flat = ops.reshape(
+        y_permed, (n_events, n_samples))
 
     # After matmul, cov.shape = batch_shape + [n_events, n_events]
-    cov = tf.matmul(
-        x_permed_flat, y_permed_flat, adjoint_b=True) / tf.cast(
+    cov = ops.matmul(
+        x_permed_flat, ops.transpose(y_permed_flat)) / ops.cast(
             n_samples, x.dtype)
 
-    # Insert some singletons to make
-    # cov.shape = batch_shape + event_shape**2 + [1,...,1]
-    # This is just like x_permed.shape, except the sample_axis is all 1's, and
-    # the [n_events] became event_shape**2.
-    cov = tf.reshape(
+    cov = ops.reshape(
         cov,
-        tf.concat(
-            (
-                batch_shape,
-                # event_shape**2 used here because it is the same length as
-                # event_shape, and has the same number of elements as one
-                # batch of covariance.
-                event_shape**2,
-                tf.ones([sample_ndims], tf.int32)),
-            0))
+        (n_events**2, 1),
+    )
 
     # Permuting by the argsort inverts the permutation, making
     # cov.shape have ones in the position where there were samples, and
     # [n_events * n_events] in the event position.
-    cov = tf.transpose(a=cov, perm=tf.math.invert_permutation((1, 0)))
+    cov = ops.transpose(cov)
 
     # Now expand event_shape**2 into event_shape + event_shape.
     # We here use (for the first time) the fact that we require event_axis to be
     # contiguous.
-    e_start = event_axis[0]
-    e_len = 1 + event_axis[-1] - event_axis[0]
-    cov = tf.reshape(
+    cov = ops.reshape(
         cov,
-        tf.concat((tf.shape(cov)[:e_start], event_shape, event_shape,
-                   tf.shape(cov)[e_start + e_len:]), 0))
+        ops.shape(cov)[:1] + (n_events, n_events),
+    )
 
-    # tf.squeeze requires python ints for axis, not Tensor.  This is enough to
-    # require our axis args to be constants.
     if not keepdims:
-        cov = tf.squeeze(cov, axis=0)
-
+        cov = ops.squeeze(cov, axis=0)
     return cov
 
 
 def correlation(x,
                 y=None,
                 keepdims=False):
-    x /= tf.math.reduce_std(x, axis=0, keepdims=True)
+    x = x / ops.std(x, axis=0, keepdims=True)
     if y is not None:
-        y /= tf.math.reduce_std(y, axis=0, keepdims=True)
+        y = y / ops.std(y, axis=0, keepdims=True)
     return covariance(
         x=x,
         y=y,
@@ -1148,4 +847,175 @@ def correlation(x,
 
 class StopGradient(keras.layers.Layer):
     def call(self, x):
-        return tf.stop_gradient(x)
+        return ops.stop_gradient(x)
+
+
+class UMAPModel(keras.Model):
+    def __init__(self,
+                 umap_loss_a,
+                 umap_loss_b,
+                 negative_sample_rate,
+                 encoder,
+                 decoder,
+                 optimizer=None,
+                 parametric_reconstruction_loss_fn=None,
+                 parametric_reconstruction=False,
+                 parametric_reconstruction_loss_weight=1.,
+                 global_correlation_loss_weight=0.,
+                 autoencoder_loss=False,
+                 name="umap_model"):
+        super().__init__(name=name)
+
+        self.encoder = encoder
+        self.decoder = decoder
+        self.parametric_reconstruction = parametric_reconstruction
+        self.global_correlation_loss_weight = global_correlation_loss_weight
+        self.parametric_reconstruction_loss_weight = (
+            parametric_reconstruction_loss_weight
+        )
+        self.negative_sample_rate = negative_sample_rate
+        self.umap_loss_a = umap_loss_a
+        self.umap_loss_b = umap_loss_b
+        self.autoencoder_loss = autoencoder_loss
+
+        optimizer = optimizer or keras.optimizers.Adam(1e-3, clipvalue=4.0)
+        self.compile(optimizer=optimizer)
+
+        self.flatten = keras.layers.Flatten()
+        self.seed_generator = keras.random.SeedGenerator()
+        if parametric_reconstruction_loss_fn is None:
+            self.parametric_reconstruction_loss_fn = keras.losses.BinaryCrossentropy(
+                from_logits=True
+            )
+        else:
+            self.parametric_reconstruction_loss_fn = (
+                parametric_reconstruction_loss_fn
+            )
+
+    def call(self, inputs):
+        to_x, from_x = inputs
+        embedding_to = self.encoder(to_x)
+        embedding_from = self.encoder(from_x)
+
+        y_pred = {
+            "embedding_to": embedding_to,
+            "embedding_from": embedding_from,
+        }
+        if self.parametric_reconstruction:
+            # parametric reconstruction
+            if self.autoencoder_loss:
+                embedding_to_recon = self.decoder(embedding_to)
+            else:
+                # stop gradient of reconstruction loss before it reaches the encoder
+                embedding_to_recon = self.decoder(ops.stop_gradient(embedding_to))
+            y_pred["reconstruction"] = embedding_to_recon
+        return y_pred
+
+    def compute_loss(
+        self, x=None, y=None, y_pred=None, sample_weight=None, **kwargs
+    ):
+        losses = []
+        # Regularization losses.
+        for loss in self.losses:
+            losses.append(ops.cast(loss, dtype=keras.backend.floatx()))
+
+        # umap loss
+        losses.append(self._umap_loss(y_pred))
+
+        # global correlation loss
+        if self.global_correlation_loss_weight > 0:
+            losses.append(self._global_correlation_loss(y, y_pred))
+
+        # parametric reconstruction loss
+        if self.parametric_reconstruction:
+            losses.append(self._parametric_reconstruction_loss(y, y_pred))
+
+        return ops.sum(losses)
+
+    def _umap_loss(self, y_pred, repulsion_strength=1.0):
+        # split out to/from
+        embedding_to = y_pred["embedding_to"]
+        embedding_from = y_pred["embedding_from"]
+
+        # get negative samples
+        embedding_neg_to = ops.repeat(embedding_to, self.negative_sample_rate, axis=0)
+        repeat_neg = ops.repeat(embedding_from, self.negative_sample_rate, axis=0)
+
+        repeat_neg_batch_dim = ops.shape(repeat_neg)[0]
+        shuffled_indices = keras.random.shuffle(
+            ops.arange(repeat_neg_batch_dim), seed=self.seed_generator)
+
+        if keras.config.backend() == "tensorflow":
+            embedding_neg_from = tf.gather(
+                repeat_neg, shuffled_indices
+            )
+        else:
+            embedding_neg_from = repeat_neg[shuffled_indices]
+
+        #  distances between samples (and negative samples)
+        distance_embedding = ops.concatenate(
+            [
+                ops.norm(embedding_to - embedding_from, axis=1),
+                ops.norm(embedding_neg_to - embedding_neg_from, axis=1),
+            ],
+            axis=0,
+        )
+
+        # convert distances to probabilities
+        log_probabilities_distance = convert_distance_to_log_probability(
+            distance_embedding, self.umap_loss_a, self.umap_loss_b
+        )
+
+        # set true probabilities based on negative sampling
+        batch_size = ops.shape(embedding_to)[0]
+        probabilities_graph = ops.concatenate(
+            [
+                ops.ones((batch_size,)),
+                ops.zeros((batch_size * self.negative_sample_rate,)),
+            ],
+            axis=0
+        )
+
+        # compute cross entropy
+        (attraction_loss, repellant_loss, ce_loss) = compute_cross_entropy(
+            probabilities_graph,
+            log_probabilities_distance,
+            repulsion_strength=repulsion_strength,
+        )
+
+        return ops.mean(ce_loss)
+
+    def _global_correlation_loss(self, y, y_pred):
+        # flatten data
+        x = self.flatten(y["global_correlation"])
+        z_x = self.flatten(y_pred["embedding_to"])
+
+        # z score data
+        def z_score(x):
+            return (x - ops.mean(x)) / ops.std(x)
+
+        x = z_score(x)
+        z_x = z_score(z_x)
+
+        # clip distances to 10 standard deviations for stability
+        x = ops.clip(x, -10, 10)
+        z_x = ops.clip(z_x, -10, 10)
+
+        dx = ops.norm(x[1:] - x[:-1], axis=1)
+        dz = ops.norm(z_x[1:] - z_x[:-1], axis=1)
+
+        # jitter dz to prevent mode collapse
+        dz = dz + keras.random.uniform(dz.shape, seed=self.seed_generator) * 1e-10
+
+        # compute correlation
+        corr_d = ops.squeeze(
+            correlation(
+                x=ops.expand_dims(dx, -1), y=ops.expand_dims(dz, -1)
+            )
+        )
+        return -corr_d * self.global_correlation_loss_weight
+
+    def _parametric_reconstruction_loss(self, y, y_pred):
+        loss = self.parametric_reconstruction_loss_fn(
+            y["reconstruction"], y_pred["reconstruction"])
+        return loss * self.parametric_reconstruction_loss_weight
