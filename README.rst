@@ -132,7 +132,7 @@ to install all the plotting dependencies.
 
 If you wish to use Parametric UMAP, you need to install Tensorflow, which can be
 installed either using the instructions at https://www.tensorflow.org/install
-(reccomended) or using
+(recommended) or using
 
 .. code:: bash
 
