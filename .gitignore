@@ -10,6 +10,9 @@ venv
 .idea/dictionaries
 .idea/other.xml
 
+# data for notebooks
+notebooks/Parametric_UMAP/data/
+
 # Mac Finder layout
 .DS_Store
 

@@ -20,7 +20,11 @@ Parametric UMAP is simply a subclass of UMAP, so it can be used just like nonpar
     embedder = ParametricUMAP()
     embedding = embedder.fit_transform(my_data)
 
-In this implementation, we use Keras and Tensorflow as a backend to train that neural network. The added complexity of a learned embedding presents a number of configurable settings available in addition to those in non-parametric UMAP. A set of Jupyter notebooks walking you through these parameters are available on the  `GitHub repository <https://github.com/lmcinnes/umap/tree/master/notebooks/Parametric_UMAP>`_
+In this implementation, we use Keras to train that neural network with either Tensorflow or PyTorch as a backend. To select the backend, you can set the environment variable :python:`KERAS_BACKEND` to either :python:`tensorflow` or :python:`torch`. For example, to use PyTorch as the backend:
+
+.. code:: python3
+    import os
+    os.environ["KERAS_BACKEND"] = "torch"
 
 
 Defining your own network
@@ -31,25 +35,25 @@ By default, Parametric UMAP uses 3-layer 100-neuron fully-connected neural netwo
 .. code:: python3
     
     # define the network
-    import tensorflow as tf
+    import keras
     dims = (28, 28, 1)
     n_components = 2
-    encoder = tf.keras.Sequential([
-        tf.keras.layers.InputLayer(input_shape=dims),
-        tf.keras.layers.Conv2D(
+    encoder = keras.Sequential([
+        keras.layers.InputLayer(input_shape=dims),
+        keras.layers.Conv2D(
             filters=32, kernel_size=3, strides=(2, 2), activation="relu", padding="same"
         ),
-        tf.keras.layers.Conv2D(
+        keras.layers.Conv2D(
             filters=64, kernel_size=3, strides=(2, 2), activation="relu", padding="same"
         ),
-        tf.keras.layers.Flatten(),
-        tf.keras.layers.Dense(units=256, activation="relu"),
-        tf.keras.layers.Dense(units=256, activation="relu"),
-        tf.keras.layers.Dense(units=n_components),
+        keras.layers.Flatten(),
+        keras.layers.Dense(units=256, activation="relu"),
+        keras.layers.Dense(units=256, activation="relu"),
+        keras.layers.Dense(units=n_components),
     ])
     encoder.summary()
    
-To load pass the data into ParametricUMAP, we first need to flatten it from 28x28x1 images to a 784-dimensional vector.
+To load the data into ParametricUMAP, we first need to flatten it from 28x28x1 images to a 784-dimensional vector.
     
 .. code:: python3    
 
@@ -67,7 +71,7 @@ We can then pass the network into ParametricUMAP and train:
     embedder = ParametricUMAP(encoder=encoder, dims=dims)
     embedding = embedder.fit_transform(train_images)
 
-If you are unfamilar with Tensorflow/Keras and want to train your own model, we reccomend that you take a look at the `Tensorflow documentation <https://www.tensorflow.org/>`_. 
+If you are unfamilar with Keras and want to train your own model. We recommend the `Keras documentation <https://keras.io/guides/>`_.
 
 
 Saving and loading your model
@@ -112,17 +116,17 @@ Like the encoder, a custom decoder can also be passed to ParametricUMAP, e.g.
 
 .. code:: python3
 
-            decoder = tf.keras.Sequential([
-                tf.keras.layers.InputLayer(input_shape=(n_components)),
-                tf.keras.layers.Dense(units=256, activation="relu"),
-                tf.keras.layers.Dense(units=7 * 7 * 256, activation="relu"),
-                tf.keras.layers.Reshape(target_shape=(7, 7, 256)),
-                tf.keras.layers.UpSampling2D((2)),
-                tf.keras.layers.Conv2D(
+            decoder = keras.Sequential([
+                keras.layers.InputLayer(input_shape=(n_components)),
+                keras.layers.Dense(units=256, activation="relu"),
+                keras.layers.Dense(units=7 * 7 * 256, activation="relu"),
+                keras.layers.Reshape(target_shape=(7, 7, 256)),
+                keras.layers.UpSampling2D((2)),
+                keras.layers.Conv2D(
                     filters=64, kernel_size=3, padding="same", activation="relu"
                 ),
-                tf.keras.layers.UpSampling2D((2)),
-                tf.keras.layers.Conv2D(
+                keras.layers.UpSampling2D((2)),
+                keras.layers.Conv2D(
                     filters=32, kernel_size=3, padding="same", activation="relu"
                 ),
 
@@ -178,7 +182,7 @@ It can sometimes be useful to train the embedder until some plateau in training 
 .. code:: python3
 
     keras_fit_kwargs = {"callbacks": [
-        tf.keras.callbacks.EarlyStopping(
+        keras.callbacks.EarlyStopping(
             monitor='loss',
             min_delta=10**-2,
             patience=10,
@@ -203,7 +207,6 @@ Additional important parameters
 * **loss_report_frequency:** If set to 1, an epoch in in the Keras embedding refers to a single iteration over the graph computed in UMAP. Setting :python:`loss_report_frequency` to 10, would split up that epoch into 10 seperate epochs, for more frequent reporting. 
 * **n_training_epochs:** The number of epochs over the UMAP graph to train for (irrespective of :python:`loss_report_frequency`). Training the network for multiple epochs will result in better embeddings, but take longer. This parameter is different than :python:`n_epochs` in the base UMAP class, which corresponds to the maximum number of times an edge is trained in a single ParametricUMAP epoch.
 * **optimizer:** The optimizer used to train the neural network. by default Adam (:python:`tf.keras.optimizers.Adam(1e-3)`) is used. You might be able to speed up or improve training by using a different optimizer.
-* **parametric_embedding:** If set to false, a non-parametric embedding is learned, using the same code as the parametric embedding, which can serve as a direct comparison between parametric and non-parametric embedding using the same optimizer. The parametric embeddings are performed over the entire dataset simultaneously. 
 * **global_correlation_loss_weight:** Whether to additionally train on correlation of global pairwise relationships (multidimensional scaling)
 
 Extending the model
