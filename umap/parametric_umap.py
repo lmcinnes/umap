@@ -308,7 +308,7 @@ class ParametricUMAP(UMAP):
             if should_pickle(k, v) and k not in ("optimizer", "encoder", "decoder", "parametric_model")
         )
 
-    def save(self, save_location, verbose=True):
+    def save(self, save_location, verbose=True, exclude_raw_data=False):
 
         # save encoder
         if self.encoder is not None:
@@ -331,6 +331,17 @@ class ParametricUMAP(UMAP):
             if verbose:
                 print("Keras full model saved to {}".format(parametric_model_output))
 
+        # Temporarily delete the raw data in the object, before saving it,
+        # backing it up in raw_data
+        raw_data = {}
+        if exclude_raw_data:
+            if hasattr(self, "_raw_data"):
+                raw_data['root'] = self._raw_data
+                del self._raw_data
+            if hasattr(self, "_knn_search_index") and hasattr(self._knn_search_index, "_raw_data"):
+                raw_data['knn'] = self._knn_search_index._raw_data
+                del self._knn_search_index._raw_data            
+
         # # save model.pkl (ignoring unpickleable warnings)
         with catch_warnings():
             filterwarnings("ignore")
@@ -339,6 +350,13 @@ class ParametricUMAP(UMAP):
                 pickle.dump(self, output, pickle.HIGHEST_PROTOCOL)
             if verbose:
                 print("Pickle of ParametricUMAP model saved to {}".format(model_output))
+
+        # Restore the original raw data to the object in memory
+        if exclude_raw_data:
+            if 'root' in raw_data:
+                self._raw_data = raw_data['root']
+            if 'knn' in raw_data:
+                self._knn_search_index._raw_data
 
 
 def get_graph_elements(graph_, n_epochs):
