@@ -356,7 +356,7 @@ class ParametricUMAP(UMAP):
             if 'root' in raw_data:
                 self._raw_data = raw_data['root']
             if 'knn' in raw_data:
-                self._knn_search_index._raw_data
+                self._knn_search_index._raw_data = raw_data['knn']
 
 
 def get_graph_elements(graph_, n_epochs):
