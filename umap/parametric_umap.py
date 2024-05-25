@@ -338,9 +338,9 @@ class ParametricUMAP(UMAP):
             if hasattr(self, "_raw_data"):
                 raw_data['root'] = self._raw_data
                 del self._raw_data
-            if hasattr(self, "_knn_search_index") and hasattr(self._knn_search_index, "_raw_data"):
-                raw_data['knn'] = self._knn_search_index._raw_data
-                del self._knn_search_index._raw_data            
+            if hasattr(self, "knn_search_index") and hasattr(self.knn_search_index, "_raw_data"):
+                raw_data['knn'] = self.knn_search_index._raw_data
+                del self.knn_search_index._raw_data            
 
         # # save model.pkl (ignoring unpickleable warnings)
         with catch_warnings():
@@ -356,7 +356,7 @@ class ParametricUMAP(UMAP):
             if 'root' in raw_data:
                 self._raw_data = raw_data['root']
             if 'knn' in raw_data:
-                self._knn_search_index._raw_data = raw_data['knn']
+                self.knn_search_index._raw_data = raw_data['knn']
 
 
 def get_graph_elements(graph_, n_epochs):
