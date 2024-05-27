@@ -338,7 +338,7 @@ class ParametricUMAP(UMAP):
             if hasattr(self, "_raw_data"):
                 raw_data['root'] = self._raw_data
                 del self._raw_data
-            if hasattr(self, "knn_search_index") and hasattr(self.knn_search_index, 
+            if hasattr(self, "knn_search_index") and hasattr(self.knn_search_index,
                                                              "_raw_data"):
                 raw_data['knn'] = self.knn_search_index._raw_data
                 del self.knn_search_index._raw_data
