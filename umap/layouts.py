@@ -158,7 +158,7 @@ def _optimize_layout_euclidean_single_epoch(
             )
 
             for p in range(n_neg_samples):
-                k = tau_rand_int(rng_state_per_sample[i]) % n_vertices
+                k = tau_rand_int(rng_state_per_sample[j]) % n_vertices
 
                 other = tail_embedding[k]
 
@@ -348,8 +348,8 @@ def optimize_layout_euclidean(
         tqdm_kwds["disable"] = not verbose
 
     rng_state_per_sample = np.full(
-        (epochs_per_sample.shape[0], len(rng_state)), rng_state, dtype=np.int64
-    )
+        (head_embedding.shape[0], len(rng_state)), rng_state, dtype=np.int64
+    ) + head_embedding[:, 0].astype(np.float64).view(np.int64).reshape(-1, 1)
 
     for n in tqdm(range(n_epochs), **tqdm_kwds):
 
@@ -482,7 +482,7 @@ def _optimize_layout_generic_single_epoch(
             )
 
             for p in range(n_neg_samples):
-                k = tau_rand_int(rng_state_per_sample[i]) % n_vertices
+                k = tau_rand_int(rng_state_per_sample[j]) % n_vertices
 
                 other = tail_embedding[k]
 
@@ -614,8 +614,8 @@ def optimize_layout_generic(
         tqdm_kwds["disable"] = not verbose
 
     rng_state_per_sample = np.full(
-        (epochs_per_sample.shape[0], len(rng_state)), rng_state, dtype=np.int64
-    )
+        (head_embedding.shape[0], len(rng_state)), rng_state, dtype=np.int64
+    ) + head_embedding[:, 0].astype(np.float64).view(np.int64).reshape(-1, 1)
 
     for n in tqdm(range(n_epochs), **tqdm_kwds):
         optimize_fn(
