@@ -209,7 +209,7 @@ def _nhood_compare(indices_left, indices_right):
         with numba.objmode(intersection_size='intp'):
             intersection_size = np.intersect1d(indices_left[i], indices_right[i], 
                                                assume_unique=True).shape[0]
-        union_size = np.unique(np.hstack([indices_left[i], indices_right[i]])).shape[0]
+        union_size = np.unique(np.hstack((indices_left[i], indices_right[i]))).shape[0]
         result[i] = float(intersection_size) / float(union_size)
 
     return result
