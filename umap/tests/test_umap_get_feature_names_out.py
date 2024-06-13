@@ -2,7 +2,7 @@ import numpy as np
 from sklearn.datasets import make_classification
 from sklearn.pipeline import Pipeline, FeatureUnion
 
-from ..umap_ import UMAP
+from umap.umap_ import UMAP
 
 
 def test_get_feature_names_out_passthrough():
