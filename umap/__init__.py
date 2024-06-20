@@ -33,7 +33,10 @@ from .aligned_umap import AlignedUMAP
 # Workaround: https://github.com/numba/numba/issues/3341
 import numba
 
-from importlib.metadata import version, PackageNotFoundError
+try:
+    from importlib.metadata import version, PackageNotFoundError  # Python 3.8+
+except ImportError:
+    from importlib_metadata import version, PackageNotFoundError  # Python < 3.8
 
 try:
     __version__ = version("umap-learn")
