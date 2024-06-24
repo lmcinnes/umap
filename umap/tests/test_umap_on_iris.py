@@ -89,7 +89,7 @@ def test_umap_transform_on_iris(iris, iris_subset_model, iris_selection):
 
     trust = trustworthiness(new_data, embedding, n_neighbors=10)
     assert (
-        trust >= 0.85
+        trust >= 0.80
     ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
 
 

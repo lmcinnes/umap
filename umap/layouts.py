@@ -1,8 +1,9 @@
-import numpy as np
 import numba
+import numpy as np
+from tqdm.auto import tqdm
+
 import umap.distances as dist
 from umap.utils import tau_rand_int
-from tqdm.auto import tqdm
 
 
 @numba.njit()
@@ -68,7 +69,7 @@ def _optimize_layout_euclidean_single_epoch(
     epochs_per_sample,
     a,
     b,
-    rng_state,
+    rng_state_per_sample,
     gamma,
     dim,
     move_other,
@@ -157,7 +158,7 @@ def _optimize_layout_euclidean_single_epoch(
             )
 
             for p in range(n_neg_samples):
-                k = tau_rand_int(rng_state) % n_vertices
+                k = tau_rand_int(rng_state_per_sample[j]) % n_vertices
 
                 other = tail_embedding[k]
 
@@ -346,6 +347,10 @@ def optimize_layout_euclidean(
     if "disable" not in tqdm_kwds:
         tqdm_kwds["disable"] = not verbose
 
+    rng_state_per_sample = np.full(
+        (head_embedding.shape[0], len(rng_state)), rng_state, dtype=np.int64
+    ) + head_embedding[:, 0].astype(np.float64).view(np.int64).reshape(-1, 1)
+
     for n in tqdm(range(n_epochs), **tqdm_kwds):
 
         densmap_flag = (
@@ -386,7 +391,7 @@ def optimize_layout_euclidean(
             epochs_per_sample,
             a,
             b,
-            rng_state,
+            rng_state_per_sample,
             gamma,
             dim,
             move_other,
@@ -437,7 +442,7 @@ def _optimize_layout_generic_single_epoch(
     n,
     epoch_of_next_negative_sample,
     epochs_per_negative_sample,
-    rng_state,
+    rng_state_per_sample,
     n_vertices,
     a,
     b,
@@ -477,7 +482,7 @@ def _optimize_layout_generic_single_epoch(
             )
 
             for p in range(n_neg_samples):
-                k = tau_rand_int(rng_state) % n_vertices
+                k = tau_rand_int(rng_state_per_sample[j]) % n_vertices
 
                 other = tail_embedding[k]
 
@@ -608,6 +613,10 @@ def optimize_layout_generic(
     if "disable" not in tqdm_kwds:
         tqdm_kwds["disable"] = not verbose
 
+    rng_state_per_sample = np.full(
+        (head_embedding.shape[0], len(rng_state)), rng_state, dtype=np.int64
+    ) + head_embedding[:, 0].astype(np.float64).view(np.int64).reshape(-1, 1)
+
     for n in tqdm(range(n_epochs), **tqdm_kwds):
         optimize_fn(
             epochs_per_sample,
@@ -624,7 +633,7 @@ def optimize_layout_generic(
             n,
             epoch_of_next_negative_sample,
             epochs_per_negative_sample,
-            rng_state,
+            rng_state_per_sample,
             n_vertices,
             a,
             b,

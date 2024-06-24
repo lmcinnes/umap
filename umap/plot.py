@@ -200,15 +200,16 @@ def _nhood_search(umap_object, nhood_size):
     return indices, dists
 
 
-@numba.jit(nopython=False)
+@numba.njit()
 def _nhood_compare(indices_left, indices_right):
     """Compute Jaccard index of two neighborhoods"""
     result = np.empty(indices_left.shape[0])
 
     for i in range(indices_left.shape[0]):
-        intersection_size = np.intersect1d(indices_left[i], indices_right[i], 
-                                           assume_unique=True).shape[0]
-        union_size = np.unique(np.hstack([indices_left[i], indices_right[i]])).shape[0]
+        with numba.objmode(intersection_size='intp'):
+            intersection_size = np.intersect1d(indices_left[i], indices_right[i], 
+                                               assume_unique=True).shape[0]
+        union_size = np.unique(np.hstack((indices_left[i], indices_right[i]))).shape[0]
         result[i] = float(intersection_size) / float(union_size)
 
     return result
