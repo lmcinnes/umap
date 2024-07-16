@@ -540,7 +540,7 @@ treck representatives over their entire career in congress. To fix this
 up we’ll simply re-index by a unique representative ID that has their
 last name, party, and state all listed over all the voting dataframes.
 We’ll need a function to generate those from the metadata, and then
-we’ll need to apply it to all the reocrds. Importantly we’ll have to
+we’ll need to apply it to all the records. Importantly we’ll have to
 finesse those situations where representatives are listed twice (under
 un-ambiguous and disambiguated names) with some groupby tricks.
 
