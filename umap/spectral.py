@@ -241,7 +241,7 @@ def multi_component_layout(
                 + meta_embedding[label]
             )
         else:
-            component_embedding = _spectral_layout(
+            component_embedding = spectral_layout(
                 data=None,
                 graph=component_graph,
                 dim=dim,
@@ -259,87 +259,6 @@ def multi_component_layout(
             )
 
     return result
-
-
-def spectral_layout(
-    data,
-    graph,
-    dim,
-    random_state,
-    metric="euclidean",
-    metric_kwds={},
-    init="random",
-    method=None,
-    tol=0.0,
-    maxiter=0,
-):
-    """Given a graph compute the spectral embedding of the graph. This is simply the
-    eigenvectors of the laplacian of the graph. Here we use the normalized laplacian.
-
-    Parameters
-    ----------
-    data: array of shape (n_samples, n_features)
-        The source data
-
-    graph: sparse matrix
-        The (weighted) adjacency matrix of the graph as a sparse matrix.
-
-    dim: int
-        The dimension of the space into which to embed.
-
-    random_state: numpy RandomState or equivalent
-        A state capable being used as a numpy random state.
-
-    metric: string or callable (optional, default 'euclidean')
-        The metric used to measure distances among the source data points.
-        Used only if the multiple connected components are found in the
-        graph.
-
-    metric_kwds: dict (optional, default {})
-        Keyword arguments to be passed to the metric function.
-        If metric is 'precomputed', 'linkage' keyword can be used to specify
-        'average', 'complete', or 'single' linkage. Default is 'average'.
-        Used only if the multiple connected components are found in the
-        graph.
-
-    init: string, either "random" or "tsvd"
-        Indicates to initialize the eigensolver. Use "random" (the default) to
-        use uniformly distributed random initialization; use "tsvd" to warm-start the
-        eigensolver with singular vectors of the Laplacian associated to the largest
-        singular values. This latter option also forces usage of the LOBPCG eigensolver;
-        with the former, ARPACK's solver ``eigsh`` will be used for smaller Laplacians.
-
-    method: string -- either "eigsh" or "lobpcg" -- or None
-        Name of the eigenvalue computation method to use to compute the spectral
-        embedding. If left to None (or empty string), as by default, the method is
-        chosen from the number of vectors in play: larger vector collections are
-        handled with lobpcg, smaller collections with eigsh. Method names correspond
-        to SciPy routines in scipy.sparse.linalg.
-
-    tol: float, default chosen by implementation
-        Stopping tolerance for the numerical algorithm computing the embedding.
-
-    maxiter: int, default chosen by implementation
-        Number of iterations the numerical algorithm will go through at most as it
-        attempts to compute the embedding.
-
-    Returns
-    -------
-    embedding: array of shape (n_vertices, dim)
-        The spectral embedding of the graph.
-    """
-    return _spectral_layout(
-        data=data,
-        graph=graph,
-        dim=dim,
-        random_state=random_state,
-        metric=metric,
-        metric_kwds=metric_kwds,
-        init=init,
-        method=method,
-        tol=tol,
-        maxiter=maxiter,
-    )
 
 
 def tswspectral_layout(
@@ -405,7 +324,7 @@ def tswspectral_layout(
     embedding: array of shape (n_vertices, dim)
         The spectral embedding of the graph.
     """
-    return _spectral_layout(
+    return spectral_layout(
         data=data,
         graph=graph,
         dim=dim,
@@ -419,7 +338,7 @@ def tswspectral_layout(
     )
 
 
-def _spectral_layout(
+def spectral_layout(
     data,
     graph,
     dim,
