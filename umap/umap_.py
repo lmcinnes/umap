@@ -1619,6 +1619,20 @@ class UMAP(BaseEstimator):
         For to map from internal structures back to your data use the variable
         _unique_inverse_.
 
+    eigensolver_init: string, either "random" or "tsvd"
+        Indicates to initialize the eigensolver. Use "random" (the default) to
+        use uniformly distributed random initialization; use "tsvd" to warm-start the
+        eigensolver with singular vectors of the Laplacian associated to the largest
+        singular values. This latter option also forces usage of the LOBPCG eigensolver;
+        with the former, ARPACK's solver ``eigsh`` will be used for smaller Laplacians.
+
+    eigensolver_method: string -- either "eigsh" or "lobpcg" -- or None
+        Name of the eigenvalue computation method to use to compute the spectral
+        embedding. If left to None (or empty string), as by default, the method is
+        chosen from the number of vectors in play: larger vector collections are
+        handled with lobpcg, smaller collections with eigsh. Method names correspond
+        to SciPy routines in scipy.sparse.linalg.
+
     densmap: bool (optional, default False)
         Specifies whether the density-augmented objective of densMAP
         should be used for optimization. Turning on this option generates
