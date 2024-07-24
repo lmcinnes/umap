@@ -24,9 +24,9 @@ def component_layout(
     metric="euclidean",
     metric_kwds={},
 ):
-    """Provide a layout relating the separate connected components. This is done
-    by taking the centroid of each component and then performing a spectral embedding
-    of the centroids.
+    """Provide a layout relating the separate connected components. This is done by
+    taking the centroid of each component and then performing a spectral embedding of
+    the centroids.
 
     Parameters
     ----------
@@ -153,13 +153,14 @@ def multi_component_layout(
     metric_kwds={},
     init="random",
     tol=0.0,
-    maxiter=0
+    maxiter=0,
 ):
-    """Specialised layout algorithm for dealing with graphs with many connected components.
-    This will first find relative positions for the components by spectrally embedding
-    their centroids, then spectrally embed each individual connected component positioning
-    them according to the centroid embeddings. This provides a decent embedding of each
-    component while placing the components in good relative positions to one another.
+    """Specialised layout algorithm for dealing with graphs with many connected
+    components. This will first find relative positions for the components by spectrally
+    embedding their centroids, then spectrally embed each individual connected component
+    positioning them according to the centroid embeddings. This provides a decent
+    embedding of each component while placing the components in good relative positions
+    to one another.
 
     Parameters
     ----------
@@ -249,7 +250,7 @@ def multi_component_layout(
                 metric_kwds=metric_kwds,
                 init=init,
                 tol=tol,
-                maxiter=maxiter
+                maxiter=maxiter,
             )
             expansion = data_range / np.max(np.abs(component_embedding))
             component_embedding *= expansion
@@ -267,13 +268,13 @@ def spectral_layout(
     random_state,
     metric="euclidean",
     metric_kwds={},
+    init="random",
+    method=None,
     tol=0.0,
-    maxiter=0
+    maxiter=0,
 ):
-    """
-    Given a graph compute the spectral embedding of the graph. This is
-    simply the eigenvectors of the laplacian of the graph. Here we use the
-    normalized laplacian.
+    """Given a graph compute the spectral embedding of the graph. This is simply the
+    eigenvectors of the laplacian of the graph. Here we use the normalized laplacian.
 
     Parameters
     ----------
@@ -288,6 +289,32 @@ def spectral_layout(
 
     random_state: numpy RandomState or equivalent
         A state capable being used as a numpy random state.
+
+    metric: string or callable (optional, default 'euclidean')
+        The metric used to measure distances among the source data points.
+        Used only if the multiple connected components are found in the
+        graph.
+
+    metric_kwds: dict (optional, default {})
+        Keyword arguments to be passed to the metric function.
+        If metric is 'precomputed', 'linkage' keyword can be used to specify
+        'average', 'complete', or 'single' linkage. Default is 'average'.
+        Used only if the multiple connected components are found in the
+        graph.
+
+    init: string, either "random" or "tsvd"
+        Indicates to initialize the eigensolver. Use "random" (the default) to
+        use uniformly distributed random initialization; use "tsvd" to warm-start the
+        eigensolver with singular vectors of the Laplacian associated to the largest
+        singular values. This latter option also forces usage of the LOBPCG eigensolver;
+        with the former, ARPACK's solver ``eigsh`` will be used for smaller Laplacians.
+
+    method: string -- either "eigsh" or "lobpcg" -- or None
+        Name of the eigenvalue computation method to use to compute the spectral
+        embedding. If left to None (or empty string), as by default, the method is
+        chosen from the number of vectors in play: larger vector collections are
+        handled with lobpcg, smaller collections with eigsh. Method names correspond
+        to SciPy routines in scipy.sparse.linalg.
 
     tol: float, default chosen by implementation
         Stopping tolerance for the numerical algorithm computing the embedding.
@@ -308,9 +335,10 @@ def spectral_layout(
         random_state=random_state,
         metric=metric,
         metric_kwds=metric_kwds,
-        init="random",
+        init=init,
+        method=method,
         tol=tol,
-        maxiter=maxiter
+        maxiter=maxiter,
     )
 
 
@@ -323,15 +351,14 @@ def tswspectral_layout(
     metric_kwds={},
     method=None,
     tol=0.0,
-    maxiter=0
+    maxiter=0,
 ):
-    """Given a graph, compute the spectral embedding of the graph. This is
-    simply the eigenvectors of the Laplacian of the graph. Here we use the
-    normalized laplacian and a truncated SVD-based guess of the
-    eigenvectors to "warm" up the eigensolver. This function should
-    give results of similar accuracy to the spectral_layout function, but
-    may converge more quickly for graph Laplacians that cause
-    spectral_layout to take an excessive amount of time to complete.
+    """Given a graph, compute the spectral embedding of the graph. This is simply the
+    eigenvectors of the Laplacian of the graph. Here we use the normalized laplacian and
+    a truncated SVD-based guess of the eigenvectors to "warm" up the eigensolver. This
+    function should give results of similar accuracy to the spectral_layout function,
+    but may converge more quickly for graph Laplacians that cause spectral_layout to
+    take an excessive amount of time to complete.
 
     Parameters
     ----------
@@ -388,7 +415,7 @@ def tswspectral_layout(
         init="tsvd",
         method=method,
         tol=tol,
-        maxiter=maxiter
+        maxiter=maxiter,
     )
 
 
@@ -402,10 +429,10 @@ def _spectral_layout(
     init="random",
     method=None,
     tol=0.0,
-    maxiter=0
+    maxiter=0,
 ):
-    """General implementation of the spectral embedding of the graph, derived as
-    a subset of the eigenvectors of the normalized Laplacian of the graph. The numerical
+    """General implementation of the spectral embedding of the graph, derived as a
+    subset of the eigenvectors of the normalized Laplacian of the graph. The numerical
     method for computing the eigendecomposition is chosen through heuristics.
 
     Parameters
@@ -481,9 +508,7 @@ def _spectral_layout(
     # L = D - graph
     # Normalized Laplacian
     I = scipy.sparse.identity(graph.shape[0], dtype=np.float64)
-    D = scipy.sparse.spdiags(
-        1.0 / sqrt_deg, 0, graph.shape[0], graph.shape[0]
-    )
+    D = scipy.sparse.spdiags(1.0 / sqrt_deg, 0, graph.shape[0], graph.shape[0])
     L = I - D * graph * D
     if not scipy.sparse.issparse(L):
         L = np.asarray(L)
@@ -532,14 +557,14 @@ def _spectral_layout(
                 warnings.filterwarnings(
                     category=UserWarning,
                     message=r"(?ms).*not reaching the requested tolerance",
-                    action="error"
+                    action="error",
                 )
                 eigenvalues, eigenvectors = scipy.sparse.linalg.lobpcg(
                     L,
                     np.asarray(X),
                     largest=False,
                     tol=tol or 1e-4,
-                    maxiter=maxiter or 5 * graph.shape[0]
+                    maxiter=maxiter or 5 * graph.shape[0],
                 )
         else:
             raise ValueError("Method should either be None, 'eigsh' or 'lobpcg'")
