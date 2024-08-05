@@ -3,13 +3,14 @@ from numpy.testing import assert_array_almost_equal
 import umap.distances as dist
 import umap.sparse as spdist
 
+import re
 from sklearn.metrics import pairwise_distances
 from sklearn.neighbors import BallTree
 from scipy.version import full_version as scipy_full_version_
 import pytest
 
 
-scipy_full_version = tuple(int(n) for n in scipy_full_version_.split("."))
+scipy_full_version = tuple(int(n) for n in re.findall(r'[0-9]+\.[0-9]+\.?[0-9]*', scipy_full_version_)[0].split("."))
 
 
 # ===================================================

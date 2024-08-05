@@ -2,11 +2,11 @@ from umap.spectral import spectral_layout, tswspectral_layout
 
 import numpy as np
 import pytest
+import re
 from scipy.version import full_version as scipy_full_version_
 from warnings import catch_warnings
 
-
-scipy_full_version = tuple(int(n) for n in scipy_full_version_.split("."))
+scipy_full_version = tuple(int(n) for n in re.findall(r'[0-9]+\.[0-9]+\.?[0-9]*', scipy_full_version_)[0].split("."))
 
 
 @pytest.mark.skipif(
