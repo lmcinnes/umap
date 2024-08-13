@@ -360,7 +360,7 @@ class ParametricUMAP(UMAP):
         # Extract weights
         pm = PumapNet(self.dims[0], self.n_components)
         pm = to_torch(km, pm)
-        
+
         # Put in ONNX
         dummy_input = torch.randn(1, self.dims[0])
         # Invoke export
