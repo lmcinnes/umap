@@ -1081,6 +1081,7 @@ class PumapNet(nn.Module):
         x = F.relu(x)
         return x
 
+
 def to_torch(km, pm):
     """ Copies weights from a parametric UMAP encoder to pytorch.
     Parameters
@@ -1093,7 +1094,7 @@ def to_torch(km, pm):
         Net with copied weights.
     """
     kweights = km.get_weights()
-    n_layers = int(len(kweights)/2) # The actual number of layers
+    n_layers = int(len(kweights)/2)  # The actual number of layers
 
     # Get the names of the pytorch layers
     all_keys = [x for x in pm.state_dict().keys()]
@@ -1102,7 +1103,7 @@ def to_torch(km, pm):
     # Set a variable for the state dict
     pyt_state_dict = pm.state_dict()
 
-    for i in range(n_layers): # Set weights and biases in the dict.
+    for i in range(n_layers):  # Set weights and biases in the dict.
         pyt_state_dict[pm_names[i] + ".bias"] = kweights[2*i + 1]
         pyt_state_dict[pm_names[i] + ".weight"] = np.transpose(kweights[2*i])
 
