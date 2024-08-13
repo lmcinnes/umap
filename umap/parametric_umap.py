@@ -358,8 +358,8 @@ class ParametricUMAP(UMAP):
         # Extract encoder
         km = self.encoder
         # Extract weights
-        pm = PumapNet(self.dims[0],self.n_components)
-        pm = to_torch(km,pm)
+        pm = PumapNet(self.dims[0], self.n_components)
+        pm = to_torch(km, pm)
         
         # Put in ONNX
         dummy_input = torch.randn(1, self.dims[0])
@@ -1051,12 +1051,12 @@ class UMAPModel(keras.Model):
 
 
 class PumapNet(nn.Module):
-    def __init__(self,indim,outdim):
+    def __init__(self, indim, outdim):
         super(PumapNet, self).__init__()
-        self.dense1 = nn.Linear(indim,100)
-        self.dense2 = nn.Linear(100,100)
-        self.dense3 = nn.Linear(100,100)
-        self.dense4 = nn.Linear(100,outdim)
+        self.dense1 = nn.Linear(indim, 100)
+        self.dense2 = nn.Linear(100, 100)
+        self.dense3 = nn.Linear(100, 100)
+        self.dense4 = nn.Linear(100, outdim)
 
         """
         Creates the same network as the one used by parametric UMAP.
@@ -1081,7 +1081,7 @@ class PumapNet(nn.Module):
         x = F.relu(x)
         return x
 
-def to_torch(km,pm):
+def to_torch(km, pm):
     """ Copies weights from a parametric UMAP encoder to pytorch.
     Parameters
     ----------
