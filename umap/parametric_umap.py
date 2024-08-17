@@ -1055,6 +1055,7 @@ if torch_imported:
 
     class PumapNet(nn.Module):
 
+
         def __init__(self, indim, outdim):
 
             super(PumapNet, self).__init__()
@@ -1062,7 +1063,7 @@ if torch_imported:
             self.dense2 = nn.Linear(100, 100)
             self.dense3 = nn.Linear(100, 100)
             self.dense4 = nn.Linear(100, outdim)
-    
+
             """
             Creates the same network as the one used by parametric UMAP.
             Note: shape of network is fixed.
