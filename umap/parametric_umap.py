@@ -1054,8 +1054,9 @@ class UMAPModel(keras.Model):
 if torch_imported:
 
     class PumapNet(nn.Module):
-        
+
         def __init__(self, indim, outdim):
+
             super(PumapNet, self).__init__()
             self.dense1 = nn.Linear(indim, 100)
             self.dense2 = nn.Linear(100, 100)
@@ -1110,7 +1111,7 @@ if torch_imported:
         # Set a variable for the state dict
         pyt_state_dict = pm.state_dict()
 
-        for i in range(n_layers): #  Set weights and biases in the dict.
+        for i in range(n_layers):
             pyt_state_dict[pm_names[i] + ".bias"] = kweights[2*i + 1]
             pyt_state_dict[pm_names[i] + ".weight"] = np.transpose(kweights[2*i])
 
