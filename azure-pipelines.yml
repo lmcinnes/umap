@@ -17,6 +17,13 @@ pr:
     - doc/*
     - README.rst
 
+parameters:
+  - name: includeReleaseCandidates
+    displayName: "Allow pre-release dependencies"
+    type: boolean
+    default: false
+
+
 variables:
   triggeredByPullRequest: $[eq(variables['Build.Reason'], 'PullRequest')]
 
@@ -75,11 +82,25 @@ stages:
 
         - script: |
             python -m pip install --upgrade pip
+          displayName: 'Upgrade pip'
+
+        - script: |
             pip install -e .
             pip install .[plot]
             pip install .[parametric_umap]
+          displayName: 'Install dependencies'
+          condition: ${{ eq(parameters.includeReleaseCandidates, false) }}
+
+        - script: |
+            pip install --pre -e .
+            pip install --pre .[plot]
+            pip install --pre .[parametric_umap]
+          displayName: 'Install dependencies (allow pre-releases)'
+          condition: ${{ eq(parameters.includeReleaseCandidates, true) }}
+
+        - script: |
             pip install pytest  pytest-azurepipelines pytest-cov pytest-benchmark coveralls
-          displayName: 'Install package'
+          displayName: 'Install pytest'
 
         - script: |
             # export NUMBA_DISABLE_JIT=1 # Disable numba coverage so tests run on time for now.
