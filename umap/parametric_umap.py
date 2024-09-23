@@ -61,6 +61,7 @@ class ParametricUMAP(UMAP):
         autoencoder_loss=False,
         reconstruction_validation=None,
         global_correlation_loss_weight=0,
+        landmarks=False,
         keras_fit_kwargs={},
         **kwargs
     ):
@@ -92,6 +93,8 @@ class ParametricUMAP(UMAP):
             validation X data for reconstruction loss, by default None
         global_correlation_loss_weight : float, optional
             Whether to additionally train on correlation of global pairwise relationships (>0), by default 0
+        landmarks : bool, optional
+            Whether the model will accept landmark positions in the embedding space when fitting, by default False.
         keras_fit_kwargs : dict, optional
             additional arguments for model.fit (like callbacks), by default {}
         """
@@ -110,6 +113,7 @@ class ParametricUMAP(UMAP):
         self.batch_size = batch_size
         self.loss_report_frequency = 10
         self.global_correlation_loss_weight = global_correlation_loss_weight
+        self.landmarks = landmarks
 
         self.reconstruction_validation = (
             reconstruction_validation  # holdout data for reconstruction acc
@@ -214,7 +218,8 @@ class ParametricUMAP(UMAP):
             parametric_reconstruction_loss_weight=prlw,
             global_correlation_loss_weight=self.global_correlation_loss_weight,
             autoencoder_loss=self.autoencoder_loss,
-            optimizer=self.optimizer
+            optimizer=self.optimizer,
+            landmarks=self.landmarks,
         )
 
     def _fit_embed_data(self, X, n_epochs, init, random_state):
