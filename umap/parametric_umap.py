@@ -214,6 +214,7 @@ class ParametricUMAP(UMAP):
             parametric_reconstruction_loss_weight=prlw,
             global_correlation_loss_weight=self.global_correlation_loss_weight,
             autoencoder_loss=self.autoencoder_loss,
+            
         )
 
     def _fit_embed_data(self, X, n_epochs, init, random_state):
