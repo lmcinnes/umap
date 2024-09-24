@@ -137,6 +137,39 @@ class ParametricUMAP(UMAP):
                 )
 
     def fit(self, X, y=None, precomputed_distances=None, landmark_positions=None):
+        """Fit X into an embedded space.
+
+        Optionally use y for supervised dimension reduction.
+
+        Parameters
+        ----------
+        X : array, shape (n_samples, n_features) or (n_samples, n_samples)
+            If the metric is 'precomputed' X must be a square distance
+            matrix. Otherwise it contains a sample per row. If the method
+            is 'exact', X may be a sparse matrix of type 'csr', 'csc'
+            or 'coo'.
+
+        y : array, shape (n_samples)
+            A target array for supervised dimension reduction. How this is
+            handled is determined by parameters UMAP was instantiated with.
+            The relevant attributes are ``target_metric`` and
+            ``target_metric_kwds``.
+
+        precomputed_distances TODO
+
+        landmark_position TODO
+        """
+        
+        if landmark_positions is not None:
+            len_X = len(X)
+            len_land = len(landmark_positions)
+            if len_X != len_land:
+                raise ValueError(
+                    "Length of x = {len_x}, length of y = {len_y}, while it must be equal.".format(
+                        len_x=len_X, len_y=len_land
+                    )
+                )
+                
         # store landmark_positions
         self.landmark_positions = landmark_positions
         
@@ -161,6 +194,19 @@ class ParametricUMAP(UMAP):
             return out
 
     def fit_transform(self, X, y=None, precomputed_distances=None, landmark_positions=None):
+        """TODO
+        """
+        
+        if landmark_positions is not None:
+            len_X = len(X)
+            len_land = len(landmark_positions)
+            if len_X != len_land:
+                raise ValueError(
+                    "Length of x = {len_x}, length of y = {len_y}, while it must be equal.".format(
+                        len_x=len_X, len_y=len_land
+                    )
+                )
+                
         # store landmark_positions
         self.landmark_positions = landmark_positions
         
@@ -253,6 +299,7 @@ class ParametricUMAP(UMAP):
                 "Data should be scaled to the range 0-1 for cross-entropy reconstruction loss."
             )
 
+        # check if landmark positions were passed to fit.
         if hasattr(self, "landmark_positions"):
             landmark_positions = self.landmark_positions
         else:
@@ -947,7 +994,6 @@ class UMAPModel(keras.Model):
         self.umap_loss_a = umap_loss_a
         self.umap_loss_b = umap_loss_b
         self.autoencoder_loss = autoencoder_loss
-        self.landmarks = landmarks
 
         optimizer = optimizer or keras.optimizers.Adam(1e-3, clipvalue=4.0)
         self.compile(optimizer=optimizer)
@@ -1099,7 +1145,7 @@ class UMAPModel(keras.Model):
         y_to = y["landmarks_to"]
         
         # Euclidean distance between y and y_pred, ignoring nans.
-        # Replace all predicted and landmark embeddings with 0 if there isn't a landmark.
+        # Before computing difference, replace all predicted and landmark embeddings with 0 if there isn't a landmark.
         clean_y_pred_to = ops.where(ops.isnan(y_to), x1=ops.zeros_like(y_pred["embedding_to"]), x2=y_pred["embedding_to"])
         clean_y_to = ops.where(ops.isnan(y_to), x1=ops.zeros_like(y_to), x2=y_to)
         
