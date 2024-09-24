@@ -8,8 +8,10 @@ from ..umap_ import UMAP
 def test_get_feature_names_out_passthrough():
     umap = UMAP()
     # get_feature_names_out should return same names if feature are passed in directly.
-    example_passthrough = ['feature1', 'feature2']
-    passthrough_result = umap.get_feature_names_out(feature_names_out=example_passthrough)
+    example_passthrough = ["feature1", "feature2"]
+    passthrough_result = umap.get_feature_names_out(
+        feature_names_out=example_passthrough
+    )
     assert example_passthrough == passthrough_result
 
 
@@ -48,6 +50,13 @@ def test_get_feature_names_out_featureunion():
 
     pipeline.fit(X)
     feature_names = pipeline.get_feature_names_out()
-    expected_feature_names = np.array(["umap1__umap_component_1", "umap1__umap_component_2", "umap2__umap_component_1",
-                                       "umap2__umap_component_2", "umap2__umap_component_3"])
+    expected_feature_names = np.array(
+        [
+            "umap1__umap_component_1",
+            "umap1__umap_component_2",
+            "umap2__umap_component_1",
+            "umap2__umap_component_2",
+            "umap2__umap_component_3",
+        ]
+    )
     np.testing.assert_array_equal(feature_names, expected_feature_names)

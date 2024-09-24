@@ -63,8 +63,8 @@ def test_check_input_data(all_finite_data, inverse_data):
     call_umap_functions(all_finite_data, None)
     call_umap_functions(all_finite_data, True)
 
-    call_umap_functions(nan_data, 'allow-nan')
-    call_umap_functions(all_finite_data, 'allow-nan')
+    call_umap_functions(nan_data, "allow-nan")
+    call_umap_functions(all_finite_data, "allow-nan")
 
     call_umap_functions(inf_data, False)
     call_umap_functions(inf_nan_data, False)
@@ -81,5 +81,5 @@ def test_check_input_data(all_finite_data, inverse_data):
         call_umap_functions(inf_data, True)
         call_umap_functions(inf_nan_data, True)
 
-        call_umap_functions(inf_data, 'allow-nan')
-        call_umap_functions(inf_nan_data, 'allow-nan')
+        call_umap_functions(inf_data, "allow-nan")
+        call_umap_functions(inf_nan_data, "allow-nan")

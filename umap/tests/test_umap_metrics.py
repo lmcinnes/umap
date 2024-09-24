@@ -10,7 +10,10 @@ from scipy.version import full_version as scipy_full_version_
 import pytest
 
 
-scipy_full_version = tuple(int(n) for n in re.findall(r'[0-9]+\.[0-9]+\.?[0-9]*', scipy_full_version_)[0].split("."))
+scipy_full_version = tuple(
+    int(n)
+    for n in re.findall(r"[0-9]+\.[0-9]+\.?[0-9]*", scipy_full_version_)[0].split(".")
+)
 
 
 # ===================================================
@@ -125,7 +128,9 @@ def sparse_spatial_check(metric, sparse_spatial_data):
     assert (
         metric in spdist.sparse_named_distances
     ), f"{metric} not supported for sparse data"
-    dist_matrix = pairwise_distances(np.asarray(sparse_spatial_data.todense()), metric=metric)
+    dist_matrix = pairwise_distances(
+        np.asarray(sparse_spatial_data.todense()), metric=metric
+    )
 
     if metric in ("braycurtis", "dice", "sokalsneath", "yule"):
         dist_matrix[np.where(~np.isfinite(dist_matrix))] = 0.0
@@ -144,7 +149,9 @@ def sparse_binary_check(metric, sparse_binary_data):
     assert (
         metric in spdist.sparse_named_distances
     ), f"{metric} not supported for sparse data"
-    dist_matrix = pairwise_distances(np.asarray(sparse_binary_data.todense()), metric=metric)
+    dist_matrix = pairwise_distances(
+        np.asarray(sparse_binary_data.todense()), metric=metric
+    )
     if metric in ("jaccard", "dice", "sokalsneath", "yule"):
         dist_matrix[np.where(~np.isfinite(dist_matrix))] = 0.0
 
@@ -344,6 +351,7 @@ def test_seuclidean(spatial_data):
         err_msg="Distances don't match " "for metric seuclidean",
     )
 
+
 @pytest.mark.skipif(
     scipy_full_version < (1, 8), reason="incorrect function in scipy<1.8"
 )
@@ -508,9 +516,9 @@ def test_grad_metrics_match_metrics(spatial_data, spatial_distances):
         test_matrix = np.array(
             [
                 [
-                    dist.weighted_minkowski_grad(spatial_data[i], spatial_data[j], v, p=3)[
-                        0
-                    ]
+                    dist.weighted_minkowski_grad(
+                        spatial_data[i], spatial_data[j], v, p=3
+                    )[0]
                     for j in range(spatial_data.shape[0])
                 ]
                 for i in range(spatial_data.shape[0])

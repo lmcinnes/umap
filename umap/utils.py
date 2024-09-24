@@ -156,7 +156,9 @@ def csr_unique(matrix, return_index=True, return_inverse=True, return_counts=Tru
     unique_matrix[inverse]
     """
     lil_matrix = matrix.tolil()
-    rows = np.asarray([tuple(x + y) for x, y in zip(lil_matrix.rows, lil_matrix.data)], dtype=object)
+    rows = np.asarray(
+        [tuple(x + y) for x, y in zip(lil_matrix.rows, lil_matrix.data)], dtype=object
+    )
     return_values = return_counts + return_inverse + return_index
     return np.unique(
         rows,

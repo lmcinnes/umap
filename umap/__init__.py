@@ -10,6 +10,7 @@ except ImportError:
         "Tensorflow not installed; ParametricUMAP will be unavailable",
         category=ImportWarning,
     )
+
     # Add a dummy class to raise an error
     class ParametricUMAP(object):
         def __init__(self, **kwds):
