@@ -139,15 +139,16 @@ class ParametricUMAP(UMAP):
     def fit(self, X, y=None, precomputed_distances=None, landmark_positions=None):
         """Fit X into an embedded space.
 
-        Optionally use y for supervised dimension reduction.
+        Optionally use a precomputed distance matrix, y for supervised 
+        dimension reduction, or landmarked positions.
 
         Parameters
         ----------
-        X : array, shape (n_samples, n_features) or (n_samples, n_samples)
-            If the metric is 'precomputed' X must be a square distance
-            matrix. Otherwise it contains a sample per row. If the method
-            is 'exact', X may be a sparse matrix of type 'csr', 'csc'
-            or 'coo'.
+        X : array, shape (n_samples, n_features) 
+            Contains a sample per row. If the method is 'exact', X may 
+            be a sparse matrix of type 'csr', 'csc' or 'coo'. 
+            Unlike UMAP, ParametricUMAP requires precomputed distances to 
+            be passed seperately.
 
         y : array, shape (n_samples)
             A target array for supervised dimension reduction. How this is
@@ -155,9 +156,13 @@ class ParametricUMAP(UMAP):
             The relevant attributes are ``target_metric`` and
             ``target_metric_kwds``.
 
-        precomputed_distances TODO
+        precomputed_distances : array, shape (n_samples, n_samples), optional
+            A precomputed a square distance matrix. Unlike UMAP, ParametricUMAP 
+            still requires X to be passed seperately for training.
 
-        landmark_position TODO
+        landmark_positions : array, shape (n_samples, n_components), optional
+            The desired position in low-dimensional space of each sample in X. 
+            Points that are not landmarks should have nan coordinates.
         """
         
         if landmark_positions is not None:
@@ -194,7 +199,32 @@ class ParametricUMAP(UMAP):
             return out
 
     def fit_transform(self, X, y=None, precomputed_distances=None, landmark_positions=None):
-        """TODO
+        """Fit X into an embedded space.
+
+        Optionally use a precomputed distance matrix, y for supervised 
+        dimension reduction, or landmarked positions.
+
+        Parameters
+        ----------
+        X : array, shape (n_samples, n_features) 
+            Contains a sample per row. If the method is 'exact', X may 
+            be a sparse matrix of type 'csr', 'csc' or 'coo'. 
+            Unlike UMAP, ParametricUMAP requires precomputed distances to 
+            be passed seperately.
+
+        y : array, shape (n_samples)
+            A target array for supervised dimension reduction. How this is
+            handled is determined by parameters UMAP was instantiated with.
+            The relevant attributes are ``target_metric`` and
+            ``target_metric_kwds``.
+
+        precomputed_distances : array, shape (n_samples, n_samples), optional
+            A precomputed a square distance matrix. Unlike UMAP, ParametricUMAP 
+            still requires X to be passed seperately for training.
+
+        landmark_positions : array, shape (n_samples, n_components), optional
+            The desired position in low-dimensional space of each sample in X. 
+            Points that are not landmarks should have nan coordinates.
         """
         
         if landmark_positions is not None:
