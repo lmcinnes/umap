@@ -61,7 +61,6 @@ class ParametricUMAP(UMAP):
         autoencoder_loss=False,
         reconstruction_validation=None,
         global_correlation_loss_weight=0,
-        landmarks=False,
         keras_fit_kwargs={},
         **kwargs
     ):
@@ -93,8 +92,6 @@ class ParametricUMAP(UMAP):
             validation X data for reconstruction loss, by default None
         global_correlation_loss_weight : float, optional
             Whether to additionally train on correlation of global pairwise relationships (>0), by default 0
-        landmarks : bool, optional
-            Whether the model will accept landmark positions in the embedding space when fitting, by default False.
         keras_fit_kwargs : dict, optional
             additional arguments for model.fit (like callbacks), by default {}
         """
@@ -113,7 +110,6 @@ class ParametricUMAP(UMAP):
         self.batch_size = batch_size
         self.loss_report_frequency = 10
         self.global_correlation_loss_weight = global_correlation_loss_weight
-        self.landmarks = landmarks
 
         self.reconstruction_validation = (
             reconstruction_validation  # holdout data for reconstruction acc
@@ -140,7 +136,10 @@ class ParametricUMAP(UMAP):
                     )
                 )
 
-    def fit(self, X, y=None, precomputed_distances=None):
+    def fit(self, X, y=None, precomputed_distances=None, landmark_positions=None):
+        # store landmark_positions
+        self.landmark_positions = landmark_positions
+        
         if self.metric == "precomputed":
             if precomputed_distances is None:
                 raise ValueError(
@@ -150,12 +149,21 @@ class ParametricUMAP(UMAP):
             # prepare X for training the network
             self._X = X
             # geneate the graph on precomputed distances
-            return super().fit(precomputed_distances, y)
+            out = super().fit(precomputed_distances, y)
+            # delete landmark positions
+            delattr(self, "landmark_positions")
+            return out
+            
         else:
-            return super().fit(X, y)
+            out = super().fit(X, y)
+            # delete landmark positions
+            delattr(self, "landmark_positions")
+            return out
 
-    def fit_transform(self, X, y=None, precomputed_distances=None):
-
+    def fit_transform(self, X, y=None, precomputed_distances=None, landmark_positions=None):
+        # store landmark_positions
+        self.landmark_positions = landmark_positions
+        
         if self.metric == "precomputed":
             if precomputed_distances is None:
                 raise ValueError(
@@ -165,9 +173,15 @@ class ParametricUMAP(UMAP):
             # prepare X for training the network
             self._X = X
             # generate the graph on precomputed distances
-            return super().fit_transform(precomputed_distances, y)
+            out = super().fit_transform(precomputed_distances, y)
+            # delete landmark positions
+            delattr(self, "landmark_positions")
+            return out
         else:
-            return super().fit_transform(X, y)
+            out = super().fit_transform(X, y)
+            # delete landmark positions
+            delattr(self, "landmark_positions")
+            return out
 
     def transform(self, X):
         """Transform X into the existing embedded space and return that
@@ -219,7 +233,6 @@ class ParametricUMAP(UMAP):
             global_correlation_loss_weight=self.global_correlation_loss_weight,
             autoencoder_loss=self.autoencoder_loss,
             optimizer=self.optimizer,
-            landmarks=self.landmarks,
         )
 
     def _fit_embed_data(self, X, n_epochs, init, random_state):
@@ -240,6 +253,11 @@ class ParametricUMAP(UMAP):
                 "Data should be scaled to the range 0-1 for cross-entropy reconstruction loss."
             )
 
+        if hasattr(self, "landmark_positions"):
+            landmark_positions = self.landmark_positions
+        else:
+            landmark_positions = None
+            
         # get dataset of edges
         (
             edge_dataset,
@@ -255,6 +273,7 @@ class ParametricUMAP(UMAP):
             self.batch_size,
             self.parametric_reconstruction,
             self.global_correlation_loss_weight,
+            landmark_positions=landmark_positions,
         )
         self.head = ops.array(ops.expand_dims(head.astype(np.int64), 0))
         self.tail = ops.array(ops.expand_dims(tail.astype(np.int64), 0))
@@ -634,7 +653,7 @@ def construct_edge_dataset(
     batch_size,
     parametric_reconstruction,
     global_correlation_loss_weight,
-    landmarks_desired=None,
+    landmark_positions=None,
 ):
     """
     Construct a tf.data.Dataset of edges, sampled by edge weight.
@@ -651,16 +670,18 @@ def construct_edge_dataset(
         batch size
     parametric_reconstruction : bool
         Whether the decoder is parametric or non-parametric
-    landmark_positions : array, optional, shape (n_samples, n_components)
-        Desired landmarked position in low dimensional space of each sample in X, nan in each dimension if the point is not a landmark.
+    landmark_positions : array, shape (n_samples, n_components), optional
+        The desired position in low-dimensional space of each sample in X. 
+        Points that are not landmarks should have nan coordinates.
     """
+
     def gather_index(tensor, index):
         return tensor[index]
 
     # if X is > 512Mb in size, we need to use a different, slower method for
     #    batching data.
     gather_indices_in_python = True if X.nbytes * 1e-9 > 0.5 else False
-    if landmarks is not None:
+    if landmark_positions is not None:
         gather_landmark_indices_in_python = True if landmark_positions.nbytes * 1e-9 > 0.5 else False
 
     def gather_X(edge_to, edge_from):
@@ -681,7 +702,7 @@ def construct_edge_dataset(
             # add reconstruction to iterator output
             # edge_out = ops.concatenate([edge_to_batch, edge_from_batch], axis=0)
             outputs["reconstruction"] = edge_to_batch
-        if landmarks is not None:
+        if landmark_positions is not None:
             if gather_landmark_indices_in_python:
                 outputs["landmarks_to"] = tf.py_function(gather_index, [landmark_positions, edge_to], [tf.float32])[0]
             else:
@@ -980,7 +1001,8 @@ class UMAPModel(keras.Model):
         if self.parametric_reconstruction:
             losses.append(self._parametric_reconstruction_loss(y, y_pred))
 
-        if self.landmarks:
+        # landmark loss, present if landmarks are provided in fit() or fit_transform()
+        if "landmarks_to" in y:
             losses.append(self._landmarks_loss(y, y_pred))
 
         return ops.sum(losses)
@@ -1081,7 +1103,7 @@ class UMAPModel(keras.Model):
         clean_y_pred_to = ops.where(ops.isnan(y_to), x1=ops.zeros_like(y_pred["embedding_to"]), x2=y_pred["embedding_to"])
         clean_y_to = ops.where(ops.isnan(y_to), x1=ops.zeros_like(y_to), x2=y_to)
         
-        return ops.mean(clean_y_to)
+        return ops.mean(ops.norm(clean_y_pred_to - clean_y_to, axis=1))
 
 ##################################################
 # 1. Pytorch version of parametric UMAP network. #
