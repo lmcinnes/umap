@@ -57,6 +57,7 @@ class ParametricUMAP(UMAP):
         autoencoder_loss=False,
         reconstruction_validation=None,
         global_correlation_loss_weight=0,
+        landmarks_loss_fn=None,
         keras_fit_kwargs={},
         **kwargs,
     ):
@@ -88,6 +89,8 @@ class ParametricUMAP(UMAP):
             validation X data for reconstruction loss, by default None
         global_correlation_loss_weight : float, optional
             Whether to additionally train on correlation of global pairwise relationships (>0), by default 0
+        landmarks_loss_fn : callable, optional
+            The function to use for landmark loss, by default the euclidean distance.
         keras_fit_kwargs : dict, optional
             additional arguments for model.fit (like callbacks), by default {}
         """
@@ -106,7 +109,8 @@ class ParametricUMAP(UMAP):
         self.batch_size = batch_size
         self.loss_report_frequency = 10
         self.global_correlation_loss_weight = global_correlation_loss_weight
-
+        self.landmarks_loss_fn = landmarks_loss_fn
+        
         self.reconstruction_validation = (
             reconstruction_validation  # holdout data for reconstruction acc
         )
@@ -306,6 +310,7 @@ class ParametricUMAP(UMAP):
             parametric_reconstruction_loss_weight=prlw,
             global_correlation_loss_weight=self.global_correlation_loss_weight,
             autoencoder_loss=self.autoencoder_loss,
+            landmarks_loss_fn=self.landmarks_loss_fn,
             optimizer=self.optimizer,
         )
 
@@ -981,7 +986,9 @@ class StopGradient(keras.layers.Layer):
     def call(self, x):
         return ops.stop_gradient(x)
 
-
+def _default_landmark_loss(y, y_pred):
+    return ops.mean(ops.norm(y_pred - y, axis=1))
+    
 class UMAPModel(keras.Model):
     def __init__(
         self,
@@ -996,6 +1003,7 @@ class UMAPModel(keras.Model):
         parametric_reconstruction_loss_weight=1.0,
         global_correlation_loss_weight=0.0,
         autoencoder_loss=False,
+        landmarks_loss_fn=None,
         landmarks=False,
         name="umap_model",
     ):
@@ -1012,6 +1020,7 @@ class UMAPModel(keras.Model):
         self.umap_loss_a = umap_loss_a
         self.umap_loss_b = umap_loss_b
         self.autoencoder_loss = autoencoder_loss
+        self.landmarks_loss_fn = landmarks_loss_fn
 
         optimizer = optimizer or keras.optimizers.Adam(1e-3, clipvalue=4.0)
         self.compile(optimizer=optimizer)
@@ -1024,6 +1033,11 @@ class UMAPModel(keras.Model):
             )
         else:
             self.parametric_reconstruction_loss_fn = parametric_reconstruction_loss_fn
+
+        if landmarks_loss_fn is None:
+            self.landmarks_loss_fn = _default_landmark_loss
+        else:
+            self.landmarks_loss_fn = landmarks_loss_fn
 
     def call(self, inputs):
         to_x, from_x = inputs
@@ -1165,7 +1179,7 @@ class UMAPModel(keras.Model):
         )
         clean_y_to = ops.where(ops.isnan(y_to), x1=ops.zeros_like(y_to), x2=y_to)
 
-        return ops.mean(ops.norm(clean_y_pred_to - clean_y_to, axis=1))
+        return self.landmarks_loss_fn(clean_y_to, clean_y_pred_to)
 
 
 ##################################################
