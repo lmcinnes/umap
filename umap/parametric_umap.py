@@ -90,7 +90,9 @@ class ParametricUMAP(UMAP):
         global_correlation_loss_weight : float, optional
             Whether to additionally train on correlation of global pairwise relationships (>0), by default 0
         landmarks_loss_fn : callable, optional
-            The function to use for landmark loss, by default the euclidean distance.
+            The function to use for landmark loss, by default the euclidean distance
+        landmarks_loss_weight : float, optional
+            How to weight the landmark loss relative to umap loss, by default 1.0
         keras_fit_kwargs : dict, optional
             additional arguments for model.fit (like callbacks), by default {}
         """
@@ -110,6 +112,7 @@ class ParametricUMAP(UMAP):
         self.loss_report_frequency = 10
         self.global_correlation_loss_weight = global_correlation_loss_weight
         self.landmarks_loss_fn = landmarks_loss_fn
+        self.landmarks_loss_weight = landmarks_loss_weight
         
         self.reconstruction_validation = (
             reconstruction_validation  # holdout data for reconstruction acc
@@ -311,6 +314,7 @@ class ParametricUMAP(UMAP):
             global_correlation_loss_weight=self.global_correlation_loss_weight,
             autoencoder_loss=self.autoencoder_loss,
             landmarks_loss_fn=self.landmarks_loss_fn,
+            landmarks_loss_weight=self.landmarks_loss_weight,
             optimizer=self.optimizer,
         )
 
@@ -1004,6 +1008,7 @@ class UMAPModel(keras.Model):
         global_correlation_loss_weight=0.0,
         autoencoder_loss=False,
         landmarks_loss_fn=None,
+        landmarks_loss_weight=1.0,
         landmarks=False,
         name="umap_model",
     ):
@@ -1021,6 +1026,7 @@ class UMAPModel(keras.Model):
         self.umap_loss_b = umap_loss_b
         self.autoencoder_loss = autoencoder_loss
         self.landmarks_loss_fn = landmarks_loss_fn
+        self.landmarks_loss_weight = landmarks_loss_weight
 
         optimizer = optimizer or keras.optimizers.Adam(1e-3, clipvalue=4.0)
         self.compile(optimizer=optimizer)
@@ -1179,7 +1185,7 @@ class UMAPModel(keras.Model):
         )
         clean_y_to = ops.where(ops.isnan(y_to), x1=ops.zeros_like(y_to), x2=y_to)
 
-        return self.landmarks_loss_fn(clean_y_to, clean_y_pred_to)
+        return self.landmarks_loss_fn(clean_y_to, clean_y_pred_to) * self.landmarks_loss_weight
 
 
 ##################################################
