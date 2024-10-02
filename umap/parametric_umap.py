@@ -58,6 +58,7 @@ class ParametricUMAP(UMAP):
         reconstruction_validation=None,
         global_correlation_loss_weight=0,
         landmarks_loss_fn=None,
+        landmarks_loss_weight=1.0,
         keras_fit_kwargs={},
         **kwargs,
     ):
@@ -119,6 +120,11 @@ class ParametricUMAP(UMAP):
         )
         self.keras_fit_kwargs = keras_fit_kwargs  # arguments for model.fit
         self.parametric_model = None
+
+        # Pass the random state on to keras. This will set the numpy, backend, and python random seeds
+        # For reproducable training.
+        if isintance(self.random_state, int):
+            keras.utils.set_random_seed(self.random_state)
 
         # How many epochs to train for
         # (different than n_epochs which is specific to each sample)
@@ -192,13 +198,15 @@ class ParametricUMAP(UMAP):
             # geneate the graph on precomputed distances
             out = super().fit(precomputed_distances, y)
             # delete landmark positions
-            delattr(self, "landmark_positions")
+            if self.landmark_positions:
+                delattr(self, "landmark_positions")
             return out
 
         else:
             out = super().fit(X, y)
             # delete landmark positions
-            delattr(self, "landmark_positions")
+            if self.landmark_positions:
+                delattr(self, "landmark_positions")
             return out
 
     def fit_transform(
@@ -256,12 +264,14 @@ class ParametricUMAP(UMAP):
             # generate the graph on precomputed distances
             out = super().fit_transform(precomputed_distances, y)
             # delete landmark positions
-            delattr(self, "landmark_positions")
+            if self.landmark_positions:
+                delattr(self, "landmark_positions")
             return out
         else:
             out = super().fit_transform(X, y)
             # delete landmark positions
-            delattr(self, "landmark_positions")
+            if self.landmark_positions:
+                delattr(self, "landmark_positions")
             return out
 
     def transform(self, X):
