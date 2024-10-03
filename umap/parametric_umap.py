@@ -123,7 +123,7 @@ class ParametricUMAP(UMAP):
 
         # Pass the random state on to keras. This will set the numpy, backend, and python random seeds
         # For reproducable training.
-        if isintance(self.random_state, int):
+        if isinstance(self.random_state, int):
             keras.utils.set_random_seed(self.random_state)
 
         # How many epochs to train for
@@ -274,20 +274,23 @@ class ParametricUMAP(UMAP):
                 delattr(self, "landmark_positions")
             return out
 
-    def transform(self, X):
+    def transform(self, X, batch_size=None):
         """Transform X into the existing embedded space and return that
         transformed output.
         Parameters
         ----------
         X : array, shape (n_samples, n_features)
             New data to be transformed.
+        batch_sixe : int, optional
+            Batch size for inference, defaults to the self.batch_size used in training.
         Returns
         -------
         X_new : array, shape (n_samples, n_components)
             Embedding of the new data in low-dimensional space.
         """
+        batch_size = batch_size if batch_size else self.batch_size
         return self.encoder.predict(
-            np.asanyarray(X), batch_size=self.batch_size, verbose=self.verbose
+            np.asanyarray(X), batch_size=batch_size, verbose=self.verbose
         )
 
     def inverse_transform(self, X):
