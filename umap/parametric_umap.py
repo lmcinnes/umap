@@ -57,8 +57,8 @@ class ParametricUMAP(UMAP):
         autoencoder_loss=False,
         reconstruction_validation=None,
         global_correlation_loss_weight=0,
-        landmarks_loss_fn=None,
-        landmarks_loss_weight=1.0,
+        landmark_loss_fn=None,
+        landmark_loss_weight=1.0,
         keras_fit_kwargs={},
         **kwargs,
     ):
@@ -90,9 +90,9 @@ class ParametricUMAP(UMAP):
             validation X data for reconstruction loss, by default None
         global_correlation_loss_weight : float, optional
             Whether to additionally train on correlation of global pairwise relationships (>0), by default 0
-        landmarks_loss_fn : callable, optional
+        landmark_loss_fn : callable, optional
             The function to use for landmark loss, by default the euclidean distance
-        landmarks_loss_weight : float, optional
+        landmark_loss_weight : float, optional
             How to weight the landmark loss relative to umap loss, by default 1.0
         keras_fit_kwargs : dict, optional
             additional arguments for model.fit (like callbacks), by default {}
@@ -112,8 +112,8 @@ class ParametricUMAP(UMAP):
         self.batch_size = batch_size
         self.loss_report_frequency = 10
         self.global_correlation_loss_weight = global_correlation_loss_weight
-        self.landmarks_loss_fn = landmarks_loss_fn
-        self.landmarks_loss_weight = landmarks_loss_weight
+        self.landmark_loss_fn = landmark_loss_fn
+        self.landmark_loss_weight = landmark_loss_weight
         
         self.reconstruction_validation = (
             reconstruction_validation  # holdout data for reconstruction acc
@@ -326,8 +326,8 @@ class ParametricUMAP(UMAP):
             parametric_reconstruction_loss_weight=prlw,
             global_correlation_loss_weight=self.global_correlation_loss_weight,
             autoencoder_loss=self.autoencoder_loss,
-            landmarks_loss_fn=self.landmarks_loss_fn,
-            landmarks_loss_weight=self.landmarks_loss_weight,
+            landmark_loss_fn=self.landmark_loss_fn,
+            landmark_loss_weight=self.landmark_loss_weight,
             optimizer=self.optimizer,
         )
 
@@ -803,11 +803,11 @@ def construct_edge_dataset(
             outputs["reconstruction"] = edge_to_batch
         if landmark_positions is not None:
             if gather_landmark_indices_in_python:
-                outputs["landmarks_to"] = tf.py_function(
+                outputs["landmark_to"] = tf.py_function(
                     gather_index, [landmark_positions, edge_to], [tf.float32]
                 )[0]
             else:
-                outputs["landmarks_to"] = tf.gather(landmark_positions, edge_to)
+                outputs["landmark_to"] = tf.gather(landmark_positions, edge_to)
         return (edge_to_batch, edge_from_batch), outputs
 
     # get data from graph
@@ -1020,9 +1020,8 @@ class UMAPModel(keras.Model):
         parametric_reconstruction_loss_weight=1.0,
         global_correlation_loss_weight=0.0,
         autoencoder_loss=False,
-        landmarks_loss_fn=None,
-        landmarks_loss_weight=1.0,
-        landmarks=False,
+        landmark_loss_fn=None,
+        landmark_loss_weight=1.0,
         name="umap_model",
     ):
         super().__init__(name=name)
@@ -1038,8 +1037,8 @@ class UMAPModel(keras.Model):
         self.umap_loss_a = umap_loss_a
         self.umap_loss_b = umap_loss_b
         self.autoencoder_loss = autoencoder_loss
-        self.landmarks_loss_fn = landmarks_loss_fn
-        self.landmarks_loss_weight = landmarks_loss_weight
+        self.landmark_loss_fn = landmark_loss_fn
+        self.landmark_loss_weight = landmark_loss_weight
 
         optimizer = optimizer or keras.optimizers.Adam(1e-3, clipvalue=4.0)
         self.compile(optimizer=optimizer)
@@ -1053,10 +1052,10 @@ class UMAPModel(keras.Model):
         else:
             self.parametric_reconstruction_loss_fn = parametric_reconstruction_loss_fn
 
-        if landmarks_loss_fn is None:
-            self.landmarks_loss_fn = _default_landmark_loss
+        if landmark_loss_fn is None:
+            self.landmark_loss_fn = _default_landmark_loss
         else:
-            self.landmarks_loss_fn = landmarks_loss_fn
+            self.landmark_loss_fn = landmark_loss_fn
 
     def call(self, inputs):
         to_x, from_x = inputs
@@ -1095,8 +1094,8 @@ class UMAPModel(keras.Model):
             losses.append(self._parametric_reconstruction_loss(y, y_pred))
 
         # landmark loss, present if landmarks are provided in fit() or fit_transform()
-        if "landmarks_to" in y:
-            losses.append(self._landmarks_loss(y, y_pred))
+        if "landmark_to" in y:
+            losses.append(self._landmark_loss(y, y_pred))
 
         return ops.sum(losses)
 
@@ -1186,8 +1185,8 @@ class UMAPModel(keras.Model):
         )
         return loss * self.parametric_reconstruction_loss_weight
 
-    def _landmarks_loss(self, y, y_pred):
-        y_to = y["landmarks_to"]
+    def _landmark_loss(self, y, y_pred):
+        y_to = y["landmark_to"]
 
         # Euclidean distance between y and y_pred, ignoring nans.
         # Before computing difference, replace all predicted and landmark embeddings with 0 if there isn't a landmark.
@@ -1198,7 +1197,7 @@ class UMAPModel(keras.Model):
         )
         clean_y_to = ops.where(ops.isnan(y_to), x1=ops.zeros_like(y_to), x2=y_to)
 
-        return self.landmarks_loss_fn(clean_y_to, clean_y_pred_to) * self.landmarks_loss_weight
+        return self.landmark_loss_fn(clean_y_to, clean_y_pred_to) * self.landmark_loss_weight
 
 
 ##################################################
