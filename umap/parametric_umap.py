@@ -114,7 +114,7 @@ class ParametricUMAP(UMAP):
         self.global_correlation_loss_weight = global_correlation_loss_weight
         self.landmark_loss_fn = landmark_loss_fn
         self.landmark_loss_weight = landmark_loss_weight
-        
+
         self.reconstruction_validation = (
             reconstruction_validation  # holdout data for reconstruction acc
         )
@@ -277,7 +277,7 @@ class ParametricUMAP(UMAP):
     def transform(self, X, batch_size=None):
         """Transform X into the existing embedded space and return that
         transformed output.
-        
+
         Parameters
         ----------
         X : array, shape (n_samples, n_features)
@@ -297,7 +297,7 @@ class ParametricUMAP(UMAP):
     def inverse_transform(self, X):
         """Transform X in the existing embedded space back into the input
         data space and return that transformed output.
-        
+
         Parameters
         ----------
         X : array, shape (n_samples, n_components)
@@ -1005,9 +1005,11 @@ class StopGradient(keras.layers.Layer):
     def call(self, x):
         return ops.stop_gradient(x)
 
+
 def _default_landmark_loss(y, y_pred):
     return ops.mean(ops.norm(y_pred - y, axis=1))
-    
+
+
 class UMAPModel(keras.Model):
     def __init__(
         self,
@@ -1199,7 +1201,10 @@ class UMAPModel(keras.Model):
         )
         clean_y_to = ops.where(ops.isnan(y_to), x1=ops.zeros_like(y_to), x2=y_to)
 
-        return self.landmark_loss_fn(clean_y_to, clean_y_pred_to) * self.landmark_loss_weight
+        return (
+            self.landmark_loss_fn(clean_y_to, clean_y_pred_to)
+            * self.landmark_loss_weight
+        )
 
 
 ##################################################
