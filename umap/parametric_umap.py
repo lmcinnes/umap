@@ -277,6 +277,7 @@ class ParametricUMAP(UMAP):
     def transform(self, X, batch_size=None):
         """Transform X into the existing embedded space and return that
         transformed output.
+        
         Parameters
         ----------
         X : array, shape (n_samples, n_features)
@@ -296,6 +297,7 @@ class ParametricUMAP(UMAP):
     def inverse_transform(self, X):
         """Transform X in the existing embedded space back into the input
         data space and return that transformed output.
+        
         Parameters
         ----------
         X : array, shape (n_samples, n_components)
