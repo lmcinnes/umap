@@ -4,7 +4,7 @@ from warnings import warn, catch_warnings, filterwarnings
 from numba import TypingError
 import os
 from umap.spectral import spectral_layout
-from sklearn.utils import check_random_state
+from sklearn.utils import check_random_state, check_array
 import codecs, pickle
 from sklearn.neighbors import KDTree
 
@@ -198,14 +198,14 @@ class ParametricUMAP(UMAP):
             # geneate the graph on precomputed distances
             out = super().fit(precomputed_distances, y)
             # delete landmark positions
-            if self.landmark_positions:
+            if self.landmark_positions is not None:
                 delattr(self, "landmark_positions")
             return out
 
         else:
             out = super().fit(X, y)
             # delete landmark positions
-            if self.landmark_positions:
+            if self.landmark_positions is not None:
                 delattr(self, "landmark_positions")
             return out
 
@@ -250,8 +250,21 @@ class ParametricUMAP(UMAP):
                     )
                 )
 
-        # store landmark_positions
-        self.landmark_positions = landmark_positions
+        # store landmark_positions after checking it is in the right format.
+        if landmark_positions:
+            if self.metric in ("bit_hamming", "bit_jaccard"):
+                self.landmark_positions = check_array(
+                    landmark_positions, dtype=np.uint8, order="C",
+                )
+            else:
+                self.landmark_positions = check_array(
+                    landmark_positions,
+                    dtype=np.float32,
+                    accept_sparse="csr",
+                    order="C",
+                )
+        else:
+            self.landmark_positions = landmark_positions
 
         if self.metric == "precomputed":
             if precomputed_distances is None:
@@ -284,14 +297,16 @@ class ParametricUMAP(UMAP):
             New data to be transformed.
         batch_sixe : int, optional
             Batch size for inference, defaults to the self.batch_size used in training.
+            
         Returns
         -------
         X_new : array, shape (n_samples, n_components)
             Embedding of the new data in low-dimensional space.
         """
         batch_size = batch_size if batch_size else self.batch_size
+            
         return self.encoder.predict(
-            np.asanyarray(X), batch_size=batch_size, verbose=self.verbose
+            X, batch_size=batch_size, verbose=self.verbose
         )
 
     def inverse_transform(self, X):
@@ -809,7 +824,12 @@ def construct_edge_dataset(
                     gather_index, [landmark_positions, edge_to], [tf.float32]
                 )[0]
             else:
-                outputs["landmark_to"] = tf.gather(landmark_positions, edge_to)
+                # Make sure we explicitly cast landmark_positions to float32,
+                # as it's user-provided and needs to play nice with loss functions.
+                outputs["landmark_to"] = tf.gather(
+                    tf.cast(landmark_positions, tf.float32), 
+                    edge_to
+                )
         return (edge_to_batch, edge_from_batch), outputs
 
     # get data from graph
@@ -1007,7 +1027,7 @@ class StopGradient(keras.layers.Layer):
 
 
 def _default_landmark_loss(y, y_pred):
-    return ops.mean(ops.norm(y_pred - y, axis=1))
+    return ops.mean(ops.norm(ops.subtract(y_pred, y), axis=1))
 
 
 class UMAPModel(keras.Model):
@@ -1100,7 +1120,7 @@ class UMAPModel(keras.Model):
         # landmark loss, present if landmarks are provided in fit() or fit_transform()
         if "landmark_to" in y:
             losses.append(self._landmark_loss(y, y_pred))
-
+            
         return ops.sum(losses)
 
     def _umap_loss(self, y_pred, repulsion_strength=1.0):
@@ -1201,10 +1221,7 @@ class UMAPModel(keras.Model):
         )
         clean_y_to = ops.where(ops.isnan(y_to), x1=ops.zeros_like(y_to), x2=y_to)
 
-        return (
-            self.landmark_loss_fn(clean_y_to, clean_y_pred_to)
-            * self.landmark_loss_weight
-        )
+        return self.landmark_loss_fn(clean_y_to, clean_y_pred_to) * self.landmark_loss_weight
 
 
 ##################################################
