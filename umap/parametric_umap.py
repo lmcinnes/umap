@@ -186,21 +186,11 @@ class ParametricUMAP(UMAP):
 
         # store landmark_positions after checking it is in the right format.
         if landmark_positions is not None:
-            if self.metric in ("bit_hamming", "bit_jaccard"):
-                self.landmark_positions = check_array(
-                    landmark_positions,
-                    dtype=np.uint8,
-                    order="C",
-                    force_all_finite="allow-nan",
-                )
-            else:
-                self.landmark_positions = check_array(
-                    landmark_positions,
-                    dtype=np.float32,
-                    accept_sparse="csr",
-                    order="C",
-                    force_all_finite="allow-nan",
-                )
+            self.landmark_positions = check_array(
+                landmark_positions,
+                dtype=np.float32,
+                force_all_finite="allow-nan",
+            )
         else:
             self.landmark_positions = landmark_positions
 
@@ -269,17 +259,11 @@ class ParametricUMAP(UMAP):
 
         # store landmark_positions after checking it is in the right format.
         if landmark_positions is not None:
-            if self.metric in ("bit_hamming", "bit_jaccard"):
-                self.landmark_positions = check_array(
-                    landmark_positions, dtype=np.uint8, order="C",
-                )
-            else:
-                self.landmark_positions = check_array(
-                    landmark_positions,
-                    dtype=np.float32,
-                    accept_sparse="csr",
-                    order="C",
-                )
+            self.landmark_positions = check_array(
+                landmark_positions,
+                dtype=np.float32,
+                force_all_finite="allow-nan",
+            )
         else:
             self.landmark_positions = landmark_positions
 
@@ -828,6 +812,7 @@ def construct_edge_dataset(
         return edge_to, edge_from, edge_to_batch, edge_from_batch
 
     def get_outputs(edge_to, edge_from, edge_to_batch, edge_from_batch):
+        print(edge_to, edge_from, edge_to_batch, edge_from_batch)
         outputs = {"umap": ops.repeat(0, batch_size)}
         if global_correlation_loss_weight > 0:
             outputs["global_correlation"] = edge_to_batch
@@ -844,7 +829,7 @@ def construct_edge_dataset(
                 # Make sure we explicitly cast landmark_positions to float32,
                 # as it's user-provided and needs to play nice with loss functions.
                 outputs["landmark_to"] = tf.gather(
-                    tf.cast(landmark_positions, tf.float32), 
+                    landmark_positions, 
                     edge_to
                 )
         return (edge_to_batch, edge_from_batch), outputs

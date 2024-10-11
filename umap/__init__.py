@@ -4,7 +4,7 @@ from .umap_ import UMAP
 try:
     with catch_warnings():
         simplefilter("ignore")
-        from .parametric_umap import ParametricUMAP
+        from .parametric_umap import ParametricUMAP, load_ParametricUMAP
 except ImportError:
     warn(
         "Tensorflow not installed; ParametricUMAP will be unavailable",
