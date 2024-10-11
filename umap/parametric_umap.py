@@ -184,8 +184,25 @@ class ParametricUMAP(UMAP):
                     )
                 )
 
-        # store landmark_positions
-        self.landmark_positions = landmark_positions
+        # store landmark_positions after checking it is in the right format.
+        if landmark_positions is not None:
+            if self.metric in ("bit_hamming", "bit_jaccard"):
+                self.landmark_positions = check_array(
+                    landmark_positions,
+                    dtype=np.uint8,
+                    order="C",
+                    force_all_finite="allow-nan",
+                )
+            else:
+                self.landmark_positions = check_array(
+                    landmark_positions,
+                    dtype=np.float32,
+                    accept_sparse="csr",
+                    order="C",
+                    force_all_finite="allow-nan",
+                )
+        else:
+            self.landmark_positions = landmark_positions
 
         if self.metric == "precomputed":
             if precomputed_distances is None:
@@ -251,7 +268,7 @@ class ParametricUMAP(UMAP):
                 )
 
         # store landmark_positions after checking it is in the right format.
-        if landmark_positions:
+        if landmark_positions is not None:
             if self.metric in ("bit_hamming", "bit_jaccard"):
                 self.landmark_positions = check_array(
                     landmark_positions, dtype=np.uint8, order="C",
@@ -306,7 +323,7 @@ class ParametricUMAP(UMAP):
         batch_size = batch_size if batch_size else self.batch_size
             
         return self.encoder.predict(
-            X, batch_size=batch_size, verbose=self.verbose
+            np.asanyarray(X), batch_size=batch_size, verbose=self.verbose
         )
 
     def inverse_transform(self, X):
@@ -1027,7 +1044,7 @@ class StopGradient(keras.layers.Layer):
 
 
 def _default_landmark_loss(y, y_pred):
-    return ops.mean(ops.norm(ops.subtract(y_pred, y), axis=1))
+    return ops.mean(ops.norm(y_pred - y, axis=1))
 
 
 class UMAPModel(keras.Model):
