@@ -385,7 +385,7 @@ class ParametricUMAP(UMAP):
         self.head = ops.array(ops.expand_dims(head.astype(np.int64), 0))
         self.tail = ops.array(ops.expand_dims(tail.astype(np.int64), 0))
 
-        if self.encoder is None:
+        if self.parametric_model is None:
             init_embedding = None
 
             # create encoder and decoder model
