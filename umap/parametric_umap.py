@@ -174,6 +174,10 @@ class ParametricUMAP(UMAP):
             Points that are not landmarks should have nan coordinates.
         """
 
+        # We may have set landmark positions in a call to fit_transform
+        if landmark_positions is None and hasattr(self, "landmark_positions"):
+            lanrmark_positions = self.landmark_positions
+
         if landmark_positions is not None:
             len_X = len(X)
             len_land = len(landmark_positions)
@@ -257,15 +261,7 @@ class ParametricUMAP(UMAP):
                     )
                 )
 
-        # store landmark_positions after checking it is in the right format.
-        if landmark_positions is not None:
-            self.landmark_positions = check_array(
-                landmark_positions,
-                dtype=np.float32,
-                force_all_finite="allow-nan",
-            )
-        else:
-            self.landmark_positions = landmark_positions
+        self.landmark_positions = landmark_positions
 
         if self.metric == "precomputed":
             if precomputed_distances is None:
@@ -276,17 +272,13 @@ class ParametricUMAP(UMAP):
             # prepare X for training the network
             self._X = X
             # generate the graph on precomputed distances
-            out = super().fit_transform(precomputed_distances, y)
-            # delete landmark positions
-            if self.landmark_positions:
-                delattr(self, "landmark_positions")
-            return out
+            # landmark positions are cleaned up inside the 
+            # .fit() component of .fit_transform()
+            return super().fit_transform(precomputed_distances, y)
         else:
-            out = super().fit_transform(X, y)
-            # delete landmark positions
-            if self.landmark_positions:
-                delattr(self, "landmark_positions")
-            return out
+            # landmark positions are cleaned up inside the 
+            # .fit() component of .fit_transform()
+            return super().fit_transform(X, y)
 
     def transform(self, X, batch_size=None):
         """Transform X into the existing embedded space and return that
@@ -812,7 +804,6 @@ def construct_edge_dataset(
         return edge_to, edge_from, edge_to_batch, edge_from_batch
 
     def get_outputs(edge_to, edge_from, edge_to_batch, edge_from_batch):
-        print(edge_to, edge_from, edge_to_batch, edge_from_batch)
         outputs = {"umap": ops.repeat(0, batch_size)}
         if global_correlation_loss_weight > 0:
             outputs["global_correlation"] = edge_to_batch
@@ -1029,7 +1020,9 @@ class StopGradient(keras.layers.Layer):
 
 
 def _default_landmark_loss(y, y_pred):
-    return ops.mean(ops.norm(y_pred - y, axis=1))
+    # Euclidean distance between points.
+    # Relu activation smooths gradients.
+    return keras.activations.relu(ops.mean(ops.norm(y_pred - y, axis=1)))
 
 
 class UMAPModel(keras.Model):
