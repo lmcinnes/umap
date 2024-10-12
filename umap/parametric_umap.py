@@ -121,7 +121,8 @@ class ParametricUMAP(UMAP):
         self.keras_fit_kwargs = keras_fit_kwargs  # arguments for model.fit
         self.parametric_model = None
 
-        # Pass the random state on to keras. This will set the numpy, backend, and python random seeds
+        # Pass the random state on to keras. This will set the numpy, 
+        # backend, and python random seeds
         # For reproducable training.
         if isinstance(self.random_state, int):
             keras.utils.set_random_seed(self.random_state)
@@ -183,9 +184,8 @@ class ParametricUMAP(UMAP):
             len_land = len(landmark_positions)
             if len_X != len_land:
                 raise ValueError(
-                    "Length of x = {len_x}, length of y = {len_y}, while it must be equal.".format(
-                        len_x=len_X, len_y=len_land
-                    )
+                    f"Length of x = {len_X}, length of landmark_positions \
+                    = {len_land}, while it must be equal."
                 )
 
         # store landmark_positions after checking it is in the right format.
@@ -256,9 +256,8 @@ class ParametricUMAP(UMAP):
             len_land = len(landmark_positions)
             if len_X != len_land:
                 raise ValueError(
-                    "Length of x = {len_x}, length of y = {len_y}, while it must be equal.".format(
-                        len_x=len_X, len_y=len_land
-                    )
+                    f"Length of x = {len_X}, length of landmark_positions \
+                    = {len_land}, while it must be equal."
                 )
 
         self.landmark_positions = landmark_positions
@@ -1205,7 +1204,8 @@ class UMAPModel(keras.Model):
         y_to = y["landmark_to"]
 
         # Euclidean distance between y and y_pred, ignoring nans.
-        # Before computing difference, replace all predicted and landmark embeddings with 0 if there isn't a landmark.
+        # Before computing difference, replace all predicted and 
+        # git slandmark embeddings with 0 if there isn't a landmark.
         clean_y_pred_to = ops.where(
             ops.isnan(y_to),
             x1=ops.zeros_like(y_pred["embedding_to"]),
