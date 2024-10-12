@@ -120,15 +120,15 @@ Re-training Parametric UMAP with landmarks
 
 To update our embedding to include the new class, we'll fine-tune our existing ``ParametricUMAP`` model. Doing this without any other changes will start from where we left off, but our embedding space's structure may drift and change. This is because the UMAP loss function is invariant to scaling, translation, and rotation, as it is only concerned with the relative positions and distances between points. 
 
-In order to keep our embedding space more consistent, we'll use the landmarks option for ``ParametricUMAP``. We retrain the model on the ``x2`` partition, along with some points chosen as landmarks from ``x1``. We'll choose 10% of the samples in ``x1`` to be included, along with their current position in the embedding space to be used in the landmarks loss function.
+In order to keep our embedding space more consistent, we'll use the landmarks option for ``ParametricUMAP``. We retrain the model on the ``x2`` partition, along with some points chosen as landmarks from ``x1``. We'll choose 1% of the samples in ``x1`` to be included, along with their current position in the embedding space to be used in the landmarks loss function.
 
-The default ``landmark_loss_fn`` is the euclidean distance between the point's original position and it's current one. The only change we'll make is to set ``landmark_loss_weight`` to 0.5
+The default ``landmark_loss_fn`` is the euclidean distance between the point's original position and it's current one. The only change we'll make is to set ``landmark_loss_weight=0.01``.
 
 .. code:: python3
 
     # Select landmarks indexes from x1.
     #
-    landmark_idx = list(np.random.choice(range(x1.shape[0]), int(x1.shape[0]/10), replace=False))
+    landmark_idx = list(np.random.choice(range(x1.shape[0]), int(x1.shape[0]/100), replace=False))
     
     # Add the landmark points to x2 for training.
     #
@@ -147,7 +147,7 @@ The default ``landmark_loss_fn`` is the euclidean distance between the point's o
     
     # Set landmark loss weight and continue training our Parametric UMAP model.
     #
-    p_embedder.landmark_loss_weight = 0.5
+    p_embedder.landmark_loss_weight = 0.01
     p_embedder.fit(x2_lmk, landmark_positions=landmarks)
     p_emb2_x2 = p_embedder.transform(x2)
     
