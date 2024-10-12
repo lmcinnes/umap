@@ -272,11 +272,11 @@ class ParametricUMAP(UMAP):
             # prepare X for training the network
             self._X = X
             # generate the graph on precomputed distances
-            # landmark positions are cleaned up inside the 
+            # landmark positions are cleaned up inside the
             # .fit() component of .fit_transform()
             return super().fit_transform(precomputed_distances, y)
         else:
-            # landmark positions are cleaned up inside the 
+            # landmark positions are cleaned up inside the
             # .fit() component of .fit_transform()
             return super().fit_transform(X, y)
 
@@ -290,14 +290,14 @@ class ParametricUMAP(UMAP):
             New data to be transformed.
         batch_sixe : int, optional
             Batch size for inference, defaults to the self.batch_size used in training.
-            
+
         Returns
         -------
         X_new : array, shape (n_samples, n_components)
             Embedding of the new data in low-dimensional space.
         """
         batch_size = batch_size if batch_size else self.batch_size
-            
+
         return self.encoder.predict(
             np.asanyarray(X), batch_size=batch_size, verbose=self.verbose
         )
@@ -819,10 +819,7 @@ def construct_edge_dataset(
             else:
                 # Make sure we explicitly cast landmark_positions to float32,
                 # as it's user-provided and needs to play nice with loss functions.
-                outputs["landmark_to"] = tf.gather(
-                    landmark_positions, 
-                    edge_to
-                )
+                outputs["landmark_to"] = tf.gather(landmark_positions, edge_to)
         return (edge_to_batch, edge_from_batch), outputs
 
     # get data from graph
@@ -1115,7 +1112,7 @@ class UMAPModel(keras.Model):
         # landmark loss, present if landmarks are provided in fit() or fit_transform()
         if "landmark_to" in y:
             losses.append(self._landmark_loss(y, y_pred))
-            
+
         return ops.sum(losses)
 
     def _umap_loss(self, y_pred, repulsion_strength=1.0):
@@ -1216,7 +1213,10 @@ class UMAPModel(keras.Model):
         )
         clean_y_to = ops.where(ops.isnan(y_to), x1=ops.zeros_like(y_to), x2=y_to)
 
-        return self.landmark_loss_fn(clean_y_to, clean_y_pred_to) * self.landmark_loss_weight
+        return (
+            self.landmark_loss_fn(clean_y_to, clean_y_pred_to)
+            * self.landmark_loss_weight
+        )
 
 
 ##################################################
