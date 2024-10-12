@@ -64,6 +64,7 @@ configuration = {
             "scikit-image",
         ],
         "parametric_umap": ["tensorflow >= 2.1"],
+        "torch_umap": ["torch"],
         "tbb": ["tbb >= 2019.0"],
     },
     "ext_modules": [],
