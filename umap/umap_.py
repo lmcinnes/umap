@@ -5,7 +5,6 @@ from __future__ import print_function
 
 import locale
 from warnings import warn
-import time
 
 from scipy.optimize import curve_fit
 from sklearn.base import BaseEstimator
@@ -150,11 +149,10 @@ def raise_disconnected_warning(
     fastmath=True,
 )  # benchmarking `parallel=True` shows it to *decrease* performance
 def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0):
-    """Compute a continuous version of the distance to the kth nearest
-    neighbor. That is, this is similar to knn-distance but allows continuous
-    k values rather than requiring an integral k. In essence we are simply
-    computing the distance such that the cardinality of fuzzy set we generate
-    is k.
+    """Compute a continuous version of the distance to the kth nearest neighbor. That
+    is, this is similar to knn-distance but allows continuous k values rather than
+    requiring an integral k. In essence we are simply computing the distance such that
+    the cardinality of fuzzy set we generate is k.
 
     Parameters
     ----------
@@ -217,7 +215,6 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
             rho[i] = np.max(non_zero_dists)
 
         for n in range(n_iter):
-
             psum = 0.0
             for j in range(1, distances.shape[1]):
                 d = distances[i, j] - rho[i]
@@ -265,9 +262,9 @@ def nearest_neighbors(
     n_jobs=-1,
     verbose=False,
 ):
-    """Compute the ``n_neighbors`` nearest points for each data point in ``X``
-    under ``metric``. This may be exact, but more likely is approximated via
-    nearest neighbor descent.
+    """Compute the ``n_neighbors`` nearest points for each data point in ``X`` under
+    ``metric``. This may be exact, but more likely is approximated via nearest neighbor
+    descent.
 
     Parameters
     ----------
@@ -366,10 +363,10 @@ def compute_membership_strengths(
     return_dists=False,
     bipartite=False,
 ):
-    """Construct the membership strength data for the 1-skeleton of each local
-    fuzzy simplicial set -- this is formed as a sparse matrix where each row is
-    a local fuzzy simplicial set, with a membership strength for the
-    1-simplex to each other data point.
+    """Construct the membership strength data for the 1-skeleton of each local fuzzy
+    simplicial set -- this is formed as a sparse matrix where each row is a local fuzzy
+    simplicial set, with a membership strength for the 1-simplex to each other data
+    point.
 
     Parameters
     ----------
@@ -454,12 +451,12 @@ def fuzzy_simplicial_set(
     verbose=False,
     return_dists=None,
 ):
-    """Given a set of data X, a neighborhood size, and a measure of distance
-    compute the fuzzy simplicial set (here represented as a fuzzy graph in
-    the form of a sparse matrix) associated to the data. This is done by
-    locally approximating geodesic distance at each point, creating a fuzzy
-    simplicial set for each such point, and then combining all the local
-    fuzzy simplicial sets into a global one via a fuzzy union.
+    """Given a set of data X, a neighborhood size, and a measure of distance compute the
+    fuzzy simplicial set (here represented as a fuzzy graph in the form of a sparse
+    matrix) associated to the data. This is done by locally approximating geodesic
+    distance at each point, creating a fuzzy simplicial set for each such point, and
+    then combining all the local fuzzy simplicial sets into a global one via a fuzzy
+    union.
 
     Parameters
     ----------
@@ -619,8 +616,8 @@ def fuzzy_simplicial_set(
 
 @numba.njit()
 def fast_intersection(rows, cols, values, target, unknown_dist=1.0, far_dist=5.0):
-    """Under the assumption of categorical distance for the intersecting
-    simplicial set perform a fast intersection.
+    """Under the assumption of categorical distance for the intersecting simplicial set
+    perform a fast intersection.
 
     Parameters
     ----------
@@ -664,8 +661,8 @@ def fast_intersection(rows, cols, values, target, unknown_dist=1.0, far_dist=5.0
 def fast_metric_intersection(
     rows, cols, values, discrete_space, metric, metric_args, scale
 ):
-    """Under the assumption of categorical distance for the intersecting
-    simplicial set perform a fast intersection.
+    """Under the assumption of categorical distance for the intersecting simplicial set
+    perform a fast intersection.
 
     Parameters
     ----------
@@ -712,7 +709,6 @@ def reprocess_row(probabilities, k=15, n_iters=32):
     mid = 1.0
 
     for n in range(n_iters):
-
         psum = 0.0
         for j in range(probabilities.shape[0]):
             psum += pow(probabilities[j], mid)
@@ -736,19 +732,21 @@ def reprocess_row(probabilities, k=15, n_iters=32):
 @numba.njit()
 def reset_local_metrics(simplicial_set_indptr, simplicial_set_data):
     for i in range(simplicial_set_indptr.shape[0] - 1):
-        simplicial_set_data[
-            simplicial_set_indptr[i] : simplicial_set_indptr[i + 1]
-        ] = reprocess_row(
-            simplicial_set_data[simplicial_set_indptr[i] : simplicial_set_indptr[i + 1]]
+        simplicial_set_data[simplicial_set_indptr[i] : simplicial_set_indptr[i + 1]] = (
+            reprocess_row(
+                simplicial_set_data[
+                    simplicial_set_indptr[i] : simplicial_set_indptr[i + 1]
+                ]
+            )
         )
     return
 
 
 def reset_local_connectivity(simplicial_set, reset_local_metric=False):
-    """Reset the local connectivity requirement -- each data sample should
-    have complete confidence in at least one 1-simplex in the simplicial set.
-    We can enforce this by locally rescaling confidences, and then remerging the
-    different local simplicial sets together.
+    """Reset the local connectivity requirement -- each data sample should have complete
+    confidence in at least one 1-simplex in the simplicial set. We can enforce this by
+    locally rescaling confidences, and then remerging the different local simplicial
+    sets together.
 
     Parameters
     ----------
@@ -784,10 +782,10 @@ def discrete_metric_simplicial_set_intersection(
     metric_kws={},
     metric_scale=1.0,
 ):
-    """Combine a fuzzy simplicial set with another fuzzy simplicial set
-    generated from discrete metric data using discrete distances. The target
-    data is assumed to be categorical label data (a vector of labels),
-    and this will update the fuzzy simplicial set to respect that label data.
+    """Combine a fuzzy simplicial set with another fuzzy simplicial set generated from
+    discrete metric data using discrete distances. The target data is assumed to be
+    categorical label data (a vector of labels), and this will update the fuzzy
+    simplicial set to respect that label data.
 
     TODO: optional category cardinality based weighting of distance
 
@@ -856,7 +854,6 @@ def discrete_metric_simplicial_set_intersection(
 def general_simplicial_set_intersection(
     simplicial_set1, simplicial_set2, weight=0.5, right_complement=False
 ):
-
     if right_complement:
         result = simplicial_set1.tocoo()
     else:
@@ -902,8 +899,8 @@ def general_simplicial_set_union(simplicial_set1, simplicial_set2):
 
 
 def make_epochs_per_sample(weights, n_epochs):
-    """Given a set of weights and number of epochs generate the number of
-    epochs per sample for each weight.
+    """Given a set of weights and number of epochs generate the number of epochs per
+    sample for each weight.
 
     Parameters
     ----------
@@ -952,15 +949,16 @@ def simplicial_set_embedding(
     output_dens,
     output_metric=dist.named_distances_with_gradients["euclidean"],
     output_metric_kwds={},
+    eigensolver_init="random",
+    eigensolver_method=None,
     euclidean_output=True,
     parallel=False,
     verbose=False,
     tqdm_kwds=None,
 ):
-    """Perform a fuzzy simplicial set embedding, using a specified
-    initialisation method and then minimizing the fuzzy set cross entropy
-    between the 1-skeletons of the high and low dimensional fuzzy simplicial
-    sets.
+    """Perform a fuzzy simplicial set embedding, using a specified initialisation method
+    and then minimizing the fuzzy set cross entropy between the 1-skeletons of the high
+    and low dimensional fuzzy simplicial sets.
 
     Parameters
     ----------
@@ -1038,6 +1036,20 @@ def simplicial_set_embedding(
     output_metric_kwds: dict
         Key word arguments to be passed to the output_metric function.
 
+    eigensolver_init: string, either "random" or "tsvd"
+        Indicates to initialize the eigensolver. Use "random" (the default) to
+        use uniformly distributed random initialization; use "tsvd" to warm-start the
+        eigensolver with singular vectors of the Laplacian associated to the largest
+        singular values. This latter option also forces usage of the LOBPCG eigensolver;
+        with the former, ARPACK's solver ``eigsh`` will be used for smaller Laplacians.
+
+    eigensolver_method: string -- either "eigsh" or "lobpcg" -- or None
+        Name of the eigenvalue computation method to use to compute the spectral
+        embedding. If left to None (or empty string), as by default, the method is
+        chosen from the number of vectors in play: larger vector collections are
+        handled with lobpcg, smaller collections with eigsh. Method names correspond
+        to SciPy routines in scipy.sparse.linalg.
+
     euclidean_output: bool
         Whether to use the faster code specialised for euclidean output metrics
 
@@ -1111,6 +1123,8 @@ def simplicial_set_embedding(
             random_state,
             metric=metric,
             metric_kwds=metric_kwds,
+            init=eigensolver_init,
+            method=eigensolver_method,
         )
         # We add a little noise to avoid local minima for optimization to come
         embedding = noisy_scale_coords(
@@ -1242,7 +1256,11 @@ def simplicial_set_embedding(
             print(ts() + " Computing embedding densities")
 
         # Compute graph in embedding
-        (knn_indices, knn_dists, rp_forest,) = nearest_neighbors(
+        (
+            knn_indices,
+            knn_dists,
+            rp_forest,
+        ) = nearest_neighbors(
             embedding,
             densmap_kwds["n_neighbors"],
             "euclidean",
@@ -1297,9 +1315,9 @@ def simplicial_set_embedding(
 
 @numba.njit()
 def init_transform(indices, weights, embedding):
-    """Given indices and weights and an original embeddings
-    initialize the positions of new points relative to the
-    indices and weights (of their neighbors in the source data).
+    """Given indices and weights and an original embeddings initialize the positions of
+    new points relative to the indices and weights (of their neighbors in the source
+    data).
 
     Parameters
     ----------
@@ -1331,7 +1349,8 @@ def init_transform(indices, weights, embedding):
 def init_graph_transform(graph, embedding):
     """Given a bipartite graph representing the 1-simplices and strengths between the
     new points and the original data set along with an embedding of the original points
-    initialize the positions of new points relative to the strengths (of their neighbors in the source data).
+    initialize the positions of new points relative to the strengths (of their neighbors
+    in the source data).
 
     If a point is in our original data set it embeds at the original points coordinates.
     If a point has no neighbours in our original dataset it embeds as the np.nan vector.
@@ -1368,6 +1387,7 @@ def init_graph_transform(graph, embedding):
 
     return result
 
+
 @numba.njit()
 def init_update(current_init, n_original_samples, indices):
     for i in range(n_original_samples, indices.shape[0]):
@@ -1384,10 +1404,11 @@ def init_update(current_init, n_original_samples, indices):
 
 
 def find_ab_params(spread, min_dist):
-    """Fit a, b params for the differentiable curve used in lower
-    dimensional fuzzy simplicial complex construction. We want the
-    smooth curve (from a pre-defined family with simple gradient) that
-    best matches an offset exponential decay.
+    """Fit a, b params for the differentiable curve used in lower dimensional fuzzy
+    simplicial complex construction.
+
+    We want the smooth curve (from a pre-defined family with simple gradient) that best
+    matches an offset exponential decay.
     """
 
     def curve(x, a, b):
@@ -1402,7 +1423,7 @@ def find_ab_params(spread, min_dist):
 
 
 class UMAP(BaseEstimator):
-    """Uniform Manifold Approximation and Projection
+    """Uniform Manifold Approximation and Projection.
 
     Finds a low dimensional embedding of the data that approximates
     an underlying manifold.
@@ -1598,6 +1619,20 @@ class UMAP(BaseEstimator):
         For to map from internal structures back to your data use the variable
         _unique_inverse_.
 
+    eigensolver_init: string, either "random" or "tsvd"
+        Indicates to initialize the eigensolver. Use "random" (the default) to
+        use uniformly distributed random initialization; use "tsvd" to warm-start the
+        eigensolver with singular vectors of the Laplacian associated to the largest
+        singular values. This latter option also forces usage of the LOBPCG eigensolver;
+        with the former, ARPACK's solver ``eigsh`` will be used for smaller Laplacians.
+
+    eigensolver_method: string -- either "eigsh" or "lobpcg" -- or None
+        Name of the eigenvalue computation method to use to compute the spectral
+        embedding. If left to None (or empty string), as by default, the method is
+        chosen from the number of vectors in play: larger vector collections are
+        handled with lobpcg, smaller collections with eigsh. Method names correspond
+        to SciPy routines in scipy.sparse.linalg.
+
     densmap: bool (optional, default False)
         Specifies whether the density-augmented objective of densMAP
         should be used for optimization. Turning on this option generates
@@ -1686,6 +1721,8 @@ class UMAP(BaseEstimator):
         transform_seed=42,
         transform_mode="embedding",
         force_approximation_algorithm=False,
+        eigensolver_init="random",
+        eigensolver_method=None,
         verbose=False,
         tqdm_kwds=None,
         unique=False,
@@ -1728,6 +1765,8 @@ class UMAP(BaseEstimator):
         self.verbose = verbose
         self.tqdm_kwds = tqdm_kwds
         self.unique = unique
+        self.eigensolver_init = eigensolver_init
+        self.eigensolver_method = eigensolver_method
 
         self.densmap = densmap
         self.dens_lambda = dens_lambda
@@ -1938,11 +1977,21 @@ class UMAP(BaseEstimator):
         ):
             self.angular_rp_forest = True
 
+        # Eigensolver settings
+        if self.eigensolver_init not in ("random", "tsvd"):
+            raise ValueError("eigensolver_init must be 'random' or 'tsvd'")
+
+        if self.eigensolver_method not in (None, "eigsh", "logpcg"):
+            raise ValueError("eigensolver_method must be None, 'eigsh', or 'logpcg'")
+
         if self.n_jobs < -1 or self.n_jobs == 0:
             raise ValueError("n_jobs must be a postive integer, or -1 (for all cores)")
         if self.n_jobs != 1 and self.random_state is not None:
             self.n_jobs = 1
-            warn(f"n_jobs value {self.n_jobs} overridden to 1 by setting random_state. Use no seed for parallelism.") 
+            warn(
+                f"n_jobs value {self.n_jobs} overridden to 1 by setting random_state. "
+                "Use no seed for parallelism."
+            )
 
         if self.dens_lambda < 0.0:
             raise ValueError("dens_lambda cannot be negative")
@@ -2101,6 +2150,9 @@ class UMAP(BaseEstimator):
         self.verbose = flattened([m.verbose for m in models])
         self.unique = flattened([m.unique for m in models])
 
+        self.eigensolver_init = flattened([m.eigensolver_init for m in models])
+        self.eigensolver_method = flattened([m.eigensolver_method for m in models])
+
         self.densmap = flattened([m.densmap for m in models])
         self.dens_lambda = flattened([m.dens_lambda for m in models])
         self.dens_frac = flattened([m.dens_frac for m in models])
@@ -2114,7 +2166,6 @@ class UMAP(BaseEstimator):
         self._b = flattened([m._b for m in models])
 
     def __mul__(self, other):
-
         check_is_fitted(
             self, attributes=["graph_"], msg="Only fitted UMAP models can be combined"
         )
@@ -2174,6 +2225,8 @@ class UMAP(BaseEstimator):
             result.densmap,
             result._densmap_kwds,
             result.output_dens,
+            eigensolver_init=result.eigensolver_init[0],
+            eigensolver_method=result.eigensolver_method[0],
             parallel=False,
             verbose=bool(np.max(result.verbose)),
             tqdm_kwds=self.tqdm_kwds,
@@ -2186,7 +2239,6 @@ class UMAP(BaseEstimator):
         return result
 
     def __add__(self, other):
-
         check_is_fitted(
             self, attributes=["graph_"], msg="Only fitted UMAP models can be combined"
         )
@@ -2244,6 +2296,8 @@ class UMAP(BaseEstimator):
             result.densmap,
             result._densmap_kwds,
             result.output_dens,
+            eigensolver_init=result.eigensolver_init[0],
+            eigensolver_method=result.eigensolver_method[0],
             parallel=False,
             verbose=bool(np.max(result.verbose)),
             tqdm_kwds=self.tqdm_kwds,
@@ -2256,7 +2310,6 @@ class UMAP(BaseEstimator):
         return result
 
     def __sub__(self, other):
-
         check_is_fitted(
             self, attributes=["graph_"], msg="Only fitted UMAP models can be combined"
         )
@@ -2316,6 +2369,8 @@ class UMAP(BaseEstimator):
             result.densmap,
             result._densmap_kwds,
             result.output_dens,
+            eigensolver_init=result.eigensolver_init[0],
+            eigensolver_method=result.eigensolver_method[0],
             parallel=False,
             verbose=bool(np.max(result.verbose)),
             tqdm_kwds=self.tqdm_kwds,
@@ -2353,9 +2408,17 @@ class UMAP(BaseEstimator):
                                      Values cannot be infinite.
         """
         if self.metric in ("bit_hamming", "bit_jaccard"):
-            X = check_array(X, dtype=np.uint8, order="C", force_all_finite=force_all_finite)
+            X = check_array(
+                X, dtype=np.uint8, order="C", force_all_finite=force_all_finite
+            )
         else:
-            X = check_array(X, dtype=np.float32, accept_sparse="csr", order="C", force_all_finite=force_all_finite)
+            X = check_array(
+                X,
+                dtype=np.float32,
+                accept_sparse="csr",
+                order="C",
+                force_all_finite=force_all_finite,
+            )
         self._raw_data = X
 
         # Handle all the optional arguments, setting default
@@ -2366,7 +2429,12 @@ class UMAP(BaseEstimator):
             self._b = self.b
 
         if isinstance(self.init, np.ndarray):
-            init = check_array(self.init, dtype=np.float32, accept_sparse=False, force_all_finite=force_all_finite)
+            init = check_array(
+                self.init,
+                dtype=np.float32,
+                accept_sparse=False,
+                force_all_finite=force_all_finite,
+            )
         else:
             init = self.init
 
@@ -2467,9 +2535,7 @@ class UMAP(BaseEstimator):
             if not np.all(X.diagonal() == 0):
                 raise ValueError("Non-zero distances from samples to themselves!")
             if self.knn_dists is None:
-                self._knn_indices = np.zeros(
-                    (X.shape[0], self.n_neighbors), dtype=int
-                )
+                self._knn_indices = np.zeros((X.shape[0], self.n_neighbors), dtype=int)
                 self._knn_dists = np.zeros(self._knn_indices.shape, dtype=float)
                 for row_id in range(X.shape[0]):
                     # Find KNNs row-by-row
@@ -2530,7 +2596,7 @@ class UMAP(BaseEstimator):
                 # sklearn pairwise_distances fails for callable metric on sparse data
                 _m = self.metric if self._sparse_data else self._input_distance_func
                 dmat = pairwise_distances(X[index], metric=_m, **self._metric_kwds)
-            except (ValueError, TypeError) as e:
+            except (ValueError, TypeError):
                 # metric is numba.jit'd or not supported by sklearn,
                 # fallback to pairwise special
 
@@ -2542,21 +2608,21 @@ class UMAP(BaseEstimator):
                             X[index].toarray(),
                             metric=_m,
                             kwds=self._metric_kwds,
-                            force_all_finite=force_all_finite
+                            force_all_finite=force_all_finite,
                         )
                     else:
                         dmat = dist.pairwise_special_metric(
                             X[index],
                             metric=self._input_distance_func,
                             kwds=self._metric_kwds,
-                            force_all_finite=force_all_finite
+                            force_all_finite=force_all_finite,
                         )
                 else:
                     dmat = dist.pairwise_special_metric(
                         X[index],
                         metric=self._input_distance_func,
                         kwds=self._metric_kwds,
-                        force_all_finite=force_all_finite
+                        force_all_finite=force_all_finite,
                     )
             # set any values greater than disconnection_distance to be np.inf.
             # This will have no effect when _disconnection_distance is not set since it defaults to np.inf.
@@ -2677,7 +2743,9 @@ class UMAP(BaseEstimator):
             if self.target_metric == "string":
                 y_ = y[index]
             else:
-                y_ = check_array(y, ensure_2d=False, force_all_finite=force_all_finite)[index]
+                y_ = check_array(y, ensure_2d=False, force_all_finite=force_all_finite)[
+                    index
+                ]
             if self.target_metric == "categorical":
                 if self.target_weight < 1.0:
                     far_dist = 2.5 * (1.0 / (1.0 - self.target_weight))
@@ -2727,10 +2795,14 @@ class UMAP(BaseEstimator):
                             y_,
                             metric=self.target_metric,
                             kwds=self._target_metric_kwds,
-                            force_all_finite=force_all_finite
+                            force_all_finite=force_all_finite,
                         )
 
-                    (target_graph, target_sigmas, target_rhos,) = fuzzy_simplicial_set(
+                    (
+                        target_graph,
+                        target_sigmas,
+                        target_rhos,
+                    ) = fuzzy_simplicial_set(
                         ydmat,
                         target_n_neighbors,
                         random_state,
@@ -2745,7 +2817,11 @@ class UMAP(BaseEstimator):
                     )
                 else:
                     # Standard case
-                    (target_graph, target_sigmas, target_rhos,) = fuzzy_simplicial_set(
+                    (
+                        target_graph,
+                        target_sigmas,
+                        target_rhos,
+                    ) = fuzzy_simplicial_set(
                         y_,
                         target_n_neighbors,
                         random_state,
@@ -2824,9 +2900,8 @@ class UMAP(BaseEstimator):
         return self
 
     def _fit_embed_data(self, X, n_epochs, init, random_state):
-        """A method wrapper for simplicial_set_embedding that can be
-        replaced by subclasses.
-        """
+        """A method wrapper for simplicial_set_embedding that can be replaced by
+        subclasses."""
         return simplicial_set_embedding(
             X,
             self.graph_,
@@ -2846,6 +2921,8 @@ class UMAP(BaseEstimator):
             self.output_dens,
             self._output_distance_func,
             self._output_metric_kwds,
+            self.eigensolver_init,
+            self.eigensolver_method,
             self.output_metric in ("euclidean", "l2"),
             self.random_state is None,
             self.verbose,
@@ -2853,8 +2930,7 @@ class UMAP(BaseEstimator):
         )
 
     def fit_transform(self, X, y=None, force_all_finite=True):
-        """Fit X into an embedded space and return that transformed
-        output.
+        """Fit X into an embedded space and return that transformed output.
 
         Parameters
         ----------
@@ -2904,8 +2980,8 @@ class UMAP(BaseEstimator):
             )
 
     def transform(self, X, force_all_finite=True):
-        """Transform X into the existing embedded space and return that
-        transformed output.
+        """Transform X into the existing embedded space and return that transformed
+        output.
 
         Parameters
         ----------
@@ -2930,9 +3006,17 @@ class UMAP(BaseEstimator):
             )
         # If we just have the original input then short circuit things
         if self.metric in ("bit_hamming", "bit_jaccard"):
-            X = check_array(X, dtype=np.uint8, order="C", force_all_finite=force_all_finite)
+            X = check_array(
+                X, dtype=np.uint8, order="C", force_all_finite=force_all_finite
+            )
         else:
-            X = check_array(X, dtype=np.float32, accept_sparse="csr", order="C", force_all_finite=force_all_finite)
+            X = check_array(
+                X,
+                dtype=np.float32,
+                accept_sparse="csr",
+                order="C",
+                force_all_finite=force_all_finite,
+            )
         x_hash = joblib.hash(X)
         if x_hash == self._input_hash:
             if self.transform_mode == "embedding":
@@ -3007,7 +3091,7 @@ class UMAP(BaseEstimator):
                             self._raw_data.toarray(),
                             metric=_m,
                             kwds=self._metric_kwds,
-                            force_all_finite=force_all_finite
+                            force_all_finite=force_all_finite,
                         )
                     else:
                         dmat = dist.pairwise_special_metric(
@@ -3015,7 +3099,7 @@ class UMAP(BaseEstimator):
                             self._raw_data,
                             metric=self._input_distance_func,
                             kwds=self._metric_kwds,
-                            force_all_finite=force_all_finite
+                            force_all_finite=force_all_finite,
                         )
                 else:
                     dmat = dist.pairwise_special_metric(
@@ -3023,7 +3107,7 @@ class UMAP(BaseEstimator):
                         self._raw_data,
                         metric=self._input_distance_func,
                         kwds=self._metric_kwds,
-                        force_all_finite=force_all_finite
+                        force_all_finite=force_all_finite,
                     )
             indices = np.argpartition(dmat, self._n_neighbors)[:, : self._n_neighbors]
             dmat_shortened = submatrix(dmat, indices, self._n_neighbors)
@@ -3136,8 +3220,8 @@ class UMAP(BaseEstimator):
         return embedding
 
     def inverse_transform(self, X):
-        """Transform X in the existing embedded space back into the input
-        data space and return that transformed output.
+        """Transform X in the existing embedded space back into the input data space and
+        return that transformed output.
 
         Parameters
         ----------
@@ -3304,9 +3388,17 @@ class UMAP(BaseEstimator):
 
     def update(self, X, force_all_finite=True):
         if self.metric in ("bit_hamming", "bit_jaccard"):
-            X = check_array(X, dtype=np.uint8, order="C", force_all_finite=force_all_finite)
+            X = check_array(
+                X, dtype=np.uint8, order="C", force_all_finite=force_all_finite
+            )
         else:
-            X = check_array(X, dtype=np.float32, accept_sparse="csr", order="C", force_all_finite=force_all_finite)
+            X = check_array(
+                X,
+                dtype=np.float32,
+                accept_sparse="csr",
+                order="C",
+                force_all_finite=force_all_finite,
+            )
         random_state = check_random_state(self.transform_seed)
         rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
@@ -3318,7 +3410,6 @@ class UMAP(BaseEstimator):
             raise ValueError("Updating supervised models is not currently " "supported")
 
         if self._small_data:
-
             if self._sparse_data:
                 self._raw_data = scipy.sparse.vstack([self._raw_data, X])
             else:
@@ -3332,7 +3423,7 @@ class UMAP(BaseEstimator):
                     dmat = pairwise_distances(
                         self._raw_data, metric=_m, **self._metric_kwds
                     )
-                except (ValueError, TypeError) as e:
+                except (ValueError, TypeError):
                     # metric is numba.jit'd or not supported by sklearn,
                     # fallback to pairwise special
 
@@ -3344,21 +3435,21 @@ class UMAP(BaseEstimator):
                                 self._raw_data.toarray(),
                                 metric=_m,
                                 kwds=self._metric_kwds,
-                                force_all_finite=force_all_finite
+                                force_all_finite=force_all_finite,
                             )
                         else:
                             dmat = dist.pairwise_special_metric(
                                 self._raw_data,
                                 metric=self._input_distance_func,
                                 kwds=self._metric_kwds,
-                                force_all_finite=force_all_finite
+                                force_all_finite=force_all_finite,
                             )
                     else:
                         dmat = dist.pairwise_special_metric(
                             self._raw_data,
                             metric=self._input_distance_func,
                             kwds=self._metric_kwds,
-                            force_all_finite=force_all_finite
+                            force_all_finite=force_all_finite,
                         )
                 self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
                     dmat,
@@ -3448,6 +3539,8 @@ class UMAP(BaseEstimator):
                 self.output_dens,
                 self._output_distance_func,
                 self._output_metric_kwds,
+                self.eigensolver_init,
+                self.eigensolver_method,
                 self.output_metric in ("euclidean", "l2"),
                 self.random_state is None,
                 self.verbose,
@@ -3515,6 +3608,8 @@ class UMAP(BaseEstimator):
                 self.output_dens,
                 self._output_distance_func,
                 self._output_metric_kwds,
+                self.eigensolver_init,
+                self.eigensolver_method,
                 self.output_metric in ("euclidean", "l2"),
                 self.random_state is None,
                 self.verbose,
@@ -3526,14 +3621,17 @@ class UMAP(BaseEstimator):
             self.rad_emb_ = aux_data["rad_emb"]
 
     def get_feature_names_out(self, feature_names_out=None):
-        """
-        Defines descriptive names for each output of the (fitted) estimator.
-        :param feature_names_out: Optional passthrough for feature names.
-        By default, feature names will be generated automatically.
-        :return: List of descriptive names for each output variable from the fitted estimator.
+        """Defines descriptive names for each output of the (fitted) estimator.
+
+        :param feature_names_out: Optional passthrough for feature names. By default,
+            feature names will be generated automatically.
+        :return: List of descriptive names for each output variable from the fitted
+            estimator.
         """
         if feature_names_out is None:
-            feature_names_out = [f"umap_component_{i+1}" for i in range(self.n_components)]
+            feature_names_out = [
+                f"umap_component_{i+1}" for i in range(self.n_components)
+            ]
         return feature_names_out
 
     def __repr__(self):
