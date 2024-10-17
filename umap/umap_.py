@@ -2336,7 +2336,7 @@ class UMAP(BaseEstimator):
 
         return result
 
-    def fit(self, X, y=None, force_all_finite=True):
+    def fit(self, X, y=None, force_all_finite=True, **kwargs):
         """Fit X into an embedded space.
 
         Optionally use y for supervised dimension reduction.
@@ -2360,6 +2360,9 @@ class UMAP(BaseEstimator):
                                    - False: accepts np.inf, np.nan, pd.NA in array.
                                    - 'allow-nan': accepts only np.nan and pd.NA values in array.
                                      Values cannot be infinite.
+
+        **kwargs : optional
+            Any additional keyword arguments are passed to _fit_embed_data.
         """
         if self.metric in ("bit_hamming", "bit_jaccard"):
             X = check_array(
@@ -2816,6 +2819,7 @@ class UMAP(BaseEstimator):
                 epochs,
                 init,
                 random_state,  # JH why raw data?
+                **kwargs,
             )
 
             if self.n_epochs_list is not None:
@@ -2853,9 +2857,10 @@ class UMAP(BaseEstimator):
 
         return self
 
-    def _fit_embed_data(self, X, n_epochs, init, random_state):
+    def _fit_embed_data(self, X, n_epochs, init, random_state, **kwargs):
         """A method wrapper for simplicial_set_embedding that can be
-        replaced by subclasses.
+        replaced by subclasses. Arbitrary keyword arguments can be passed
+        through .fit() and .fit_transform().
         """
         return simplicial_set_embedding(
             X,
@@ -2882,7 +2887,7 @@ class UMAP(BaseEstimator):
             tqdm_kwds=self.tqdm_kwds,
         )
 
-    def fit_transform(self, X, y=None, force_all_finite=True):
+    def fit_transform(self, X, y=None, force_all_finite=True, **kwargs):
         """Fit X into an embedded space and return that transformed
         output.
 
@@ -2904,6 +2909,8 @@ class UMAP(BaseEstimator):
                                    - 'allow-nan': accepts only np.nan and pd.NA values in array.
                                      Values cannot be infinite.
 
+        **kwargs : Any additional keyword arguments are passed to _fit_embed_data.
+
         Returns
         -------
         X_new : array, shape (n_samples, n_components)
@@ -2918,7 +2925,7 @@ class UMAP(BaseEstimator):
         r_emb: array, shape (n_samples)
             Local radii of data points in the embedding (log-transformed).
         """
-        self.fit(X, y, force_all_finite)
+        self.fit(X, y, force_all_finite, **kwargs)
         if self.transform_mode == "embedding":
             if self.output_dens:
                 return self.embedding_, self.rad_orig_, self.rad_emb_
