@@ -204,8 +204,8 @@ def poincare(u, v):
 
 @numba.njit()
 def hyperboloid_grad(x, y):
-    s = np.sqrt(1 + np.sum(x ** 2))
-    t = np.sqrt(1 + np.sum(y ** 2))
+    s = np.sqrt(1 + np.sum(x**2))
+    t = np.sqrt(1 + np.sum(y**2))
 
     B = s * t
     for i in range(x.shape[0]):
@@ -340,7 +340,7 @@ def canberra_grad(x, y):
             result += np.abs(x[i] - y[i]) / denominator
             grad[i] = (
                 np.sign(x[i] - y[i]) / denominator
-                - np.abs(x[i] - y[i]) * np.sign(x[i]) / denominator ** 2
+                - np.abs(x[i] - y[i]) * np.sign(x[i]) / denominator**2
             )
 
     return result, grad
@@ -497,7 +497,7 @@ def haversine(x, y):
         raise ValueError("haversine is only defined for 2 dimensional data")
     sin_lat = np.sin(0.5 * (x[0] - y[0]))
     sin_long = np.sin(0.5 * (x[1] - y[1]))
-    result = np.sqrt(sin_lat ** 2 + np.cos(x[0]) * np.cos(y[0]) * sin_long ** 2)
+    result = np.sqrt(sin_lat**2 + np.cos(x[0]) * np.cos(y[0]) * sin_long**2)
     return 2.0 * np.arcsin(result)
 
 
@@ -514,30 +514,20 @@ def haversine_grad(x, y):
     sin_long = np.sin(0.5 * (x[1] - y[1]))
     cos_long = np.cos(0.5 * (x[1] - y[1]))
 
-    a_0 = np.cos(x[0] + np.pi / 2) * np.cos(y[0] + np.pi / 2) * sin_long ** 2
-    a_1 = a_0 + sin_lat ** 2
+    a_0 = np.cos(x[0] + np.pi / 2) * np.cos(y[0] + np.pi / 2) * sin_long**2
+    a_1 = a_0 + sin_lat**2
 
     d = 2.0 * np.arcsin(np.sqrt(min(max(abs(a_1), 0), 1)))
     denom = np.sqrt(abs(a_1 - 1)) * np.sqrt(abs(a_1))
-    grad = (
-        np.array(
-            [
-                (
-                    sin_lat * cos_lat
-                    - np.sin(x[0] + np.pi / 2)
-                    * np.cos(y[0] + np.pi / 2)
-                    * sin_long ** 2
-                ),
-                (
-                    np.cos(x[0] + np.pi / 2)
-                    * np.cos(y[0] + np.pi / 2)
-                    * sin_long
-                    * cos_long
-                ),
-            ]
-        )
-        / (denom + 1e-6)
-    )
+    grad = np.array(
+        [
+            (
+                sin_lat * cos_lat
+                - np.sin(x[0] + np.pi / 2) * np.cos(y[0] + np.pi / 2) * sin_long**2
+            ),
+            (np.cos(x[0] + np.pi / 2) * np.cos(y[0] + np.pi / 2) * sin_long * cos_long),
+        ]
+    ) / (denom + 1e-6)
     return d, grad
 
 
@@ -598,7 +588,7 @@ def cosine_grad(x, y):
         dist = 1.0
         grad = np.zeros(x.shape)
     else:
-        grad = -(x * result - y * norm_x) / np.sqrt(norm_x ** 3 * norm_y)
+        grad = -(x * result - y * norm_x) / np.sqrt(norm_x**3 * norm_y)
         dist = 1.0 - (result / np.sqrt(norm_x * norm_y))
 
     return dist, grad
@@ -622,8 +612,8 @@ def correlation(x, y):
     for i in range(x.shape[0]):
         shifted_x = x[i] - mu_x
         shifted_y = y[i] - mu_y
-        norm_x += shifted_x ** 2
-        norm_y += shifted_y ** 2
+        norm_x += shifted_x**2
+        norm_y += shifted_y**2
         dot_product += shifted_x * shifted_y
 
     if norm_x == 0.0 and norm_y == 0.0:
@@ -677,7 +667,7 @@ def hellinger_grad(x, y):
         dist_denom = np.sqrt(l1_norm_x * l1_norm_y)
         dist = np.sqrt(1 - result / dist_denom)
         grad_denom = 2 * dist
-        grad_numer_const = (l1_norm_y * result) / (2 * dist_denom ** 3)
+        grad_numer_const = (l1_norm_y * result) / (2 * dist_denom**3)
 
         grad = (grad_numer_const - (y / grad_term * dist_denom)) / grad_denom
 
@@ -838,8 +828,8 @@ def correlation_grad(x, y):
     for i in range(x.shape[0]):
         shifted_x = x[i] - mu_x
         shifted_y = y[i] - mu_y
-        norm_x += shifted_x ** 2
-        norm_y += shifted_y ** 2
+        norm_x += shifted_x**2
+        norm_y += shifted_y**2
         dot_product += shifted_x * shifted_y
 
     if norm_x == 0.0 and norm_y == 0.0:
@@ -889,12 +879,12 @@ def spherical_gaussian_energy_grad(x, y):  # pragma: no cover
     sigma = np.abs(x[2]) + np.abs(y[2])
     sign_sigma = np.sign(x[2])
 
-    dist = (mu_1 ** 2 + mu_2 ** 2) / (2 * sigma) + np.log(sigma) + np.log(2 * np.pi)
+    dist = (mu_1**2 + mu_2**2) / (2 * sigma) + np.log(sigma) + np.log(2 * np.pi)
     grad = np.empty(3, np.float32)
 
     grad[0] = mu_1 / sigma
     grad[1] = mu_2 / sigma
-    grad[2] = sign_sigma * (1.0 / sigma - (mu_1 ** 2 + mu_2 ** 2) / (2 * sigma ** 2))
+    grad[2] = sign_sigma * (1.0 / sigma - (mu_1**2 + mu_2**2) / (2 * sigma**2))
 
     return dist, grad
 
@@ -914,13 +904,13 @@ def diagonal_gaussian_energy_grad(x, y):  # pragma: no cover
 
     if det == 0.0:
         # TODO: figure out the right thing to do here
-        return mu_1 ** 2 + mu_2 ** 2, np.array([0.0, 0.0, 1.0, 1.0], dtype=np.float32)
+        return mu_1**2 + mu_2**2, np.array([0.0, 0.0, 1.0, 1.0], dtype=np.float32)
 
     cross_term = 2 * sigma_12
     m_dist = (
-        np.abs(sigma_22) * (mu_1 ** 2)
+        np.abs(sigma_22) * (mu_1**2)
         - cross_term * mu_1 * mu_2
-        + np.abs(sigma_11) * (mu_2 ** 2)
+        + np.abs(sigma_11) * (mu_2**2)
     )
 
     dist = (m_dist / det + np.log(np.abs(det))) / 2.0 + np.log(2 * np.pi)
@@ -928,8 +918,8 @@ def diagonal_gaussian_energy_grad(x, y):  # pragma: no cover
 
     grad[0] = (2 * sigma_22 * mu_1 - cross_term * mu_2) / (2 * det)
     grad[1] = (2 * sigma_11 * mu_2 - cross_term * mu_1) / (2 * det)
-    grad[2] = sign_s1 * (sigma_22 * (det - m_dist) + det * mu_2 ** 2) / (2 * det ** 2)
-    grad[3] = sign_s2 * (sigma_11 * (det - m_dist) + det * mu_1 ** 2) / (2 * det ** 2)
+    grad[2] = sign_s1 * (sigma_22 * (det - m_dist) + det * mu_2**2) / (2 * det**2)
+    grad[3] = sign_s2 * (sigma_11 * (det - m_dist) + det * mu_1**2) / (2 * det**2)
 
     return dist, grad
 
@@ -962,14 +952,14 @@ def gaussian_energy_grad(x, y):  # pragma: no cover
     sigma_22 = x[2] * np.sin(x[4]) ** 2 + x[3] * np.cos(x[4]) ** 2 + c
 
     # Determinant of the sum of covariances
-    det_sigma = np.abs(sigma_11 * sigma_22 - sigma_12 ** 2)
+    det_sigma = np.abs(sigma_11 * sigma_22 - sigma_12**2)
     x_inv_sigma_y_numerator = (
-        sigma_22 * mu_1 ** 2 - 2 * sigma_12 * mu_1 * mu_2 + sigma_11 * mu_2 ** 2
+        sigma_22 * mu_1**2 - 2 * sigma_12 * mu_1 * mu_2 + sigma_11 * mu_2**2
     )
 
     if det_sigma < 1e-32:
         return (
-            mu_1 ** 2 + mu_2 ** 2,
+            mu_1**2 + mu_2**2,
             np.array([0.0, 0.0, 1.0, 1.0, 0.0], dtype=np.float32),
         )
 
@@ -985,7 +975,7 @@ def gaussian_energy_grad(x, y):  # pragma: no cover
     grad[2] -= x_inv_sigma_y_numerator * np.cos(x[4]) ** 2 * sigma_22
     grad[2] -= x_inv_sigma_y_numerator * np.sin(x[4]) ** 2 * sigma_11
     grad[2] += x_inv_sigma_y_numerator * 2 * sigma_12 * np.sin(x[4]) * np.cos(x[4])
-    grad[2] /= det_sigma ** 2 + 1e-8
+    grad[2] /= det_sigma**2 + 1e-8
 
     grad[3] = mu_1 * (mu_1 * np.cos(x[4]) ** 2 - mu_2 * np.cos(x[4]) * np.sin(x[4]))
     grad[3] += mu_2 * (mu_2 * np.sin(x[4]) ** 2 - mu_1 * np.cos(x[4]) * np.sin(x[4]))
@@ -993,16 +983,16 @@ def gaussian_energy_grad(x, y):  # pragma: no cover
     grad[3] -= x_inv_sigma_y_numerator * np.sin(x[4]) ** 2 * sigma_22
     grad[3] -= x_inv_sigma_y_numerator * np.cos(x[4]) ** 2 * sigma_11
     grad[3] -= x_inv_sigma_y_numerator * 2 * sigma_12 * np.sin(x[4]) * np.cos(x[4])
-    grad[3] /= det_sigma ** 2 + 1e-8
+    grad[3] /= det_sigma**2 + 1e-8
 
     grad[4] = (x[3] - x[2]) * (
-        2 * mu_1 * mu_2 * np.cos(2 * x[4]) - (mu_1 ** 2 - mu_2 ** 2) * np.sin(2 * x[4])
+        2 * mu_1 * mu_2 * np.cos(2 * x[4]) - (mu_1**2 - mu_2**2) * np.sin(2 * x[4])
     )
     grad[4] *= det_sigma
     grad[4] -= x_inv_sigma_y_numerator * (x[3] - x[2]) * np.sin(2 * x[4]) * sigma_22
     grad[4] -= x_inv_sigma_y_numerator * (x[2] - x[3]) * np.sin(2 * x[4]) * sigma_11
     grad[4] -= x_inv_sigma_y_numerator * 2 * sigma_12 * (x[2] - x[3]) * np.cos(2 * x[4])
-    grad[4] /= det_sigma ** 2 + 1e-8
+    grad[4] /= det_sigma**2 + 1e-8
 
     return dist, grad
 
@@ -1019,7 +1009,7 @@ def spherical_gaussian_grad(x, y):  # pragma: no cover
         return 10.0, np.array([0.0, 0.0, -1.0], dtype=np.float32)
 
     dist = (
-        (mu_1 ** 2 + mu_2 ** 2) / np.abs(sigma)
+        (mu_1**2 + mu_2**2) / np.abs(sigma)
         + 2 * np.log(np.abs(sigma))
         + np.log(2 * np.pi)
     )
@@ -1027,9 +1017,7 @@ def spherical_gaussian_grad(x, y):  # pragma: no cover
 
     grad[0] = (2 * mu_1) / np.abs(sigma)
     grad[1] = (2 * mu_2) / np.abs(sigma)
-    grad[2] = sigma_sign * (
-        -(mu_1 ** 2 + mu_2 ** 2) / (sigma ** 2) + (2 / np.abs(sigma))
-    )
+    grad[2] = sigma_sign * (-(mu_1**2 + mu_2**2) / (sigma**2) + (2 / np.abs(sigma)))
 
     return dist, grad
 
@@ -1283,7 +1271,9 @@ def chunked_parallel_special_metric(X, Y=None, metric=hellinger, chunk_size=16):
     return result
 
 
-def pairwise_special_metric(X, Y=None, metric="hellinger", kwds=None, force_all_finite=True):
+def pairwise_special_metric(
+    X, Y=None, metric="hellinger", kwds=None, force_all_finite=True
+):
     if callable(metric):
         if kwds is not None:
             kwd_vals = tuple(kwds.values())
@@ -1294,7 +1284,9 @@ def pairwise_special_metric(X, Y=None, metric="hellinger", kwds=None, force_all_
         def _partial_metric(_X, _Y=None):
             return metric(_X, _Y, *kwd_vals)
 
-        return pairwise_distances(X, Y, metric=_partial_metric, force_all_finite=force_all_finite)
+        return pairwise_distances(
+            X, Y, metric=_partial_metric, force_all_finite=force_all_finite
+        )
     else:
         special_metric_func = named_distances[metric]
     return parallel_special_metric(X, Y, metric=special_metric_func)

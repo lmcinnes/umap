@@ -206,9 +206,10 @@ def _nhood_compare(indices_left, indices_right):
     result = np.empty(indices_left.shape[0])
 
     for i in range(indices_left.shape[0]):
-        with numba.objmode(intersection_size='intp'):
-            intersection_size = np.intersect1d(indices_left[i], indices_right[i], 
-                                               assume_unique=True).shape[0]
+        with numba.objmode(intersection_size="intp"):
+            intersection_size = np.intersect1d(
+                indices_left[i], indices_right[i], assume_unique=True
+            ).shape[0]
         union_size = np.unique(np.hstack((indices_left[i], indices_right[i]))).shape[0]
         result[i] = float(intersection_size) / float(union_size)
 
@@ -264,7 +265,6 @@ def _datashade_points(
     show_legend=True,
     alpha=255,
 ):
-
     """Use datashader to plot points"""
     extent = _get_extent(points)
     canvas = ds.Canvas(
@@ -1466,7 +1466,11 @@ def interactive(
             width=width,
             height=height,
             tooltips=None if not tooltip_needed else tooltips,
-            tools=tools if tools is not None else "pan,wheel_zoom,box_zoom,save,reset,help",
+            tools=(
+                tools
+                if tools is not None
+                else "pan,wheel_zoom,box_zoom,save,reset,help"
+            ),
             background_fill_color=background,
         )
         plot.circle(
@@ -1546,9 +1550,7 @@ def interactive(
                 "be displayed. Sorry; try subsampling your data."
             )
         if interactive_text_search:
-            warn(
-                "Too many points for text search." "Sorry; try subsampling your data."
-            )
+            warn("Too many points for text search." "Sorry; try subsampling your data.")
         if alpha is not None:
             warn("Alpha parameter will not be applied on holoviews plots")
         hv.extension("bokeh")

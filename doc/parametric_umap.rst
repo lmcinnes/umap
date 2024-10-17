@@ -91,7 +91,7 @@ This loads both the UMAP object and the parametric networks it contains.
 
 Plotting loss
 -------------
-Parametric UMAP monitors loss during training using Keras. That loss will be printed after each epoch during training. This loss is saved in :python:`embedder.history`, and can be plotted: 
+Parametric UMAP monitors loss during training using Keras. That loss will be printed after each epoch during training. This loss is saved in :python:`embedder._history`, and can be plotted: 
 
 .. code:: python3
     
@@ -102,6 +102,8 @@ Parametric UMAP monitors loss during training using Keras. That loss will be pri
     ax.set_xlabel('Epoch')
     
 .. image:: images/umap-loss.png
+
+Much like other keras models, if you continue to train your model via the :python:`fit` method of the model, the :python:`embedder._history` will be updated with further training epoch losses.
 
 Parametric inverse_transform (reconstruction)
 ---------------------------------------------
@@ -205,6 +207,8 @@ Additional important parameters
 * **optimizer:** The optimizer used to train the neural network. by default Adam (:python:`tf.keras.optimizers.Adam(1e-3)`) is used. You might be able to speed up or improve training by using a different optimizer.
 * **parametric_embedding:** If set to false, a non-parametric embedding is learned, using the same code as the parametric embedding, which can serve as a direct comparison between parametric and non-parametric embedding using the same optimizer. The parametric embeddings are performed over the entire dataset simultaneously. 
 * **global_correlation_loss_weight:** Whether to additionally train on correlation of global pairwise relationships (multidimensional scaling)
+* **landmark_loss_fn:** The loss function to use when re-training on landmarked data, where you have provided a desired location in the embedding space to the :python:`fit` method of the model. By default, euclidean loss is used. For more information on re-training, landmarks, and why you might use them, see :doc:`transform_landmarked_pumap`.
+* **landmark_loss_weight:** How to weight the landmark loss relative to umap loss, by default 1.0.
 
 Extending the model
 -------------------

@@ -43,6 +43,7 @@ Things to note about the datasets:
           the equator and black to white from the south
           to north pole.
 """
+
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns

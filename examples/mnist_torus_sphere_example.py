@@ -50,7 +50,7 @@ if "torus" in target_spaces:
         for i in range(x.shape[0]):
             a = abs(x[i] - y[i])
             if 2 * a < torus_dimensions[i]:
-                distance_sqr += a ** 2
+                distance_sqr += a**2
                 g[i] = x[i] - y[i]
             else:
                 distance_sqr += (torus_dimensions[i] - a) ** 2
@@ -74,7 +74,7 @@ if "torus" in target_spaces:
     # Plot a torus
     R = 2
     r = 1
-    values = (R - np.sqrt(x ** 2 + y ** 2)) ** 2 + z ** 2 - r ** 2
+    values = (R - np.sqrt(x**2 + y**2)) ** 2 + z**2 - r**2
     mlab.contour3d(x, y, z, values, color=(1.0, 1.0, 1.0), contours=[0])
 
     # torus angles -> 3D
@@ -105,7 +105,7 @@ if "sphere" in target_spaces:
 
     # Plot a sphere
     r = 3
-    values = x ** 2 + y ** 2 + z ** 2 - r ** 2
+    values = x**2 + y**2 + z**2 - r**2
     mlab.contour3d(x, y, z, values, color=(1.0, 1.0, 1.0), contours=[0])
 
     # latitude, longitude -> 3D

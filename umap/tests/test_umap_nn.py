@@ -15,6 +15,7 @@ from umap.umap_ import (
 #  Nearest Neighbour Test cases
 # ===================================================
 
+
 # nearest_neighbours metric parameter validation
 # -----------------------------------------------
 def test_nn_bad_metric(nn_data):
