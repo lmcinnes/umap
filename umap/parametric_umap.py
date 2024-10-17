@@ -287,7 +287,7 @@ class ParametricUMAP(UMAP):
         ----------
         X : array, shape (n_samples, n_features)
             New data to be transformed.
-        batch_sixe : int, optional
+        batch_size : int, optional
             Batch size for inference, defaults to the self.batch_size used in training.
 
         Returns
