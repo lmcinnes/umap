@@ -153,7 +153,7 @@ def multi_component_layout(
     metric_kwds={},
     init="random",
     tol=0.0,
-    maxiter=0
+    maxiter=0,
 ):
     """Specialised layout algorithm for dealing with graphs with many connected components.
     This will first find relative positions for the components by spectrally embedding
@@ -249,7 +249,7 @@ def multi_component_layout(
                 metric_kwds=metric_kwds,
                 init=init,
                 tol=tol,
-                maxiter=maxiter
+                maxiter=maxiter,
             )
             expansion = data_range / np.max(np.abs(component_embedding))
             component_embedding *= expansion
@@ -268,7 +268,7 @@ def spectral_layout(
     metric="euclidean",
     metric_kwds={},
     tol=0.0,
-    maxiter=0
+    maxiter=0,
 ):
     """
     Given a graph compute the spectral embedding of the graph. This is
@@ -310,7 +310,7 @@ def spectral_layout(
         metric_kwds=metric_kwds,
         init="random",
         tol=tol,
-        maxiter=maxiter
+        maxiter=maxiter,
     )
 
 
@@ -323,7 +323,7 @@ def tswspectral_layout(
     metric_kwds={},
     method=None,
     tol=0.0,
-    maxiter=0
+    maxiter=0,
 ):
     """Given a graph, compute the spectral embedding of the graph. This is
     simply the eigenvectors of the Laplacian of the graph. Here we use the
@@ -388,7 +388,7 @@ def tswspectral_layout(
         init="tsvd",
         method=method,
         tol=tol,
-        maxiter=maxiter
+        maxiter=maxiter,
     )
 
 
@@ -402,7 +402,7 @@ def _spectral_layout(
     init="random",
     method=None,
     tol=0.0,
-    maxiter=0
+    maxiter=0,
 ):
     """General implementation of the spectral embedding of the graph, derived as
     a subset of the eigenvectors of the normalized Laplacian of the graph. The numerical
@@ -481,9 +481,7 @@ def _spectral_layout(
     # L = D - graph
     # Normalized Laplacian
     I = scipy.sparse.identity(graph.shape[0], dtype=np.float64)
-    D = scipy.sparse.spdiags(
-        1.0 / sqrt_deg, 0, graph.shape[0], graph.shape[0]
-    )
+    D = scipy.sparse.spdiags(1.0 / sqrt_deg, 0, graph.shape[0], graph.shape[0])
     L = I - D * graph * D
     if not scipy.sparse.issparse(L):
         L = np.asarray(L)
@@ -532,14 +530,14 @@ def _spectral_layout(
                 warnings.filterwarnings(
                     category=UserWarning,
                     message=r"(?ms).*not reaching the requested tolerance",
-                    action="error"
+                    action="error",
                 )
                 eigenvalues, eigenvectors = scipy.sparse.linalg.lobpcg(
                     L,
                     np.asarray(X),
                     largest=False,
                     tol=tol or 1e-4,
-                    maxiter=maxiter or 5 * graph.shape[0]
+                    maxiter=maxiter or 5 * graph.shape[0],
                 )
         else:
             raise ValueError("Method should either be None, 'eigsh' or 'lobpcg'")

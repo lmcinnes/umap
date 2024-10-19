@@ -83,6 +83,7 @@ def test_repeated_points_small_dense_binary(binary_repeats):
 #  Repeated Data Test cases
 # ===================================================
 
+
 # ----------------------------------------------------
 # This should test whether the n_neighbours are being
 # reduced properly when your n_neighbours is larger
