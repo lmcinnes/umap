@@ -177,7 +177,7 @@ class ParametricUMAP(UMAP):
             Points that are not landmarks should have nan coordinates.
         """
         if (self.prev_epoch_X is not None) & (landmark_positions is None):
-            # Add the landmark points for training, then make a landmark vector. 
+            # Add the landmark points for training, then make a landmark vector.
             landmark_positions = np.stack(
                 [np.array([np.nan, np.nan])]*X.shape[0] + list(
                     self.transform(
@@ -243,7 +243,7 @@ class ParametricUMAP(UMAP):
             Points that are not landmarks should have nan coordinates.
         """
         if (self.prev_epoch_X is not None) & (landmark_positions is None):
-        # Add the landmark points for training, then make a landmark vector. 
+            # Add the landmark points for training, then make a landmark vector.
             landmark_positions = np.stack(
                 [np.array([np.nan, np.nan])]*X.shape[0] + list(
                     self.transform(
@@ -495,8 +495,10 @@ class ParametricUMAP(UMAP):
             if verbose:
                 print("Pickle of ParametricUMAP model saved to {}".format(model_output))
 
-    def add_landmarks(self, X, sample_pct=0.01, sample_mode="uniform", landmark_loss_weight=0.01, idx=None):
-        """Add some points from a dataset X as "landmarks" to be approximately preserved after retraining.
+    def add_landmarks(
+            self, X, sample_pct=0.01, sample_mode="uniform", landmark_loss_weight=0.01, idx=None
+    ):
+        """Add some points from a dataset X as "landmarks."
 
         Parameters
         ----------
@@ -505,7 +507,7 @@ class ParametricUMAP(UMAP):
         sample_pct : float, optional
             Percentage of old data to use as landmarks.
         sample_mode : str, optional
-            Method for sampling points. Currently only "uniform" and "predefined" are supported. 
+            Method for sampling points. Allows "uniform" and "predefined."
         landmark_loss_weight : float, optional
             Multiplier for landmark loss function.
         
@@ -515,7 +517,9 @@ class ParametricUMAP(UMAP):
         self.landmark_loss_weight = landmark_loss_weight
 
         if self.sample_mode == "uniform":
-            self.prev_epoch_idx = list(np.random.choice(range(X.shape[0]), int(X.shape[0]*sample_pct), replace=False))
+            self.prev_epoch_idx = list(
+                np.random.choice(range(X.shape[0]), int(X.shape[0]*sample_pct), replace=False)
+            )
             self.prev_epoch_X = X[self.prev_epoch_idx]
         elif self.sample_mode == "predetermined":
             if idx is None:
@@ -525,12 +529,12 @@ class ParametricUMAP(UMAP):
             else:
                 self.prev_epoch_idx = idx
                 self.prev_epoch_X = X[self.prev_epoch_idx]
-                
+
         else:
             raise ValueError(
                 "Choice of sample_mode is not supported."
             )
-        
+
     def remove_landmarks(self):
         self.prev_epoch_X = None
 
