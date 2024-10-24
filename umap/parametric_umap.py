@@ -176,8 +176,8 @@ class ParametricUMAP(UMAP):
             The desired position in low-dimensional space of each sample in X.
             Points that are not landmarks should have nan coordinates.
         """
-        if (self.prev_epoch_X is not None)&(landmark_positions is None):
-             # Add the landmark points for training, then make a landmark vector. NaN corresponds to no landmark information.
+        if (self.prev_epoch_X is not None) & (landmark_positions is None):
+            # Add the landmark points for training, then make a landmark vector. 
             landmark_positions = np.stack(
                 [np.array([np.nan, np.nan])]*X.shape[0] + list(
                     self.transform(
@@ -185,7 +185,7 @@ class ParametricUMAP(UMAP):
                     )
                 )
             )
-            X = np.concatenate((X, self.prev_epoch_X))       
+            X = np.concatenate((X, self.prev_epoch_X))
 
         if landmark_positions is not None:
             len_X = len(X)
@@ -242,8 +242,8 @@ class ParametricUMAP(UMAP):
             The desired position in low-dimensional space of each sample in X.
             Points that are not landmarks should have nan coordinates.
         """
-        if (self.prev_epoch_X is not None)&(landmark_positions is None):
-             # Add the landmark points for training, then make a landmark vector. NaN corresponds to no landmark information.
+        if (self.prev_epoch_X is not None) & (landmark_positions is None):
+        # Add the landmark points for training, then make a landmark vector. 
             landmark_positions = np.stack(
                 [np.array([np.nan, np.nan])]*X.shape[0] + list(
                     self.transform(
@@ -251,7 +251,7 @@ class ParametricUMAP(UMAP):
                     )
                 )
             )
-            X = np.concatenate((X, self.prev_epoch_X))      
+            X = np.concatenate((X, self.prev_epoch_X))
 
         if landmark_positions is not None:
             len_X = len(X)
@@ -495,7 +495,7 @@ class ParametricUMAP(UMAP):
             if verbose:
                 print("Pickle of ParametricUMAP model saved to {}".format(model_output))
 
-    def add_landmarks(self, X, sample_pct=0.01, sample_mode = "uniform", landmark_loss_weight = 0.01,curr_window_vals = 1.0, old_window_thresh = 0.0):
+    def add_landmarks(self, X, sample_pct=0.01, sample_mode="uniform", landmark_loss_weight=0.01, idx=None):
         """Add some points from a dataset X as "landmarks" to be approximately preserved after retraining.
 
         Parameters
@@ -505,13 +505,9 @@ class ParametricUMAP(UMAP):
         sample_pct : float, optional
             Percentage of old data to use as landmarks.
         sample_mode : str, optional
-            Method for sampling points. Currently only "uniform" and "sliding_window" are supported. 
+            Method for sampling points. Currently only "uniform" and "predefined" are supported. 
         landmark_loss_weight : float, optional
             Multiplier for landmark loss function.
-        curr_window_vals: array, shape (n_samples,) or float, optional
-            In "sliding_window" mode, the window value to give to the current points.
-        old_window_thresh: float, optional
-            In "sliding_window" mode, points with values below this value are dropped.
         
         """
         self.sample_pct = sample_pct
@@ -520,39 +516,20 @@ class ParametricUMAP(UMAP):
 
         if self.sample_mode == "uniform":
             self.prev_epoch_idx = list(np.random.choice(range(X.shape[0]), int(X.shape[0]*sample_pct), replace=False))
-            self.prev_epoch_X = X[self.prev_epoch_idx]    
-        elif self.sample_mode == "sliding_window":
-            if (self.window_vals is None)&(self.prev_epoch_X is not None):
+            self.prev_epoch_X = X[self.prev_epoch_idx]
+        elif self.sample_mode == "predetermined":
+            if idx is None:
                 raise ValueError(
-                    "Use remove_landmarks to remove previous landmarks before adding sliding windows."
+                    "Choice of sample_mode is not supported."
                 )
-            if type(curr_window_vals) is float:
-                curr_window_vals = np.array([curr_window_vals]*X.shape[0])
-            new_idx = list(np.random.choice(range(X.shape[0]), int(X.shape[0]*self.sample_pct), replace=False))
-            new_X = X[new_idx]
-            new_window_vals = curr_window_vals[new_idx]
-            # update self.prev_epoch_idx, self.prev_epoch_X, self.window_vals by FIRST concatenating with the old values, THEN throwing away everything that fails the threshold.
-            if self.window_vals is None:
-                self.prev_epoch_idx = new_idx
-                self.window_vals = new_window_vals
-                self.prev_epoch_X = new_X
             else:
-                print(self.prev_epoch_X.shape) # ZZX: Kill this before release.
-                print(len(new_idx))
-                self.prev_epoch_idx = self.prev_epoch_idx.extend(new_idx)
-                self.window_vals = np.stack((self.window_vals,new_window_vals))
-                self.prev_epoch_X = np.stack((self.prev_epoch_X,new_X))
-            # Throw away indices if the window_vals are below old_window_thresh
-            retained_inds = [x for x in range(len(self.window_vals)) if self.window_vals[x] >= old_window_thresh]
-            self.prev_epoch_idx = list(np.array(self.prev_epoch_idx)[retained_inds])
-            self.window_vals = self.window_vals[retained_inds]
-            self.prev_epoch_X = self.prev_epoch_X[retained_inds]
-            
+                self.prev_epoch_idx = idx
+                self.prev_epoch_X = X[self.prev_epoch_idx]
+                
         else:
             raise ValueError(
                 "Choice of sample_mode is not supported."
             )
-    
         
     def remove_landmarks(self):
         self.prev_epoch_X = None
