@@ -496,7 +496,12 @@ class ParametricUMAP(UMAP):
                 print("Pickle of ParametricUMAP model saved to {}".format(model_output))
 
     def add_landmarks(
-            self, X, sample_pct=0.01, sample_mode="uniform", landmark_loss_weight=0.01, idx=None
+        self, 
+        X,
+        sample_pct=0.01,
+        sample_mode="uniform",
+        landmark_loss_weight=0.01,
+        idx=None,
     ):
         """Add some points from a dataset X as "landmarks."
 
@@ -510,7 +515,7 @@ class ParametricUMAP(UMAP):
             Method for sampling points. Allows "uniform" and "predefined."
         landmark_loss_weight : float, optional
             Multiplier for landmark loss function.
-        
+
         """
         self.sample_pct = sample_pct
         self.sample_mode = sample_mode
@@ -518,7 +523,9 @@ class ParametricUMAP(UMAP):
 
         if self.sample_mode == "uniform":
             self.prev_epoch_idx = list(
-                np.random.choice(range(X.shape[0]), int(X.shape[0]*sample_pct), replace=False)
+                np.random.choice(
+                    range(X.shape[0]), int(X.shape[0]*sample_pct), replace=False
+                )
             )
             self.prev_epoch_X = X[self.prev_epoch_idx]
         elif self.sample_mode == "predetermined":
