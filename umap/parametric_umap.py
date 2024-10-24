@@ -496,7 +496,7 @@ class ParametricUMAP(UMAP):
                 print("Pickle of ParametricUMAP model saved to {}".format(model_output))
 
     def add_landmarks(
-        self, 
+        self,
         X,
         sample_pct=0.01,
         sample_mode="uniform",
