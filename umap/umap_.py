@@ -2483,15 +2483,16 @@ class UMAP(BaseEstimator):
             if not np.all(X.diagonal() == 0):
                 raise ValueError("Non-zero distances from samples to themselves!")
             if self.knn_dists is None:
-                # For sparse precomputed distance matrices, we just argsort the rows to find
-                # nearest neighbors. To make this easier, we expect matrices that are
-                # symmetrical (so we can find neighbors by looking at rows in isolation,
-                # rather than also having to consider that sample's column too).
+                # For sparse precomputed distance matrices, we just argsort the rows
+                # to find nearest neighbors. To make this easier, we expect matrices
+                # that are symmetrical (so we can find neighbors by looking at rows
+                # in isolation, rather than also having to consider that sample's 
+                # column too). 
                 # print("Computing KNNs for sparse precomputed distances...")
                 if sparse_tril(X).getnnz() != sparse_triu(X).getnnz():
                     raise ValueError(
                         "Sparse precomputed distance matrices should be symmetrical!"
-                    )                
+                    )
                 self._knn_indices = np.zeros((X.shape[0], self.n_neighbors), dtype=int)
                 self._knn_dists = np.zeros(self._knn_indices.shape, dtype=float)
                 for row_id in range(X.shape[0]):
