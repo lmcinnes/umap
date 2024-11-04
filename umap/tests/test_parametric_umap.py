@@ -86,7 +86,7 @@ def test_custom_encoder_decoder(moon_dataset):
             tf.keras.layers.Dense(units=100, activation="relu"),
             tf.keras.layers.Dense(units=100, activation="relu"),
             tf.keras.layers.Dense(
-                units=np.product(dims), name="recon", activation=None
+                units=np.prod(dims), name="recon", activation=None
             ),
             tf.keras.layers.Reshape(dims),
         ]
