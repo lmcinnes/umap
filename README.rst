@@ -501,8 +501,6 @@ Additionally, if you use the densMAP algorithm in your work please cite the foll
         eprint = {https://www.biorxiv.org/content/early/2020/05/14/2020.05.12.077776.full.pdf},
     }
 
-
-
 If you use the Parametric UMAP algorithm in your work please cite the following reference:
 
 .. code:: bibtex
