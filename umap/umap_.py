@@ -2849,14 +2849,18 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self.rad_orig_ = aux_data["rad_orig"][inverse]
                 self.rad_emb_ = aux_data["rad_emb"][inverse]
 
+
         if self.verbose:
             print(ts() + " Finished embedding")
 
         numba.set_num_threads(self._original_n_threads)
         self._input_hash = joblib.hash(self._raw_data)
 
-        # Set number of features out for sklearn API
-        self._n_features_out = self.embedding_.shape[1]
+        if self.transform_mode == "embedding":
+            # Set number of features out for sklearn API
+            self._n_features_out = self.embedding_.shape[1]
+        else:
+            self._n_features_out = self.graph_.shape[1]
 
         return self
 
