@@ -38,7 +38,7 @@ def test_get_feature_names_out_default():
 
 def test_get_feature_names_out_multicomponent():
     # The output length should be equal to the number of components UMAP generates.
-    X, _ = make_classification(n_samples=30, n_features=10, random_state=42)    
+    X, _ = make_classification(n_samples=30, n_features=10, random_state=42)
     umap = UMAP(
         n_neighbors=10,
         min_dist=0.01,
