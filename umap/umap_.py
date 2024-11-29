@@ -8,8 +8,8 @@ from warnings import warn
 import time
 
 from scipy.optimize import curve_fit
-from sklearn.base import BaseEstimator
-from sklearn.utils import check_random_state, check_array
+from sklearn.base import BaseEstimator, ClassNamePrefixFeaturesOutMixin
+from sklearn.utils import check_array, check_random_state
 from sklearn.utils.validation import check_is_fitted
 from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import normalize
@@ -1408,7 +1408,7 @@ def find_ab_params(spread, min_dist):
     return params[0], params[1]
 
 
-class UMAP(BaseEstimator):
+class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
     """Uniform Manifold Approximation and Projection
 
     Finds a low dimensional embedding of the data that approximates
@@ -2849,11 +2849,18 @@ class UMAP(BaseEstimator):
                 self.rad_orig_ = aux_data["rad_orig"][inverse]
                 self.rad_emb_ = aux_data["rad_emb"][inverse]
 
+
         if self.verbose:
             print(ts() + " Finished embedding")
 
         numba.set_num_threads(self._original_n_threads)
         self._input_hash = joblib.hash(self._raw_data)
+
+        if self.transform_mode == "embedding":
+            # Set number of features out for sklearn API
+            self._n_features_out = self.embedding_.shape[1]
+        else:
+            self._n_features_out = self.graph_.shape[1]
 
         return self
 
@@ -3577,19 +3584,6 @@ class UMAP(BaseEstimator):
         if self.output_dens:
             self.rad_orig_ = aux_data["rad_orig"]
             self.rad_emb_ = aux_data["rad_emb"]
-
-    def get_feature_names_out(self, feature_names_out=None):
-        """
-        Defines descriptive names for each output of the (fitted) estimator.
-        :param feature_names_out: Optional passthrough for feature names.
-        By default, feature names will be generated automatically.
-        :return: List of descriptive names for each output variable from the fitted estimator.
-        """
-        if feature_names_out is None:
-            feature_names_out = [
-                f"umap_component_{i+1}" for i in range(self.n_components)
-            ]
-        return feature_names_out
 
     def __repr__(self):
         from sklearn.utils._pprint import _EstimatorPrettyPrinter
