@@ -13,6 +13,11 @@ the latent space the classifier uses. Fortunately UMAP makes this
 possible, albeit more slowly than some other transformers that allow
 this.
 
+This tutorial will step through a simple case where we expect the overall 
+distribution in our higher-dimensional vectors to be consistent between the 
+training and testing data. For more detail on how this can go wrong, and 
+how we can fix it using Parametric UMAP, see :doc:`transform_landmarked_pumap`.
+
 To demonstrate this functionality we'll make use of
 `scikit-learn <http://scikit-learn.org/stable/index.html>`__ and the
 digits dataset contained therein (see :doc:`basic_usage` for an example

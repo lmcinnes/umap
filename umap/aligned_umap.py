@@ -103,8 +103,9 @@ def build_neighborhood_similarities(graphs_indptr, graphs_indices, relations):
                 raw_base_graph_indices = base_graph_indices[
                     base_graph_indptr[k] : base_graph_indptr[k + 1]
                 ].copy()
-                base_indices = relations[i, j][raw_base_graph_indices[
-                    raw_base_graph_indices < relations.shape[2]]]
+                base_indices = relations[i, j][
+                    raw_base_graph_indices[raw_base_graph_indices < relations.shape[2]]
+                ]
                 base_indices = base_indices[base_indices >= 0]
                 comparison_indices = comparison_graph_indices[
                     comparison_graph_indptr[comparison_index] : comparison_graph_indptr[
@@ -169,11 +170,11 @@ def set_aligned_params(new_params, existing_params, n_models, param_names=PARAM_
             if isinstance(existing_params[param], list):
                 existing_params[param].append(new_params[param])
             elif isinstance(existing_params[param], tuple):
-                existing_params[param] = existing_params[param] + \
-                    (new_params[param],)
+                existing_params[param] = existing_params[param] + (new_params[param],)
             elif isinstance(existing_params[param], np.ndarray):
-                existing_params[param] = np.append(existing_params[param],
-                                                   new_params[param])
+                existing_params[param] = np.append(
+                    existing_params[param], new_params[param]
+                )
             else:
                 if new_params[param] != existing_params[param]:
                     existing_params[param] = (existing_params[param],) * n_models + (
@@ -472,7 +473,7 @@ class AlignedUMAP(BaseEstimator):
                 self.repulsion_strength, self.n_models_
             ),
             learning_rate=get_nth_item_or_val(self.learning_rate, self.n_models_),
-	    init=self.init,
+            init=self.init,
             spread=get_nth_item_or_val(self.spread, self.n_models_),
             negative_sample_rate=get_nth_item_or_val(
                 self.negative_sample_rate, self.n_models_

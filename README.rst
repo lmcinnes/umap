@@ -64,6 +64,14 @@ The details for the underlying mathematics can be found in
 McInnes, L, Healy, J, *UMAP: Uniform Manifold Approximation and Projection
 for Dimension Reduction*, ArXiv e-prints 1802.03426, 2018
 
+A broader introduction to UMAP targetted the scientific community can be found 
+in our `paper published in Nature Review Methods Primers  <https://doi.org/10.1038/s43586-024-00363-x>`_:
+
+Healy, J., McInnes, L. *Uniform manifold approximation and projection*. Nat Rev Methods 
+Primers 4, 82 (2024). 
+
+A read only version of this paper can accessed via `link <https://rdcu.be/d0YZT>`_
+
 The important thing is that you don't need to worry about that—you can use
 UMAP right now for dimension reduction and visualisation as easily as a drop
 in replacement for scikit-learn's t-SNE.
@@ -456,6 +464,27 @@ current reference:
         year = 2018,
         month = feb,
    }
+
+If you found the Nature Primer introduction useful please cite the following reference:
+
+.. code:: bibtex
+
+    @article{Healy2024,
+      author={Healy, John
+      and McInnes, Leland},
+      title={Uniform manifold approximation and projection},
+      journal={Nature Reviews Methods Primers},
+      year={2024},
+      month={Nov},
+      day={21},
+      volume={4},
+      number={1},
+      pages={82},
+      abstract={Uniform manifold approximation and projection is a nonlinear dimension reduction method often used for visualizing data and as pre-processing for further machine-learning tasks such as clustering. In this Primer, we provide an introduction to the uniform manifold approximation and projection algorithm, the intuitions behind how it works, how best to apply it on data and how to interpret and understand results.},
+      issn={2662-8449},
+      doi={10.1038/s43586-024-00363-x},
+      url={https://doi.org/10.1038/s43586-024-00363-x}
+    }
 
 Additionally, if you use the densMAP algorithm in your work please cite the following reference:
 

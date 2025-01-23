@@ -13,6 +13,7 @@ from umap.utils import norm
 
 locale.setlocale(locale.LC_NUMERIC, "C")
 
+
 # Just reproduce a simpler version of numpy unique (not numba supported yet)
 @numba.njit()
 def arr_unique(arr):
@@ -464,10 +465,10 @@ def sparse_correlation(ind1, data1, ind2, data2, n_features):
         shifted_data2[i] = data2[i] - mu_y
 
     norm1 = np.sqrt(
-        (norm(shifted_data1) ** 2) + (n_features - ind1.shape[0]) * (mu_x ** 2)
+        (norm(shifted_data1) ** 2) + (n_features - ind1.shape[0]) * (mu_x**2)
     )
     norm2 = np.sqrt(
-        (norm(shifted_data2) ** 2) + (n_features - ind2.shape[0]) * (mu_y ** 2)
+        (norm(shifted_data2) ** 2) + (n_features - ind2.shape[0]) * (mu_y**2)
     )
 
     dot_prod_inds, dot_prod_data = sparse_mul(ind1, shifted_data1, ind2, shifted_data2)

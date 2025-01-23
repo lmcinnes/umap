@@ -61,6 +61,7 @@ PyPI install, presuming you have numba and sklearn and all its requirements
    transform
    inverse_transform
    parametric_umap
+   transform_landmarked_pumap
    sparse
    supervised
    clustering

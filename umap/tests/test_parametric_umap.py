@@ -16,7 +16,10 @@ else:
     from umap.parametric_umap import ParametricUMAP, load_ParametricUMAP
 
 tf_only = pytest.mark.skipif(not IMPORT_TF, reason="TensorFlow >= 2.0 is not installed")
-not_windows = pytest.mark.skipif(platform.system() == "Windows", reason="Windows file access issues")
+not_windows = pytest.mark.skipif(
+    platform.system() == "Windows", reason="Windows file access issues"
+)
+
 
 @pytest.fixture(scope="session")
 def moon_dataset():
@@ -59,6 +62,7 @@ def test_inverse_transform(moon_dataset):
     assert X_r is not None
     assert X_r.shape == X.shape
 
+
 @tf_only
 def test_custom_encoder_decoder(moon_dataset):
     """test using a custom encoder / decoder"""
@@ -82,7 +86,7 @@ def test_custom_encoder_decoder(moon_dataset):
             tf.keras.layers.Dense(units=100, activation="relu"),
             tf.keras.layers.Dense(units=100, activation="relu"),
             tf.keras.layers.Dense(
-                units=np.product(dims), name="recon", activation=None
+                units=np.prod(dims), name="recon", activation=None
             ),
             tf.keras.layers.Reshape(dims),
         ]
