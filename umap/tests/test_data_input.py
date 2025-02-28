@@ -25,7 +25,7 @@ def test_check_input_data(all_finite_data, inverse_data):
     """
     Data input to UMAP gets checked for liability.
     This tests checks the if data input is dismissed/accepted
-    according to the "force_all_finite" keyword as used by
+    according to the "ensure_all_finite" keyword as used by
     sklearn.
 
     Parameters
@@ -44,19 +44,19 @@ def test_check_input_data(all_finite_data, inverse_data):
     inf_nan_data[1] = np.inf
 
     # wrapper to call each data handling function of UMAP in a convenient way
-    def call_umap_functions(data, force_all_finite):
+    def call_umap_functions(data, ensure_all_finite):
         u = UMAP(metric=nan_dist)
-        if force_all_finite is None:
+        if ensure_all_finite is None:
             u.fit_transform(data)
             u.fit(data)
             u.transform(data)
             u.update(data)
             u.inverse_transform(inverse_data)
         else:
-            u.fit_transform(data, force_all_finite=force_all_finite)
-            u.fit(data, force_all_finite=force_all_finite)
-            u.transform(data, force_all_finite=force_all_finite)
-            u.update(data, force_all_finite=force_all_finite)
+            u.fit_transform(data, ensure_all_finite=ensure_all_finite)
+            u.fit(data, ensure_all_finite=ensure_all_finite)
+            u.transform(data, ensure_all_finite=ensure_all_finite)
+            u.update(data, ensure_all_finite=ensure_all_finite)
             u.inverse_transform(inverse_data)
 
     # Check whether correct data input is accepted

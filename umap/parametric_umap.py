@@ -365,7 +365,7 @@ class ParametricUMAP(UMAP):
             landmark_positions = check_array(
                 landmark_positions,
                 dtype=np.float32,
-                force_all_finite="allow-nan",
+                ensure_all_finite="allow-nan",
             )
 
         # get dataset of edges
