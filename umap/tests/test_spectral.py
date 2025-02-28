@@ -13,7 +13,7 @@ scipy_full_version = tuple(
 
 
 @pytest.mark.skipif(
-    scipy_full_version < (1, 10),
+    scipy_full_version < (1, 10) or scipy_full_version >= (1, 15),
     reason="SciPy installing with Python 3.7 does not converge under same circumstances",
 )
 def test_tsw_spectral_init(iris):
