@@ -539,7 +539,7 @@ that are hard even for humans to classify correctly).
     </div>
     """))
     
-    plot_figure.circle(
+    plot_figure.scatter(
         'x',
         'y',
         source=datasource,
