@@ -404,7 +404,7 @@ approach we used for Penguins.
 
 .. parsed-literal::
 
-    UMAP(a=None, angular_rp_forest=False, b=None,
+    umap.UMAP(a=None, angular_rp_forest=False, b=None,
          force_approximation_algorithm=False, init='spectral', learning_rate=1.0,
          local_connectivity=1.0, low_memory=False, metric='euclidean',
          metric_kwds=None, min_dist=0.1, n_components=2, n_epochs=None,
