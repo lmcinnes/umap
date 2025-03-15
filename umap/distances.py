@@ -1272,7 +1272,7 @@ def chunked_parallel_special_metric(X, Y=None, metric=hellinger, chunk_size=16):
 
 
 def pairwise_special_metric(
-    X, Y=None, metric="hellinger", kwds=None, force_all_finite=True
+    X, Y=None, metric="hellinger", kwds=None, ensure_all_finite=True
 ):
     if callable(metric):
         if kwds is not None:
@@ -1285,7 +1285,7 @@ def pairwise_special_metric(
             return metric(_X, _Y, *kwd_vals)
 
         return pairwise_distances(
-            X, Y, metric=_partial_metric, force_all_finite=force_all_finite
+            X, Y, metric=_partial_metric, ensure_all_finite=ensure_all_finite
         )
     else:
         special_metric_func = named_distances[metric]

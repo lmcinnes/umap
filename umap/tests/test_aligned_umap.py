@@ -13,7 +13,7 @@ from sklearn.metrics import adjusted_rand_score
 def nn_accuracy(true_nn, embd_nn):
     num_correct = 0.0
     for i in range(true_nn.shape[0]):
-        num_correct += np.sum(np.in1d(true_nn[i], embd_nn[i]))
+        num_correct += np.sum(np.isin(true_nn[i], embd_nn[i]))
     return num_correct / true_nn.size
 
 
