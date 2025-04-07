@@ -264,9 +264,15 @@ the original).
     plt.scatter(
         embedding[:, 0], 
         embedding[:, 1], 
-        c=[sns.color_palette()[x] for x in penguins.species.map({"Adelie":0, "Chinstrap":1, "Gentoo":2})])
+        c=[sns.color_palette()[x] for x in penguins.species.map({"Adelie":0, "Chinstrap":0, "Gentoo":1})])
     plt.gca().set_aspect('equal', 'datalim')
-    plt.title('UMAP projection of the Penguin dataset', fontsize=24);
+    plt.title('UMAP projection of the Penguin dataset', fontsize=24)
+    handles = [
+    plt.Line2D([0], [0], marker='o', color='w', markerfacecolor=sns.color_palette()[0], markersize=10, label='Adelie'),
+    plt.Line2D([0], [0], marker='o', color='w', markerfacecolor=sns.color_palette()[1], markersize=10, label='Gentoo'),
+    plt.Line2D([0], [0], marker='o', color='w', markerfacecolor=sns.color_palette()[2], markersize=10, label='Chinstrap')
+    ]
+    plt.legend(handles=handles, title="Species");
 
 
 
