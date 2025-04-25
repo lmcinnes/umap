@@ -1822,7 +1822,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             self._target_metric_kwds = self.target_metric_kwds
         # check sparsity of data upfront to set proper _input_distance_func &
         # save repeated checks later on
-        if self._raw_data and scipy.sparse.isspmatrix_csr(self._raw_data):
+        if self._raw_data is not None and scipy.sparse.isspmatrix_csr(self._raw_data):
             self._sparse_data = True
         else:
             self._sparse_data = False
@@ -2021,7 +2021,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self.knn_indices = None
                 self.knn_dists = None
                 self.knn_search_index = None
-            elif self._raw_data and self.knn_dists.shape[0] != self._raw_data.shape[0]:
+            elif self._raw_data is not None and self.knn_dists.shape[0] != self._raw_data.shape[0]:
                 warn(
                     "precomputed_knn has a different number of samples than the"
                     " data you are fitting. precomputed_knn will be ignored and"
