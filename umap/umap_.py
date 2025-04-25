@@ -2326,10 +2326,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         return result
     
     def fit_transform_index(self, ensure_all_finite=True, **kwargs):
-        """Fit a UMAP model to an adjacency matrix.
-
-        The adjacency matrix is represented by the knn_indices and knn_dists
-        attributes.
+        """Generate a UMAP embedding from a precomputed index
 
         Parameters
         ----------
@@ -2346,16 +2343,9 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         if self.precomputed_knn[0] is None or self.precomputed_knn[1] is None:
             raise ValueError("precomputed_knn must be set")
         
-        if self.transform_mode != "embedding":
-            raise ValueError("fit_adj is only supported for embedding transform mode")
+        if self.init is None:
+            raise ValueError("init must be set")
         
-        # Handle all the optional arguments, setting default
-        if self.a is None or self.b is None:
-            self._a, self._b = find_ab_params(self.spread, self.min_dist)
-        else:
-            self._a = self.a
-            self._b = self.b
-
         if isinstance(self.init, np.ndarray):
             init = check_array(
                 self.init,
@@ -2365,6 +2355,16 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             )
         else:
             raise ValueError("init must be a numpy array")
+
+        if self.transform_mode != "embedding":
+            raise ValueError("fit_transform_index is only supported for embedding transform mode")
+        
+        # Handle all the optional arguments, setting default
+        if self.a is None or self.b is None:
+            self._a, self._b = find_ab_params(self.spread, self.min_dist)
+        else:
+            self._a = self.a
+            self._b = self.b
 
         self._initial_alpha = self.learning_rate
 
@@ -2388,17 +2388,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         if self.n_jobs > 0 and self.n_jobs is not None:
             numba.set_num_threads(self.n_jobs)
 
-        # Check if we should unique the data
-        # We've already ensured that we aren't in the precomputed case
-        if self.unique:
-            raise NotImplementedError("Unique is not implemented for fit_adj")
-            
-        # If we aren't asking for unique use the full index.
-        # This will save special cases later.
-        else:
-            index = list(range(self.precomputed_knn[0].shape[0]))
-            inverse = list(range(self.precomputed_knn[0].shape[0]))
-
+        inverse = list(range(self.precomputed_knn[0].shape[0]))
         random_state = check_random_state(self.random_state)
 
         if self.verbose:
@@ -2454,7 +2444,6 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
 
         if self.verbose:
             print(ts(), "Construct embedding")
-
 
         epochs = (
             self.n_epochs_list if self.n_epochs_list is not None else self.n_epochs
