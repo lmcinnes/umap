@@ -421,6 +421,11 @@ See `the documentation <https://umap-learn.readthedocs.io/en/0.5dev/densmap_demo
 Interactive UMAP with Nomic Atlas
 ------------------------
 
+.. image:: https://assets.nomicatlas.com/mnist-training-embeddings-umap-short.gif
+   :alt: UMAP interactive visualization with Nomic Atlas
+   :align: center
+   :width: 600
+
 For interactive exploration of UMAP embeddings, especially with large datasets, you can use `Nomic Atlas <https://atlas.nomic.ai/>`_. Nomic Atlas is a platform for embedding generation, visualization, analysis, and retrieval that directly integrates UMAP as one of its projection models.
 
 Using Nomic Atlas with UMAP is straightforward:
@@ -429,15 +434,16 @@ Using Nomic Atlas with UMAP is straightforward:
 
     from nomic import AtlasDataset
     from nomic.data_inference import ProjectionOptions
-    import pandas as pd
 
-    # Create a dataset and add your data
-    dataset = AtlasDataset("my_umap_visualization")
-    dataset.add_data(df)
+    # Create a dataset
+    dataset = AtlasDataset("my-dataset")
+    
+    # data is a DataFrame or a list of dicts
+    dataset.add_data(data)
 
-    # Create an interactive map with UMAP parameters
+    # Create an interactive map hosted in Atlas
     atlas_map = dataset.create_index(
-        indexed_field='text_column',
+        indexed_field='text',
         projection=ProjectionOptions(
             model="umap",
             n_neighbors=15,
@@ -445,8 +451,8 @@ Using Nomic Atlas with UMAP is straightforward:
             n_epochs=200
         )
     )
-
-    print(f"Explore your map: {atlas_map.map_link}")
+    # you can access your UMAP coordinates later on with
+    # atlas_map.maps[0].embeddings.projected
 
 Nomic Atlas provides:
 
@@ -456,8 +462,6 @@ Nomic Atlas provides:
 * Scalability for millions of data points
 * Rich information display on hover
 * Shareable UMAPs via URL links to your embeddings and data maps in Atlas
-
-For a complete example, see the :doc:`nomic_atlas_example` guide in the documentation.
 
 ----------------
 Help and Support

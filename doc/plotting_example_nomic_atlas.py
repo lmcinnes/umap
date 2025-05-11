@@ -5,7 +5,7 @@ import pandas as pd
 # Example data
 df = pd.read_csv("https://docs.nomic.ai/singapore_airlines_reviews.csv")
 
-dataset = AtlasDataset("mnist-training-embeddings")
+dataset = AtlasDataset("example-dataset-airline-reviews")
 
 dataset.add_data(df)
 

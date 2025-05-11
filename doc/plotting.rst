@@ -305,45 +305,170 @@ Interactive plotting with Nomic Atlas
 
 For interactive exploration, especially with large datasets, you can use `Nomic Atlas <https://atlas.nomic.ai/>`_. Nomic Atlas is a platform for embedding generation, visualization, analysis, retrieval, and everything you need to operationalize your embeddings and make them useful for your applications. It directly integrates UMAP as one of its projection models, allowing you to leverage UMAP within a powerful visualization environment.
 
-Here's an example of how you might use Nomic Atlas with UMAP to visualize embeddings of text:
-
-.. code:: python3
-
-    from nomic import AtlasDataset
-    from nomic.data_inference import ProjectionOptions
-    import pandas as pd
-
-    # Create a Nomic Atlas Dataset
-    dataset = AtlasDataset("example-dataset-airline-reviews") 
-
-    # Example dataset of reviews of an airline
-    df = pd.read_csv("https://docs.nomic.ai/singapore_airline_reviews.csv")
-
-    # Add your data
-    dataset.add_data(df)
-
-    # Atlas generates embeddings and builds a UMAP projection
-    atlas_map = dataset.create_index(
-        indexed_field='text_column',
-        projection=ProjectionOptions(
-            model="umap", # Specify UMAP as the projection model
-            n_neighbors=15,
-            min_dist=0.1,
-            n_epochs=200
-        )
-    )
-    print(f"Explore your map: {atlas_map.map_link}")
-
 Nomic Atlas handles the embedding and UMAP dimensionality reduction process and provides an interactive interface with features like searching, filtering, coloring by metadata, and displaying rich information on hover. Atlas can help when you want to share your understanding of your UMAP visualizations or collaborate with others, as the map is accessible via a URL.
 
 .. raw:: html
 
    <video width="600" controls>
-     <source src="https://assets.nomicatlas.com/airline-reviews-umap.mp4" type="video/mp4">
+     <source src="https://assets.nomicatlas.com/mnist-training-embeddings-umap-short.mp4" type="video/mp4">
      Your browser does not support the video tag.
    </video>
 
-For a complete example of how to use UMAP with Nomic Atlas, see the :doc:`nomic_atlas_example` guide.
+.. code:: python3
+
+    import base64
+    import io
+    from PIL import Image
+    import torch
+    import torch.nn as nn
+    import torch.optim as optim
+    import torchvision
+    import torchvision.transforms as transforms
+    from torch.utils.data import DataLoader, Subset
+    import numpy as np
+    from nomic import AtlasDataset
+    import time
+
+    # --- Hyperparameters ---
+    NUM_EPOCHS = 20
+    LEARNING_RATE = 3e-6
+    BATCH_SIZE = 128
+    NUM_VIS_SAMPLES = 2000
+    EMBEDDING_DIM = 128
+    ATLAS_DATASET_NAME = "mnist_training_embeddings"
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}\n")
+
+    class MNIST_CNN(nn.Module):
+        def __init__(self, embedding_dim=128):
+            super(MNIST_CNN, self).__init__()
+            self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
+            self.relu1 = nn.ReLU()
+            self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2) # 28x28 -> 14x14
+            self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+            self.relu2 = nn.ReLU()
+            self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2) # 14x14 -> 7x7
+            self.flatten = nn.Flatten()
+            self.fc1 = nn.Linear(64 * 7 * 7, embedding_dim) # Embedding layer
+            self.relu3 = nn.ReLU()
+            self.fc2 = nn.Linear(embedding_dim, 10) # Output layer
+
+        def forward(self, x):
+            x = self.pool1(self.relu1(self.conv1(x)))
+            x = self.pool2(self.relu2(self.conv2(x)))
+            x = self.flatten(x)
+            embeddings = self.relu3(self.fc1(x))
+            output = self.fc2(embeddings)
+            return output, embeddings
+
+    # --- 2. Load MNIST Data ---
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,))
+    ])
+
+    train_dataset = torchvision.datasets.MNIST(root='./data', train=True, download=True, transform=transform)
+    test_dataset = torchvision.datasets.MNIST(root='./data', train=False, download=True, transform=transform)
+
+    # DataLoader for training
+    # Handle persistent_workers based on device type (MPS doesn't support it well)
+    persistent_workers_flag = True if device.type not in ['mps', 'cpu'] else False
+    num_workers_val = 2 if persistent_workers_flag else 0 # num_workers > 0 can cause issues on MPS without persistent_workers
+
+    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=num_workers_val, persistent_workers=persistent_workers_flag if num_workers_val > 0 else False)
+
+    # Create a subset of the test dataset for visualization
+    vis_indices = list(range(NUM_VIS_SAMPLES))
+    vis_subset = Subset(test_dataset, vis_indices)
+    test_loader_for_vis = DataLoader(vis_subset, batch_size=BATCH_SIZE, shuffle=False, num_workers=num_workers_val, persistent_workers=persistent_workers_flag if num_workers_val > 0 else False)
+
+    print(f"Training on {len(train_dataset)} samples, visualizing {NUM_VIS_SAMPLES} test samples per epoch.\n")
+
+    # --- 3. Initialize Model, Optimizer, Criterion ---
+    model = MNIST_CNN(embedding_dim=EMBEDDING_DIM).to(device)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+
+    # --- 4. Training Loop & Embedding Extraction ---
+    all_embeddings_list = []
+    all_metadata_list = []
+    all_images_html = []  # Store HTML representations of images
+
+    # Helper function to convert tensor to HTML image
+    def tensor_to_html(tensor):
+        # Denormalize the image
+        img = tensor.clone().detach().cpu().squeeze(0)
+        img = img * 0.3081 + 0.1307  # Reverse the normalization
+        img = torch.clamp(img, 0, 1)
+
+        
+        img_pil = Image.fromarray((img.numpy() * 255).astype('uint8'), mode='L')
+        buffered = io.BytesIO()
+        img_pil.save(buffered, format="PNG")
+        img_str = base64.b64encode(buffered.getvalue()).decode()
+        
+        return f'<img src="data:image/png;base64,{img_str}" width="28" height="28">'
+
+    overall_start_time = time.time()
+    for epoch in range(NUM_EPOCHS):
+        epoch_start_time = time.time()
+        model.train()
+        running_loss = 0.0
+        for batch_idx, (data, target) in enumerate(train_loader):
+            data, target = data.to(device), target.to(device)
+            optimizer.zero_grad()
+            outputs, _ = model(data)
+            loss = criterion(outputs, target)
+            loss.backward()
+            optimizer.step()
+            running_loss += loss.item()
+            if (batch_idx + 1) % 200 == 0: # Print every 200 mini-batches
+                print(f'Epoch [{epoch+1}/{NUM_EPOCHS}], Batch [{batch_idx+1}/{len(train_loader)}], Avg Loss: {running_loss / 200:.4f}')
+                running_loss = 0.0
+
+        print(f"Epoch {epoch+1}/{NUM_EPOCHS} training finished in {time.time() - epoch_start_time:.2f}s.\n")
+
+        # Extract embeddings for visualization subset
+        model.eval()
+        vis_samples_collected_this_epoch = 0
+        image_offset_in_vis_subset = 0 # Tracks the index within the vis_subset (0 to NUM_VIS_SAMPLES-1)
+        with torch.no_grad():
+            for data, target in test_loader_for_vis:
+                data, target = data.to(device), target.to(device)
+                _, embeddings_batch = model(data)
+                for i in range(embeddings_batch.size(0)):
+                    # original_idx_in_subset is the true index of this image within the NUM_VIS_SAMPLES selected for visualization
+                    original_idx_in_subset = image_offset_in_vis_subset + i 
+                    if original_idx_in_subset >= NUM_VIS_SAMPLES: # Should not happen if test_loader_for_vis is setup correctly
+                        continue
+                    
+                    all_embeddings_list.append(embeddings_batch[i].cpu().numpy())
+                    
+                    # Generate HTML representation of the image
+                    img_html = tensor_to_html(data[i])
+                    all_images_html.append(img_html)
+                    
+                    all_metadata_list.append({
+                        'id': f'vis_img_{original_idx_in_subset}_epoch_{epoch}', # Unique ID for Atlas
+                        'epoch': epoch,
+                        'label': f'Digit: {target[i].item()}',
+                        'vis_sample_idx': original_idx_in_subset, # Index within the 0..NUM_VIS_SAMPLES-1 range
+                        'image_html': img_html  # Add the HTML representation to metadata
+                    })
+                    vis_samples_collected_this_epoch += 1
+                image_offset_in_vis_subset += embeddings_batch.size(0) # Move offset by batch size
+                if vis_samples_collected_this_epoch >= NUM_VIS_SAMPLES: # Ensure we don't collect more than needed
+                    break
+                    
+        print(f"Collected {vis_samples_collected_this_epoch} embeddings for visualization in epoch {epoch+1}.\n")
+
+    total_script_time = time.time() - overall_start_time
+    print(f"Total training and embedding extraction time: {total_script_time:.2f}s\n")
+
+    dataset = AtlasDataset("mnist-training-embeddings", unique_id_field='id')
+    dataset.add_data(data=all_metadata_list, embeddings=np.array(all_embeddings_list))
+    atlas_map = dataset.create_index(projection='umap', topic_model=False) 
+    print(f"Explore your map: {atlas_map.map_link}")
 
 Plotting connectivity
 ---------------------
