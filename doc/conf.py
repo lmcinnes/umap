@@ -40,6 +40,7 @@ extensions = [
     "sphinx.ext.viewcode",
     #    'bokeh.sphinxext.bokeh_plot',
     "sphinx_gallery.gen_gallery",
+    "sphinxcontrib.images",
     "numpydoc",
 ]
 
