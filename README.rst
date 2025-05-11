@@ -417,29 +417,50 @@ An example of making use of these options (based on a subsample of the mnist_784
 See `the documentation <https://umap-learn.readthedocs.io/en/0.5dev/densmap_demo.html>`_ for more details.
 
 
-----------------------------------------
+--------------------------
 Interactive UMAP with Nomic Atlas
-----------------------------------------
+--------------------------
 
-For a highly interactive and scalable way to explore your UMAP embeddings, especially with large datasets, consider `Nomic Atlas <https://atlas.nomic.ai/>`_. Nomic Atlas is a platform for building, visualizing, and sharing interactive maps of your data directly in your web browser.
+For interactive exploration of UMAP embeddings, especially with large datasets, you can use `Nomic Atlas <https://atlas.nomic.ai/>`_. Nomic Atlas is a platform for embedding generation, visualization, analysis, and retrieval that directly integrates UMAP as one of its projection models.
 
-Nomic Atlas offers UMAP users:
+Using Nomic Atlas with UMAP is straightforward:
 
-* **Seamless UMAP Integration**: Leverage UMAP's core algorithm (including parameters like ``n_neighbors``, ``min_dist``, etc.) to generate embeddings within the Atlas platform.
-* **Scalability**: Visualize and interact with datasets containing millions of points, going beyond the capabilities of many local plotting tools.
-* **Rich Interactivity**: Explore embeddings with features like zooming, panning, searching, filtering, and coloring by metadata.
-* **Web-Based and Shareable**: Easily share your interactive UMAP visualizations with collaborators or embed them elsewhere using a simple URL.
-* **Support for Diverse Data**: Embed not just numerical vectors, but also text and images.
+.. code:: python
 
-.. raw:: html
+    from nomic import AtlasDataset
+    from nomic.data_inference import ProjectionOptions
+    import pandas as pd
 
-   <video width="600" controls>
-     <source src="https://nomicatlas.com/umap-with-nomic-atlas.mp4" type="video/mp4">
-     Your browser does not support the video tag.
-   </video>
+    # Create a dataset and add your data
+    dataset = AtlasDataset("my_umap_visualization")
+    dataset.add_data(df)
 
+    # Create an interactive map with UMAP parameters
+    atlas_map = dataset.create_index(
+        indexed_field='text_column',
+        projection=ProjectionOptions(
+            model="umap",
+            n_neighbors=15,
+            min_dist=0.1,
+            n_epochs=200
+        )
+    )
 
-----------------
+    print(f"Explore your map: {atlas_map.map_link}")
+
+Nomic Atlas provides:
+
+* In-browser AI-analysis of your UMAP data
+* Vector search and filtering over your UMAP data programmatically using the [Nomic Atlas API](https://docs.nomic.ai/reference/api-reference)
+* Scalability for millions of data points
+* Interactive features like zooming, searching, and filtering
+* Ability to color points by metadata
+* Rich information display on hover
+* Shareable maps via URL for collaboration
+
+For a complete example, see the :doc:`nomic_atlas_example` guide in the documentation.
+
+--------------------------
 Help and Support
 ----------------
 
