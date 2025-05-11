@@ -300,6 +300,48 @@ supports all the same aesthetic parameters as ``umap.plot.points`` so
 you can theme your plot, color by label or value, and other similar
 operations explained above for ``umap.plot.points``.
 
+Interactive exploration with Nomic Atlas
+----------------------------------------
+
+For even richer interactive exploration, especially with large datasets, you can use `Nomic Atlas <https://atlas.nomic.ai/>`_. Nomic Atlas is a platform for embedding generation, visualization, analysis, retrieval, and everything you need to operationalize your embeddings and make them useful for your applications. It directly integrates UMAP as one of its projection models, allowing you to leverage UMAP's speed and scalability capabilities within a powerful visualization environment.
+
+Here's a conceptual overview of how you might use Nomic Atlas with UMAP-like parameters:
+
+.. code:: python3
+
+    from nomic import AtlasDataset
+    from nomic.data_inference import ProjectionOptions
+    import pandas as pd
+
+    # Create a Nomic Atlas Dataset
+    dataset = AtlasDataset("my_umap_visualization_with_nomic_atlas") 
+
+    # Add your data
+    dataset.add_data(df)
+
+    # Create an index and map, specifying UMAP parameters within ProjectionOptions
+    # atlas_map = dataset.create_index(
+    #    indexed_field='text_column',
+    #    projection=ProjectionOptions(
+    #        model="umap", # Specify UMAP as the projection model
+    #        n_neighbors=15, # UMAP's n_neighbors
+    #        min_dist=0.1,   # UMAP's min_dist
+    #        n_epochs=200    # UMAP's n_epochs (can be inferred by Atlas or set manually)
+    #    )
+    # )
+    print(f"Explore your map: {atlas_map.map_link}")
+
+Nomic Atlas handles the embedding and UMAP dimensionality reduction process and provides an interactive interface with features like searching, filtering, coloring by metadata, and displaying rich information on hover. Atlas can help when you want to share your understanding of your UMAP visualizations or collaborate with others, as the map is accessible via a URL.
+
+.. raw:: html
+
+   <video width="600" controls>
+     <source src="https://assets.nomicatlas.com/nomic-atlas-umap-example.mp4" type="video/mp4">
+     Your browser does not support the video tag.
+   </video>
+
+For a complete example of how to use UMAP with Nomic Atlas, see the :doc:`nomic_atlas_example` guide.
+
 Plotting connectivity
 ---------------------
 

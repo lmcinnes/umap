@@ -136,3 +136,24 @@ Thanks to the authors of "Evolutionary-scale prediction of atomic level protein 
 with a language model".
 
 `ESM Metagenomic Atlas <https://esmatlas.com/explore>`__
+
+Nomic Atlas
+-----------
+`Nomic Atlas <https://atlas.nomic.ai/>`_ is a platform for interactively visualizing and exploring massive datasets. It automates the creation of embeddings and 2D coordinate projections using UMAP.
+
+Nomic Atlas is particularly well-suited for:
+
+*   Exploring datasets with thousands or millions of data points
+*   Querying your data with an AI analyst
+*   Embedding unstructured text and images
+*   Collaboratively analyzing and annotating data maps
+*   Sharing interactive data visualizations via a web link
+
+.. raw:: html
+
+   <video width="400" controls>
+     <source src="https://assets.nomicatlas.com/umap-with-nomic-atlas.mp4" type="video/mp4">
+     Your browser does not support the video tag.
+   </video>
+
+See the :doc:`nomic_atlas_example` for a guide on using UMAP with Nomic Atlas.

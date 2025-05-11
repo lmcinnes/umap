@@ -555,6 +555,54 @@ that are hard even for humans to classify correctly).
 .. raw:: html
    :file: basic_usage_bokeh_example.html
 
+Visualizing Digits using UMAP with Nomic Atlas
+------------------------------
+
+A powerful way to create interactive visualizations of very large datasets is with `Nomic Atlas <https://atlas.nomic.ai/>`_. Nomic Atlas allows you to build web-based, shareable maps of your data, automating the process of creating embeddings and 2D coordinate projections using UMAP.
+
+Let's revisit the digits dataset and see how we can visualize it with Nomic Atlas. You'll need to install the `nomic` library if you haven't already: `pip install nomic`.
+
+.. code:: python3
+
+    import pandas as pd
+    from nomic import AtlasDataset
+    from nomic.data_inference import ProjectionOptions
+    from sklearn.datasets import load_digits
+
+    # Load the digits dataset (if not already loaded)
+    digits = load_digits()
+
+    # Prepare data for Nomic Atlas
+    df_digits = pd.DataFrame(digits.data)
+    df_digits['id'] = [f'digit_{i}' for i in range(len(df_digits))]
+    # Add the target labels as metadata for coloring/filtering in Atlas
+    df_digits['label'] = [str(x) for x in digits.target]
+
+    # For this example, we will embed the raw vector data. 
+
+    # Create a Nomic Atlas Dataset.
+    atlas_dataset = AtlasDataset("dataset-of-digits", unique_id_field="id")
+
+    # Add the data to the dataset
+    # atlas_dataset.add_data(df_digits)
+
+    # Create a map using UMAP parameters within ProjectionOptions
+  
+    # project = atlas_dataset.create_index(
+    #    projection=ProjectionOptions(
+    #        model="umap",
+    #        n_neighbors=15,      # Corresponds to UMAP's n_neighbors
+    #        min_dist=0.1,        # Corresponds to UMAP's min_dist
+    #        n_epochs=200,        # UMAP's n_epochs, Atlas might infer this if not set
+    #        # indexed_field can be set here if not on all columns
+    #    )
+    # )
+    # print(f"Explore your interactive UMAP digits map in Nomic Atlas: {project.map_link}")
+
+After running the script, Nomic Atlas will output a URL. Opening this link in your browser will take you to an interactive map of the digits dataset. You can then color points by their 'label', search, and explore the UMAP embedding in detail. Nomic Atlas excels when you need to share these visualizations or work with datasets that are too large for local plotting libraries.
+
+For more details on using Nomic Atlas with UMAP, including how to customize UMAP parameters, see the :doc:`nomic_atlas_example`.
+
 As can be seen, the nines that blend between the ones and the sevens are
 odd looking nines (that aren't very rounded) and do, indeed, interpolate
 surprisingly well between ones with hats and crossed sevens. In contrast
@@ -599,14 +647,14 @@ Original data access and use
 
    </h4>
 
-From Gorman et al.: “Data reported here are publicly available within
+From Gorman et al.: "Data reported here are publicly available within
 the PAL-LTER data system (datasets #219, 220, and 221):
 http://oceaninformatics.ucsd.edu/datazoo/data/pallter/datasets. These
 data are additionally archived within the United States (US) LTER
-Network’s Information System Data Portal: https://portal.lternet.edu/.
+Network's Information System Data Portal: https://portal.lternet.edu/.
 Individuals interested in using these data are therefore expected to
-follow the US LTER Network’s Data Access Policy, Requirements and Use
-Agreement: https://lternet.edu/data-access-policy/.”
+follow the US LTER Network's Data Access Policy, Requirements and Use
+Agreement: https://lternet.edu/data-access-policy/."
 
 Anyone interested in publishing the data should contact `Dr. Kristen
 Gorman <https://www.uaf.edu/cfos/people/faculty/detail/kristen-gorman.php>`__

@@ -416,6 +416,29 @@ An example of making use of these options (based on a subsample of the mnist_784
 
 See `the documentation <https://umap-learn.readthedocs.io/en/0.5dev/densmap_demo.html>`_ for more details.
 
+
+----------------------------------------
+Interactive UMAP with Nomic Atlas
+----------------------------------------
+
+For a highly interactive and scalable way to explore your UMAP embeddings, especially with large datasets, consider `Nomic Atlas <https://atlas.nomic.ai/>`_. Nomic Atlas is a platform for building, visualizing, and sharing interactive maps of your data directly in your web browser.
+
+Nomic Atlas offers UMAP users:
+
+* **Seamless UMAP Integration**: Leverage UMAP's core algorithm (including parameters like ``n_neighbors``, ``min_dist``, etc.) to generate embeddings within the Atlas platform.
+* **Scalability**: Visualize and interact with datasets containing millions of points, going beyond the capabilities of many local plotting tools.
+* **Rich Interactivity**: Explore embeddings with features like zooming, panning, searching, filtering, and coloring by metadata.
+* **Web-Based and Shareable**: Easily share your interactive UMAP visualizations with collaborators or embed them elsewhere using a simple URL.
+* **Support for Diverse Data**: Embed not just numerical vectors, but also text and images.
+
+.. raw:: html
+
+   <video width="600" controls>
+     <source src="https://nomicatlas.com/umap-with-nomic-atlas.mp4" type="video/mp4">
+     Your browser does not support the video tag.
+   </video>
+
+
 ----------------
 Help and Support
 ----------------
