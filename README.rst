@@ -417,9 +417,9 @@ An example of making use of these options (based on a subsample of the mnist_784
 See `the documentation <https://umap-learn.readthedocs.io/en/0.5dev/densmap_demo.html>`_ for more details.
 
 
---------------------------
+------------------------
 Interactive UMAP with Nomic Atlas
---------------------------
+------------------------
 
 For interactive exploration of UMAP embeddings, especially with large datasets, you can use `Nomic Atlas <https://atlas.nomic.ai/>`_. Nomic Atlas is a platform for embedding generation, visualization, analysis, and retrieval that directly integrates UMAP as one of its projection models.
 
@@ -450,19 +450,16 @@ Using Nomic Atlas with UMAP is straightforward:
 
 Nomic Atlas provides:
 
-- In-browser AI-analysis of your UMAP data
-- Vector search and filtering over your UMAP data programmatically using the Nomic Atlas API
-- Scalability for millions of data points
-- Interactive features like zooming, searching, and filtering
-- Ability to color points by metadata
-- Rich information display on hover
-- Shareable maps via URL for collaboration
-
-.. _Nomic Atlas API: https://docs.nomic.ai/reference/api-reference
+* In-browser AI-analysis of your UMAP data
+* Vector search over your UMAP data using the `Nomic API <https://docs.nomic.ai/atlas/data-maps/guides/vector-search-over-your-data>`_
+* Scalability for millions of data points
+* Interactive features like zooming, recoloring, searching, and filtering in the `Nomic Atlas data map <https://docs.nomic.ai/atlas/data-maps/controls>`_
+* Rich information display on hover
+* Shareable maps via URL for collaboration
 
 For a complete example, see the :doc:`nomic_atlas_example` guide in the documentation.
 
---------------------------
+----------------
 Help and Support
 ----------------
 
