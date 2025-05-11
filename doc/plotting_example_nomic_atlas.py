@@ -10,11 +10,8 @@ dataset = AtlasDataset("example-dataset-airline-reviews")
 dataset.add_data(df)
 
 atlas_map = dataset.create_index(
-    indexed_field='text',
+    indexed_field="text",
     projection=ProjectionOptions(
-      model="umap",
-      n_neighbors=20,
-      min_dist=0.01,
-      n_epochs=200
-  )
+        model="umap", n_neighbors=20, min_dist=0.01, n_epochs=200
+    ),
 )
