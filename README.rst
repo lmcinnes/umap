@@ -450,12 +450,12 @@ Using Nomic Atlas with UMAP is straightforward:
 
 Nomic Atlas provides:
 
-* In-browser AI-analysis of your UMAP data
+* In-browser analysis of your UMAP data with the `Atlas Analyst <https://docs.nomic.ai/atlas/data-maps/atlas-analyst>`_
 * Vector search over your UMAP data using the `Nomic API <https://docs.nomic.ai/atlas/data-maps/guides/vector-search-over-your-data>`_
-* Scalability for millions of data points
 * Interactive features like zooming, recoloring, searching, and filtering in the `Nomic Atlas data map <https://docs.nomic.ai/atlas/data-maps/controls>`_
+* Scalability for millions of data points
 * Rich information display on hover
-* Shareable maps via URL for collaboration
+* Shareable UMAPs via URL links to your embeddings and data maps in Atlas
 
 For a complete example, see the :doc:`nomic_atlas_example` guide in the documentation.
 
