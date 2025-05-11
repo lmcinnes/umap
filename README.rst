@@ -421,11 +421,6 @@ See `the documentation <https://umap-learn.readthedocs.io/en/0.5dev/densmap_demo
 Interactive UMAP with Nomic Atlas
 ------------------------
 
-.. image:: https://assets.nomicatlas.com/mnist-training-embeddings-umap-short.gif
-   :alt: UMAP interactive visualization with Nomic Atlas
-   :align: center
-   :width: 600
-
 For interactive exploration of UMAP embeddings, especially with large datasets, you can use `Nomic Atlas <https://atlas.nomic.ai/>`_. Nomic Atlas is a platform for embedding generation, visualization, analysis, and retrieval that directly integrates UMAP as one of its projection models.
 
 Using Nomic Atlas with UMAP is straightforward:
