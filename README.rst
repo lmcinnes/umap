@@ -421,8 +421,9 @@ See `the documentation <https://umap-learn.readthedocs.io/en/0.5dev/densmap_demo
 Interactive UMAP with Nomic Atlas
 ------------------------
 
-.. image:: images/mnist-training-embeddings-umap.png
-    :alt: UMAP embedding across MNIST training epochs
+.. image:: https://assets.nomicatlas.com/mnist-training-embeddings-umap-short.gif
+   :width: 600
+   :alt: MNIST UMAP visualization in Nomic Atlas
 
 For interactive exploration of UMAP embeddings, especially for visualizing large datasets data over time/training epochs, you can use `Nomic Atlas <https://atlas.nomic.ai/>`_. Nomic Atlas is a platform for embedding generation, visualization, analysis, and retrieval that directly integrates UMAP as one of its projection models.
 
@@ -439,7 +440,7 @@ Using Nomic Atlas with UMAP is straightforward:
     # data is a DataFrame or a list of dicts
     dataset.add_data(data)
 
-    # Create an interactive map hosted in Atlas
+    # Create an interactive UMAP in Atlas
     atlas_map = dataset.create_index(
         indexed_field='text',
         projection=ProjectionOptions(

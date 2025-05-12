@@ -92,7 +92,8 @@ PyPI install, presuming you have numba and sklearn and all its requirements
    interactive_viz
    exploratory_analysis
    scientific_papers
-   nomic_atlas_example
+   nomic_atlas_umap_of_text_embeddings
+   nomic_atlas_visualizing_mnist_training
 
 .. toctree::
    :caption: API Reference:

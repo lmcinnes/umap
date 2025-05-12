@@ -137,8 +137,9 @@ with a language model".
 
 `ESM Metagenomic Atlas <https://esmatlas.com/explore>`__
 
-Nomic Atlas
------------
+Interactive UMAP with Nomic Atlas
+---------------------------------
+
 `Nomic Atlas <https://atlas.nomic.ai/>`_ is a platform for interactively visualizing and exploring massive datasets. It automates the creation of embeddings and 2D coordinate projections using UMAP.
 
 .. image:: https://assets.nomicatlas.com/mnist-training-embeddings-umap-short.gif
@@ -154,3 +155,12 @@ Atlas provides:
 * Scalability for millions of data points
 * Rich information display on hover
 * Shareable UMAPs via URL links to your embeddings and data maps in Atlas
+
+-----------
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Nomic Atlas Examples
+
+   nomic_atlas_umap_of_text_embeddings
+   nomic_atlas_visualizing_mnist_training_dynamics
