@@ -416,6 +416,52 @@ An example of making use of these options (based on a subsample of the mnist_784
 
 See `the documentation <https://umap-learn.readthedocs.io/en/0.5dev/densmap_demo.html>`_ for more details.
 
+
+------------------------
+Interactive UMAP with Nomic Atlas
+------------------------
+
+.. image:: https://assets.nomicatlas.com/mnist-training-embeddings-umap-short.gif
+   :width: 600
+   :alt: MNIST UMAP visualization in Nomic Atlas
+
+For interactive exploration of UMAP embeddings, especially for visualizing large datasets data over time/training epochs, you can use `Nomic Atlas <https://atlas.nomic.ai/>`_. Nomic Atlas is a platform for embedding generation, visualization, analysis, and retrieval that directly integrates UMAP as one of its projection models.
+
+Using Nomic Atlas with UMAP is straightforward:
+
+.. code:: python
+
+    from nomic import AtlasDataset
+    from nomic.data_inference import ProjectionOptions
+
+    # Create a dataset
+    dataset = AtlasDataset("my-dataset")
+    
+    # data is a DataFrame or a list of dicts
+    dataset.add_data(data)
+
+    # Create an interactive UMAP in Atlas
+    atlas_map = dataset.create_index(
+        indexed_field='text',
+        projection=ProjectionOptions(
+            model="umap",
+            n_neighbors=15,
+            min_dist=0.1,
+            n_epochs=200
+        )
+    )
+    # you can access your UMAP coordinates later on with
+    # atlas_map.maps[0].embeddings.projected
+
+Nomic Atlas provides:
+
+* In-browser analysis of your UMAP data with the `Atlas Analyst <https://docs.nomic.ai/atlas/data-maps/atlas-analyst>`_
+* Vector search over your UMAP data using the `Nomic API <https://docs.nomic.ai/atlas/data-maps/guides/vector-search-over-your-data>`_
+* Interactive features like zooming, recoloring, searching, and filtering in the `Nomic Atlas data map <https://docs.nomic.ai/atlas/data-maps/controls>`_
+* Scalability for millions of data points
+* Rich information display on hover
+* Shareable UMAPs via URL links to your embeddings and data maps in Atlas
+
 ----------------
 Help and Support
 ----------------

@@ -599,14 +599,14 @@ Original data access and use
 
    </h4>
 
-From Gorman et al.: “Data reported here are publicly available within
+From Gorman et al.: "Data reported here are publicly available within
 the PAL-LTER data system (datasets #219, 220, and 221):
 http://oceaninformatics.ucsd.edu/datazoo/data/pallter/datasets. These
 data are additionally archived within the United States (US) LTER
-Network’s Information System Data Portal: https://portal.lternet.edu/.
+Network's Information System Data Portal: https://portal.lternet.edu/.
 Individuals interested in using these data are therefore expected to
-follow the US LTER Network’s Data Access Policy, Requirements and Use
-Agreement: https://lternet.edu/data-access-policy/.”
+follow the US LTER Network's Data Access Policy, Requirements and Use
+Agreement: https://lternet.edu/data-access-policy/."
 
 Anyone interested in publishing the data should contact `Dr. Kristen
 Gorman <https://www.uaf.edu/cfos/people/faculty/detail/kristen-gorman.php>`__
