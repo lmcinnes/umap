@@ -141,6 +141,7 @@ stages:
           displayName: 'Install package locally'
         
         - bash: |
+            pip install build
             python -m build --wheel --sdist --outdir dist/ .
             ls -l dist/
           displayName: 'Build package'

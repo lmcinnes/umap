@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "umap-learn"
-version = "0.5.9"
+version = "0.5.9.post1"
 description = "Uniform Manifold Approximation and Projection"
 readme = "README.rst"
 license = {text = "BSD"}
