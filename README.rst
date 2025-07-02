@@ -417,9 +417,9 @@ An example of making use of these options (based on a subsample of the mnist_784
 See `the documentation <https://umap-learn.readthedocs.io/en/0.5dev/densmap_demo.html>`_ for more details.
 
 
-------------------------
+---------------------------------
 Interactive UMAP with Nomic Atlas
-------------------------
+---------------------------------
 
 .. image:: https://assets.nomicatlas.com/mnist-training-embeddings-umap-short.gif
    :width: 600
