@@ -26,3 +26,7 @@ umap_learn.egg-info
 # docs
 doc/auto_examples
 doc/_build
+
+# build directories
+build
+dist
