@@ -516,15 +516,26 @@ def _spectral_layout(
         X[:, 0] = sqrt_deg / np.linalg.norm(sqrt_deg)
 
         if method == "eigsh":
+            A = I - L
             eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
-                L,
+                A,
                 k,
-                which="SM",
+                which="LA",
                 ncv=num_lanczos_vectors,
                 tol=tol or 1e-4,
                 v0=np.ones(L.shape[0]),
                 maxiter=maxiter or graph.shape[0] * 5,
             )
+            eigenvalues = [1.0 - eigenvalue for eigenvalue in eigenvalues]
+            # eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
+            #     L,
+            #     k,
+            #     which="SM",
+            #     ncv=num_lanczos_vectors,
+            #     tol=tol or 1e-4,
+            #     v0=np.ones(L.shape[0]),
+            #     maxiter=maxiter or graph.shape[0] * 5,
+            # )
         elif method == "lobpcg":
             with warnings.catch_warnings():
                 warnings.filterwarnings(
