@@ -323,25 +323,51 @@ def nearest_neighbors(
 
         knn_search_index = None
     else:
-        # TODO: Hacked values for now
-        n_trees = min(64, 5 + int(round((X.shape[0]) ** 0.5 / 20.0)))
-        n_iters = max(5, int(round(np.log2(X.shape[0]))))
-
-        knn_search_index = NNDescent(
-            X,
-            n_neighbors=n_neighbors,
-            metric=metric,
-            metric_kwds=metric_kwds,
-            random_state=random_state,
-            n_trees=n_trees,
-            n_iters=n_iters,
-            max_candidates=60,
-            low_memory=low_memory,
-            n_jobs=n_jobs,
-            verbose=verbose,
-            compressed=False,
-        )
-        knn_indices, knn_dists = knn_search_index.neighbor_graph
+        # # TODO: Hacked values for now
+        if not verbose:
+            n_trees = min(64, 5 + int(round((X.shape[0]) ** 0.5 / 20.0)))
+            n_iters = max(5, int(round(np.log2(X.shape[0]))))
+            knn_search_index = NNDescent(
+                X,
+                n_neighbors=n_neighbors,
+                metric=metric,
+                metric_kwds=metric_kwds,
+                random_state=random_state,
+                n_trees=n_trees,
+                n_iters=n_iters,
+                max_candidates=60,
+                low_memory=low_memory,
+                n_jobs=n_jobs,
+                verbose=verbose,
+                compressed=False,
+            )
+            knn_indices, knn_dists = knn_search_index.neighbor_graph
+        else:
+            print(ts(), "Using alternative param NNDescent to find Nearest Neighbors")
+            n_trees = max(4, min(8, 5 + int(round((X.shape[0]) ** 0.5 / 20.0))))
+            n_iters = max(5, int(round(np.log2(X.shape[0]))))
+            effective_n_neighbors = int(1.5 * n_neighbors)
+            effective_max_candidates = max(20, min(60, effective_n_neighbors))
+            print(
+                ts(), f"Using {n_trees} trees, {n_iters} iterations, {effective_n_neighbors} neighbors, and {effective_max_candidates} max candidates."
+            )
+            knn_search_index = NNDescent(
+                X,
+                n_neighbors=effective_n_neighbors,
+                # metric=metric,
+                # metric_kwds=metric_kwds,
+                metric="euclidean",
+                random_state=random_state,
+                n_trees=n_trees,
+                n_iters=n_iters,
+                max_candidates=effective_max_candidates,
+                # n_jobs=-1,
+                verbose=verbose,
+                # compressed=False,
+            )
+            knn_indices, knn_dists = knn_search_index.neighbor_graph
+            knn_indices = knn_indices[:, :n_neighbors]
+            knn_dists = knn_dists[:, :n_neighbors]
 
     if verbose:
         print(ts(), "Finished Nearest Neighbor Search")
@@ -1975,7 +2001,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
 
         if self.n_jobs < -1 or self.n_jobs == 0:
             raise ValueError("n_jobs must be a postive integer, or -1 (for all cores)")
-        if self.n_jobs != 1 and self.random_state is not None:
+        if self.n_jobs != 1 and self.random_state is not None and self.verbose is False: # turn off parallelism reset in new layout mode
             self.n_jobs = 1
             warn(
                 f"n_jobs value {self.n_jobs} overridden to 1 by setting random_state. Use no seed for parallelism."

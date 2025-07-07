@@ -186,7 +186,7 @@ def _optimize_layout_euclidean_single_epoch(
             )
 
 @numba.njit(
-    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, i8[:, ::1], f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, bool, f4[::1], f4[::1], i8, i8, i8, i8, f4[::1], f4[::1], i8, i8, f4[:, ::1], i4[::1])",
+    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, i8[:, ::1], f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, bool, f4[::1], f4[::1], i8, i8, i8, i8, f4[::1], f4[::1], i8, i8, f4[:, ::1], i4[::1], i8)",
     fastmath=True,
     parallel=True,
     locals={
@@ -235,8 +235,9 @@ def optimize_layout_euclidean_single_epoch_fast(
     n_threads,
     updates,
     node_order,
+    block_size=256,
 ):
-    block_size = 4096
+    # block_size = 256
     # for node_block in range(0, head_embedding.shape[0], n_threads):
     #     # updates[:] = 0.0
     #     for thread in numba.prange(n_threads):
@@ -249,7 +250,7 @@ def optimize_layout_euclidean_single_epoch_fast(
         # updates[:] = 0.0
         for node_idx in numba.prange(block_start, block_end):
             from_node = node_order[node_idx]
-            thread = from_node % n_threads
+            # thread = from_node % n_threads
             # local_rng_state = rng_state_per_thread[thread]
             current = head_embedding[from_node]
 
@@ -495,6 +496,8 @@ def optimize_layout_euclidean(
     # a lot of time in compilation step (first call to numba function)
     if csr_indptr is not None and csr_indices is not None:
         optimize_fn = optimize_layout_euclidean_single_epoch_fast
+        epochs_per_negative_sample *= 1.5 # to account for the fact that we are using a fast version
+        epoch_of_next_negative_sample *= 1.5
     else:
         optimize_fn = _get_optimize_layout_euclidean_single_epoch_fn(parallel)
 
@@ -538,6 +541,7 @@ def optimize_layout_euclidean(
     n_threads = numba.get_num_threads()
     updates = np.zeros((head_embedding.shape[0], dim), dtype=np.float32)
     node_order = np.arange(head_embedding.shape[0], dtype=np.int32)
+    block_size = 65536
 
     rng_state_per_sample = np.full(
         (head_embedding.shape[0], len(rng_state)), rng_state, dtype=np.int64
@@ -589,7 +593,7 @@ def optimize_layout_euclidean(
                 a,
                 b,
                 rng_state_per_thread,
-                gamma,
+                gamma * 1.1,
                 dim,
                 alpha,
                 epochs_per_negative_sample,
@@ -609,9 +613,11 @@ def optimize_layout_euclidean(
                 n_threads,
                 updates,
                 node_order,
+                block_size=block_size,
             )
+            block_size = int(4096 + (block_size - 4096) * np.sqrt(alpha)) # Reduce block size for next epoch
             # tau_rand_int(rng_state_per_thread[0])  # Ensure the RNG state is updated
-            updates *= min(0.25, alpha)  # a cheap momentum
+            updates *= min(0.25, np.sqrt(alpha))  # a cheap momentum
             random_state.shuffle(node_order)  # Shuffle the order of nodes for the next epoch
         else:
             optimize_fn(
