@@ -185,6 +185,168 @@ def _optimize_layout_euclidean_single_epoch(
                 n_neg_samples * epochs_per_negative_sample[i]
             )
 
+@numba.njit(
+    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, i8[:, ::1], f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, bool, f4[::1], f4[::1], i8, i8, i8, i8, f4[::1], f4[::1], i8, i8, f4[:, ::1], i4[::1])",
+    fastmath=True,
+    parallel=True,
+    locals={
+        "updates": numba.types.float32[:, ::1],
+        "from_node": numba.types.intp,
+        "to_node": numba.types.intp,
+        "raw_index": numba.types.intp,
+        "dist_squared": numba.types.float32,
+        "grad_coeff": numba.types.float32,
+        "grad_d": numba.types.float32,
+        "dphi_term": numba.types.float32,
+        "phi": numba.types.float32,
+        "q_jk": numba.types.float32,
+        "q_kj": numba.types.float32,
+        "drk": numba.types.float32,
+        "drj": numba.types.float32,
+    },
+)
+def optimize_layout_euclidean_single_epoch_fast(
+    head_embedding,
+    tail_embedding,
+    csr_indptr,
+    csr_indices,
+    n_vertices,
+    epochs_per_sample,
+    a,
+    b,
+    rng_state_per_thread,
+    gamma,
+    dim,
+    alpha,
+    epochs_per_negative_sample,
+    epoch_of_next_negative_sample,
+    epoch_of_next_sample,
+    n,
+    densmap_flag,
+    dens_phi_sum,
+    dens_re_sum,
+    dens_re_cov,
+    dens_re_std,
+    dens_re_mean,
+    dens_lambda,
+    dens_R,
+    dens_mu,
+    dens_mu_tot,
+    n_threads,
+    updates,
+    node_order,
+):
+    block_size = 4096
+    # for node_block in range(0, head_embedding.shape[0], n_threads):
+    #     # updates[:] = 0.0
+    #     for thread in numba.prange(n_threads):
+    #         from_node = node_block + thread
+
+    # for from_node in numba.prange(head_embedding.shape[0]):
+
+    for block_start in range(0, head_embedding.shape[0], block_size):
+        block_end = min(block_start + block_size, head_embedding.shape[0])
+        # updates[:] = 0.0
+        for node_idx in numba.prange(block_start, block_end):
+            from_node = node_order[node_idx]
+            thread = from_node % n_threads
+            # local_rng_state = rng_state_per_thread[thread]
+            current = head_embedding[from_node]
+
+            for raw_index in range(csr_indptr[from_node], csr_indptr[from_node+1]):
+                if epoch_of_next_sample[raw_index] <= n:
+                    to_node = csr_indices[raw_index]
+                    other = tail_embedding[to_node]
+
+                    dist_squared = rdist(current, other)
+
+                    # if densmap_flag:
+                    #     phi = 1.0 / (1.0 + a * pow(dist_squared, b))
+                    #     dphi_term = (
+                    #         a * b * pow(dist_squared, b - 1) / (1.0 + a * pow(dist_squared, b))
+                    #     )
+
+                    #     q_jk = phi / dens_phi_sum[to_node]
+                    #     q_kj = phi / dens_phi_sum[from_node]
+
+                    #     drk = q_jk * (
+                    #         (1.0 - b * (1 - phi)) / np.exp(dens_re_sum[to_node]) + dphi_term
+                    #     )
+                    #     drj = q_kj * (
+                    #         (1.0 - b * (1 - phi)) / np.exp(dens_re_sum[from_node]) + dphi_term
+                    #     )
+
+                    #     re_std_sq = dens_re_std * dens_re_std
+                    #     weight_k = (
+                    #         dens_R[to_node]
+                    #         - dens_re_cov * (dens_re_sum[to_node] - dens_re_mean) / re_std_sq
+                    #     )
+                    #     weight_j = (
+                    #         dens_R[from_node]
+                    #         - dens_re_cov * (dens_re_sum[from_node] - dens_re_mean) / re_std_sq
+                    #     )
+
+                    #     grad_cor_coeff = (
+                    #         dens_lambda
+                    #         * dens_mu_tot
+                    #         * (weight_k * drk + weight_j * drj)
+                    #         / (dens_mu[raw_index] * dens_re_std)
+                    #         / n_vertices
+                    #     )
+
+                    if dist_squared > 0.0:
+                        grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
+                        grad_coeff /= a * pow(dist_squared, b) + 1.0
+                        for d in range(dim):
+                            grad_d = clip(grad_coeff * (current[d] - other[d]))
+
+                            # if densmap_flag:
+                            #     # FIXME: grad_cor_coeff might be referenced before assignment
+
+                            #     grad_d += clip(2 * grad_cor_coeff * (current[d] - other[d]))
+
+                            updates[from_node, d] += grad_d * alpha
+                            # updates[to_node, d] += -grad_d * alpha
+
+
+                    epoch_of_next_sample[raw_index] += epochs_per_sample[raw_index]
+
+                    n_neg_samples = int(
+                        (n - epoch_of_next_negative_sample[raw_index]) / epochs_per_negative_sample[raw_index]
+                    )
+
+                    for p in range(n_neg_samples):
+                        # to_node = tau_rand_int(local_rng_state) % n_vertices
+                        to_node = (raw_index * (n + p + 1) * rng_state_per_thread[0][0]) % n_vertices
+
+                        other = tail_embedding[to_node]
+
+                        dist_squared = rdist(current, other)
+
+                        if dist_squared > 0.0:
+                            grad_coeff = 2.0 * gamma * b
+                            grad_coeff /= (0.001 + dist_squared) * (
+                                a * pow(dist_squared, b) + 1
+                            )
+
+                            for d in range(dim):
+                                if grad_coeff > 0.0:
+                                    grad_d = clip(grad_coeff * (current[d] - other[d]))
+                                else:
+                                    grad_d = 0
+                                updates[from_node, d] += grad_d * alpha
+
+                    epoch_of_next_negative_sample[raw_index] += (
+                        n_neg_samples * epochs_per_negative_sample[raw_index]
+                    )
+
+        # head_embedding[block_start:block_end] += updates[block_start:block_end]
+        for node_idx in numba.prange(block_start, block_end):
+            from_node = node_order[node_idx]
+            for d in range(dim):
+                head_embedding[from_node, d] += updates[from_node, d]
+
+
 
 def _optimize_layout_euclidean_densmap_epoch_init(
     head_embedding,
@@ -255,6 +417,9 @@ def optimize_layout_euclidean(
     densmap_kwds=None,
     tqdm_kwds=None,
     move_other=False,
+    csr_indptr=None,
+    csr_indices=None,
+    random_state=None,
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
     fuzzy set cross entropy between the 1-skeletons of the high dimensional
@@ -319,6 +484,8 @@ def optimize_layout_euclidean(
 
     dim = head_embedding.shape[1]
     alpha = initial_alpha
+    if random_state is None:
+        random_state = np.random.RandomState()
 
     epochs_per_negative_sample = epochs_per_sample / negative_sample_rate
     epoch_of_next_negative_sample = epochs_per_negative_sample.copy()
@@ -326,7 +493,10 @@ def optimize_layout_euclidean(
 
     # Fix for calling UMAP many times for small datasets, otherwise we spend here
     # a lot of time in compilation step (first call to numba function)
-    optimize_fn = _get_optimize_layout_euclidean_single_epoch_fn(parallel)
+    if csr_indptr is not None and csr_indices is not None:
+        optimize_fn = optimize_layout_euclidean_single_epoch_fast
+    else:
+        optimize_fn = _get_optimize_layout_euclidean_single_epoch_fn(parallel)
 
     if densmap_kwds is None:
         densmap_kwds = {}
@@ -364,9 +534,17 @@ def optimize_layout_euclidean(
     if "disable" not in tqdm_kwds:
         tqdm_kwds["disable"] = not verbose
 
+    numba.set_num_threads(64) 
+    n_threads = numba.get_num_threads()
+    updates = np.zeros((head_embedding.shape[0], dim), dtype=np.float32)
+    node_order = np.arange(head_embedding.shape[0], dtype=np.int32)
+
     rng_state_per_sample = np.full(
         (head_embedding.shape[0], len(rng_state)), rng_state, dtype=np.int64
     ) + head_embedding[:, 0].astype(np.float64).view(np.int64).reshape(-1, 1)
+    rng_state_per_thread = np.full(
+        (n_threads, len(rng_state)), rng_state, dtype=np.int64
+    ) + np.arange(n_threads).reshape(-1, 1)
 
     for n in tqdm(range(n_epochs), **tqdm_kwds):
         densmap_flag = (
@@ -398,35 +576,73 @@ def optimize_layout_euclidean(
             dens_re_mean = 0
             dens_re_cov = 0
 
-        optimize_fn(
-            head_embedding,
-            tail_embedding,
-            head,
-            tail,
-            n_vertices,
-            epochs_per_sample,
-            a,
-            b,
-            rng_state_per_sample,
-            gamma,
-            dim,
-            move_other,
-            alpha,
-            epochs_per_negative_sample,
-            epoch_of_next_negative_sample,
-            epoch_of_next_sample,
-            n,
-            densmap_flag,
-            dens_phi_sum,
-            dens_re_sum,
-            dens_re_cov,
-            dens_re_std,
-            dens_re_mean,
-            dens_lambda,
-            dens_R,
-            dens_mu,
-            dens_mu_tot,
-        )
+        if csr_indptr is not None and csr_indices is not None:
+            # Use the fast version with CSR matrix
+
+            optimize_layout_euclidean_single_epoch_fast(
+                head_embedding,
+                tail_embedding,
+                csr_indptr,
+                csr_indices,
+                n_vertices,
+                epochs_per_sample,
+                a,
+                b,
+                rng_state_per_thread,
+                gamma,
+                dim,
+                alpha,
+                epochs_per_negative_sample,
+                epoch_of_next_negative_sample,
+                epoch_of_next_sample,
+                n,
+                densmap_flag,
+                dens_phi_sum,
+                dens_re_sum,
+                dens_re_cov,
+                dens_re_std,
+                dens_re_mean,
+                dens_lambda,
+                dens_R,
+                dens_mu,
+                dens_mu_tot,
+                n_threads,
+                updates,
+                node_order,
+            )
+            # tau_rand_int(rng_state_per_thread[0])  # Ensure the RNG state is updated
+            updates *= min(0.25, alpha)  # a cheap momentum
+            random_state.shuffle(node_order)  # Shuffle the order of nodes for the next epoch
+        else:
+            optimize_fn(
+                head_embedding,
+                tail_embedding,
+                head,
+                tail,
+                n_vertices,
+                epochs_per_sample,
+                a,
+                b,
+                rng_state_per_sample,
+                gamma,
+                dim,
+                move_other,
+                alpha,
+                epochs_per_negative_sample,
+                epoch_of_next_negative_sample,
+                epoch_of_next_sample,
+                n,
+                densmap_flag,
+                dens_phi_sum,
+                dens_re_sum,
+                dens_re_cov,
+                dens_re_std,
+                dens_re_mean,
+                dens_lambda,
+                dens_R,
+                dens_mu,
+                dens_mu_tot,
+            )
 
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
 

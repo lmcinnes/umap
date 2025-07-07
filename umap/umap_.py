@@ -1192,27 +1192,55 @@ def simplicial_set_embedding(
     ).astype(np.float32, order="C")
 
     if euclidean_output:
-        embedding = optimize_layout_euclidean(
-            embedding,
-            embedding,
-            head,
-            tail,
-            n_epochs,
-            n_vertices,
-            epochs_per_sample,
-            a,
-            b,
-            rng_state,
-            gamma,
-            initial_alpha,
-            negative_sample_rate,
-            parallel=parallel,
-            verbose=verbose,
-            densmap=densmap,
-            densmap_kwds=densmap_kwds,
-            tqdm_kwds=tqdm_kwds,
-            move_other=True,
-        )
+        if verbose:
+            print(ts() + " Using new optimization code")
+            csr_matrix = graph.tocsr()
+            embedding = optimize_layout_euclidean(
+                embedding,
+                embedding,
+                head,
+                tail,
+                n_epochs,
+                n_vertices,
+                epochs_per_sample,
+                a,
+                b,
+                rng_state,
+                gamma,
+                initial_alpha,
+                negative_sample_rate,
+                parallel=parallel,
+                verbose=verbose,
+                densmap=densmap,
+                densmap_kwds=densmap_kwds,
+                tqdm_kwds=tqdm_kwds,
+                move_other=False,
+                csr_indptr=csr_matrix.indptr,
+                csr_indices=csr_matrix.indices,
+                random_state=random_state,
+            )
+        else:
+            embedding = optimize_layout_euclidean(
+                embedding,
+                embedding,
+                head,
+                tail,
+                n_epochs,
+                n_vertices,
+                epochs_per_sample,
+                a,
+                b,
+                rng_state,
+                gamma,
+                initial_alpha,
+                negative_sample_rate,
+                parallel=parallel,
+                verbose=verbose,
+                densmap=densmap,
+                densmap_kwds=densmap_kwds,
+                tqdm_kwds=tqdm_kwds,
+                move_other=True,
+            )
     else:
         embedding = optimize_layout_generic(
             embedding,
