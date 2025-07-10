@@ -185,6 +185,93 @@ def _optimize_layout_euclidean_single_epoch(
                 n_neg_samples * epochs_per_negative_sample[i]
             )
 
+
+# def _optimize_layout_euclidean_single_epoch(
+#     head_embedding,
+#     tail_embedding,
+#     head,
+#     tail,
+#     n_vertices,
+#     epochs_per_sample,
+#     a,
+#     b,
+#     rng_state_per_sample,
+#     gamma,
+#     dim,
+#     move_other,
+#     alpha,
+#     epochs_per_negative_sample,
+#     epoch_of_next_negative_sample,
+#     epoch_of_next_sample,
+#     n,
+#     densmap_flag,
+#     dens_phi_sum,
+#     dens_re_sum,
+#     dens_re_cov,
+#     dens_re_std,
+#     dens_re_mean,
+#     dens_lambda,
+#     dens_R,
+#     dens_mu,
+#     dens_mu_tot,
+# ):
+#     for i in numba.prange(epochs_per_sample.shape[0]):
+#         if epoch_of_next_sample[i] <= n:
+#             j = head[i]
+#             k = tail[i]
+
+#             current = head_embedding[j]
+#             other = tail_embedding[k]
+
+#             dist_squared = rdist(current, other)
+
+#             if dist_squared > 0.0:
+#                 grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
+#                 grad_coeff /= a * pow(dist_squared, b) + 1.0
+#             else:
+#                 grad_coeff = 0.0
+
+#             for d in range(dim):
+#                 grad_d = clip(grad_coeff * (current[d] - other[d]))
+#                 current[d] += grad_d * alpha
+#                 if move_other:
+#                     other[d] += -grad_d * alpha
+
+#             epoch_of_next_sample[i] += epochs_per_sample[i]
+
+#             n_neg_samples = int(
+#                 (n - epoch_of_next_negative_sample[i]) / epochs_per_negative_sample[i]
+#             )
+
+#             for p in range(n_neg_samples):
+#                 k = tau_rand_int(rng_state_per_sample[j]) % n_vertices
+
+#                 other = tail_embedding[k]
+
+#                 dist_squared = rdist(current, other)
+
+#                 if dist_squared > 0.0:
+#                     grad_coeff = 2.0 * gamma * b
+#                     grad_coeff /= (0.001 + dist_squared) * (
+#                         a * pow(dist_squared, b) + 1
+#                     )
+#                 elif j == k:
+#                     continue
+#                 else:
+#                     grad_coeff = 0.0
+
+#                 for d in range(dim):
+#                     if grad_coeff > 0.0:
+#                         grad_d = clip(grad_coeff * (current[d] - other[d]))
+#                     else:
+#                         grad_d = 0
+#                     current[d] += grad_d * alpha
+
+#             epoch_of_next_negative_sample[i] += (
+#                 n_neg_samples * epochs_per_negative_sample[i]
+#             )
+
+
 @numba.njit(
     "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, i8[:, ::1], f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, bool, f4[::1], f4[::1], i8, i8, i8, i8, f4[::1], f4[::1], i8, i8, f4[:, ::1], i4[::1], i8)",
     fastmath=True,
@@ -261,53 +348,14 @@ def optimize_layout_euclidean_single_epoch_fast(
 
                     dist_squared = rdist(current, other)
 
-                    # if densmap_flag:
-                    #     phi = 1.0 / (1.0 + a * pow(dist_squared, b))
-                    #     dphi_term = (
-                    #         a * b * pow(dist_squared, b - 1) / (1.0 + a * pow(dist_squared, b))
-                    #     )
-
-                    #     q_jk = phi / dens_phi_sum[to_node]
-                    #     q_kj = phi / dens_phi_sum[from_node]
-
-                    #     drk = q_jk * (
-                    #         (1.0 - b * (1 - phi)) / np.exp(dens_re_sum[to_node]) + dphi_term
-                    #     )
-                    #     drj = q_kj * (
-                    #         (1.0 - b * (1 - phi)) / np.exp(dens_re_sum[from_node]) + dphi_term
-                    #     )
-
-                    #     re_std_sq = dens_re_std * dens_re_std
-                    #     weight_k = (
-                    #         dens_R[to_node]
-                    #         - dens_re_cov * (dens_re_sum[to_node] - dens_re_mean) / re_std_sq
-                    #     )
-                    #     weight_j = (
-                    #         dens_R[from_node]
-                    #         - dens_re_cov * (dens_re_sum[from_node] - dens_re_mean) / re_std_sq
-                    #     )
-
-                    #     grad_cor_coeff = (
-                    #         dens_lambda
-                    #         * dens_mu_tot
-                    #         * (weight_k * drk + weight_j * drj)
-                    #         / (dens_mu[raw_index] * dens_re_std)
-                    #         / n_vertices
-                    #     )
-
                     if dist_squared > 0.0:
                         grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
                         grad_coeff /= a * pow(dist_squared, b) + 1.0
                         for d in range(dim):
                             grad_d = clip(grad_coeff * (current[d] - other[d]))
 
-                            # if densmap_flag:
-                            #     # FIXME: grad_cor_coeff might be referenced before assignment
-
-                            #     grad_d += clip(2 * grad_cor_coeff * (current[d] - other[d]))
-
                             updates[from_node, d] += grad_d * alpha
-                            # updates[to_node, d] += -grad_d * alpha
+                            # updates[to_node, d] -= grad_d * alpha
 
 
                     epoch_of_next_sample[raw_index] += epochs_per_sample[raw_index]
@@ -318,7 +366,7 @@ def optimize_layout_euclidean_single_epoch_fast(
 
                     for p in range(n_neg_samples):
                         # to_node = tau_rand_int(local_rng_state) % n_vertices
-                        to_node = (raw_index * (n + p + 1) * rng_state_per_thread[0][0]) % n_vertices
+                        to_node = node_order[(raw_index * (n + p + 1)) % n_vertices]
 
                         other = tail_embedding[to_node]
 
@@ -333,9 +381,7 @@ def optimize_layout_euclidean_single_epoch_fast(
                             for d in range(dim):
                                 if grad_coeff > 0.0:
                                     grad_d = clip(grad_coeff * (current[d] - other[d]))
-                                else:
-                                    grad_d = 0
-                                updates[from_node, d] += grad_d * alpha
+                                    updates[from_node, d] += grad_d * alpha
 
                     epoch_of_next_negative_sample[raw_index] += (
                         n_neg_samples * epochs_per_negative_sample[raw_index]
@@ -346,6 +392,7 @@ def optimize_layout_euclidean_single_epoch_fast(
             from_node = node_order[node_idx]
             for d in range(dim):
                 head_embedding[from_node, d] += updates[from_node, d]
+
 
 
 
@@ -496,10 +543,10 @@ def optimize_layout_euclidean(
     # a lot of time in compilation step (first call to numba function)
     if csr_indptr is not None and csr_indices is not None:
         optimize_fn = optimize_layout_euclidean_single_epoch_fast
-        epochs_per_negative_sample *= 1.5 # to account for the fact that we are using a fast version
-        epoch_of_next_negative_sample *= 1.5
+        # epochs_per_negative_sample *= 1.5 # to account for the fact that we are using a fast version
+        # epoch_of_next_negative_sample *= 1.5
     else:
-        optimize_fn = _get_optimize_layout_euclidean_single_epoch_fn(parallel)
+        optimize_fn = _get_optimize_layout_euclidean_single_epoch_fn(parallel=True)
 
     if densmap_kwds is None:
         densmap_kwds = {}
@@ -537,11 +584,11 @@ def optimize_layout_euclidean(
     if "disable" not in tqdm_kwds:
         tqdm_kwds["disable"] = not verbose
 
-    numba.set_num_threads(64) 
+    numba.set_num_threads(12) 
     n_threads = numba.get_num_threads()
     updates = np.zeros((head_embedding.shape[0], dim), dtype=np.float32)
     node_order = np.arange(head_embedding.shape[0], dtype=np.int32)
-    block_size = 65536
+    block_size = head_embedding.shape[0]
 
     rng_state_per_sample = np.full(
         (head_embedding.shape[0], len(rng_state)), rng_state, dtype=np.int64
@@ -593,7 +640,7 @@ def optimize_layout_euclidean(
                 a,
                 b,
                 rng_state_per_thread,
-                gamma * 1.1,
+                gamma,
                 dim,
                 alpha,
                 epochs_per_negative_sample,
@@ -615,9 +662,12 @@ def optimize_layout_euclidean(
                 node_order,
                 block_size=block_size,
             )
-            block_size = int(4096 + (block_size - 4096) * np.sqrt(alpha)) # Reduce block size for next epoch
+            gamma = 1.0 # - alpha
+            block_size = 4096 # head_embedding.shape[0] # int(4096 * (1.0 -  1 / (1 + np.exp((alpha - 0.5) * 6)))) # Reduce block size for next epoch
+            momentum = 0.5 # 1/(n_epochs / 10)**2 # (1.0 - alpha)/ 2.0 # min(0.5, np.sqrt(1.0 - np.sqrt(alpha)))
+            # print(block_size, gamma, momentum)
             # tau_rand_int(rng_state_per_thread[0])  # Ensure the RNG state is updated
-            updates *= min(0.25, np.sqrt(alpha))  # a cheap momentum
+            updates *= momentum # a cheap momentum
             random_state.shuffle(node_order)  # Shuffle the order of nodes for the next epoch
         else:
             optimize_fn(
