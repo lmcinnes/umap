@@ -366,6 +366,7 @@ def optimize_layout_euclidean_single_epoch_fast(
 
                     for p in range(n_neg_samples):
                         # to_node = tau_rand_int(local_rng_state) % n_vertices
+                        # to_node = (raw_index * (n + p + 1) + rng_state_per_thread[0][0]) % n_vertices
                         to_node = node_order[(raw_index * (n + p + 1)) % n_vertices]
 
                         other = tail_embedding[to_node]
@@ -543,8 +544,9 @@ def optimize_layout_euclidean(
     # a lot of time in compilation step (first call to numba function)
     if csr_indptr is not None and csr_indices is not None:
         optimize_fn = optimize_layout_euclidean_single_epoch_fast
-        # epochs_per_negative_sample *= 1.5 # to account for the fact that we are using a fast version
-        # epoch_of_next_negative_sample *= 1.5
+        epochs_per_negative_sample *= 2.0 # to account for the fact that we are using a fast version
+        epoch_of_next_negative_sample *= 2.0
+        initial_alpha = 0.25
     else:
         optimize_fn = _get_optimize_layout_euclidean_single_epoch_fn(parallel=True)
 
@@ -628,8 +630,7 @@ def optimize_layout_euclidean(
             dens_re_cov = 0
 
         if csr_indptr is not None and csr_indices is not None:
-            # Use the fast version with CSR matrix
-
+            alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))**2
             optimize_layout_euclidean_single_epoch_fast(
                 head_embedding,
                 tail_embedding,
@@ -662,14 +663,13 @@ def optimize_layout_euclidean(
                 node_order,
                 block_size=block_size,
             )
-            gamma = 1.0 # - alpha
             block_size = 4096 # head_embedding.shape[0] # int(4096 * (1.0 -  1 / (1 + np.exp((alpha - 0.5) * 6)))) # Reduce block size for next epoch
-            momentum = 0.5 # 1/(n_epochs / 10)**2 # (1.0 - alpha)/ 2.0 # min(0.5, np.sqrt(1.0 - np.sqrt(alpha)))
-            # print(block_size, gamma, momentum)
-            # tau_rand_int(rng_state_per_thread[0])  # Ensure the RNG state is updated
+            momentum = (1.0 - alpha) * 0.5
             updates *= momentum # a cheap momentum
             random_state.shuffle(node_order)  # Shuffle the order of nodes for the next epoch
         else:
+            # use the old version of the function for compatibility
+            alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
             optimize_fn(
                 head_embedding,
                 tail_embedding,
@@ -699,11 +699,6 @@ def optimize_layout_euclidean(
                 dens_mu,
                 dens_mu_tot,
             )
-
-        alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
-
-        if verbose and n % int(n_epochs / 10) == 0:
-            print("\tcompleted ", n, " / ", n_epochs, "epochs")
 
         if epochs_list is not None and n in epochs_list:
             embedding_list.append(head_embedding.copy())

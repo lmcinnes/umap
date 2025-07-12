@@ -263,6 +263,7 @@ def nearest_neighbors(
     low_memory=True,
     use_pynndescent=True,
     n_jobs=-1,
+    compatibility_layout=False,
     verbose=False,
 ):
     """Compute the ``n_neighbors`` nearest points for each data point in ``X``
@@ -291,6 +292,9 @@ def nearest_neighbors(
 
     low_memory: bool (optional, default True)
         Whether to pursue lower memory NNdescent.
+
+    compatibility_layout: bool (optional, default False)
+        Whether using compatibility layout which alters NNdescent algorithm hyperparameter choices.
 
     verbose: bool (optional, default False)
         Whether to print status data during the computation.
@@ -324,7 +328,7 @@ def nearest_neighbors(
         knn_search_index = None
     else:
         # # TODO: Hacked values for now
-        if not verbose:
+        if compatibility_layout:
             n_trees = min(64, 5 + int(round((X.shape[0]) ** 0.5 / 20.0)))
             n_iters = max(5, int(round(np.log2(X.shape[0]))))
             knn_search_index = NNDescent(
@@ -479,6 +483,7 @@ def fuzzy_simplicial_set(
     apply_set_operations=True,
     verbose=False,
     return_dists=None,
+    compatibility_layout=False,
 ):
     """Given a set of data X, a neighborhood size, and a measure of distance
     compute the fuzzy simplicial set (here represented as a fuzzy graph in
@@ -581,6 +586,9 @@ def fuzzy_simplicial_set(
     return_dists: bool or None (optional, default None)
         Whether to return the pairwise distance associated with each edge.
 
+    compatibility_layout: bool (optional, default False)
+        Whether using compatibility layout which alters NNdescent algorithm hyperparameter choices.
+
     Returns
     -------
     fuzzy_simplicial_set: coo_matrix
@@ -597,6 +605,7 @@ def fuzzy_simplicial_set(
             angular,
             random_state,
             verbose=verbose,
+            compatibility_layout=compatibility_layout,
         )
 
     knn_dists = knn_dists.astype(np.float32)
@@ -983,6 +992,7 @@ def simplicial_set_embedding(
     euclidean_output=True,
     parallel=False,
     verbose=False,
+    compatibility_layout=False,
     tqdm_kwds=None,
 ):
     """Perform a fuzzy simplicial set embedding, using a specified
@@ -1077,6 +1087,11 @@ def simplicial_set_embedding(
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
 
+    compatibility_layout: bool (optional, default False)
+        Whether to use the compatibility layout code for the embedding.
+        This is the original code used in UMAP, and is not as efficient as the
+        new code, but is kept available for compatibility with older versions of UMAP.
+
     tqdm_kwds: dict
         Key word arguments to be used by the tqdm progress bar.
 
@@ -1139,6 +1154,7 @@ def simplicial_set_embedding(
             random_state,
             metric=metric,
             metric_kwds=metric_kwds,
+            compatibility_layout=compatibility_layout,
         )
         # We add a little noise to avoid local minima for optimization to come
         embedding = noisy_scale_coords(
@@ -1218,7 +1234,29 @@ def simplicial_set_embedding(
     ).astype(np.float32, order="C")
 
     if euclidean_output:
-        if verbose:
+        if compatibility_layout:
+            embedding = optimize_layout_euclidean(
+                embedding,
+                embedding,
+                head,
+                tail,
+                n_epochs,
+                n_vertices,
+                epochs_per_sample,
+                a,
+                b,
+                rng_state,
+                gamma,
+                initial_alpha,
+                negative_sample_rate,
+                parallel=parallel,
+                verbose=verbose,
+                densmap=densmap,
+                densmap_kwds=densmap_kwds,
+                tqdm_kwds=tqdm_kwds,
+                move_other=True,
+            )
+        else:
             print(ts() + " Using new optimization code")
             csr_matrix = graph.tocsr()
             embedding = optimize_layout_euclidean(
@@ -1245,28 +1283,7 @@ def simplicial_set_embedding(
                 csr_indices=csr_matrix.indices,
                 random_state=random_state,
             )
-        else:
-            embedding = optimize_layout_euclidean(
-                embedding,
-                embedding,
-                head,
-                tail,
-                n_epochs,
-                n_vertices,
-                epochs_per_sample,
-                a,
-                b,
-                rng_state,
-                gamma,
-                initial_alpha,
-                negative_sample_rate,
-                parallel=parallel,
-                verbose=verbose,
-                densmap=densmap,
-                densmap_kwds=densmap_kwds,
-                tqdm_kwds=tqdm_kwds,
-                move_other=True,
-            )
+
     else:
         embedding = optimize_layout_generic(
             embedding,
@@ -1310,6 +1327,7 @@ def simplicial_set_embedding(
             False,
             random_state,
             verbose=verbose,
+            compatibility_layout=compatibility_layout,
         )
 
         emb_graph, emb_sigmas, emb_rhos, emb_dists = fuzzy_simplicial_set(
@@ -1757,6 +1775,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         output_dens=False,
         disconnection_distance=None,
         precomputed_knn=(None, None, None),
+        compatibility_layout=False,
     ):
         self.n_neighbors = n_neighbors
         self.metric = metric
@@ -1797,6 +1816,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         self.output_dens = output_dens
         self.disconnection_distance = disconnection_distance
         self.precomputed_knn = precomputed_knn
+        self.compatibility_layout = compatibility_layout
 
         self.n_jobs = n_jobs
 
@@ -2001,7 +2021,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
 
         if self.n_jobs < -1 or self.n_jobs == 0:
             raise ValueError("n_jobs must be a postive integer, or -1 (for all cores)")
-        if self.n_jobs != 1 and self.random_state is not None and self.verbose is False: # turn off parallelism reset in new layout mode
+        if self.n_jobs != 1 and self.random_state is not None and self.compatibility_layout: # turn off parallelism reset in new layout mode
             self.n_jobs = 1
             warn(
                 f"n_jobs value {self.n_jobs} overridden to 1 by setting random_state. Use no seed for parallelism."
@@ -2169,6 +2189,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         self.dens_frac = flattened([m.dens_frac for m in models])
         self.dens_var_shift = flattened([m.dens_var_shift for m in models])
         self.output_dens = flattened([m.output_dens for m in models])
+        self.compatibility_layout = any([m.compatibility_layout for m in models])
 
         self.a = flattened([m.a for m in models])
         self.b = flattened([m.b for m in models])
@@ -2239,6 +2260,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             result.output_dens,
             parallel=False,
             verbose=bool(np.max(result.verbose)),
+            compatibility_layout=result.compatibility_layout,
             tqdm_kwds=self.tqdm_kwds,
         )
 
@@ -2309,6 +2331,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             result.output_dens,
             parallel=False,
             verbose=bool(np.max(result.verbose)),
+            compatibility_layout=result.compatibility_layout,
             tqdm_kwds=self.tqdm_kwds,
         )
 
@@ -2381,6 +2404,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             result.output_dens,
             parallel=False,
             verbose=bool(np.max(result.verbose)),
+            compatibility_layout=result.compatibility_layout,
             tqdm_kwds=self.tqdm_kwds,
         )
 
@@ -2697,6 +2721,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     use_pynndescent=True,
                     n_jobs=self.n_jobs,
                     verbose=self.verbose,
+                    compatibility_layout=self.compatibility_layout,
                 )
             else:
                 self._knn_indices = self.knn_indices
@@ -2945,6 +2970,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             self.output_metric in ("euclidean", "l2"),
             self.random_state is None,
             self.verbose,
+            compatibility_layout=self.compatibility_layout,
             tqdm_kwds=self.tqdm_kwds,
         )
 
@@ -3514,6 +3540,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     use_pynndescent=True,
                     n_jobs=self.n_jobs,
                     verbose=self.verbose,
+                    compatibility_layout=self.compatibility_layout,
                 )
 
                 self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
@@ -3529,6 +3556,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     self.local_connectivity,
                     True,
                     self.verbose,
+                    compatibility_layout=self.compatibility_layout,
                 )
                 knn_indices = self._knn_indices
 
@@ -3565,6 +3593,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self.output_metric in ("euclidean", "l2"),
                 self.random_state is None,
                 self.verbose,
+                compatibility_layout=self.compatibility_layout,
                 tqdm_kwds=self.tqdm_kwds,
             )
 
@@ -3632,6 +3661,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self.output_metric in ("euclidean", "l2"),
                 self.random_state is None,
                 self.verbose,
+                compatibility_layout=self.compatibility_layout,
                 tqdm_kwds=self.tqdm_kwds,
             )
 

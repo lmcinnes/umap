@@ -269,6 +269,7 @@ def spectral_layout(
     metric_kwds={},
     tol=0.0,
     maxiter=0,
+    compatibility_layout=False,
 ):
     """
     Given a graph compute the spectral embedding of the graph. This is
@@ -295,6 +296,11 @@ def spectral_layout(
     maxiter: int, default chosen by implementation
         Number of iterations the numerical algorithm will go through at most as it
         attempts to compute the embedding.
+
+    compatibility_layout: bool (optional, default False)
+        Whether to use the compatibility layout code for the embedding.
+        This is the original code used in UMAP, and is not as efficient as the
+        new code, but is kept available for compatibility with older versions of UMAP.
 
     Returns
     -------
@@ -403,6 +409,7 @@ def _spectral_layout(
     method=None,
     tol=0.0,
     maxiter=0,
+    compatibility_layout=False,
 ):
     """General implementation of the spectral embedding of the graph, derived as
     a subset of the eigenvectors of the normalized Laplacian of the graph. The numerical
@@ -455,6 +462,11 @@ def _spectral_layout(
         Number of iterations the numerical algorithm will go through at most as it
         attempts to compute the embedding.
 
+    compatibility_layout: bool (optional, default False)
+        Whether to use the compatibility layout code for the embedding.
+        This is the original code used in UMAP, and is not as efficient as the
+        new code, but is kept available for compatibility with older versions of UMAP.
+
     Returns
     -------
     embedding: array of shape (n_vertices, dim)
@@ -476,13 +488,12 @@ def _spectral_layout(
         )
 
     sqrt_deg = np.sqrt(np.asarray(graph.sum(axis=0)).squeeze())
-    # standard Laplacian
-    # D = scipy.sparse.spdiags(diag_data, 0, graph.shape[0], graph.shape[0])
-    # L = D - graph
+
     # Normalized Laplacian
-    I = scipy.sparse.identity(graph.shape[0], dtype=np.float64)
     D = scipy.sparse.spdiags(1.0 / sqrt_deg, 0, graph.shape[0], graph.shape[0])
-    L = I - D * graph * D
+    A = D * graph * D
+    I = scipy.sparse.identity(graph.shape[0], dtype=np.float64)   
+    L = I - A
     if not scipy.sparse.issparse(L):
         L = np.asarray(L)
 
@@ -494,7 +505,7 @@ def _spectral_layout(
         else np.random.default_rng(seed=random_state)
     )
     if not method:
-        method = "eigsh" if L.shape[0] < 2000000 else "lobpcg"
+        method = "lobpcg" if compatibility_layout and L.shape[0] >= 2000000 else "eigsh"
 
     try:
         if init == "random":
@@ -516,26 +527,29 @@ def _spectral_layout(
         X[:, 0] = sqrt_deg / np.linalg.norm(sqrt_deg)
 
         if method == "eigsh":
-            A = I - L
-            eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
-                A,
-                k,
-                which="LA",
-                ncv=num_lanczos_vectors,
-                tol=tol or 1e-4,
-                v0=np.ones(L.shape[0]),
-                maxiter=maxiter or graph.shape[0] * 5,
-            )
-            eigenvalues = [1.0 - eigenvalue for eigenvalue in eigenvalues]
-            # eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
-            #     L,
-            #     k,
-            #     which="SM",
-            #     ncv=num_lanczos_vectors,
-            #     tol=tol or 1e-4,
-            #     v0=np.ones(L.shape[0]),
-            #     maxiter=maxiter or graph.shape[0] * 5,
-            # )
+            if compatibility_layout:
+                # Compatibility mode uses the original eigsh method
+                # which is not as fast for large graphs.
+                eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
+                    L,
+                    k,
+                    which="SM",
+                    ncv=num_lanczos_vectors,
+                    tol=tol or 1e-4,
+                    v0=np.ones(L.shape[0]),
+                    maxiter=maxiter or graph.shape[0] * 5,
+                )
+            else:
+                eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
+                    A,
+                    k,
+                    which="LA",
+                    ncv=num_lanczos_vectors,
+                    tol=tol or 1e-4,
+                    v0=np.ones(L.shape[0]),
+                    maxiter=maxiter or graph.shape[0] * 5,
+                )
+                eigenvalues = [1.0 - eigenvalue for eigenvalue in eigenvalues]
         elif method == "lobpcg":
             with warnings.catch_warnings():
                 warnings.filterwarnings(
