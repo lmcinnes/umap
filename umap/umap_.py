@@ -358,16 +358,15 @@ def nearest_neighbors(
             knn_search_index = NNDescent(
                 X,
                 n_neighbors=effective_n_neighbors,
-                # metric=metric,
-                # metric_kwds=metric_kwds,
-                metric="euclidean",
+                metric=metric,
+                metric_kwds=metric_kwds,
                 random_state=random_state,
                 n_trees=n_trees,
                 n_iters=n_iters,
                 max_candidates=effective_max_candidates,
-                # n_jobs=-1,
+                n_jobs=n_jobs,
                 verbose=verbose,
-                # compressed=False,
+                compressed=False,
             )
             knn_indices, knn_dists = knn_search_index.neighbor_graph
             knn_indices = knn_indices[:, :n_neighbors]
