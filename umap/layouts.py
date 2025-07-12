@@ -663,7 +663,7 @@ def optimize_layout_euclidean(
                 node_order,
                 block_size=block_size,
             )
-            block_size = 4096 # head_embedding.shape[0] # int(4096 * (1.0 -  1 / (1 + np.exp((alpha - 0.5) * 6)))) # Reduce block size for next epoch
+            block_size = 4096
             momentum = (1.0 - alpha) * 0.5
             updates *= momentum # a cheap momentum
             random_state.shuffle(node_order)  # Shuffle the order of nodes for the next epoch
