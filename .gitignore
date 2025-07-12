@@ -30,3 +30,12 @@ doc/_build
 # build directories
 build
 dist
+
+# coverage reports
+.coverage
+.coverage.*
+.coverage.xml
+
+# vscode settings
+.vscode/settings.json
+.vscode/tasks.json
