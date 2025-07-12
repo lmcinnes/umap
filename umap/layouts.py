@@ -586,7 +586,6 @@ def optimize_layout_euclidean(
     if "disable" not in tqdm_kwds:
         tqdm_kwds["disable"] = not verbose
 
-    numba.set_num_threads(12) 
     n_threads = numba.get_num_threads()
     updates = np.zeros((head_embedding.shape[0], dim), dtype=np.float32)
     node_order = np.arange(head_embedding.shape[0], dtype=np.int32)
