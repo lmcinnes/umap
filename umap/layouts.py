@@ -187,7 +187,7 @@ def _optimize_layout_euclidean_single_epoch(
 
 
 @numba.njit(
-    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], i4[::1], i8)",
+    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], f4[:, ::1], f4[:, ::1], i4[::1], i8)",
     fastmath=True,
     parallel=True,
     locals={
@@ -217,9 +217,14 @@ def optimize_layout_euclidean_single_epoch_fast(
     epoch_of_next_sample,
     n,
     updates,
+    adam_m,
+    adam_v,
     node_order,
     block_size=256,
 ):
+    beta1 = 0.2 + (0.7 * (1.0 - (float(n) / float(200))))
+    beta2 = 0.79 + (0.2 * (1.0 - (float(n) / float(200))))
+    gamma = 5.0
     for block_start in range(0, n_vertices, block_size):
         block_end = min(block_start + block_size, n_vertices)
         for node_idx in numba.prange(block_start, block_end):
@@ -238,8 +243,7 @@ def optimize_layout_euclidean_single_epoch_fast(
                         grad_coeff /= a * pow(dist_squared, b) + 1.0
                         for d in range(dim):
                             grad_d = clip(grad_coeff * (current[d] - other[d]))
-
-                            updates[from_node, d] += grad_d * alpha
+                            updates[from_node, d] += grad_d
 
                     epoch_of_next_sample[raw_index] += epochs_per_sample[raw_index]
 
@@ -263,7 +267,7 @@ def optimize_layout_euclidean_single_epoch_fast(
                             if grad_coeff > 0.0:
                                 for d in range(dim):
                                     grad_d = clip(grad_coeff * (current[d] - other[d]))
-                                    updates[from_node, d] += grad_d * alpha
+                                    updates[from_node, d] += grad_d
 
                     epoch_of_next_negative_sample[raw_index] += (
                         n_neg_samples * epochs_per_negative_sample[raw_index]
@@ -272,7 +276,15 @@ def optimize_layout_euclidean_single_epoch_fast(
         for node_idx in numba.prange(block_start, block_end):
             from_node = node_order[node_idx]
             for d in range(dim):
-                head_embedding[from_node, d] += updates[from_node, d]
+                if updates[from_node, d] != 0.0:
+                    adam_m[from_node, d] = beta1 * adam_m[from_node, d] + (1.0 - beta1) * updates[from_node, d]
+                    adam_v[from_node, d] = beta2 * adam_v[from_node, d] + (1.0 - beta2) * updates[from_node, d]**2
+                    m_est = adam_m[from_node, d] / (1.0 - pow(beta1, n))
+                    v_est = adam_v[from_node, d] / (1.0 - pow(beta2, n))
+                    head_embedding[from_node, d] += alpha * m_est / (np.sqrt(v_est) + 1e-8)
+            # if from_node == 0 or from_node == 1:
+            #     print(adam_m[from_node], updates[from_node])
+
 
 
 @numba.njit(
@@ -560,9 +572,10 @@ def optimize_layout_euclidean(
     # a lot of time in compilation step (first call to numba function)
     if csr_indptr is not None and csr_indices is not None:
         optimize_fn = optimize_layout_euclidean_single_epoch_fast
-        epochs_per_negative_sample *= 2.0 # to account for the fact that we are using a fast version
-        epoch_of_next_negative_sample *= 2.0
-        initial_alpha = 0.25
+        epochs_per_negative_sample *= 1.0 # to account for the fact that we are using a fast version
+        epoch_of_next_negative_sample *= 1.0
+        initial_alpha = 1.5
+        epochs_per_sample /= 2.0
     else:
         optimize_fn = _get_optimize_layout_euclidean_single_epoch_fn(parallel=True)
 
@@ -605,6 +618,8 @@ def optimize_layout_euclidean(
     n_threads = numba.get_num_threads()
     print(f"Using {n_threads=}")
     updates = np.zeros((head_embedding.shape[0], dim), dtype=np.float32)
+    adam_m = np.zeros_like(updates)
+    adam_v = np.zeros_like(updates)
     node_order = np.arange(head_embedding.shape[0], dtype=np.int32)
     block_size = head_embedding.shape[0]
 
@@ -646,7 +661,7 @@ def optimize_layout_euclidean(
             dens_re_cov = 0
 
         if csr_indptr is not None and csr_indices is not None:
-            alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))**2
+            alpha = (initial_alpha - 0.05) * (1.0 - (float(n) / float(n_epochs)))**3 + 0.05
             if densmap_flag:
                 optimize_layout_euclidean_single_epoch_fast_densmap(
                     head_embedding,
@@ -695,12 +710,14 @@ def optimize_layout_euclidean(
                     epoch_of_next_sample,
                     n,
                     updates,
+                    adam_m,
+                    adam_v,
                     node_order,
                     block_size=block_size,
                 )
             block_size = 4096
-            momentum = (1.0 - alpha) * 0.5
-            updates *= momentum # a cheap momentum
+            momentum = 0.0# (1.0 - alpha) * 0.5
+            updates *= momentum
             random_state.shuffle(node_order)  # Shuffle the order of nodes for the next epoch
         else:
             # use the old version of the function for compatibility

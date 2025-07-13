@@ -1143,7 +1143,7 @@ def simplicial_set_embedding(
             pca = PCA(n_components=n_components, random_state=random_state)
         embedding = pca.fit_transform(data).astype(np.float32)
         embedding = noisy_scale_coords(
-            embedding, random_state, max_coord=10, noise=0.0001
+            embedding, random_state, max_coord=20, noise=0.0001
         )
     elif isinstance(init, str) and init == "spectral":
         embedding = spectral_layout(
@@ -1157,7 +1157,7 @@ def simplicial_set_embedding(
         )
         # We add a little noise to avoid local minima for optimization to come
         embedding = noisy_scale_coords(
-            embedding, random_state, max_coord=10, noise=0.0001
+            embedding, random_state, max_coord=40, noise=0.01
         )
     elif isinstance(init, str) and init == "tswspectral":
         embedding = tswspectral_layout(
@@ -1169,7 +1169,7 @@ def simplicial_set_embedding(
             metric_kwds=metric_kwds,
         )
         embedding = noisy_scale_coords(
-            embedding, random_state, max_coord=10, noise=0.0001
+            embedding, random_state, max_coord=20, noise=0.0001
         )
     else:
         init_data = np.array(init)
@@ -1257,6 +1257,8 @@ def simplicial_set_embedding(
             )
         else:
             print(ts() + " Using new optimization code")
+            embedding *= 4.0
+            print(ts() + " Embedding max coordinates: ", np.abs(embedding).max(axis=0))
             csr_matrix = graph.tocsr()
             embedding = optimize_layout_euclidean(
                 embedding,
