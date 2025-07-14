@@ -187,7 +187,7 @@ def _optimize_layout_euclidean_single_epoch(
 
 
 @numba.njit(
-    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], f4[:, ::1], f4[:, ::1], i4[::1], i8)",
+    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], f4[:, ::1], f4[:, ::1], f8, f8, i4[::1], i8)",
     fastmath=True,
     parallel=True,
     locals={
@@ -219,12 +219,12 @@ def optimize_layout_euclidean_single_epoch_fast(
     updates,
     adam_m,
     adam_v,
+    beta1,
+    beta2,
     node_order,
     block_size=256,
 ):
-    beta1 = 0.2 + (0.7 * (1.0 - (float(n) / float(200))))
-    beta2 = 0.79 + (0.2 * (1.0 - (float(n) / float(200))))
-    gamma = 5.0
+    # gamma = 3.0
     for block_start in range(0, n_vertices, block_size):
         block_end = min(block_start + block_size, n_vertices)
         for node_idx in numba.prange(block_start, block_end):
@@ -236,7 +236,7 @@ def optimize_layout_euclidean_single_epoch_fast(
                     to_node = csr_indices[raw_index]
                     other = tail_embedding[to_node]
 
-                    dist_squared = rdist(current, other)
+                    dist_squared = rdist(current, other) / 2
 
                     if dist_squared > 0.0:
                         grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
@@ -256,7 +256,7 @@ def optimize_layout_euclidean_single_epoch_fast(
 
                         other = tail_embedding[to_node]
 
-                        dist_squared = rdist(current, other)
+                        dist_squared = rdist(current, other) / 4
 
                         if dist_squared > 0.0:
                             grad_coeff = 2.0 * gamma * b
@@ -281,7 +281,7 @@ def optimize_layout_euclidean_single_epoch_fast(
                     adam_v[from_node, d] = beta2 * adam_v[from_node, d] + (1.0 - beta2) * updates[from_node, d]**2
                     m_est = adam_m[from_node, d] / (1.0 - pow(beta1, n))
                     v_est = adam_v[from_node, d] / (1.0 - pow(beta2, n))
-                    head_embedding[from_node, d] += alpha * m_est / (np.sqrt(v_est) + 1e-8)
+                    head_embedding[from_node, d] += alpha * m_est / (np.sqrt(v_est) + 1e-4)
             # if from_node == 0 or from_node == 1:
             #     print(adam_m[from_node], updates[from_node])
 
@@ -572,10 +572,10 @@ def optimize_layout_euclidean(
     # a lot of time in compilation step (first call to numba function)
     if csr_indptr is not None and csr_indices is not None:
         optimize_fn = optimize_layout_euclidean_single_epoch_fast
-        epochs_per_negative_sample *= 1.0 # to account for the fact that we are using a fast version
-        epoch_of_next_negative_sample *= 1.0
-        initial_alpha = 1.5
-        epochs_per_sample /= 2.0
+        epochs_per_negative_sample *= 2.0 # to account for the fact that we are using a fast version
+        epoch_of_next_negative_sample *= 2.0
+        initial_alpha = 2.0
+        epochs_per_sample /= 1.0
     else:
         optimize_fn = _get_optimize_layout_euclidean_single_epoch_fn(parallel=True)
 
@@ -661,7 +661,16 @@ def optimize_layout_euclidean(
             dens_re_cov = 0
 
         if csr_indptr is not None and csr_indices is not None:
-            alpha = (initial_alpha - 0.05) * (1.0 - (float(n) / float(n_epochs)))**3 + 0.05
+            if n <= 100:
+                alpha = (initial_alpha - 0.1) * (1.0 - (float(n) / float(100)))**2 + 0.2
+                beta1 = 0.2 + (0.7 * ((float(n) / float(100))))
+                beta2 = 0.79 + (0.2 * ((float(n) / float(100))))
+                gamma = 1.0 * (float(n) / float(100))
+            else:
+                alpha = 0.15 * (1.0 - (float(n - 100) / float(n_epochs - 100))) + 0.05
+                beta1 = 0.9
+                beta2 = 0.99
+                gamma = 0.25 * (1.0 - float(n - 100) / float(n_epochs - 100)) + 0.75
             if densmap_flag:
                 optimize_layout_euclidean_single_epoch_fast_densmap(
                     head_embedding,
@@ -712,6 +721,8 @@ def optimize_layout_euclidean(
                     updates,
                     adam_m,
                     adam_v,
+                    beta1,
+                    beta2,
                     node_order,
                     block_size=block_size,
                 )

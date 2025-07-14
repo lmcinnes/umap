@@ -1257,7 +1257,7 @@ def simplicial_set_embedding(
             )
         else:
             print(ts() + " Using new optimization code")
-            embedding *= 4.0
+            embedding *= 1.5
             print(ts() + " Embedding max coordinates: ", np.abs(embedding).max(axis=0))
             csr_matrix = graph.tocsr()
             embedding = optimize_layout_euclidean(
