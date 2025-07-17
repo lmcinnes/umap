@@ -462,6 +462,31 @@ Nomic Atlas provides:
 * Rich information display on hover
 * Shareable UMAPs via URL links to your embeddings and data maps in Atlas
 
+
+---------------------------------
+GPU-Accelerated UMAP with torchdr
+---------------------------------
+
+For GPU-accelerated UMAP computations, `torchdr <https://github.com/TorchDR/TorchDR>`_ provides a PyTorch-based implementation that significantly speed up the algorithm. 
+torchdr accelerates **every step** of the dimensionality reduction pipeline on GPU: kNN computation, affinity construction and embedding optimization.
+
+Using torchdr with UMAP is straightforward:
+
+.. code:: python
+
+    from torchdr import UMAP as torchdrUMAP
+    
+    umap_gpu = torchdrUMAP(
+        n_neighbors=15,
+        min_dist=0.1,
+        n_components=2,
+        device='cuda'
+    )
+    embedding = umap_gpu.fit_transform(data-maps)
+
+For more information and advanced usage, see the `torchdr documentation <https://torchdr.github.io/index.html>`_.
+
+
 ----------------
 Help and Support
 ----------------
