@@ -969,6 +969,48 @@ def noisy_scale_coords(coords, random_state, max_coord=10.0, noise=0.0001):
     )
 
 
+@numba.njit( 
+    fastmath=True,
+    locals={
+        "mu_sum": numba.types.float32[:],
+        "ro": numba.types.float32[:],
+        "i": numba.types.int64,
+        "j": numba.types.int64,
+        "k": numba.types.int64,
+        "D": numba.types.float32,
+        "mu": numba.types.float32,
+    },
+)
+def compute_densities(
+    row,
+    col,
+    val,
+    dist_indptr,
+    dist_indices,
+    dist_vals,
+    n_vertices,
+):
+    mu_sum = np.zeros(n_vertices, dtype=np.float32)
+    ro = np.zeros(n_vertices, dtype=np.float32)
+    for i in range(len(row)):
+        j = row[i]
+        k = col[i]
+
+        idx = np.searchsorted(dist_indices[dist_indptr[j] : dist_indptr[j + 1]], k)
+        D = dist_vals[dist_indptr[j] + idx] if idx < (dist_indptr[j + 1] - dist_indptr[j]) else 0.0
+        D = D * D  # match sq-Euclidean used for embedding
+        mu = val[i]
+
+        ro[j] += mu * D
+        ro[k] += mu * D
+        mu_sum[j] += mu
+        mu_sum[k] += mu
+
+    epsilon = 1e-8
+    ro = np.log(epsilon + (ro / mu_sum)).astype(np.float32)
+
+    return mu_sum, ro
+
 def simplicial_set_embedding(
     data,
     graph,
@@ -1198,24 +1240,36 @@ def simplicial_set_embedding(
         if verbose:
             print(ts() + " Computing original densities")
 
-        dists = densmap_kwds["graph_dists"]
+        # dists = densmap_kwds["graph_dists"]
 
-        mu_sum = np.zeros(n_vertices, dtype=np.float32)
-        ro = np.zeros(n_vertices, dtype=np.float32)
-        for i in range(len(head)):
-            j = head[i]
-            k = tail[i]
+        # mu_sum = np.zeros(n_vertices, dtype=np.float32)
+        # ro = np.zeros(n_vertices, dtype=np.float32)
+        # for i in range(len(head)):
+        #     j = head[i]
+        #     k = tail[i]
 
-            D = dists[j, k] * dists[j, k]  # match sq-Euclidean used for embedding
-            mu = graph.data[i]
+        #     D = dists[j, k] * dists[j, k]  # match sq-Euclidean used for embedding
+        #     mu = graph.data[i]
 
-            ro[j] += mu * D
-            ro[k] += mu * D
-            mu_sum[j] += mu
-            mu_sum[k] += mu
+        #     ro[j] += mu * D
+        #     ro[k] += mu * D
+        #     mu_sum[j] += mu
+        #     mu_sum[k] += mu
 
-        epsilon = 1e-8
-        ro = np.log(epsilon + (ro / mu_sum))
+        # epsilon = 1e-8
+        # ro = np.log(epsilon + (ro / mu_sum))
+
+        dists = densmap_kwds["graph_dists"].tocsr()
+        dists.sort_indices()
+        mu_sum, ro = compute_densities(
+            head,
+            tail,
+            weight,
+            dists.indptr,
+            dists.indices,
+            dists.data,
+            n_vertices,
+        )
 
         if densmap:
             R = (ro - np.mean(ro)) / np.std(ro)
@@ -1250,15 +1304,14 @@ def simplicial_set_embedding(
                 negative_sample_rate,
                 parallel=parallel,
                 verbose=verbose,
-                densmap=densmap,
                 densmap_kwds=densmap_kwds,
                 tqdm_kwds=tqdm_kwds,
                 move_other=True,
+                optimizer="compatibility",
             )
         else:
             print(ts() + " Using new optimization code")
-            embedding *= 1.5
-            print(ts() + " Embedding max coordinates: ", np.abs(embedding).max(axis=0))
+            optimizer = "densmap" if densmap else "adam"
             csr_matrix = graph.tocsr()
             embedding = optimize_layout_euclidean(
                 embedding,
@@ -1276,13 +1329,13 @@ def simplicial_set_embedding(
                 negative_sample_rate,
                 parallel=parallel,
                 verbose=verbose,
-                densmap=densmap,
                 densmap_kwds=densmap_kwds,
                 tqdm_kwds=tqdm_kwds,
                 move_other=False,
                 csr_indptr=csr_matrix.indptr,
                 csr_indices=csr_matrix.indices,
                 random_state=random_state,
+                optimizer=optimizer,
             )
 
     else:
