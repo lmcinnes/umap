@@ -217,7 +217,7 @@ def optimize_layout_euclidean_single_epoch_fast(
     n,
     updates,
     node_order,
-    block_size=256,
+    block_size=4096,
 ):
     for block_start in range(0, n_vertices, block_size):
         block_end = min(block_start + block_size, n_vertices)
@@ -247,7 +247,6 @@ def optimize_layout_euclidean_single_epoch_fast(
 
                     for p in range(n_neg_samples):
                         to_node = node_order[(raw_index * (n + p + 1)) % n_vertices]
-
                         other = tail_embedding[to_node]
 
                         dist_squared = rdist(current, other)
