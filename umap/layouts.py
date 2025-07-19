@@ -421,6 +421,7 @@ def optimize_layout_euclidean_single_epoch_fast_densmap(
     updates,
     node_order,
     block_size=256,
+    densmap_flag=True,
 ):
     for block_start in range(0, head_embedding.shape[0], block_size):
         block_end = min(block_start + block_size, head_embedding.shape[0])
@@ -435,38 +436,41 @@ def optimize_layout_euclidean_single_epoch_fast_densmap(
 
                     dist_squared = rdist(current, other)
 
-                    phi = 1.0 / (1.0 + a * pow(dist_squared, b))
-                    dphi_term = (
-                        a * b * pow(dist_squared, b - 1) / (1.0 + a * pow(dist_squared, b))
-                    )
+                    if densmap_flag:
+                        phi = 1.0 / (1.0 + a * pow(dist_squared, b))
+                        dphi_term = (
+                            a * b * pow(dist_squared, b - 1) / (1.0 + a * pow(dist_squared, b))
+                        )
 
-                    q_jk = phi / dens_phi_sum[to_node]
-                    q_kj = phi / dens_phi_sum[from_node]
+                        q_jk = phi / dens_phi_sum[to_node]
+                        q_kj = phi / dens_phi_sum[from_node]
 
-                    drk = q_jk * (
-                        (1.0 - b * (1 - phi)) / np.exp(dens_re_sum[to_node]) + dphi_term
-                    )
-                    drj = q_kj * (
-                        (1.0 - b * (1 - phi)) / np.exp(dens_re_sum[from_node]) + dphi_term
-                    )
+                        drk = q_jk * (
+                            (1.0 - b * (1 - phi)) / np.exp(dens_re_sum[to_node]) + dphi_term
+                        )
+                        drj = q_kj * (
+                            (1.0 - b * (1 - phi)) / np.exp(dens_re_sum[from_node]) + dphi_term
+                        )
 
-                    re_std_sq = dens_re_std * dens_re_std
-                    weight_k = (
-                        dens_R[to_node]
-                        - dens_re_cov * (dens_re_sum[to_node] - dens_re_mean) / re_std_sq
-                    )
-                    weight_j = (
-                        dens_R[from_node]
-                        - dens_re_cov * (dens_re_sum[from_node] - dens_re_mean) / re_std_sq
-                    )
+                        re_std_sq = dens_re_std * dens_re_std
+                        weight_k = (
+                            dens_R[to_node]
+                            - dens_re_cov * (dens_re_sum[to_node] - dens_re_mean) / re_std_sq
+                        )
+                        weight_j = (
+                            dens_R[from_node]
+                            - dens_re_cov * (dens_re_sum[from_node] - dens_re_mean) / re_std_sq
+                        )
 
-                    grad_cor_coeff = (
-                        dens_lambda
-                        * dens_mu_tot
-                        * (weight_k * drk + weight_j * drj)
-                        / (dens_mu[raw_index] * dens_re_std)
-                        / n_vertices
-                    )
+                        grad_cor_coeff = (
+                            dens_lambda
+                            * dens_mu_tot
+                            * (weight_k * drk + weight_j * drj)
+                            / (dens_mu[raw_index] * dens_re_std)
+                            / n_vertices
+                        )
+                    else:
+                        grad_cor_coeff = 0.0
 
                     if dist_squared > 0.0:
                         grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
@@ -904,6 +908,7 @@ def optimize_layout_euclidean(
                 updates,
                 node_order,
                 block_size,
+                densmap_flag=densmap_flag,
             )
             updates *= momentum_schedule[n]
             random_state.shuffle(node_order)  
