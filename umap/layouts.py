@@ -774,8 +774,8 @@ def optimize_layout_euclidean(
             
     elif optimizer == "standard":
         densmap = False
-        epochs_per_negative_sample *= 2.0 # to account for the fact that we are using a fast version
-        epoch_of_next_negative_sample *= 2.0
+        epochs_per_negative_sample *= 1.5 # to account for the fact that we are using a fast version
+        epoch_of_next_negative_sample *= 1.5 # we can use fewer negative samples
         alpha_schedule = np.asarray(
             [0.25 * (1.0 - (float(n) / float(n_epochs)))**2 for n in range(n_epochs)]
         )
