@@ -1311,7 +1311,7 @@ def simplicial_set_embedding(
             )
         else:
             print(ts() + " Using new optimization code")
-            optimizer = "densmap" if densmap else "adam"
+            optimizer = "densmap" if densmap else "standard"
             csr_matrix = graph.tocsr()
             embedding = optimize_layout_euclidean(
                 embedding,
