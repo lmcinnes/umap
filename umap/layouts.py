@@ -741,8 +741,8 @@ def optimize_layout_euclidean(
 
     elif optimizer == "adam":
             densmap = False
-            epochs_per_negative_sample *= 2.0
-            epoch_of_next_negative_sample *= 2.0
+            epochs_per_negative_sample *= 1.5
+            epoch_of_next_negative_sample *= 1.5
             alpha_schedule = np.concatenate(
                 [
                     [(2.0 - 0.1) * (1.0 - (float(n) / float(100)))**2 + 0.2 for n in range(100)],
