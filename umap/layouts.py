@@ -367,8 +367,6 @@ def optimize_layout_euclidean_single_epoch_adam(
                     m_est = adam_m[from_node, d] / (1.0 - pow(beta1, n))
                     v_est = adam_v[from_node, d] / (1.0 - pow(beta2, n))
                     head_embedding[from_node, d] += alpha * m_est / (np.sqrt(v_est) + 1e-4)
-            # if from_node == 0 or from_node == 1:
-            #     print(adam_m[from_node], updates[from_node])
 
 
 
@@ -514,6 +512,149 @@ def optimize_layout_euclidean_single_epoch_fast_densmap(
                 head_embedding[from_node, d] += updates[from_node, d]
 
 
+@numba.njit(
+    fastmath=True,
+    parallel=True,
+    locals={
+        "updates": numba.types.float32[:, ::1],
+        "from_node": numba.types.intp,
+        "to_node": numba.types.intp,
+        "raw_index": numba.types.intp,
+        "dist_squared": numba.types.float32,
+        "grad_coeff": numba.types.float32,
+        "grad_d": numba.types.float32,
+    },
+)
+def optimize_layout_euclidean_single_epoch_adam_densmap(
+    head_embedding,
+    tail_embedding,
+    csr_indptr,
+    csr_indices,
+    n_vertices,
+    epochs_per_sample,
+    a,
+    b,
+    gamma,
+    dim,
+    alpha,
+    epochs_per_negative_sample,
+    epoch_of_next_negative_sample,
+    epoch_of_next_sample,
+    n,
+    dens_phi_sum,
+    dens_re_sum,
+    dens_re_cov,
+    dens_re_std,
+    dens_re_mean,
+    dens_lambda,
+    dens_R,
+    dens_mu,
+    dens_mu_tot,
+    updates,
+    adam_m,
+    adam_v,
+    beta1,
+    beta2,
+    node_order,
+    block_size=256,
+    densmap_flag=True,
+):
+    for block_start in range(0, n_vertices, block_size):
+        block_end = min(block_start + block_size, n_vertices)
+        for node_idx in numba.prange(block_start, block_end):
+            from_node = node_order[node_idx]
+            current = head_embedding[from_node]
+
+            for raw_index in range(csr_indptr[from_node], csr_indptr[from_node+1]):
+                if epoch_of_next_sample[raw_index] <= n:
+                    to_node = csr_indices[raw_index]
+                    other = tail_embedding[to_node]
+
+                    dist_squared = rdist(current, other) / 2
+
+                    if densmap_flag:
+                        phi = 1.0 / (1.0 + a * pow(dist_squared, b))
+                        dphi_term = (
+                            a * b * pow(dist_squared, b - 1) / (1.0 + a * pow(dist_squared, b))
+                        )
+
+                        q_jk = phi / dens_phi_sum[to_node]
+                        q_kj = phi / dens_phi_sum[from_node]
+
+                        drk = q_jk * (
+                            (1.0 - b * (1 - phi)) / np.exp(dens_re_sum[to_node]) + dphi_term
+                        )
+                        drj = q_kj * (
+                            (1.0 - b * (1 - phi)) / np.exp(dens_re_sum[from_node]) + dphi_term
+                        )
+
+                        re_std_sq = dens_re_std * dens_re_std
+                        weight_k = (
+                            dens_R[to_node]
+                            - dens_re_cov * (dens_re_sum[to_node] - dens_re_mean) / re_std_sq
+                        )
+                        weight_j = (
+                            dens_R[from_node]
+                            - dens_re_cov * (dens_re_sum[from_node] - dens_re_mean) / re_std_sq
+                        )
+
+                        grad_cor_coeff = (
+                            dens_lambda
+                            * dens_mu_tot
+                            * (weight_k * drk + weight_j * drj)
+                            / (dens_mu[raw_index] * dens_re_std)
+                            / n_vertices
+                        )
+                    else:
+                        grad_cor_coeff = 0.0
+
+                    if dist_squared > 0.0:
+                        grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
+                        grad_coeff /= a * pow(dist_squared, b) + 1.0
+                        for d in range(dim):
+                            grad_d = clip(grad_coeff * (current[d] - other[d]))
+                            grad_d += clip(2 * grad_cor_coeff * (current[d] - other[d]))
+                            updates[from_node, d] += grad_d
+
+                    epoch_of_next_sample[raw_index] += epochs_per_sample[raw_index]
+
+                    n_neg_samples = int(
+                        (n - epoch_of_next_negative_sample[raw_index]) / epochs_per_negative_sample[raw_index]
+                    )
+
+                    for p in range(n_neg_samples):
+                        to_node = node_order[(raw_index * (n + p + 1)) % n_vertices]
+
+                        other = tail_embedding[to_node]
+
+                        dist_squared = rdist(current, other) / 4
+
+                        if dist_squared > 0.0:
+                            grad_coeff = 2.0 * gamma * b
+                            grad_coeff /= (0.001 + dist_squared) * (
+                                a * pow(dist_squared, b) + 1
+                            )
+
+                            if grad_coeff > 0.0:
+                                for d in range(dim):
+                                    grad_d = clip(grad_coeff * (current[d] - other[d]))
+                                    updates[from_node, d] += grad_d
+
+                    epoch_of_next_negative_sample[raw_index] += (
+                        n_neg_samples * epochs_per_negative_sample[raw_index]
+                    )
+
+        for node_idx in numba.prange(block_start, block_end):
+            from_node = node_order[node_idx]
+            for d in range(dim):
+                if updates[from_node, d] != 0.0:
+                    adam_m[from_node, d] = beta1 * adam_m[from_node, d] + (1.0 - beta1) * updates[from_node, d]
+                    adam_v[from_node, d] = beta2 * adam_v[from_node, d] + (1.0 - beta2) * updates[from_node, d]**2
+                    m_est = adam_m[from_node, d] / (1.0 - pow(beta1, n))
+                    v_est = adam_v[from_node, d] / (1.0 - pow(beta2, n))
+                    head_embedding[from_node, d] += alpha * m_est / (np.sqrt(v_est) + 1e-4)
+
+
 def _optimize_layout_euclidean_densmap_epoch_init(
     head_embedding,
     tail_embedding,
@@ -648,7 +789,7 @@ def optimize_layout_euclidean(
         CSR indices array for the graph of 1-simplices.
     optimizer: str (optional, default "standard")
         The optimizer to use for the optimization. Can be one of "standard", "adam", 
-        "compatibility", or "densmap".
+        "compatibility", "densmap_adam" or "densmap_standard".
 
     Returns
     -------
@@ -660,9 +801,9 @@ def optimize_layout_euclidean(
     if random_state is None:
         random_state = np.random.RandomState()
 
-    if optimizer not in ["standard", "adam", "compatibility", "densmap"]:
+    if optimizer not in ["standard", "adam", "compatibility", "densmap_standard", "densmap_adam"]:
         raise ValueError(
-            f"Unknown optimizer {optimizer}. Must be one of 'standard', 'adam', 'compatibility', or 'densmap'."
+            f"Unknown optimizer {optimizer}. Must be one of 'standard', 'adam', 'compatibility', 'densmap_standard' or 'densmap_adam'."
         )
     
     if optimizer != "compatibility" and (csr_indptr is None or csr_indices is None):
@@ -714,22 +855,13 @@ def optimize_layout_euclidean(
         alpha_schedule = np.linspace(
             initial_alpha, 0.0, n_epochs, endpoint=False
         )
-    elif optimizer == "densmap":
+    elif optimizer.startswith("densmap"):
         dens_init_fn = numba.njit(
             _optimize_layout_euclidean_densmap_epoch_init,
             fastmath=True,
             parallel=parallel,
         )
-
-        epochs_per_negative_sample *= 2.5 # to account for the fact that we are using a fast version
-        epoch_of_next_negative_sample *= 2.5
-        alpha_schedule = np.asarray(
-            [0.25 * (1.0 - (float(n) / float(n_epochs)))**2 for n in range(n_epochs)]
-        )
-        momentum_schedule = np.asarray(
-            [0.5 * (1.0 - alpha_schedule[n]) for n in range(n_epochs)]
-        )
-
+        
         dens_mu_tot = np.sum(densmap_kwds["mu_sum"]) / 2
         dens_lambda = densmap_kwds["lambda"]
         dens_R = densmap_kwds["R"]
@@ -738,6 +870,46 @@ def optimize_layout_euclidean(
         dens_re_sum = np.zeros(n_vertices, dtype=np.float32)
         dens_var_shift = densmap_kwds["var_shift"]
         densmap = True
+
+        if optimizer.endswith("_standard"):
+            epochs_per_negative_sample *= 1.5 # to account for the fact that we are using a fast version
+            epoch_of_next_negative_sample *= 1.5
+            alpha_schedule = np.asarray(
+                [0.25 * (1.0 - (float(n) / float(n_epochs)))**2 for n in range(n_epochs)]
+            )
+            momentum_schedule = np.asarray(
+                [0.5 * (1.0 - alpha_schedule[n]) for n in range(n_epochs)]
+            )
+        else:
+            epochs_per_negative_sample *= 1.5
+            epoch_of_next_negative_sample *= 1.5
+            alpha_schedule = np.concatenate(
+                [
+                    [(2.0 - 0.1) * (1.0 - (float(n) / float(100)))**2 + 0.2 for n in range(100)],
+                    [0.15 * (1.0 - (float(n - 100) / float(n_epochs - 100))) + 0.05 for n in range(100, n_epochs)]
+                ]
+            )
+            momentum_schedule = np.zeros(n_epochs, dtype=np.float32)
+            beta1_schedule = np.concatenate(
+                [
+                    [0.2 + (0.7 * (float(n) / float(100))) for n in range(100)],
+                    np.full(n_epochs - 100, 0.9)
+                ]
+            )
+            beta2_schedule = np.concatenate(
+                [
+                    [0.79 + (0.2 * ((float(n) / float(100)))) for n in range(100)],
+                    np.full(n_epochs - 100, 0.99)
+                ]
+            )
+            gamma_schedule = np.concatenate(
+                [
+                    [1.0 * np.sqrt(float(n) / float(100)) for n in range(100)],
+                    [0.25 * (1.0 - float(n - 100) / float(n_epochs - 100)) + 0.75 for n in range(100, n_epochs)]
+                ]
+            )
+            adam_m = np.zeros_like(updates)
+            adam_v = np.zeros_like(updates)
 
     elif optimizer == "adam":
             densmap = False
@@ -878,7 +1050,7 @@ def optimize_layout_euclidean(
             )
             updates[:] = 0.0
             random_state.shuffle(node_order)    
-        elif optimizer == "densmap":                     
+        elif optimizer == "densmap_standard":                     
             optimize_layout_euclidean_single_epoch_fast_densmap(
                 head_embedding,
                 tail_embedding,
@@ -910,7 +1082,44 @@ def optimize_layout_euclidean(
                 densmap_flag=densmap_flag,
             )
             updates *= momentum_schedule[n]
-            random_state.shuffle(node_order)  
+            random_state.shuffle(node_order)
+        elif optimizer == "densmap_adam":
+            optimize_layout_euclidean_single_epoch_adam_densmap(
+                head_embedding,
+                tail_embedding,
+                csr_indptr,
+                csr_indices,
+                n_vertices,
+                epochs_per_sample,
+                a,
+                b,
+                gamma_schedule[n],
+                dim,
+                alpha_schedule[n],
+                epochs_per_negative_sample,
+                epoch_of_next_negative_sample,
+                epoch_of_next_sample,
+                n,
+                dens_phi_sum,
+                dens_re_sum,
+                dens_re_cov,
+                dens_re_std,
+                dens_re_mean,
+                dens_lambda,
+                dens_R,
+                dens_mu,
+                dens_mu_tot,
+                updates,
+                adam_m,
+                adam_v,
+                beta1_schedule[n],
+                beta2_schedule[n],
+                node_order,
+                block_size=block_size,
+                densmap_flag=densmap_flag
+            )
+            updates[:] = 0.0
+            random_state.shuffle(node_order)
         elif optimizer == "compatibility":
             optimize_fn(
                 head_embedding,

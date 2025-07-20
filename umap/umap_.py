@@ -1034,6 +1034,7 @@ def simplicial_set_embedding(
     parallel=False,
     verbose=False,
     compatibility_layout=False,
+    optimizer="standard",
     tqdm_kwds=None,
 ):
     """Perform a fuzzy simplicial set embedding, using a specified
@@ -1132,6 +1133,11 @@ def simplicial_set_embedding(
         Whether to use the compatibility layout code for the embedding.
         This is the original code used in UMAP, and is not as efficient as the
         new code, but is kept available for compatibility with older versions of UMAP.
+
+    optimizer: str (optional, default 'standard')
+        The optimizer to use for the embedding. Options are:
+            * 'standard': use the standard SGD optimizer.
+            * 'adam': use the Adam optimizer.
 
     tqdm_kwds: dict
         Key word arguments to be used by the tqdm progress bar.
@@ -1311,7 +1317,7 @@ def simplicial_set_embedding(
             )
         else:
             print(ts() + " Using new optimization code")
-            optimizer = "densmap" if densmap else "standard"
+            optimizer = f"densmap_{optimizer}" if densmap else optimizer
             csr_matrix = graph.tocsr()
             embedding = optimize_layout_euclidean(
                 embedding,
@@ -1786,6 +1792,30 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         nearest neighbor of each item should be itself, e.g. the nearest neighbor of
         item 0 should be 0, the nearest neighbor of item 1 is 1 and so on. Please note
         that you will *not* be able to transform new data in this case.
+
+    compatibility_layout: bool (optional, default False)
+        Whether to use the compatibility layout code for the embedding.
+        This is the original code used in UMAP, and is not as efficient as the
+        new code, but is kept available for compatibility with older versions of UMAP.
+
+    optimizer: str (optional, default 'standard')
+        The optimizer to use for the embedding. Options are:
+            * 'standard': use the standard SGD optimizer.
+            * 'adam': use the Adam optimizer.
+    
+    Attributes
+    ----------
+    embedding_: array of shape (n_samples, n_components)
+        The low dimensional embedding of the input data.
+
+    embedding_list_: list of arrays
+        If `n_epochs` is a list, this contains the intermediate embeddings
+        at the different epochs specified in that list. Each array in the list
+        has shape (n_samples, n_components).
+
+    graph_: csr_matrix
+        The fuzzy simplicial set graph constructed from the input data. 
+    
     """
 
     def __init__(
@@ -1830,6 +1860,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         disconnection_distance=None,
         precomputed_knn=(None, None, None),
         compatibility_layout=False,
+        optimizer="standard",
     ):
         self.n_neighbors = n_neighbors
         self.metric = metric
@@ -1871,6 +1902,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         self.disconnection_distance = disconnection_distance
         self.precomputed_knn = precomputed_knn
         self.compatibility_layout = compatibility_layout
+        self.optimizer = optimizer
 
         self.n_jobs = n_jobs
 
@@ -2282,6 +2314,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
 
         result.densmap = np.any(result.densmap)
         result.output_dens = np.any(result.output_dens)
+        result.optimizer = result.optimizer[0] if isinstance(result.optimizer, list) else result.optimizer
 
         result._densmap_kwds = {
             "lambda": np.max(result.dens_lambda),
@@ -2315,6 +2348,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             parallel=False,
             verbose=bool(np.max(result.verbose)),
             compatibility_layout=result.compatibility_layout,
+            optimizer=result.optimizer,
             tqdm_kwds=self.tqdm_kwds,
         )
 
@@ -2353,6 +2387,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
 
         result.densmap = np.any(result.densmap)
         result.output_dens = np.any(result.output_dens)
+        result.optimizer = result.optimizer[0] if isinstance(result.optimizer, list) else result.optimizer
 
         result._densmap_kwds = {
             "lambda": np.max(result.dens_lambda),
@@ -2386,6 +2421,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             parallel=False,
             verbose=bool(np.max(result.verbose)),
             compatibility_layout=result.compatibility_layout,
+            optimizer=result.optimizer,
             tqdm_kwds=self.tqdm_kwds,
         )
 
@@ -2426,6 +2462,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
 
         result.densmap = np.any(result.densmap)
         result.output_dens = np.any(result.output_dens)
+        result.optimizer = result.optimizer[0] if isinstance(result.optimizer, list) else result.optimizer
 
         result._densmap_kwds = {
             "lambda": np.max(result.dens_lambda),
@@ -2459,6 +2496,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             parallel=False,
             verbose=bool(np.max(result.verbose)),
             compatibility_layout=result.compatibility_layout,
+            optimizer=result.optimizer,
             tqdm_kwds=self.tqdm_kwds,
         )
 
@@ -3025,6 +3063,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             self.random_state is None,
             self.verbose,
             compatibility_layout=self.compatibility_layout,
+            optimizer=self.optimizer,
             tqdm_kwds=self.tqdm_kwds,
         )
 
@@ -3648,6 +3687,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self.random_state is None,
                 self.verbose,
                 compatibility_layout=self.compatibility_layout,
+                optimizer=self.optimizer,
                 tqdm_kwds=self.tqdm_kwds,
             )
 
