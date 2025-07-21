@@ -1246,25 +1246,6 @@ def simplicial_set_embedding(
         if verbose:
             print(ts() + " Computing original densities")
 
-        # dists = densmap_kwds["graph_dists"]
-
-        # mu_sum = np.zeros(n_vertices, dtype=np.float32)
-        # ro = np.zeros(n_vertices, dtype=np.float32)
-        # for i in range(len(head)):
-        #     j = head[i]
-        #     k = tail[i]
-
-        #     D = dists[j, k] * dists[j, k]  # match sq-Euclidean used for embedding
-        #     mu = graph.data[i]
-
-        #     ro[j] += mu * D
-        #     ro[k] += mu * D
-        #     mu_sum[j] += mu
-        #     mu_sum[k] += mu
-
-        # epsilon = 1e-8
-        # ro = np.log(epsilon + (ro / mu_sum))
-
         dists = densmap_kwds["graph_dists"].tocsr()
         dists.sort_indices()
         mu_sum, ro = compute_densities(
@@ -1345,26 +1326,55 @@ def simplicial_set_embedding(
             )
 
     else:
-        embedding = optimize_layout_generic(
-            embedding,
-            embedding,
-            head,
-            tail,
-            n_epochs,
-            n_vertices,
-            epochs_per_sample,
-            a,
-            b,
-            rng_state,
-            gamma,
-            initial_alpha,
-            negative_sample_rate,
-            output_metric,
-            tuple(output_metric_kwds.values()),
-            verbose=verbose,
-            tqdm_kwds=tqdm_kwds,
-            move_other=True,
-        )
+        if compatibility_layout:
+            embedding = optimize_layout_generic(
+                embedding,
+                embedding,
+                head,
+                tail,
+                n_epochs,
+                n_vertices,
+                epochs_per_sample,
+                a,
+                b,
+                rng_state,
+                gamma,
+                initial_alpha,
+                negative_sample_rate,
+                output_metric,
+                tuple(output_metric_kwds.values()),
+                verbose=verbose,
+                tqdm_kwds=tqdm_kwds,
+                move_other=True,
+                optimizer="compatibility",
+            )
+        else:
+            print(ts() + " Using new optimization code")
+            csr_matrix = graph.tocsr()
+            embedding = optimize_layout_generic(
+                embedding,
+                embedding,
+                head,
+                tail,
+                n_epochs,
+                n_vertices,
+                epochs_per_sample,
+                a,
+                b,
+                rng_state,
+                gamma,
+                initial_alpha,
+                negative_sample_rate,
+                output_metric,
+                tuple(output_metric_kwds.values()),
+                verbose=verbose,
+                tqdm_kwds=tqdm_kwds,
+                move_other=False,
+                csr_indptr=csr_matrix.indptr,
+                csr_indices=csr_matrix.indices,
+                random_state=random_state,
+                optimizer=optimizer,
+            )
 
     if isinstance(embedding, list):
         aux_data["embedding_list"] = embedding
@@ -1408,25 +1418,17 @@ def simplicial_set_embedding(
 
         n_vertices = emb_graph.shape[1]
 
-        mu_sum = np.zeros(n_vertices, dtype=np.float32)
-        re = np.zeros(n_vertices, dtype=np.float32)
-
-        head = emb_graph.row
-        tail = emb_graph.col
-        for i in range(len(head)):
-            j = head[i]
-            k = tail[i]
-
-            D = emb_dists[j, k]
-            mu = emb_graph.data[i]
-
-            re[j] += mu * D
-            re[k] += mu * D
-            mu_sum[j] += mu
-            mu_sum[k] += mu
-
-        epsilon = 1e-8
-        re = np.log(epsilon + (re / mu_sum))
+        dists = emb_graph.tocsr()
+        dists.sort_indices()
+        mu_sum, re = compute_densities(
+            head,
+            tail,
+            weight,
+            dists.indptr,
+            dists.indices,
+            dists.data,
+            n_vertices,
+        )
 
         aux_data["rad_emb"] = re
 
