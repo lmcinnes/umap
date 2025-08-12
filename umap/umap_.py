@@ -1948,10 +1948,10 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         if self.n_jobs < -1 or self.n_jobs == 0:
             raise ValueError("n_jobs must be a postive integer, or -1 (for all cores)")
         if self.n_jobs != 1 and self.random_state is not None:
-            self.n_jobs = 1
             warn(
                 f"n_jobs value {self.n_jobs} overridden to 1 by setting random_state. Use no seed for parallelism."
             )
+            self.n_jobs = 1
 
         if self.dens_lambda < 0.0:
             raise ValueError("dens_lambda cannot be negative")
