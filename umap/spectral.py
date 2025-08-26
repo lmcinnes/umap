@@ -15,6 +15,9 @@ from umap.distances import pairwise_special_metric, SPECIAL_METRICS
 from umap.sparse import SPARSE_SPECIAL_METRICS, sparse_named_distances
 
 
+from line_profiler import profile
+
+
 def component_layout(
     data,
     n_components,
@@ -398,6 +401,7 @@ def tswspectral_layout(
     )
 
 
+@profile
 def _spectral_layout(
     data,
     graph,
@@ -492,7 +496,7 @@ def _spectral_layout(
     # Normalized Laplacian
     D = scipy.sparse.spdiags(1.0 / sqrt_deg, 0, graph.shape[0], graph.shape[0])
     A = D * graph * D
-    I = scipy.sparse.identity(graph.shape[0], dtype=np.float64)   
+    I = scipy.sparse.identity(graph.shape[0], dtype=np.float64)
     L = I - A
     if not scipy.sparse.issparse(L):
         L = np.asarray(L)
