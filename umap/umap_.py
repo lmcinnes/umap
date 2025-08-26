@@ -148,6 +148,7 @@ def raise_disconnected_warning(
         "hi": numba.types.float32,
     },
     fastmath=True,
+    parallel=True,
 )  # benchmarking `parallel=True` shows it to *decrease* performance
 def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0):
     """Compute a continuous version of the distance to the kth nearest
@@ -194,7 +195,7 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
 
     mean_distances = np.mean(distances)
 
-    for i in range(distances.shape[0]):
+    for i in numba.prange(distances.shape[0]):
         lo = 0.0
         hi = NPY_INFINITY
         mid = 1.0
@@ -355,11 +356,10 @@ def nearest_neighbors(
             n_iters = max(5, int(round(np.log2(X.shape[0]))))
             effective_n_neighbors = int(1.5 * n_neighbors)
             effective_max_candidates = max(20, min(60, effective_n_neighbors))
-            if verbose:
-                print(
-                    ts(),
-                    f"Using {n_trees} trees, {n_iters} iterations, {n_neighbors} neighbors, and {effective_max_candidates} max candidates.",
-                )
+            print(
+                ts(),
+                f"Using {n_trees} trees, {n_iters} iterations, {effective_n_neighbors} neighbors, and {effective_max_candidates} max candidates.",
+            )
             knn_search_index = NNDescent(
                 X,
                 n_neighbors=n_neighbors,
@@ -631,13 +631,15 @@ def fuzzy_simplicial_set(
 
     if apply_set_operations:
         transpose = result.transpose()
-
         prod_matrix = result.multiply(transpose)
 
-        result = (
-            set_op_mix_ratio * (result + transpose - prod_matrix)
-            + (1.0 - set_op_mix_ratio) * prod_matrix
-        )
+        if set_op_mix_ratio == 1.0:
+            result += transpose - prod_matrix
+        else:
+            result = (
+                set_op_mix_ratio * (result + transpose - prod_matrix)
+                + (1.0 - set_op_mix_ratio) * prod_matrix
+            )
 
     result.eliminate_zeros()
 
@@ -1163,8 +1165,8 @@ def simplicial_set_embedding(
         is turned on, this dictionary includes local radii in the original
         data (``rad_orig``) and in the embedding (``rad_emb``).
     """
-    graph = graph.tocoo()
-    graph.sum_duplicates()
+    # graph = graph.tocoo()
+    # graph.sum_duplicates()
     n_vertices = graph.shape[1]
 
     # For smaller datasets we can use more epochs
@@ -1247,15 +1249,16 @@ def simplicial_set_embedding(
 
     epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs_max)
 
-    head = graph.row
-    tail = graph.col
-    weight = graph.data
-
     rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
     aux_data = {}
 
     if densmap or output_dens:
+        coo_graph = graph.tocoo()
+        head = coo_graph.row
+        tail = coo_graph.col
+        weight = coo_graph.data
+
         if verbose:
             print(ts() + " Computing original densities")
 
@@ -1273,7 +1276,7 @@ def simplicial_set_embedding(
 
         if densmap:
             R = (ro - np.mean(ro)) / np.std(ro)
-            densmap_kwds["mu"] = graph.data
+            densmap_kwds["mu"] = coo_graph.data
             densmap_kwds["mu_sum"] = mu_sum
             densmap_kwds["R"] = R
 
@@ -1288,6 +1291,9 @@ def simplicial_set_embedding(
 
     if euclidean_output:
         if compatibility_layout:
+            coo_graph = graph.tocoo()
+            head = coo_graph.row
+            tail = coo_graph.col
             embedding = optimize_layout_euclidean(
                 embedding,
                 embedding,
@@ -1313,12 +1319,12 @@ def simplicial_set_embedding(
             if verbose:
                 print(ts() + " Using new optimization code")
             optimizer = f"densmap_{optimizer}" if densmap else optimizer
-            csr_matrix = graph.tocsr()
+            # csr_matrix = graph.tocsr()
             embedding = optimize_layout_euclidean(
                 embedding,
                 embedding,
-                head,
-                tail,
+                None,
+                None,
                 n_epochs,
                 n_vertices,
                 epochs_per_sample,
@@ -1333,14 +1339,17 @@ def simplicial_set_embedding(
                 densmap_kwds=densmap_kwds,
                 tqdm_kwds=tqdm_kwds,
                 move_other=False,
-                csr_indptr=csr_matrix.indptr,
-                csr_indices=csr_matrix.indices,
+                csr_indptr=graph.indptr,
+                csr_indices=graph.indices,
                 random_state=random_state,
                 optimizer=optimizer,
             )
 
     else:
         if compatibility_layout:
+            coo_graph = graph.tocoo()
+            head = coo_graph.row
+            tail = coo_graph.col
             embedding = optimize_layout_generic(
                 embedding,
                 embedding,
@@ -1364,12 +1373,12 @@ def simplicial_set_embedding(
             )
         else:
             print(ts() + " Using new optimization code")
-            csr_matrix = graph.tocsr()
+            # csr_matrix = graph.tocsr()
             embedding = optimize_layout_generic(
                 embedding,
                 embedding,
-                head,
-                tail,
+                None,
+                None,
                 n_epochs,
                 n_vertices,
                 epochs_per_sample,
@@ -1384,8 +1393,8 @@ def simplicial_set_embedding(
                 verbose=verbose,
                 tqdm_kwds=tqdm_kwds,
                 move_other=False,
-                csr_indptr=csr_matrix.indptr,
-                csr_indices=csr_matrix.indices,
+                csr_indptr=graph.indptr,
+                csr_indices=graph.indices,
                 random_state=random_state,
                 optimizer=optimizer,
             )

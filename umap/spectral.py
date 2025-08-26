@@ -258,7 +258,10 @@ def multi_component_layout(
             distances = pairwise_distances([meta_embedding[label]], meta_embedding)
             data_range = distances[distances > 0.0].min() / 2.0
 
-            if component_graph.shape[0] < 2 * dim or component_graph.shape[0] <= dim + 1:
+            if (
+                component_graph.shape[0] < 2 * dim
+                or component_graph.shape[0] <= dim + 1
+            ):
                 result[component_labels == label] = (
                     random_state.uniform(
                         low=-data_range,
@@ -296,7 +299,7 @@ def multi_component_layout(
         A = D * graph * D
 
         if verbose:
-            print(ts(), "Computing SVD of Laplacian...") 
+            print(ts(), "Computing SVD of Laplacian...")
 
         X = TruncatedSVD(
             n_components=dim + 1,
@@ -304,7 +307,6 @@ def multi_component_layout(
             # algorithm="arpack"
         ).fit_transform(A)
         result = X[:, 1:]
-
 
     return result
 
@@ -571,8 +573,8 @@ def _spectral_layout(
 
     # Normalized Laplacian
     D = scipy.sparse.spdiags(1.0 / sqrt_deg, 0, graph.shape[0], graph.shape[0])
-    A = D * sparse_graph * D
-    I = scipy.sparse.identity(graph.shape[0], dtype=np.float64)   
+    A = D * graph * D
+    I = scipy.sparse.identity(graph.shape[0], dtype=np.float64)
     L = I - A
     if not scipy.sparse.issparse(L):
         L = np.asarray(L)
