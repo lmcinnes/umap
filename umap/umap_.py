@@ -347,14 +347,16 @@ def nearest_neighbors(
             )
             knn_indices, knn_dists = knn_search_index.neighbor_graph
         else:
-            print(ts(), "Using alternative param NNDescent to find Nearest Neighbors")
+            if verbose:
+                print(ts(), "Using alternative param NNDescent to find Nearest Neighbors")
             n_trees = max(4, min(8, 5 + int(round((X.shape[0]) ** 0.5 / 20.0))))
             n_iters = max(5, int(round(np.log2(X.shape[0]))))
             effective_n_neighbors = int(1.5 * n_neighbors)
             effective_max_candidates = max(20, min(60, effective_n_neighbors))
-            print(
-                ts(), f"Using {n_trees} trees, {n_iters} iterations, {effective_n_neighbors} neighbors, and {effective_max_candidates} max candidates."
-            )
+            if verbose:
+                print(
+                    ts(), f"Using {n_trees} trees, {n_iters} iterations, {n_neighbors} neighbors, and {effective_max_candidates} max candidates."
+                )
             knn_search_index = NNDescent(
                 X,
                 n_neighbors=n_neighbors,
@@ -369,8 +371,8 @@ def nearest_neighbors(
                 compressed=False,
             )
             knn_indices, knn_dists = knn_search_index.neighbor_graph
-            knn_indices = knn_indices[:, :n_neighbors]
-            knn_dists = knn_dists[:, :n_neighbors]
+            # knn_indices = knn_indices[:, :n_neighbors]
+            # knn_dists = knn_dists[:, :n_neighbors]
 
     if verbose:
         print(ts(), "Finished Nearest Neighbor Search")
@@ -1202,6 +1204,7 @@ def simplicial_set_embedding(
             metric=metric,
             metric_kwds=metric_kwds,
             compatibility_layout=compatibility_layout,
+            verbose=verbose,
         )
         # We add a little noise to avoid local minima for optimization to come
         embedding = noisy_scale_coords(
@@ -1215,6 +1218,8 @@ def simplicial_set_embedding(
             random_state,
             metric=metric,
             metric_kwds=metric_kwds,
+            compatibility_layout=compatibility_layout,
+            verbose=verbose,
         )
         embedding = noisy_scale_coords(
             embedding, random_state, max_coord=20, noise=0.0001
@@ -1297,7 +1302,8 @@ def simplicial_set_embedding(
                 optimizer="compatibility",
             )
         else:
-            print(ts() + " Using new optimization code")
+            if verbose:
+                print(ts() + " Using new optimization code")
             optimizer = f"densmap_{optimizer}" if densmap else optimizer
             csr_matrix = graph.tocsr()
             embedding = optimize_layout_euclidean(
