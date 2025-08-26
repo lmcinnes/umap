@@ -148,6 +148,7 @@ def raise_disconnected_warning(
         "hi": numba.types.float32,
     },
     fastmath=True,
+    parallel=True,
 )  # benchmarking `parallel=True` shows it to *decrease* performance
 def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0):
     """Compute a continuous version of the distance to the kth nearest
@@ -194,7 +195,7 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
 
     mean_distances = np.mean(distances)
 
-    for i in range(distances.shape[0]):
+    for i in numba.prange(distances.shape[0]):
         lo = 0.0
         hi = NPY_INFINITY
         mid = 1.0
@@ -353,7 +354,8 @@ def nearest_neighbors(
             effective_n_neighbors = int(1.5 * n_neighbors)
             effective_max_candidates = max(20, min(60, effective_n_neighbors))
             print(
-                ts(), f"Using {n_trees} trees, {n_iters} iterations, {effective_n_neighbors} neighbors, and {effective_max_candidates} max candidates."
+                ts(),
+                f"Using {n_trees} trees, {n_iters} iterations, {effective_n_neighbors} neighbors, and {effective_max_candidates} max candidates.",
             )
             knn_search_index = NNDescent(
                 X,
@@ -626,13 +628,15 @@ def fuzzy_simplicial_set(
 
     if apply_set_operations:
         transpose = result.transpose()
-
         prod_matrix = result.multiply(transpose)
 
-        result = (
-            set_op_mix_ratio * (result + transpose - prod_matrix)
-            + (1.0 - set_op_mix_ratio) * prod_matrix
-        )
+        if set_op_mix_ratio == 1.0:
+            result += transpose - prod_matrix
+        else:
+            result = (
+                set_op_mix_ratio * (result + transpose - prod_matrix)
+                + (1.0 - set_op_mix_ratio) * prod_matrix
+            )
 
     result.eliminate_zeros()
 
@@ -969,7 +973,7 @@ def noisy_scale_coords(coords, random_state, max_coord=10.0, noise=0.0001):
     )
 
 
-@numba.njit( 
+@numba.njit(
     fastmath=True,
     locals={
         "mu_sum": numba.types.float32[:],
@@ -997,7 +1001,11 @@ def compute_densities(
         k = col[i]
 
         idx = np.searchsorted(dist_indices[dist_indptr[j] : dist_indptr[j + 1]], k)
-        D = dist_vals[dist_indptr[j] + idx] if idx < (dist_indptr[j + 1] - dist_indptr[j]) else 0.0
+        D = (
+            dist_vals[dist_indptr[j] + idx]
+            if idx < (dist_indptr[j + 1] - dist_indptr[j])
+            else 0.0
+        )
         D = D * D  # match sq-Euclidean used for embedding
         mu = val[i]
 
@@ -1010,6 +1018,7 @@ def compute_densities(
     ro = np.log(epsilon + (ro / mu_sum)).astype(np.float32)
 
     return mu_sum, ro
+
 
 def simplicial_set_embedding(
     data,
@@ -1153,8 +1162,8 @@ def simplicial_set_embedding(
         is turned on, this dictionary includes local radii in the original
         data (``rad_orig``) and in the embedding (``rad_emb``).
     """
-    graph = graph.tocoo()
-    graph.sum_duplicates()
+    # graph = graph.tocoo()
+    # graph.sum_duplicates()
     n_vertices = graph.shape[1]
 
     # For smaller datasets we can use more epochs
@@ -1234,15 +1243,16 @@ def simplicial_set_embedding(
 
     epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs_max)
 
-    head = graph.row
-    tail = graph.col
-    weight = graph.data
-
     rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
     aux_data = {}
 
     if densmap or output_dens:
+        coo_graph = graph.tocoo()
+        head = coo_graph.row
+        tail = coo_graph.col
+        weight = coo_graph.data
+
         if verbose:
             print(ts() + " Computing original densities")
 
@@ -1260,7 +1270,7 @@ def simplicial_set_embedding(
 
         if densmap:
             R = (ro - np.mean(ro)) / np.std(ro)
-            densmap_kwds["mu"] = graph.data
+            densmap_kwds["mu"] = coo_graph.data
             densmap_kwds["mu_sum"] = mu_sum
             densmap_kwds["R"] = R
 
@@ -1275,6 +1285,9 @@ def simplicial_set_embedding(
 
     if euclidean_output:
         if compatibility_layout:
+            coo_graph = graph.tocoo()
+            head = coo_graph.row
+            tail = coo_graph.col
             embedding = optimize_layout_euclidean(
                 embedding,
                 embedding,
@@ -1299,12 +1312,12 @@ def simplicial_set_embedding(
         else:
             print(ts() + " Using new optimization code")
             optimizer = f"densmap_{optimizer}" if densmap else optimizer
-            csr_matrix = graph.tocsr()
+            # csr_matrix = graph.tocsr()
             embedding = optimize_layout_euclidean(
                 embedding,
                 embedding,
-                head,
-                tail,
+                None,
+                None,
                 n_epochs,
                 n_vertices,
                 epochs_per_sample,
@@ -1319,14 +1332,17 @@ def simplicial_set_embedding(
                 densmap_kwds=densmap_kwds,
                 tqdm_kwds=tqdm_kwds,
                 move_other=False,
-                csr_indptr=csr_matrix.indptr,
-                csr_indices=csr_matrix.indices,
+                csr_indptr=graph.indptr,
+                csr_indices=graph.indices,
                 random_state=random_state,
                 optimizer=optimizer,
             )
 
     else:
         if compatibility_layout:
+            coo_graph = graph.tocoo()
+            head = coo_graph.row
+            tail = coo_graph.col
             embedding = optimize_layout_generic(
                 embedding,
                 embedding,
@@ -1350,12 +1366,12 @@ def simplicial_set_embedding(
             )
         else:
             print(ts() + " Using new optimization code")
-            csr_matrix = graph.tocsr()
+            # csr_matrix = graph.tocsr()
             embedding = optimize_layout_generic(
                 embedding,
                 embedding,
-                head,
-                tail,
+                None,
+                None,
                 n_epochs,
                 n_vertices,
                 epochs_per_sample,
@@ -1370,8 +1386,8 @@ def simplicial_set_embedding(
                 verbose=verbose,
                 tqdm_kwds=tqdm_kwds,
                 move_other=False,
-                csr_indptr=csr_matrix.indptr,
-                csr_indices=csr_matrix.indices,
+                csr_indptr=graph.indptr,
+                csr_indices=graph.indices,
                 random_state=random_state,
                 optimizer=optimizer,
             )
@@ -1804,7 +1820,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         The optimizer to use for the embedding. Options are:
             * 'standard': use the standard SGD optimizer.
             * 'adam': use the Adam optimizer.
-    
+
     Attributes
     ----------
     embedding_: array of shape (n_samples, n_components)
@@ -1816,8 +1832,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         has shape (n_samples, n_components).
 
     graph_: csr_matrix
-        The fuzzy simplicial set graph constructed from the input data. 
-    
+        The fuzzy simplicial set graph constructed from the input data.
+
     """
 
     def __init__(
@@ -2109,7 +2125,11 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
 
         if self.n_jobs < -1 or self.n_jobs == 0:
             raise ValueError("n_jobs must be a postive integer, or -1 (for all cores)")
-        if self.n_jobs != 1 and self.random_state is not None and self.compatibility_layout: # turn off parallelism reset in new layout mode
+        if (
+            self.n_jobs != 1
+            and self.random_state is not None
+            and self.compatibility_layout
+        ):  # turn off parallelism reset in new layout mode
             warn(
                 f"n_jobs value {self.n_jobs} overridden to 1 by setting random_state. Use no seed for parallelism."
             )
@@ -2316,7 +2336,11 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
 
         result.densmap = np.any(result.densmap)
         result.output_dens = np.any(result.output_dens)
-        result.optimizer = result.optimizer[0] if isinstance(result.optimizer, list) else result.optimizer
+        result.optimizer = (
+            result.optimizer[0]
+            if isinstance(result.optimizer, list)
+            else result.optimizer
+        )
 
         result._densmap_kwds = {
             "lambda": np.max(result.dens_lambda),
@@ -2389,7 +2413,11 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
 
         result.densmap = np.any(result.densmap)
         result.output_dens = np.any(result.output_dens)
-        result.optimizer = result.optimizer[0] if isinstance(result.optimizer, list) else result.optimizer
+        result.optimizer = (
+            result.optimizer[0]
+            if isinstance(result.optimizer, list)
+            else result.optimizer
+        )
 
         result._densmap_kwds = {
             "lambda": np.max(result.dens_lambda),
@@ -2464,7 +2492,11 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
 
         result.densmap = np.any(result.densmap)
         result.output_dens = np.any(result.output_dens)
-        result.optimizer = result.optimizer[0] if isinstance(result.optimizer, list) else result.optimizer
+        result.optimizer = (
+            result.optimizer[0]
+            if isinstance(result.optimizer, list)
+            else result.optimizer
+        )
 
         result._densmap_kwds = {
             "lambda": np.max(result.dens_lambda),
@@ -2873,9 +2905,9 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             if self.target_metric == "string":
                 y_ = y[index]
             else:
-                y_ = check_array(y, ensure_2d=False, ensure_all_finite=ensure_all_finite)[
-                    index
-                ]
+                y_ = check_array(
+                    y, ensure_2d=False, ensure_all_finite=ensure_all_finite
+                )[index]
             if self.target_metric == "categorical":
                 if self.target_weight < 1.0:
                     far_dist = 2.5 * (1.0 / (1.0 - self.target_weight))
@@ -3021,7 +3053,6 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             if self.output_dens:
                 self.rad_orig_ = aux_data["rad_orig"][inverse]
                 self.rad_emb_ = aux_data["rad_emb"][inverse]
-
 
         if self.verbose:
             print(ts() + " Finished embedding")
