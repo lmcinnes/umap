@@ -15,9 +15,6 @@ from umap.distances import pairwise_special_metric, SPECIAL_METRICS
 from umap.sparse import SPARSE_SPECIAL_METRICS, sparse_named_distances
 
 
-from line_profiler import profile
-
-
 def component_layout(
     data,
     n_components,
@@ -401,7 +398,6 @@ def tswspectral_layout(
     )
 
 
-@profile
 def _spectral_layout(
     data,
     graph,
