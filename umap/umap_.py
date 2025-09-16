@@ -147,7 +147,7 @@ def raise_disconnected_warning(
         "mid": numba.types.float32,
         "hi": numba.types.float32,
     },
-    fastmath=True,
+    fastmath=False,  # this function is not fastmath-safe 
 )  # benchmarking `parallel=True` shows it to *decrease* performance
 def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0):
     """Compute a continuous version of the distance to the kth nearest
@@ -356,7 +356,7 @@ def nearest_neighbors(
         "val": numba.types.float32,
     },
     parallel=True,
-    fastmath=True,
+    fastmath=False,  # this function is not fastmath-safe 
 )
 def compute_membership_strengths(
     knn_indices,
