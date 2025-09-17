@@ -549,9 +549,7 @@ def _spectral_layout(
     if verbose:
         print(ts(), "Checking components for spectral layout...")
     n_samples = graph.shape[0]
-    sparse_graph = graph.copy()
-    sparse_graph.data[sparse_graph.data < 1e-1] = 0.0
-    n_components, labels = scipy.sparse.csgraph.connected_components(sparse_graph)
+    n_components, labels = scipy.sparse.csgraph.connected_components(graph)
 
     if n_components > 1:
         return multi_component_layout(
@@ -569,7 +567,7 @@ def _spectral_layout(
 
     if verbose:
         print(ts(), "Computing Laplacian...")
-    sqrt_deg = np.sqrt(np.asarray(sparse_graph.sum(axis=0)).squeeze())
+    sqrt_deg = np.sqrt(np.asarray(graph.sum(axis=0)).squeeze())
 
     # Normalized Laplacian
     D = scipy.sparse.spdiags(1.0 / sqrt_deg, 0, graph.shape[0], graph.shape[0])
