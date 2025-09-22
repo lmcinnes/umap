@@ -35,6 +35,7 @@ def label_prop_iteration(
         current_l = labels[i]
         if current_l >= 0:
             continue
+        # Create a local rng state for this iteration
         local_rng_state = rng_state + i
         votes = {}
         for k in range(indptr[i], indptr[i + 1]):
@@ -72,6 +73,7 @@ def label_outliers(indptr, indices, labels, rng_state):
     max_label = labels.max()
 
     for i in numba.prange(n_rows):
+        # Create a local rng state for this iteration
         local_rng_state = rng_state + i
         if labels[i] < 0:
 
@@ -93,7 +95,9 @@ def label_outliers(indptr, indices, labels, rng_state):
                         node_queue.append(j)
 
             if n_iter >= 100:
-                labels[i] = tau_rand_int(local_rng_state) % (max_label + 1)
+                # Ensure we don't have modulo by zero
+                num_labels = max(max_label + 1, 1)
+                labels[i] = tau_rand_int(local_rng_state) % num_labels
 
     return labels
 
@@ -117,15 +121,25 @@ def remap_labels(labels):
     return labels
 
 
+@numba.njit(cache=True)
+def initialize_labels(labels, n_parts, rng_state):
+    for i in range(n_parts):
+        labels[tau_rand_int(rng_state) % labels.shape[0]] = i
+    return labels
+
+
+import matplotlib.pyplot as plt
+
+
 def label_propagation_init(
     graph,
     a,
     b,
     n_iter=20,
-    n_epochs=64,
+    n_epochs=32,
     approx_n_parts=4096,
     n_components=2,
-    scaling=0.1,
+    scaling=1.0,
     random_scale=1.0,
     random_state=None,
     recursive_init=True,
@@ -145,8 +159,9 @@ def label_propagation_init(
         return result.astype(np.float32)
 
     # Initialize the label propagation process
-    rng_state = np.random.RandomState(random_state)
+    rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
     labels = np.full(graph.shape[0], -1, dtype=np.int32)
+    labels = initialize_labels(labels, approx_n_parts, rng_state)
 
     # Perform the label propagation iterations
     for i in range(n_iter):
@@ -155,7 +170,7 @@ def label_propagation_init(
             graph.indices,
             graph.data,
             labels,
-            rng_state.randint(INT32_MIN, INT32_MAX, dtype=np.int32),
+            rng_state,
         )
 
     # Handle outliers
@@ -163,7 +178,7 @@ def label_propagation_init(
         graph.indptr,
         graph.indices,
         labels,
-        rng_state.randint(INT32_MIN, INT32_MAX, dtype=np.int32),
+        rng_state,
     )
 
     # Remap labels to a contiguous range
@@ -179,8 +194,11 @@ def label_propagation_init(
     if recursive_init:
         reduced_init = label_propagation_init(
             reduced_graph,
+            a,
+            b,
             n_iter=n_iter,
             approx_n_parts=approx_n_parts // 4,
+            n_epochs=n_epochs * 2,
             n_components=n_components,
             scaling=scaling,
             random_scale=random_scale,
@@ -192,8 +210,7 @@ def label_propagation_init(
     else:
         reduced_init = None
 
-    epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs)
-
+    epochs_per_sample = make_epochs_per_sample(reduced_graph.data, n_epochs)
     reduced_layout = optimize_layout_euclidean(
         reduced_init,
         reduced_init,
@@ -205,18 +222,18 @@ def label_propagation_init(
         a,
         b,
         rng_state,
-        1.0,
-        0.1,
-        5,
+        1.5,
+        0.5,
+        1,
         parallel=True,
-        verbose=True,
+        verbose=False,
         densmap_kwds={},
         tqdm_kwds={},
         move_other=False,
-        csr_indptr=graph.indptr,
-        csr_indices=graph.indices,
+        csr_indptr=reduced_graph.indptr,
+        csr_indices=reduced_graph.indices,
         random_state=random_state,
-        optimizer="standard",
+        optimizer="adam",
     )
 
     if upscaling == "partition_expander":
@@ -247,6 +264,4 @@ def label_propagation_init(
         )
 
     result = (scaling * (result - result.mean(axis=0))).astype(np.float32)
-    # plt.scatter(result[:, 0], result[:, 1], c=partition, s=1)
-    # plt.show()
     return result
