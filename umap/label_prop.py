@@ -158,6 +158,11 @@ def label_propagation_init(
         result = result / norms
         return result.astype(np.float32)
 
+    # Ensure we have fewer parts than samples
+    approx_n_parts = min(approx_n_parts, graph.shape[0] // 2)
+    if approx_n_parts < 2:
+        approx_n_parts = 2
+
     # Initialize the label propagation process
     rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
     labels = np.full(graph.shape[0], -1, dtype=np.int32)
