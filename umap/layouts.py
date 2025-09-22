@@ -1669,6 +1669,7 @@ def optimize_layout_generic(
     optimizer="standard",
     csr_indptr=None,
     csr_indices=None,
+    good_initialization=False,
     random_state=None,
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
@@ -1743,6 +1744,11 @@ def optimize_layout_generic(
     csr_indices: array of int (optional, default None)
         CSR indices array for the graph of 1-simplices.
 
+    good_initialization: bool (optional, default False)
+        Whether the initial embedding is already a good representation of the data.
+        If True, the optimization will use different learning rate schedules etc.
+        This is only used if optimizer is "standard" or "adam".
+
     random_state: np.random.RandomState (optional, default None)
         Random state to use for the optimization. If None, a new random state will be created
         using np.random.RandomState.
@@ -1770,11 +1776,9 @@ def optimize_layout_generic(
         "standard",
         "adam",
         "compatibility",
-        "densmap_standard",
-        "densmap_adam",
     ]:
         raise ValueError(
-            f"Unknown optimizer {optimizer}. Must be one of 'standard', 'adam', 'compatibility', 'densmap_standard' or 'densmap_adam'."
+            f"Unknown optimizer {optimizer}. Must be one of 'standard', 'adam', 'compatibility'."
         )
 
     if optimizer != "compatibility" and (csr_indptr is None or csr_indices is None):
@@ -1789,8 +1793,26 @@ def optimize_layout_generic(
     node_order = np.arange(head_embedding.shape[0], dtype=np.int32)
     block_size = 4096
 
+    # Create learning schedules using the shared helper functions
+    alpha_schedule = _create_alpha_schedule(
+        optimizer, n_epochs, initial_alpha, good_initialization
+    )
+    momentum_schedule = _create_momentum_schedule(
+        optimizer, n_epochs, good_initialization
+    )
+
+    # Adam-specific schedules
+    beta1_schedule, beta2_schedule, gamma_schedule = _create_adam_schedules(
+        optimizer, n_epochs, good_initialization
+    )
+
+    # Adjust negative sampling rates for non-compatibility optimizers
+    if optimizer != "compatibility":
+        epochs_per_negative_sample *= 1.5
+        epoch_of_next_negative_sample *= 1.5
+
+    # Initialize optimizer-specific variables
     if optimizer == "compatibility":
-        alpha_schedule = np.linspace(initial_alpha, 0.0, n_epochs, endpoint=False)
         optimize_fn = numba.njit(
             _optimize_layout_generic_single_epoch,
             fastmath=True,
@@ -1800,67 +1822,9 @@ def optimize_layout_generic(
             (head_embedding.shape[0], len(rng_state)), rng_state, dtype=np.int64
         ) + head_embedding[:, 0].astype(np.float64).view(np.int64).reshape(-1, 1)
 
-    elif optimizer == "standard":
-        epochs_per_negative_sample *= (
-            1.5  # to account for the fact that we are using a fast version
-        )
-        epoch_of_next_negative_sample *= 1.5  # we can use fewer negative samples
-        alpha_schedule = np.asarray(
-            [0.25 * (1.0 - (float(n) / float(n_epochs))) ** 2 for n in range(n_epochs)]
-        )
-        momentum_schedule = np.asarray(
-            [0.5 * (1.0 - alpha_schedule[n]) for n in range(n_epochs)]
-        )
     elif optimizer == "adam":
-        epochs_per_negative_sample *= 1.5
-        epoch_of_next_negative_sample *= 1.5
-        alpha_schedule = np.concatenate(
-            [
-                [
-                    (2.0 - 0.1) * (1.0 - (float(n) / float(100))) ** 2 + 0.2
-                    for n in range(100)
-                ],
-                [
-                    0.15 * (1.0 - (float(n - 100) / float(n_epochs - 100))) + 0.05
-                    for n in range(100, n_epochs)
-                ],
-            ]
-        )
-        momentum_schedule = np.zeros(n_epochs, dtype=np.float32)
-        beta1_schedule = np.concatenate(
-            [
-                [0.2 + (0.7 * (float(n) / float(100))) for n in range(100)],
-                np.full(n_epochs - 100, 0.9),
-            ]
-        )
-        beta2_schedule = np.concatenate(
-            [
-                [0.79 + (0.2 * ((float(n) / float(100)))) for n in range(100)],
-                np.full(n_epochs - 100, 0.99),
-            ]
-        )
-        gamma_schedule = np.concatenate(
-            [
-                [1.0 * np.sqrt(float(n) / float(100)) for n in range(100)],
-                [
-                    0.25 * (1.0 - float(n - 100) / float(n_epochs - 100)) + 0.75
-                    for n in range(100, n_epochs)
-                ],
-            ]
-        )
-        ## A gamma schedule that can provide a little bit of "gridding" if paired with an l1 output_metric
-        # gamma_schedule = np.concatenate(
-        #     [
-        #         [5.0 * np.sqrt(float(n) / float(100)) for n in range(50)],
-        #         [-2.5 * (1.0 - float(n - 100) / float(n_epochs - 50)) + 7.5 for n in range(50, n_epochs)]
-        #     ]
-        # )
         adam_m = np.zeros_like(updates)
         adam_v = np.zeros_like(updates)
-    else:
-        raise ValueError(
-            f"Unknown optimizer {optimizer}. Must be one of 'standard', 'adam', 'compatibility', or 'densmap'."
-        )
 
     if tqdm_kwds is None:
         tqdm_kwds = {}
