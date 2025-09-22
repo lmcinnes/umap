@@ -783,7 +783,7 @@ def _create_alpha_schedule(optimizer, n_epochs, initial_alpha, good_initializati
                         for n in range(n_warm_up_epochs)
                     ],
                     [
-                        0.05
+                        0.15
                         * (
                             1.0
                             - (

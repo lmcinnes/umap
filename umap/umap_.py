@@ -44,6 +44,7 @@ from umap.layouts import (
     optimize_layout_generic,
     optimize_layout_inverse,
 )
+from umap.label_prop import label_propagation_init
 
 from pynndescent import NNDescent
 from pynndescent.distances import named_distances as pynn_named_distances
@@ -1100,6 +1101,7 @@ def simplicial_set_embedding(
             * 'spectral': use a spectral embedding of the fuzzy 1-skeleton
             * 'random': assign initial embedding positions at random.
             * 'pca': use the first n_components from PCA applied to the input data.
+            * 'recursive': use label propagation for hierarchical initialization.
             * A numpy array of initial embedding positions.
 
     random_state: numpy RandomState or equivalent
@@ -1234,6 +1236,15 @@ def simplicial_set_embedding(
         embedding = noisy_scale_coords(
             embedding, random_state, max_coord=20, noise=0.0001
         )
+    elif isinstance(init, str) and init == "recursive":
+        # Use label propagation initialization
+        embedding = label_propagation_init(
+            graph,
+            a,
+            b,
+            n_components=n_components,
+            random_state=random_state,
+        )
     else:
         init_data = np.array(init)
         if len(init_data.shape) == 2:
@@ -1283,10 +1294,10 @@ def simplicial_set_embedding(
         if output_dens:
             aux_data["rad_orig"] = ro
 
-    embedding = (
-        10.0
-        * (embedding - np.min(embedding, 0))
-        / (np.max(embedding, 0) - np.min(embedding, 0))
+    # Recenter
+    embedding -= np.mean(embedding, 0)
+    embedding *= (
+        20.0 / (np.quantile(embedding, 0.95, 0) - np.quantile(embedding, 0.05, 0))
     ).astype(np.float32, order="C")
 
     if euclidean_output:
@@ -1342,6 +1353,9 @@ def simplicial_set_embedding(
                 csr_indptr=graph.indptr,
                 csr_indices=graph.indices,
                 random_state=random_state,
+                good_initialization=isinstance(init, str)
+                and init in ["recursive"]
+                and n_epochs_max >= 400,
                 optimizer=optimizer,
             )
 
@@ -1397,6 +1411,9 @@ def simplicial_set_embedding(
                 csr_indices=graph.indices,
                 random_state=random_state,
                 optimizer=optimizer,
+                good_initialization=isinstance(init, str)
+                and init in ["recursive"]
+                and n_epochs_max >= 400,
             )
 
     if isinstance(embedding, list):
@@ -1643,6 +1660,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 "warm" up the eigensolver. This is intended as an alternative
                 to the 'spectral' method, if that takes an  excessively long
                 time to complete initialization (or fails to complete).
+            * 'recursive': use label propagation for hierarchical initialization.
             * A numpy array of initial embedding positions.
 
     min_dist: float (optional, default 0.1)
@@ -1950,10 +1968,11 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             "spectral",
             "random",
             "tswspectral",
+            "recursive",
         ):
             raise ValueError(
                 'string init values must be one of: "pca", "tswspectral",'
-                ' "spectral" or "random"'
+                ' "spectral", "recursive", or "random"'
             )
         if (
             isinstance(self.init, np.ndarray)

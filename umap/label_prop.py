@@ -150,7 +150,7 @@ def label_propagation_init(
     if random_state is None:
         random_state = np.random.RandomState()
 
-    if graph.shape[0] < base_init_threshold:
+    if graph.shape[0] <= base_init_threshold:
         result = random_state.normal(
             loc=0.0, scale=1.0, size=(graph.shape[0], n_components)
         )
@@ -207,8 +207,10 @@ def label_propagation_init(
             upscaling=upscaling,
             base_init_threshold=base_init_threshold,
         )
+        good_initialization = approx_n_parts // 4 > base_init_threshold
     else:
         reduced_init = None
+        good_initialization = False
 
     epochs_per_sample = make_epochs_per_sample(reduced_graph.data, n_epochs)
     reduced_layout = optimize_layout_euclidean(
@@ -234,6 +236,7 @@ def label_propagation_init(
         csr_indices=reduced_graph.indices,
         random_state=random_state,
         optimizer="adam",
+        good_initialization=good_initialization,
     )
 
     if upscaling == "partition_expander":
