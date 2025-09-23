@@ -3,6 +3,16 @@ Release Notes
 
 Some notes on new features in various releases
 
+What's new in 0.6
+-----------------
+
+* New "recursive" initialization method that can be significantly faster for many cases, and produce better embeddings.
+* New optimization implementations that allow parallelism while maintaining reproducibility.
+* New ADAM optimizer for longer runs that result in better embeddings.
+* New spectral initialization method that can be significantly faster in some cases.
+* Support for compatility_layout option to mimic the original UMAP layout optimization algorithm.
+* Improved usage of PyNNDescent for better performance in some cases.
+
 What's new in 0.5
 -----------------
 
