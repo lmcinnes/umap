@@ -1259,9 +1259,7 @@ def simplicial_set_embedding(
                 embedding = init_data
 
     epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs_max)
-
     rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
-
     aux_data = {}
 
     if densmap or output_dens:
@@ -1301,7 +1299,7 @@ def simplicial_set_embedding(
     ).astype(np.float32, order="C")
 
     if euclidean_output:
-        if compatibility_layout:
+        if compatibility_layout or optimizer == "compatibility":
             coo_graph = graph.tocoo()
             head = coo_graph.row
             tail = coo_graph.col
@@ -1871,7 +1869,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         output_metric_kwds=None,
         n_epochs=None,
         learning_rate=1.0,
-        init="spectral",
+        init="recursive",
         min_dist=0.1,
         spread=1.0,
         low_memory=True,
@@ -1945,6 +1943,10 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         self.disconnection_distance = disconnection_distance
         self.precomputed_knn = precomputed_knn
         self.compatibility_layout = compatibility_layout
+
+        # If compatibility_layout is set and init was default, change to spectral which was the old default
+        if self.compatibility_layout and self.init == "recursive":
+            self.init = "spectral"
         self.optimizer = optimizer
 
         self.n_jobs = n_jobs
@@ -3378,44 +3380,106 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         # )
 
         if self.output_metric == "euclidean":
-            embedding = optimize_layout_euclidean(
-                embedding,
-                self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217,
-                head,
-                tail,
-                n_epochs,
-                graph.shape[1],
-                epochs_per_sample,
-                self._a,
-                self._b,
-                rng_state,
-                self.repulsion_strength,
-                self._initial_alpha / 4.0,
-                self.negative_sample_rate,
-                self.random_state is None,
-                verbose=self.verbose,
-                tqdm_kwds=self.tqdm_kwds,
-            )
+            if self.compatibility_layout:
+                embedding = optimize_layout_euclidean(
+                    embedding,
+                    self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217,
+                    head,
+                    tail,
+                    n_epochs,
+                    graph.shape[1],
+                    epochs_per_sample,
+                    self._a,
+                    self._b,
+                    rng_state,
+                    self.repulsion_strength,
+                    self._initial_alpha / 4.0,
+                    self.negative_sample_rate,
+                    self.random_state is None,
+                    verbose=self.verbose,
+                    tqdm_kwds=self.tqdm_kwds,
+                    optimizer="compatibility",
+                )
+            else:
+                optimizer = (
+                    f"densmap_{self.optimizer}" if self.densmap else self.optimizer
+                )
+                print("Using new layout with optimizer", optimizer)
+                embedding = optimize_layout_euclidean(
+                    embedding,
+                    self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217,
+                    None,
+                    None,
+                    n_epochs,
+                    graph.shape[1],
+                    epochs_per_sample,
+                    self._a,
+                    self._b,
+                    rng_state,
+                    self.repulsion_strength,
+                    self._initial_alpha / 4.0,
+                    self.negative_sample_rate,
+                    parallel=self.random_state is None,
+                    verbose=self.verbose,
+                    tqdm_kwds=self.tqdm_kwds,
+                    optimizer=optimizer,
+                    csr_indptr=csr_graph.indptr,
+                    csr_indices=csr_graph.indices,
+                    good_initialization=False,
+                    move_other=False,
+                    densmap_kwds=self._densmap_kwds if self.densmap else None,
+                )
         else:
-            embedding = optimize_layout_generic(
-                embedding,
-                self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217
-                head,
-                tail,
-                n_epochs,
-                graph.shape[1],
-                epochs_per_sample,
-                self._a,
-                self._b,
-                rng_state,
-                self.repulsion_strength,
-                self._initial_alpha / 4.0,
-                self.negative_sample_rate,
-                self._output_distance_func,
-                tuple(self._output_metric_kwds.values()),
-                verbose=self.verbose,
-                tqdm_kwds=self.tqdm_kwds,
-            )
+            if self.compatibility_layout:
+                embedding = optimize_layout_generic(
+                    embedding,
+                    self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217
+                    head,
+                    tail,
+                    n_epochs,
+                    graph.shape[1],
+                    epochs_per_sample,
+                    self._a,
+                    self._b,
+                    rng_state,
+                    self.repulsion_strength,
+                    self._initial_alpha / 4.0,
+                    self.negative_sample_rate,
+                    self._output_distance_func,
+                    tuple(self._output_metric_kwds.values()),
+                    verbose=self.verbose,
+                    tqdm_kwds=self.tqdm_kwds,
+                )
+            else:
+                optimizer = (
+                    f"densmap_{self.optimizer}" if self.densmap else self.optimizer
+                )
+                print("Using new layout with optimizer", optimizer)
+                embedding = optimize_layout_generic(
+                    embedding,
+                    self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217
+                    None,
+                    None,
+                    n_epochs,
+                    graph.shape[1],
+                    epochs_per_sample,
+                    self._a,
+                    self._b,
+                    rng_state,
+                    self.repulsion_strength,
+                    self._initial_alpha / 4.0,
+                    self.negative_sample_rate,
+                    self._output_distance_func,
+                    tuple(self._output_metric_kwds.values()),
+                    verbose=self.verbose,
+                    tqdm_kwds=self.tqdm_kwds,
+                    optimizer=optimizer,
+                    csr_indptr=csr_graph.indptr,
+                    csr_indices=csr_graph.indices,
+                    good_initialization=False,
+                    move_other=False,
+                    densmap_kwds=self._densmap_kwds if self.densmap else None,
+                )
 
         return embedding
 

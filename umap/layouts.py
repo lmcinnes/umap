@@ -187,7 +187,7 @@ def _optimize_layout_euclidean_single_epoch(
 
 
 @numba.njit(
-    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], i4[::1], i8)",
+    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], i4[::1], i4[::1], i8)",
     fastmath=True,
     parallel=True,
     locals={
@@ -217,13 +217,15 @@ def optimize_layout_euclidean_single_epoch_fast(
     epoch_of_next_sample,
     n,
     updates,
-    node_order,
+    from_node_order,
+    to_node_order,
     block_size=4096,
 ):
-    for block_start in range(0, n_vertices, block_size):
-        block_end = min(block_start + block_size, n_vertices)
+    n_from_vertices = csr_indptr.shape[0] - 1
+    for block_start in range(0, n_from_vertices, block_size):
+        block_end = min(block_start + block_size, n_from_vertices)
         for node_idx in numba.prange(block_start, block_end):
-            from_node = node_order[node_idx]
+            from_node = from_node_order[node_idx]
             current = head_embedding[from_node]
 
             for raw_index in range(csr_indptr[from_node], csr_indptr[from_node + 1]):
@@ -248,7 +250,7 @@ def optimize_layout_euclidean_single_epoch_fast(
                     )
 
                     for p in range(n_neg_samples):
-                        to_node = node_order[(raw_index * (n + p + 1)) % n_vertices]
+                        to_node = to_node_order[(raw_index * (n + p + 1)) % n_vertices]
                         other = tail_embedding[to_node]
 
                         dist_squared = rdist(current, other)
@@ -269,13 +271,13 @@ def optimize_layout_euclidean_single_epoch_fast(
                     )
 
         for node_idx in numba.prange(block_start, block_end):
-            from_node = node_order[node_idx]
+            from_node = from_node_order[node_idx]
             for d in range(dim):
                 head_embedding[from_node, d] += updates[from_node, d]
 
 
 @numba.njit(
-    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], f4[:, ::1], f4[:, ::1], f8, f8, i4[::1], i8)",
+    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], f4[:, ::1], f4[:, ::1], f8, f8, i4[::1], i4[::1], i8)",
     fastmath=True,
     parallel=True,
     locals={
@@ -309,13 +311,15 @@ def optimize_layout_euclidean_single_epoch_adam(
     adam_v,
     beta1,
     beta2,
-    node_order,
+    from_node_order,
+    to_node_order,
     block_size=256,
 ):
-    for block_start in range(0, n_vertices, block_size):
-        block_end = min(block_start + block_size, n_vertices)
+    n_from_vertices = csr_indptr.shape[0] - 1
+    for block_start in range(0, n_from_vertices, block_size):
+        block_end = min(block_start + block_size, n_from_vertices)
         for node_idx in numba.prange(block_start, block_end):
-            from_node = node_order[node_idx]
+            from_node = from_node_order[node_idx]
             current = head_embedding[from_node]
 
             for raw_index in range(csr_indptr[from_node], csr_indptr[from_node + 1]):
@@ -340,8 +344,7 @@ def optimize_layout_euclidean_single_epoch_adam(
                     )
 
                     for p in range(n_neg_samples):
-                        to_node = node_order[(raw_index * (n + p + 1)) % n_vertices]
-
+                        to_node = to_node_order[(raw_index * (n + p + 1)) % n_vertices]
                         other = tail_embedding[to_node]
 
                         dist_squared = rdist(current, other) / 4
@@ -362,7 +365,7 @@ def optimize_layout_euclidean_single_epoch_adam(
                     )
 
         for node_idx in numba.prange(block_start, block_end):
-            from_node = node_order[node_idx]
+            from_node = from_node_order[node_idx]
             for d in range(dim):
                 if updates[from_node, d] != 0.0:
                     adam_m[from_node, d] = (
@@ -693,7 +696,22 @@ def optimize_layout_euclidean_single_epoch_adam_densmap(
                     )
 
 
-def _optimize_layout_euclidean_densmap_epoch_init(
+@numba.njit(
+    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], f8, f8, f4[::1], f4[::1])",
+    fastmath=True,
+    parallel=True,
+    cache=True,
+    locals={
+        "i": numba.types.intp,
+        "j": numba.types.intp,
+        "k": numba.types.intp,
+        "current": numba.types.float32[::1],
+        "other": numba.types.float32[::1],
+        "dist_squared": numba.types.float32,
+        "phi": numba.types.float32,
+    },
+)
+def _optimize_layout_euclidean_densmap_epoch_init_coo(
     head_embedding,
     tail_embedding,
     head,
@@ -706,7 +724,7 @@ def _optimize_layout_euclidean_densmap_epoch_init(
     re_sum.fill(0)
     phi_sum.fill(0)
 
-    for i in numba.prange(head.size):
+    for i in numba.prange(head.shape[0]):
         j = head[i]
         k = tail[i]
 
@@ -722,7 +740,55 @@ def _optimize_layout_euclidean_densmap_epoch_init(
         phi_sum[k] += phi
 
     epsilon = 1e-8
-    for i in range(re_sum.size):
+    for i in range(re_sum.shape[0]):
+        re_sum[i] = np.log(epsilon + (re_sum[i] / phi_sum[i]))
+
+
+@numba.njit(
+    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], f8, f8, f4[::1], f4[::1])",
+    fastmath=True,
+    parallel=True,
+    cache=True,
+    locals={
+        "j": numba.types.intp,
+        "k": numba.types.intp,
+        "raw_index": numba.types.intp,
+        "current": numba.types.float32[::1],
+        "other": numba.types.float32[::1],
+        "dist_squared": numba.types.float32,
+        "phi": numba.types.float32,
+    },
+)
+def _optimize_layout_euclidean_densmap_epoch_init_csr(
+    head_embedding,
+    tail_embedding,
+    indptr,
+    indices,
+    a,
+    b,
+    re_sum,
+    phi_sum,
+):
+    re_sum.fill(0)
+    phi_sum.fill(0)
+
+    for j in numba.prange(indptr.shape[0] - 1):
+        for raw_index in range(indptr[j], indptr[j + 1]):
+            k = indices[raw_index]
+
+            current = head_embedding[j]
+            other = tail_embedding[k]
+            dist_squared = rdist(current, other)
+
+            phi = 1.0 / (1.0 + a * pow(dist_squared, b))
+
+            re_sum[j] += phi * dist_squared
+            re_sum[k] += phi * dist_squared
+            phi_sum[j] += phi
+            phi_sum[k] += phi
+
+    epsilon = 1e-8
+    for i in range(re_sum.shape[0]):
         re_sum[i] = np.log(epsilon + (re_sum[i] / phi_sum[i]))
 
 
@@ -1053,6 +1119,10 @@ def optimize_layout_euclidean(
     epoch_of_next_sample = epochs_per_sample.copy()
     updates = np.zeros((head_embedding.shape[0], dim), dtype=np.float32)
     node_order = np.arange(head_embedding.shape[0], dtype=np.int32)
+    if tail_embedding.shape[0] != head_embedding.shape[0]:
+        to_node_order = np.arange(tail_embedding.shape[0], dtype=np.int32)
+    else:
+        to_node_order = node_order
     block_size = 4096
 
     epochs_list = None
@@ -1087,11 +1157,7 @@ def optimize_layout_euclidean(
 
         # DensMAP setup for compatibility mode
         if densmap_kwds is not None and "mu_sum" in densmap_kwds:
-            dens_init_fn = numba.njit(
-                _optimize_layout_euclidean_densmap_epoch_init,
-                fastmath=True,
-                parallel=parallel,
-            )
+            dens_init_fn = _optimize_layout_euclidean_densmap_epoch_init_coo
             dens_mu_tot = np.sum(densmap_kwds["mu_sum"]) / 2
             dens_lambda = densmap_kwds["lambda"]
             dens_R = densmap_kwds["R"]
@@ -1115,11 +1181,7 @@ def optimize_layout_euclidean(
 
     elif optimizer.startswith("densmap"):
         # DensMAP setup
-        dens_init_fn = numba.njit(
-            _optimize_layout_euclidean_densmap_epoch_init,
-            fastmath=True,
-            parallel=parallel,
-        )
+        dens_init_fn = _optimize_layout_euclidean_densmap_epoch_init_csr
         dens_mu_tot = np.sum(densmap_kwds["mu_sum"]) / 2
         dens_lambda = densmap_kwds["lambda"]
         dens_R = densmap_kwds["R"]
@@ -1153,16 +1215,28 @@ def optimize_layout_euclidean(
             and (densmap_kwds["lambda"] > 0)
             and (((n + 1) / float(n_epochs)) > (1 - densmap_kwds["frac"]))
         ):
-            dens_init_fn(
-                head_embedding,
-                tail_embedding,
-                head,
-                tail,
-                a,
-                b,
-                dens_re_sum,
-                dens_phi_sum,
-            )
+            if csr_indptr is not None and csr_indices is not None:
+                dens_init_fn(
+                    head_embedding,
+                    tail_embedding,
+                    csr_indptr,
+                    csr_indices,
+                    a,
+                    b,
+                    dens_re_sum,
+                    dens_phi_sum,
+                )
+            else:
+                dens_init_fn(
+                    head_embedding,
+                    tail_embedding,
+                    head,
+                    tail,
+                    a,
+                    b,
+                    dens_re_sum,
+                    dens_phi_sum,
+                )
 
             # FIXME: dens_var_shift might be referenced before assignment
             dens_re_std = np.sqrt(np.var(dens_re_sum) + dens_var_shift)
@@ -1194,10 +1268,13 @@ def optimize_layout_euclidean(
                 n,
                 updates,
                 node_order,
+                to_node_order,
                 block_size=block_size,
             )
             updates *= momentum_schedule[n]
             random_state.shuffle(node_order)
+            if tail_embedding.shape[0] != head_embedding.shape[0]:
+                random_state.shuffle(to_node_order)
         elif optimizer == "adam":
             optimize_layout_euclidean_single_epoch_adam(
                 head_embedding,
@@ -1221,10 +1298,13 @@ def optimize_layout_euclidean(
                 beta1_schedule[n],
                 beta2_schedule[n],
                 node_order,
+                to_node_order,
                 block_size=block_size,
             )
             updates[:] = 0.0
             random_state.shuffle(node_order)
+            if tail_embedding.shape[0] != head_embedding.shape[0]:
+                random_state.shuffle(to_node_order)
         elif optimizer == "densmap_standard":
             optimize_layout_euclidean_single_epoch_fast_densmap(
                 head_embedding,
@@ -2289,6 +2369,401 @@ def _optimize_layout_aligned_euclidean_single_epoch(
                 epoch_of_next_negative_sample[m][i] += (
                     n_neg_samples * epochs_per_negative_sample[m][i]
                 )
+
+
+@numba.njit(
+    fastmath=True,
+    parallel=True,
+    locals={
+        "from_node": numba.types.intp,
+        "to_node": numba.types.intp,
+        "raw_index": numba.types.intp,
+        "dist_squared": numba.types.float32,
+        "grad_coeff": numba.types.float32,
+        "grad_d": numba.types.float32,
+        "other_grad_d": numba.types.float32,
+        "offset": numba.types.intp,
+        "neighbor_m": numba.types.intp,
+        "identified_index": numba.types.intp,
+        "m": numba.types.intp,
+        "i": numba.types.intp,
+        "n_neg_samples": numba.types.intp,
+        "p": numba.types.intp,
+        "d": numba.types.intp,
+        "embedding_idx": numba.types.intp,
+    },
+)
+def optimize_layout_aligned_euclidean_single_epoch_fast(
+    head_embeddings,
+    tail_embeddings,
+    csr_indptrs,
+    csr_indices,
+    epochs_per_sample,
+    a,
+    b,
+    regularisation_weights,
+    relations,
+    rng_state,
+    gamma,
+    lambda_,
+    dim,
+    alpha,
+    epochs_per_negative_sample,
+    epoch_of_next_negative_sample,
+    epoch_of_next_sample,
+    n,
+    updates,
+    node_orders,
+    block_size=256,
+):
+    n_embeddings = len(head_embeddings)
+    window_size = (relations.shape[1] - 1) // 2
+
+    max_n_edges = 0
+    for e_p_s in epochs_per_sample:
+        if e_p_s.shape[0] >= max_n_edges:
+            max_n_edges = e_p_s.shape[0]
+
+    embedding_order = np.arange(n_embeddings).astype(np.int32)
+    np.random.seed(abs(rng_state[0]))
+    np.random.shuffle(embedding_order)
+
+    # Process edges for each embedding
+    for m in embedding_order:
+        n_vertices = head_embeddings[m].shape[0]
+        for block_start in range(0, n_vertices, block_size):
+            block_end = min(block_start + block_size, n_vertices)
+
+            for node_idx in numba.prange(block_start, block_end):
+                from_node = node_orders[m][node_idx]
+                current = head_embeddings[m][from_node]
+
+                for raw_index in range(
+                    csr_indptrs[m][from_node], csr_indptrs[m][from_node + 1]
+                ):
+                    if (
+                        raw_index < epoch_of_next_sample[m].shape[0]
+                        and epoch_of_next_sample[m][raw_index] <= n
+                    ):
+                        to_node = csr_indices[m][raw_index]
+                        other = tail_embeddings[m][to_node]
+
+                        dist_squared = rdist(current, other)
+
+                        if dist_squared > 0.0:
+                            grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
+                            grad_coeff /= a * pow(dist_squared, b) + 1.0
+
+                            for d in range(dim):
+                                grad_d = grad_coeff * (current[d] - other[d])
+
+                                for offset in range(-window_size, window_size):
+                                    neighbor_m = m + offset
+                                    if n_embeddings > neighbor_m >= 0 != offset:
+                                        identified_index = relations[
+                                            m, offset + window_size, j
+                                        ]
+                                        if identified_index >= 0:
+                                            grad_d -= (
+                                                (
+                                                    lambda_
+                                                    * np.exp(-(np.abs(offset) - 1))
+                                                )
+                                                * regularisation_weights[
+                                                    m, offset + window_size, j
+                                                ]
+                                                * (
+                                                    current[d]
+                                                    - head_embeddings[neighbor_m][
+                                                        identified_index, d
+                                                    ]
+                                                )
+                                            )
+
+                                updates[m][from_node, d] += grad_d * alpha
+
+                        epoch_of_next_sample[m][node_idx] += epochs_per_sample[m][
+                            node_idx
+                        ]
+
+                        if epochs_per_negative_sample[m][node_idx] > 0:
+                            n_neg_samples = int(
+                                (n - epoch_of_next_negative_sample[m][node_idx])
+                                / epochs_per_negative_sample[m][node_idx]
+                            )
+                        else:
+                            n_neg_samples = 0
+
+                        for p in range(n_neg_samples):
+                            to_node = node_orders[m][
+                                (raw_index * (n + p + 1)) % n_vertices
+                            ]
+                            other = tail_embeddings[m][to_node]
+                            dist_squared = rdist(current, other)
+
+                            if dist_squared > 0.0:
+                                grad_coeff = 2.0 * gamma * b
+                                grad_coeff /= (0.001 + dist_squared) * (
+                                    a * pow(dist_squared, b) + 1
+                                )
+
+                                for d in range(dim):
+                                    if grad_coeff > 0.0:
+                                        grad_d = grad_coeff * (current[d] - other[d])
+                                    else:
+                                        grad_d = 0.0
+
+                                    for offset in range(-window_size, window_size):
+                                        neighbor_m = m + offset
+                                        if n_embeddings > neighbor_m >= 0 != offset:
+                                            identified_index = relations[
+                                                m, offset + window_size, j
+                                            ]
+                                            if identified_index >= 0:
+                                                grad_d -= (
+                                                    (
+                                                        lambda_
+                                                        * np.exp(-(np.abs(offset) - 1))
+                                                    )
+                                                    * regularisation_weights[
+                                                        m, offset + window_size, j
+                                                    ]
+                                                    * (
+                                                        current[d]
+                                                        - head_embeddings[neighbor_m][
+                                                            identified_index, d
+                                                        ]
+                                                    )
+                                                )
+
+                                    updates[m][from_node, d] += grad_d * alpha
+
+                        epoch_of_next_negative_sample[m][node_idx] += (
+                            n_neg_samples * epochs_per_negative_sample[m][node_idx]
+                        )
+
+            # Apply updates
+            for node_idx in numba.prange(block_start, block_end):
+                from_node = node_orders[m][node_idx]
+                for d in range(dim):
+                    head_embeddings[m][from_node, d] += updates[m][from_node, d]
+
+    return epoch_of_next_sample, epoch_of_next_negative_sample
+
+
+@numba.njit(
+    fastmath=True,
+    parallel=True,
+    locals={
+        "from_node": numba.types.intp,
+        "to_node": numba.types.intp,
+        "raw_index": numba.types.intp,
+        "dist_squared": numba.types.float32,
+        "grad_coeff": numba.types.float32,
+        "grad_d": numba.types.float32,
+        "other_grad_d": numba.types.float32,
+        "offset": numba.types.intp,
+        "neighbor_m": numba.types.intp,
+        "identified_index": numba.types.intp,
+        "m": numba.types.intp,
+        "i": numba.types.intp,
+        "n_neg_samples": numba.types.intp,
+        "p": numba.types.intp,
+        "d": numba.types.intp,
+        "embedding_idx": numba.types.intp,
+        "m_est": numba.types.float32,
+        "v_est": numba.types.float32,
+    },
+)
+def optimize_layout_aligned_euclidean_single_epoch_adam(
+    head_embeddings,
+    tail_embeddings,
+    heads,
+    tails,
+    epochs_per_sample,
+    a,
+    b,
+    regularisation_weights,
+    relations,
+    rng_state,
+    gamma,
+    lambda_,
+    dim,
+    alpha,
+    epochs_per_negative_sample,
+    epoch_of_next_negative_sample,
+    epoch_of_next_sample,
+    n,
+    updates,
+    adam_m,
+    adam_v,
+    beta1,
+    beta2,
+    node_orders,
+    block_size=256,
+):
+    n_embeddings = len(heads)
+    window_size = (relations.shape[1] - 1) // 2
+
+    max_n_edges = 0
+    for e_p_s in epochs_per_sample:
+        if e_p_s.shape[0] >= max_n_edges:
+            max_n_edges = e_p_s.shape[0]
+
+    embedding_order = np.arange(n_embeddings).astype(np.int32)
+    np.random.seed(abs(rng_state[0]))
+    np.random.shuffle(embedding_order)
+
+    # Process edges for each embedding
+    for m in embedding_order:
+        n_vertices = head_embeddings[m].shape[0]
+        for block_start in range(0, max_n_edges, block_size):
+            block_end = min(block_start + block_size, max_n_edges)
+
+            for i in numba.prange(block_start, block_end):
+                if (
+                    i < epoch_of_next_sample[m].shape[0]
+                    and epoch_of_next_sample[m][i] <= n
+                ):
+                    j = heads[m][i]
+                    k = tails[m][i]
+
+                    current = head_embeddings[m][j]
+                    other = tail_embeddings[m][k]
+
+                    dist_squared = (
+                        rdist(current, other) / 2
+                    )  # Adam uses scaled distance
+
+                    if dist_squared > 0.0:
+                        grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
+                        grad_coeff /= a * pow(dist_squared, b) + 1.0
+                    else:
+                        grad_coeff = 0.0
+
+                    for d in range(dim):
+                        grad_d = grad_coeff * (current[d] - other[d])
+
+                        for offset in range(-window_size, window_size):
+                            neighbor_m = m + offset
+                            if n_embeddings > neighbor_m >= 0 != offset:
+                                identified_index = relations[m, offset + window_size, j]
+                                if identified_index >= 0:
+                                    grad_d -= (
+                                        (lambda_ * np.exp(-(np.abs(offset) - 1)))
+                                        * regularisation_weights[
+                                            m, offset + window_size, j
+                                        ]
+                                        * (
+                                            current[d]
+                                            - head_embeddings[neighbor_m][
+                                                identified_index, d
+                                            ]
+                                        )
+                                    )
+
+                        updates[m][j, d] += grad_d
+
+                        if True:  # move_other equivalent - always true for adam version
+                            other_grad_d = grad_coeff * (other[d] - current[d])
+
+                            for offset in range(-window_size, window_size):
+                                neighbor_m = m + offset
+                                if n_embeddings > neighbor_m >= 0 != offset:
+                                    identified_index = relations[
+                                        m, offset + window_size, k
+                                    ]
+                                    if identified_index >= 0:
+                                        other_grad_d -= (
+                                            (lambda_ * np.exp(-(np.abs(offset) - 1)))
+                                            * regularisation_weights[
+                                                m, offset + window_size, k
+                                            ]
+                                            * (
+                                                other[d]
+                                                - head_embeddings[neighbor_m][
+                                                    identified_index, d
+                                                ]
+                                            )
+                                        )
+
+                            updates[m][k, d] += other_grad_d
+
+                    epoch_of_next_sample[m][i] += epochs_per_sample[m][i]
+
+                    if epochs_per_negative_sample[m][i] > 0:
+                        n_neg_samples = int(
+                            (n - epoch_of_next_negative_sample[m][i])
+                            / epochs_per_negative_sample[m][i]
+                        )
+                    else:
+                        n_neg_samples = 0
+
+                    for p in range(n_neg_samples):
+                        k = tau_rand_int(rng_state) % tail_embeddings[m].shape[0]
+                        other = tail_embeddings[m][k]
+                        dist_squared = (
+                            rdist(current, other) / 4
+                        )  # Adam uses scaled distance for negative samples
+
+                        if dist_squared > 0.0:
+                            grad_coeff = 2.0 * gamma * b
+                            grad_coeff /= (0.001 + dist_squared) * (
+                                a * pow(dist_squared, b) + 1
+                            )
+                        elif j == k:
+                            continue
+                        else:
+                            grad_coeff = 0.0
+
+                        for d in range(dim):
+                            if grad_coeff > 0.0:
+                                grad_d = grad_coeff * (current[d] - other[d])
+                            else:
+                                grad_d = 0.0
+
+                            for offset in range(-window_size, window_size):
+                                neighbor_m = m + offset
+                                if n_embeddings > neighbor_m >= 0 != offset:
+                                    identified_index = relations[
+                                        m, offset + window_size, j
+                                    ]
+                                    if identified_index >= 0:
+                                        grad_d -= (
+                                            (lambda_ * np.exp(-(np.abs(offset) - 1)))
+                                            * regularisation_weights[
+                                                m, offset + window_size, j
+                                            ]
+                                            * (
+                                                current[d]
+                                                - head_embeddings[neighbor_m][
+                                                    identified_index, d
+                                                ]
+                                            )
+                                        )
+
+                            updates[m][j, d] += clip(grad_d)
+
+                    epoch_of_next_negative_sample[m][i] += (
+                        n_neg_samples * epochs_per_negative_sample[m][i]
+                    )
+
+    # Apply Adam updates
+    for m in range(n_embeddings):
+        for j in numba.prange(head_embeddings[m].shape[0]):
+            for d in range(dim):
+                if updates[m][j, d] != 0.0:
+                    adam_m[m][j, d] = (
+                        beta1 * adam_m[m][j, d] + (1.0 - beta1) * updates[m][j, d]
+                    )
+                    adam_v[m][j, d] = (
+                        beta2 * adam_v[m][j, d] + (1.0 - beta2) * updates[m][j, d] ** 2
+                    )
+                    m_est = adam_m[m][j, d] / (1.0 - pow(beta1, n))
+                    v_est = adam_v[m][j, d] / (1.0 - pow(beta2, n))
+                    head_embeddings[m][j, d] += alpha * m_est / (np.sqrt(v_est) + 1e-4)
+
+                updates[m][j, d] = 0.0  # Reset for next iteration
 
 
 def optimize_layout_aligned_euclidean(

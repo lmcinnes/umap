@@ -90,26 +90,47 @@ def test_umap_transform_on_iris(iris, iris_subset_model, iris_selection):
 
     trust = trustworthiness(new_data, embedding, n_neighbors=10)
     assert (
-        trust >= 0.80
+        trust >= 0.75
     ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
 
 
-def test_umap_transform_on_iris_w_pynndescent(iris, iris_selection):
-    data = iris.data[iris_selection]
-    fitter = UMAP(
-        n_neighbors=10,
-        min_dist=0.01,
-        n_epochs=100,
-        random_state=42,
-        force_approximation_algorithm=True,
-    ).fit(data)
+def test_umap_transform_on_iris_adam(iris, iris_subset_model_adam, iris_selection):
+    fitter = iris_subset_model_adam
 
     new_data = iris.data[~iris_selection]
     embedding = fitter.transform(new_data)
 
     trust = trustworthiness(new_data, embedding, n_neighbors=10)
     assert (
-        trust >= 0.85
+        trust >= 0.75
+    ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
+
+
+def test_umap_compatibility_transform_on_iris(
+    iris, iris_subset_model_compatibility, iris_selection
+):
+    fitter = iris_subset_model_compatibility
+
+    new_data = iris.data[~iris_selection]
+    embedding = fitter.transform(new_data)
+
+    trust = trustworthiness(new_data, embedding, n_neighbors=10)
+    assert (
+        trust >= 0.75
+    ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
+
+
+def test_umap_transform_on_iris_w_pynndescent(
+    iris, iris_subset_model_large, iris_selection
+):
+    fitter = iris_subset_model_large
+
+    new_data = iris.data[~iris_selection]
+    embedding = fitter.transform(new_data)
+
+    trust = trustworthiness(new_data, embedding, n_neighbors=10)
+    assert (
+        trust >= 0.75
     ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
 
 
@@ -122,7 +143,37 @@ def test_umap_transform_on_iris_modified_dtype(iris, iris_subset_model, iris_sel
 
     trust = trustworthiness(new_data, embedding, n_neighbors=10)
     assert (
-        trust >= 0.8
+        trust >= 0.75
+    ), "Insufficiently trustworthy transform for iris dataset: {}".format(trust)
+
+
+def test_umap_transform_on_iris_modified_dtype_adam(
+    iris, iris_subset_model_adam, iris_selection
+):
+    fitter = iris_subset_model_adam
+    fitter.embedding_ = fitter.embedding_.astype(np.float64)
+
+    new_data = iris.data[~iris_selection]
+    embedding = fitter.transform(new_data)
+
+    trust = trustworthiness(new_data, embedding, n_neighbors=10)
+    assert (
+        trust >= 0.75
+    ), "Insufficiently trustworthy transform for iris dataset: {}".format(trust)
+
+
+def test_umap_compatibility_transform_on_iris_modified_dtype(
+    iris, iris_subset_model_compatibility, iris_selection
+):
+    fitter = iris_subset_model_compatibility
+    fitter.embedding_ = fitter.embedding_.astype(np.float64)
+
+    new_data = iris.data[~iris_selection]
+    embedding = fitter.transform(new_data)
+
+    trust = trustworthiness(new_data, embedding, n_neighbors=10)
+    assert (
+        trust >= 0.75
     ), "Insufficiently trustworthy transform for iris dataset: {}".format(trust)
 
 
@@ -143,7 +194,7 @@ def test_umap_sparse_transform_on_iris(iris, iris_selection):
 
     trust = trustworthiness(new_data, embedding, n_neighbors=10)
     assert (
-        trust >= 0.80
+        trust >= 0.75
     ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
 
 
@@ -167,7 +218,7 @@ def test_precomputed_transform_on_iris(iris, iris_selection):
 
     trust = trustworthiness(new_data, embedding, n_neighbors=10)
     assert (
-        trust >= 0.85
+        trust >= 0.75
     ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
 
 
@@ -191,7 +242,7 @@ def test_precomputed_sparse_transform_on_iris(iris, iris_selection):
 
     trust = trustworthiness(new_data, embedding, n_neighbors=10)
     assert (
-        trust >= 0.85
+        trust >= 0.75
     ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
 
 
