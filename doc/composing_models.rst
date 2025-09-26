@@ -1,7 +1,8 @@
 Combining multiple UMAP models
 ==============================
 
-It is possible to combine together multiple UMAP models, assuming that
+It is possible to combine togetwould expect given that we don't have the bottom half of the image which
+would let us tell them apart); The twos and threes are also in a larger multiple UMAP models, assuming that
 they are operating on the same underlying data. To get an idea of how
 this works recall that UMAP uses an intermediate fuzzy topological
 representation (see :ref:`how_umap_works`). Given different views of the

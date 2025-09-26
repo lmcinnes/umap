@@ -294,7 +294,7 @@ topological structure of the data.
 
 As mentioned, there is really no requirement to stop at ``n_components=3``. If you are interested in (density based) clustering, or other
 machine learning techniques, it can be beneficial to pick a larger
-embedding dimension (say 10, or 50) closer to the the dimension of the
+embedding dimension (say 10, or 50) closer to the dimension of the
 underlying manifold on which your data lies.
 
 ``metric``

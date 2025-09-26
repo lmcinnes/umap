@@ -171,7 +171,7 @@ proper handling of missing data.
    :align: center
    :alt: Diagram of culmen measurements on a penguin
 
-See the `github repostiory <https://github.com/allisonhorst/penguins>`__
+See the `github repository <https://github.com/allisonhorst/penguins>`__
 for more details about the dataset itself. It consists of measurements
 of bill (culmen) and flippers and weights of three species of penguins,
 along with some other metadata about the penguins. In total we have 333
