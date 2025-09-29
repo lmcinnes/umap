@@ -1049,6 +1049,7 @@ def simplicial_set_embedding(
     compatibility_layout=False,
     optimizer="standard",
     tqdm_kwds=None,
+    negative_selection_range=200_000,
 ):
     """Perform a fuzzy simplicial set embedding, using a specified
     initialisation method and then minimizing the fuzzy set cross entropy
@@ -1355,6 +1356,7 @@ def simplicial_set_embedding(
                 and init in ["recursive"]
                 and n_epochs_max >= 400,
                 optimizer=optimizer,
+                negative_selection_range=negative_selection_range,
             )
 
     else:
@@ -1902,6 +1904,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         precomputed_knn=(None, None, None),
         compatibility_layout=False,
         optimizer="standard",
+        negative_selection_range=200_000,
     ):
         self.n_neighbors = n_neighbors
         self.metric = metric
@@ -1943,6 +1946,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         self.disconnection_distance = disconnection_distance
         self.precomputed_knn = precomputed_knn
         self.compatibility_layout = compatibility_layout
+
+        self.negative_selection_range = negative_selection_range
 
         # If compatibility_layout is set and init was default, change to spectral which was the old default
         if self.compatibility_layout and self.init == "recursive":
@@ -3126,6 +3131,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             compatibility_layout=self.compatibility_layout,
             optimizer=self.optimizer,
             tqdm_kwds=self.tqdm_kwds,
+            negative_selection_range=self.negative_selection_range,
         )
 
     def fit_transform(self, X, y=None, ensure_all_finite=True, **kwargs):

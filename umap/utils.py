@@ -220,3 +220,52 @@ def average_nn_distance(dist_matrix):
         )
 
     return averages
+
+
+@numba.njit(fastmath=True, parallel=True, cache=True)
+def adaptive_bucket_sort(values, target_bucket_size=1000, sample_fraction=0.01):
+
+    n_values = values.shape[0]
+    n_buckets = max(1, (n_values + target_bucket_size - 1) // target_bucket_size)
+
+    if n_values <= 1024:
+        return np.argsort(values).astype(np.int32)
+
+    # Estimate bucket boundaries via sampling
+    sample_size = max(min(int(n_values * sample_fraction), 10_000), n_buckets * 10)
+    sample_indices = np.empty(sample_size, dtype=np.int32)
+    sample_values = np.empty(sample_size, dtype=np.float32)
+    step = n_values // sample_size
+    for i in numba.prange(sample_size):
+        sample_indices[i] = (i * step + (i * 17) % step) % n_values
+    for i in numba.prange(sample_size):
+        sample_values[i] = values[sample_indices[i]]
+    boundaries = np.quantile(sample_values, np.linspace(0, 1, n_buckets + 1)[1:-1])
+
+    # Parallel bucket assignment
+    bucket_assignments = np.empty(n_values, dtype=np.int32)
+    for i in numba.prange(n_values):
+        bucket = 0
+        for j in range(n_buckets - 1):
+            if values[i] <= boundaries[j]:
+                break
+            bucket += 1
+        bucket_assignments[i] = bucket
+
+    # Count bucket sizes
+    bucket_counts = np.zeros(n_buckets, dtype=np.int32)
+    for i in range(n_values):
+        bucket_counts[bucket_assignments[i]] += 1
+
+    # Create result by concatenating buckets
+    result = np.empty(n_values, dtype=np.int32)
+    bucket_starts = np.zeros(n_buckets, dtype=np.int32)
+    for i in range(1, n_buckets):
+        bucket_starts[i] = bucket_starts[i - 1] + bucket_counts[i - 1]
+
+    for i in range(n_values):
+        bucket = bucket_assignments[i]
+        result[bucket_starts[bucket]] = i
+        bucket_starts[bucket] += 1
+
+    return result

@@ -3,7 +3,7 @@ import numpy as np
 from tqdm.auto import tqdm
 
 import umap.distances as dist
-from umap.utils import tau_rand_int
+from umap.utils import adaptive_bucket_sort, tau_rand_int
 
 
 @numba.njit(inline="always")
@@ -276,8 +276,27 @@ def optimize_layout_euclidean_single_epoch_fast(
                 head_embedding[from_node, d] += updates[from_node, d]
 
 
+@numba.njit(inline="always")
+def get_range_limits(center, range_size, array_length):
+    half_size = range_size // 2
+
+    # Calculate ideal start and end
+    start = center - half_size
+    end = center + half_size + (range_size % 2)  # Add 1 if range_size is odd
+
+    # Handle boundary conditions
+    if start < 0:
+        start = 0
+        end = min(range_size, array_length)
+    elif end > array_length:
+        end = array_length
+        start = max(0, array_length - range_size)
+
+    return start, end
+
+
 @numba.njit(
-    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], f4[:, ::1], f4[:, ::1], f8, f8, i4[::1], i4[::1], i8)",
+    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], f4[:, ::1], f4[:, ::1], f8, f8, i4[::1], i4[::1], i8, i8)",
     fastmath=True,
     parallel=True,
     locals={
@@ -314,8 +333,11 @@ def optimize_layout_euclidean_single_epoch_adam(
     from_node_order,
     to_node_order,
     block_size=256,
+    negative_selection_range=200_000,
 ):
+    un_to_order = np.argsort(to_node_order)
     n_from_vertices = csr_indptr.shape[0] - 1
+    negative_selection_range = min(n_vertices, negative_selection_range)
     for block_start in range(0, n_from_vertices, block_size):
         block_end = min(block_start + block_size, n_from_vertices)
         for node_idx in numba.prange(block_start, block_end):
@@ -343,8 +365,17 @@ def optimize_layout_euclidean_single_epoch_adam(
                         / epochs_per_negative_sample[raw_index]
                     )
 
+                    to_node_idx = un_to_order[from_node]
                     for p in range(n_neg_samples):
-                        to_node = to_node_order[(raw_index * (n + p + 1)) % n_vertices]
+                        to_node_raw_selection = (
+                            raw_index * (n + p + 1)
+                        ) % negative_selection_range
+                        range_start, range_end = get_range_limits(
+                            to_node_idx, negative_selection_range, n_vertices
+                        )
+                        to_node_subset = to_node_order[range_start:range_end]
+                        to_node = to_node_subset[to_node_raw_selection]
+                        # to_node = to_node_order[(raw_index * (n + p + 1)) % n_vertices]
                         other = tail_embedding[to_node]
 
                         dist_squared = rdist(current, other) / 4
@@ -354,6 +385,8 @@ def optimize_layout_euclidean_single_epoch_adam(
                             grad_coeff /= (0.001 + dist_squared) * (
                                 a * pow(dist_squared, b) + 1
                             )
+
+                            grad_coeff *= negative_selection_range / n_vertices
 
                             if grad_coeff > 0.0:
                                 for d in range(dim):
@@ -1018,6 +1051,7 @@ def optimize_layout_euclidean(
     optimizer="adam",
     good_initialization=False,
     random_state=None,
+    negative_selection_range=200_000,
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
     fuzzy set cross entropy between the 1-skeletons of the high dimensional
@@ -1119,7 +1153,7 @@ def optimize_layout_euclidean(
     epoch_of_next_sample = epochs_per_sample.copy()
     updates = np.zeros((head_embedding.shape[0], dim), dtype=np.float32)
     node_order = np.arange(head_embedding.shape[0], dtype=np.int32)
-    if tail_embedding.shape[0] != head_embedding.shape[0]:
+    if tail_embedding.shape[0] != head_embedding.shape[0] or optimizer == "adam":
         to_node_order = np.arange(tail_embedding.shape[0], dtype=np.int32)
     else:
         to_node_order = node_order
@@ -1298,13 +1332,34 @@ def optimize_layout_euclidean(
                 beta1_schedule[n],
                 beta2_schedule[n],
                 node_order,
-                to_node_order,
+                node_order,
                 block_size=block_size,
+                negative_selection_range=negative_selection_range,
             )
             updates[:] = 0.0
-            random_state.shuffle(node_order)
-            if tail_embedding.shape[0] != head_embedding.shape[0]:
-                random_state.shuffle(to_node_order)
+            projection_direction = np.random.randn(dim)
+            projection_direction /= np.linalg.norm(projection_direction)
+            projection = np.dot(head_embedding, projection_direction)
+            node_order = np.argsort(projection).astype(np.int32)
+            # node_order = adaptive_bucket_sort(
+            #     projection, negative_selection_range // 16
+            # )
+
+            # norms = (
+            #     np.linalg.norm(head_embedding, axis=1)
+            #     + random_state.randn(head_embedding.shape[0]) * 1e-1
+            # )
+            # node_order = np.argsort(norms)[::-1].astype(np.int32, order="C")
+
+            # if n % 10 == 0:
+            #     # Occasionally reshuffle the negative sampling order
+            #     projection_direction = np.random.randn(dim)
+            #     projection_direction /= np.linalg.norm(projection_direction)
+            #     projection = np.dot(head_embedding, projection_direction)
+            #     to_node_order = np.argsort(projection).astype(np.int32)
+            # random_state.shuffle(node_order)
+            # if tail_embedding.shape[0] != head_embedding.shape[0]:
+            #     random_state.shuffle(to_node_order)
         elif optimizer == "densmap_standard":
             optimize_layout_euclidean_single_epoch_fast_densmap(
                 head_embedding,
