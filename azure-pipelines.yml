@@ -70,7 +70,17 @@ stages:
             windows_py312:
               imageName: 'windows-latest'
               python.version: '3.12'
-
+            # # Disable macOS tests on 3.13 since tensorflow only provides pre-built wheels
+            # # for ARM macs and the runner is x86
+            # mac_py313:
+            #   imageName: 'macOS-latest'
+            #   python.version: '3.13'
+            linux_py313:
+              imageName: 'ubuntu-latest'
+              python.version: '3.13'
+            windows_py313:
+              imageName: 'windows-latest'
+              python.version: '3.13'
         pool:
           vmImage: $(imageName)
 
@@ -110,7 +120,10 @@ stages:
         - bash: |
             coveralls
           displayName: 'Publish to coveralls'
-          condition: and(succeeded(), eq(variables.triggeredByPullRequest, false)) # Don't run this for PRs because they can't access pipeline secrets
+          # Don't run this for PRs because they can't access pipeline secrets
+          # The python client for coveralls currently does not support python 3.13
+          # https://github.com/TheKevJames/coveralls-python/pull/542
+          condition: and(succeeded(), eq(variables.triggeredByPullRequest, false), ne(variables['python.version'], '3.13'))
           env:
             COVERALLS_REPO_TOKEN: $(COVERALLS_TOKEN)
 
@@ -141,7 +154,8 @@ stages:
           displayName: 'Install package locally'
         
         - bash: |
-            python setup.py sdist bdist_wheel
+            pip install build
+            python -m build --wheel --sdist --outdir dist/ .
             ls -l dist/
           displayName: 'Build package'
 

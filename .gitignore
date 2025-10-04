@@ -26,3 +26,12 @@ umap_learn.egg-info
 # docs
 doc/auto_examples
 doc/_build
+
+# build and dist
+build
+dist
+
+# coverage
+.coverage
+.coverage.*
+.coverage.xml
