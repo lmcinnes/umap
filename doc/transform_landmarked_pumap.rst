@@ -223,5 +223,5 @@ In addition to ``landmark_loss_weight``, there are a number of other options ava
 
 - Continuing the training with a larger portion of points from the original data, in our case ``x1``. Not all of these points need to be landmarked, but they can contribute to a consistent graph structure in higher dimensions.
 - Changing the ``landmark_loss_fn``. For example, if we want to allow for points to move if they have to we could truncate the default euclidean loss function, allowing the metaphorical rubber band to snap at a certain point and prioritising a good UMAP structure once we discover that sticking to the landmark position is not correct.
-- Being more intelligent with our selection of landmark points, for example using submodular optimization with a package like `apricot-select <https://apricot-select.readthedocs.io/en/latest/>`__ or chosing points from different parts of a heirarchical clustering like `HDBSCAN <https://hdbscan.readthedocs.io/en/latest/index.html>`__
+- Being more intelligent with our selection of landmark points, for example using submodular optimization with a package like `apricot-select <https://apricot-select.readthedocs.io/en/latest/>`__ or chosing points from different parts of a hierarchical clustering like `HDBSCAN <https://hdbscan.readthedocs.io/en/latest/index.html>`__
 
