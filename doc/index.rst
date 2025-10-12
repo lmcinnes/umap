@@ -30,7 +30,7 @@ The details for the underlying mathematics can be found in
 McInnes, L, Healy, J, *UMAP: Uniform Manifold Approximation and Projection
 for Dimension Reduction*, ArXiv e-prints 1802.03426, 2018
 
-You can find the software `on github <https://github.com/lmcinnes/>`_.
+You can find the software `on github <https://github.com/lmcinnes/umap>`_.
 
 **Installation**
 
