@@ -135,9 +135,9 @@ def label_propagation_init(
     graph,
     a,
     b,
-    n_iter=20,
+    n_iter=100,
     n_epochs=32,
-    approx_n_parts=4096,
+    approx_n_parts=65536,
     n_components=2,
     scaling=1.0,
     random_scale=1.0,
@@ -229,11 +229,11 @@ def label_propagation_init(
         a,
         b,
         rng_state,
-        1.5,
+        4.0,  # 1.5,
         0.5,
         1,
         parallel=True,
-        verbose=False,
+        verbose=True,
         densmap_kwds={},
         tqdm_kwds={},
         move_other=False,
@@ -242,6 +242,7 @@ def label_propagation_init(
         random_state=random_state,
         optimizer="adam",
         good_initialization=good_initialization,
+        negative_selection_range=max(reduced_init.shape[0] // 4, 500),
     )
 
     if upscaling == "partition_expander":
