@@ -332,8 +332,8 @@ def optimize_layout_euclidean_single_epoch_adam(
 ):
     n_from_vertices = csr_indptr.shape[0] - 1
     negative_selection_range = max(200, min(n_vertices, negative_selection_range))
-    # negative_sample_scaling = np.pow(negative_selection_range / n_vertices, 0.1667)
-    negative_sample_scaling = 1.0
+    negative_sample_scaling = negative_selection_range / n_vertices
+    # negative_sample_scaling = 1.0
     # average_negative_rdist = 0.0
     # total_negative_samples = 0
     # rep_grad_coeff_average = 0.0
@@ -1010,55 +1010,55 @@ def _create_adam_schedules(
     )
 
     if good_initialization:
-        # gamma_schedule = (
-        #     np.concatenate(
-        #         [
-        #             [
-        #                 0.75 * np.sqrt(float(n) / float(n_warm_up_epochs))
-        #                 for n in range(n_warm_up_epochs)
-        #             ],
-        #             [
-        #                 0.25
-        #                 * (
-        #                     1.0
-        #                     - (
-        #                         float(n - n_warm_up_epochs)
-        #                         / float(n_epochs - n_warm_up_epochs)
-        #                     )
-        #                 )
-        #                 + 0.5
-        #                 for n in range(n_warm_up_epochs, n_epochs)
-        #             ],
-        #         ]
-        #     )
-        #     * gamma
-        # )
+        gamma_schedule = (
+            np.concatenate(
+                [
+                    [
+                        0.75 * np.sqrt(float(n) / float(n_warm_up_epochs))
+                        for n in range(n_warm_up_epochs)
+                    ],
+                    [
+                        0.25
+                        * (
+                            1.0
+                            - (
+                                float(n - n_warm_up_epochs)
+                                / float(n_epochs - n_warm_up_epochs)
+                            )
+                        )
+                        + 0.5
+                        for n in range(n_warm_up_epochs, n_epochs)
+                    ],
+                ]
+            )
+            * gamma
+        )
         # gamma_schedule = np.linspace(gamma, 0.25, n_epochs, dtype=np.float32)
-        gamma_schedule = np.full(n_epochs, 0.5 * gamma, dtype=np.float32)
+        # gamma_schedule = np.full(n_epochs, 0.5 * gamma, dtype=np.float32)
     else:
-        # gamma_schedule = (
-        #     np.concatenate(
-        #         [
-        #             [
-        #                 1.0 * np.sqrt(float(n) / float(n_warm_up_epochs))
-        #                 for n in range(n_warm_up_epochs)
-        #             ],
-        #             [
-        #                 0.25
-        #                 * (
-        #                     1.0
-        #                     - float(n - n_warm_up_epochs)
-        #                     / float(n_epochs - n_warm_up_epochs)
-        #                 )
-        #                 + 0.75
-        #                 for n in range(n_warm_up_epochs, n_epochs)
-        #             ],
-        #         ]
-        #     )
-        #     * gamma
-        # )
+        gamma_schedule = (
+            np.concatenate(
+                [
+                    [
+                        1.0 * np.sqrt(float(n) / float(n_warm_up_epochs))
+                        for n in range(n_warm_up_epochs)
+                    ],
+                    [
+                        0.25
+                        * (
+                            1.0
+                            - float(n - n_warm_up_epochs)
+                            / float(n_epochs - n_warm_up_epochs)
+                        )
+                        + 0.75
+                        for n in range(n_warm_up_epochs, n_epochs)
+                    ],
+                ]
+            )
+            * gamma
+        )
         # gamma_schedule = np.linspace(gamma, 0.25, n_epochs, dtype=np.float32)
-        gamma_schedule = np.full(n_epochs, gamma, dtype=np.float32)
+        # gamma_schedule = np.full(n_epochs, gamma, dtype=np.float32)
         # gamma_schedule = (
         #     np.linspace(1, 0, n_epochs, dtype=np.float32) ** 2 * gamma + gamma
         # )
@@ -1080,15 +1080,15 @@ def _create_adam_schedules(
     #         ),
     #     ]
     # )
-    # negative_selection_range_schedule = np.linspace(
-    #     n_vertices,
-    #     negative_selection_range,
-    #     n_epochs,
-    #     dtype=np.int32,
-    # )
-    negative_selection_range_schedule = np.full(
-        n_epochs, negative_selection_range, dtype=np.int32
+    negative_selection_range_schedule = np.linspace(
+        n_vertices,
+        negative_selection_range,
+        n_epochs,
+        dtype=np.int32,
     )
+    # negative_selection_range_schedule = np.full(
+    #     n_epochs, negative_selection_range, dtype=np.int32
+    # )
     # scale = n_vertices / negative_selection_range
     # negative_selection_range_schedule = np.round(
     #     n_vertices / np.linspace(1, scale, n_epochs, dtype=np.float32)
