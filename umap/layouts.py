@@ -1059,6 +1059,9 @@ def _create_adam_schedules(
         # )
         # gamma_schedule = np.linspace(gamma, 0.25, n_epochs, dtype=np.float32)
         gamma_schedule = np.full(n_epochs, gamma, dtype=np.float32)
+        # gamma_schedule = (
+        #     np.linspace(1, 0, n_epochs, dtype=np.float32) ** 2 * gamma + gamma
+        # )
 
     # negative_selection_range = min(n_vertices, max(negative_selection_range, 1024))
     # selection_range_warmup = min(max(n_warm_up_epochs, 200), n_epochs)
@@ -1086,6 +1089,10 @@ def _create_adam_schedules(
     negative_selection_range_schedule = np.full(
         n_epochs, negative_selection_range, dtype=np.int32
     )
+    # scale = n_vertices / negative_selection_range
+    # negative_selection_range_schedule = np.round(
+    #     n_vertices / np.linspace(1, scale, n_epochs, dtype=np.float32)
+    # ).astype(np.int32)
 
     return (
         beta1_schedule,
