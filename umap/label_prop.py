@@ -137,7 +137,7 @@ def label_propagation_init(
     b,
     n_iter=100,
     n_epochs=32,
-    approx_n_parts=65536,
+    approx_n_parts=None,
     n_components=2,
     scaling=1.0,
     random_scale=1.0,
@@ -157,6 +157,9 @@ def label_propagation_init(
         norms = np.linalg.norm(result, axis=1, keepdims=True)
         result = result / norms
         return result.astype(np.float32)
+
+    if approx_n_parts is None:
+        approx_n_parts = int(graph.shape[0] // 16)
 
     # Ensure we have fewer parts than samples
     approx_n_parts = min(approx_n_parts, graph.shape[0] // 2)
@@ -242,7 +245,7 @@ def label_propagation_init(
         random_state=random_state,
         optimizer="adam",
         good_initialization=good_initialization,
-        negative_selection_range=max(reduced_init.shape[0] // 4, 500),
+        negative_selection_range=reduced_init.shape[0],
     )
 
     if upscaling == "partition_expander":

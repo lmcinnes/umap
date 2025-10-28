@@ -333,14 +333,8 @@ def optimize_layout_euclidean_single_epoch_adam(
     n_from_vertices = csr_indptr.shape[0] - 1
     negative_selection_range = max(200, min(n_vertices, negative_selection_range))
     negative_sample_scaling = negative_selection_range / n_vertices
-    # negative_sample_scaling = 1.0
-    # average_negative_rdist = 0.0
-    # total_negative_samples = 0
-    # rep_grad_coeff_average = 0.0
-    c = gamma
     for block_start in range(0, n_from_vertices, block_size):
         block_end = min(block_start + block_size, n_from_vertices)
-        # for node_idx in numba.prange(block_start, block_end):
         for raw_idx in numba.prange(block_start, block_end):
             node_idx = to_node_order[raw_idx]
             from_node = from_node_order[node_idx]
@@ -374,39 +368,24 @@ def optimize_layout_euclidean_single_epoch_adam(
                         range_start = get_range_limits(
                             node_idx, negative_selection_range, n_vertices
                         )
-                        # to_node_subset = to_node_order[range_start:range_end]
-                        # to_node = to_node_subset[to_node_raw_selection]
                         to_node = from_node_order[
                             (range_start + to_node_raw_selection) % n_vertices
                         ]
-                        # to_node = to_node_order[(raw_index * (n + p + 1)) % n_vertices]
                         other = tail_embedding[to_node]
 
                         dist_squared = rdist(current, other)
-                        # average_negative_rdist += dist_squared
-                        # total_negative_samples += 1
 
                         if dist_squared > 0.0:
                             grad_coeff = negative_sample_scaling * 2.0 * gamma * b
                             grad_coeff /= (0.001 + dist_squared) * (
                                 a * pow(dist_squared, b) + 1
                             )
-                            # if from_node % 100 == 0:
-                            #     rep_grad_coeff_average += grad_coeff
 
                             if grad_coeff > 0.0:
-                                # for d in range(dim):
-                                #     grad_d = param_clip(
-                                #         grad_coeff * (current[d] - other[d]), -1, 1
-                                #     )
-                                #     updates[from_node, d] += grad_d
                                 grad_norm = np.sqrt(
                                     grad_coeff * grad_coeff * dist_squared
                                 )
-                                # if grad_norm > 16.0:
-                                scale = c * np.tanh(grad_norm / c) / grad_norm
-                                # else:
-                                #     scale = 1.0
+                                scale = gamma * np.tanh(grad_norm / gamma) / grad_norm
                                 for d in range(dim):
                                     updates[from_node, d] += (
                                         grad_coeff * (current[d] - other[d]) * scale
@@ -1032,9 +1011,9 @@ def _create_adam_schedules(
                 ]
             )
             * gamma
+            * max(np.sqrt(n_epochs / 100.0), 1.0)
         )
-        # gamma_schedule = np.linspace(gamma, 0.25, n_epochs, dtype=np.float32)
-        # gamma_schedule = np.full(n_epochs, 0.5 * gamma, dtype=np.float32)
+        # gamma_schedule = np.full(n_epochs, gamma * max(np.sqrt(n_epochs / 100.0), 1.0), dtype=np.float32)
     else:
         gamma_schedule = (
             np.concatenate(
@@ -1056,30 +1035,10 @@ def _create_adam_schedules(
                 ]
             )
             * gamma
+            * max(np.sqrt(n_epochs / 100.0), 1.0)
         )
-        # gamma_schedule = np.linspace(gamma, 0.25, n_epochs, dtype=np.float32)
-        # gamma_schedule = np.full(n_epochs, gamma, dtype=np.float32)
-        # gamma_schedule = (
-        #     np.linspace(1, 0, n_epochs, dtype=np.float32) ** 2 * gamma + gamma
-        # )
+        # gamma_schedule = np.full(n_epochs, gamma * max(np.sqrt(n_epochs / 100.0), 1.0), dtype=np.float32)
 
-    # negative_selection_range = min(n_vertices, max(negative_selection_range, 1024))
-    # selection_range_warmup = min(max(n_warm_up_epochs, 200), n_epochs)
-    # selection_range_warmup = n_warm_up_epochs
-    # negative_selection_range_schedule = np.concatenate(
-    #     [
-    #         (
-    #             (np.linspace(1, 0, selection_range_warmup))
-    #             * (n_vertices - negative_selection_range)
-    #             + negative_selection_range
-    #         ).astype(np.int32),
-    #         np.full(
-    #             n_epochs - selection_range_warmup,
-    #             negative_selection_range,
-    #             dtype=np.int32,
-    #         ),
-    #     ]
-    # )
     negative_selection_range_schedule = np.linspace(
         n_vertices,
         negative_selection_range,
@@ -1089,10 +1048,6 @@ def _create_adam_schedules(
     # negative_selection_range_schedule = np.full(
     #     n_epochs, negative_selection_range, dtype=np.int32
     # )
-    # scale = n_vertices / negative_selection_range
-    # negative_selection_range_schedule = np.round(
-    #     n_vertices / np.linspace(1, scale, n_epochs, dtype=np.float32)
-    # ).astype(np.int32)
 
     return (
         beta1_schedule,
@@ -1328,8 +1283,6 @@ def optimize_layout_euclidean(
     if "disable" not in tqdm_kwds:
         tqdm_kwds["disable"] = not verbose
 
-    print(f"Using {negative_selection_range=}")
-
     for n in tqdm(range(n_epochs), **tqdm_kwds):
         if (
             densmap
@@ -1426,30 +1379,15 @@ def optimize_layout_euclidean(
                 ],  # negative_selection_range,
             )
             updates[:] = 0.0
-            projection_direction = random_state.randn(dim)
-            projection_direction /= np.linalg.norm(projection_direction)
-            projection = np.dot(head_embedding, projection_direction)
-            node_order = np.argsort(projection).astype(np.int32)
-            # node_order = adaptive_bucket_sort(
-            #     projection, negative_selection_range // 16
-            # )
-
-            # norms = (
-            #     np.linalg.norm(head_embedding, axis=1)
-            #     + random_state.randn(head_embedding.shape[0]) * 1e-1
-            # )
-            # node_order = np.argsort(norms)[::-1].astype(np.int32, order="C")
-
-            # if n % 10 == 0:
-            #     # Occasionally reshuffle the negative sampling order
-            #     projection_direction = random_state.randn(dim)
-            #     projection_direction /= np.linalg.norm(projection_direction)
-            #     projection = np.dot(head_embedding, projection_direction)
-            #     to_node_order = np.argsort(projection).astype(np.int32)
-            # random_state.shuffle(node_order)
-            # if tail_embedding.shape[0] != head_embedding.shape[0]:
-            # random_state.shuffle(to_node_order)
-            random_state.shuffle(to_node_order)
+            if negative_selection_range_schedule[n] < n_vertices:
+                projection_direction = random_state.randn(dim)
+                projection_direction /= np.linalg.norm(projection_direction)
+                projection = np.dot(head_embedding, projection_direction)
+                node_order = np.argsort(projection).astype(np.int32)
+            else:
+                random_state.shuffle(node_order)
+            if tail_embedding.shape[0] != head_embedding.shape[0]:
+                random_state.shuffle(to_node_order)
         elif optimizer == "densmap_standard":
             optimize_layout_euclidean_single_epoch_fast_densmap(
                 head_embedding,
