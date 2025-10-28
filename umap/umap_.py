@@ -2651,6 +2651,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
 
         # Check if we should unique the data
         # We've already ensured that we aren't in the precomputed case
+        self._data_was_uniqued = False
         if self.unique:
             # check if the matrix is dense
             if self._sparse_data:
@@ -2680,15 +2681,19 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 )
             # We'll expose an inverse map when unique=True for users to map from our internal structures to their data
             self._unique_inverse_ = inverse
-        # If we aren't asking for unique use the full index.
-        # This will save special cases later.
+            self._data_was_uniqued = True
+            # Use the unique subset for processing
+            X_processed = X[index]
         else:
-            index = list(range(X.shape[0]))
-            inverse = list(range(X.shape[0]))
+            # No uniquing needed - use original data directly
+            index = None
+            inverse = None
+            X_processed = X
+            self._data_was_uniqued = False
 
         # Error check n_neighbors based on data size
-        if X[index].shape[0] <= self.n_neighbors:
-            if X[index].shape[0] == 1:
+        if X_processed.shape[0] <= self.n_neighbors:
+            if X_processed.shape[0] == 1:
                 self.embedding_ = np.zeros(
                     (1, self.n_components)
                 )  # needed to sklearn comparability
@@ -2698,7 +2703,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 "n_neighbors is larger than the dataset size; truncating to "
                 "X.shape[0] - 1"
             )
-            self._n_neighbors = X[index].shape[0] - 1
+            self._n_neighbors = X_processed.shape[0] - 1
             if self.densmap:
                 self._densmap_kwds["n_neighbors"] = self._n_neighbors
         else:
@@ -2720,19 +2725,21 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             # symmetrical (so we can find neighbors by looking at rows in isolation,
             # rather than also having to consider that sample's column too).
             # print("Computing KNNs for sparse precomputed distances...")
-            if sparse_tril(X).getnnz() != sparse_triu(X).getnnz():
+            if sparse_tril(X_processed).getnnz() != sparse_triu(X_processed).getnnz():
                 raise ValueError(
                     "Sparse precomputed distance matrices should be symmetrical!"
                 )
-            if not np.all(X.diagonal() == 0):
+            if not np.all(X_processed.diagonal() == 0):
                 raise ValueError("Non-zero distances from samples to themselves!")
             if self.knn_dists is None:
-                self._knn_indices = np.zeros((X.shape[0], self.n_neighbors), dtype=int)
+                self._knn_indices = np.zeros(
+                    (X_processed.shape[0], self.n_neighbors), dtype=int
+                )
                 self._knn_dists = np.zeros(self._knn_indices.shape, dtype=float)
-                for row_id in range(X.shape[0]):
+                for row_id in range(X_processed.shape[0]):
                     # Find KNNs row-by-row
-                    row_data = X[row_id].data
-                    row_indices = X[row_id].indices
+                    row_data = X_processed[row_id].data
+                    row_indices = X_processed[row_id].indices
                     if len(row_data) < self._n_neighbors:
                         raise ValueError(
                             "Some rows contain fewer than n_neighbors distances!"
@@ -2755,7 +2762,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self._rhos,
                 self.graph_dists_,
             ) = fuzzy_simplicial_set(
-                X[index],
+                X_processed,
                 self.n_neighbors,
                 random_state,
                 "precomputed",
@@ -2782,12 +2789,12 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 verbose=self.verbose,
             )
         # Handle small cases efficiently by computing all distances
-        elif X[index].shape[0] < 4096 and not self.force_approximation_algorithm:
+        elif X_processed.shape[0] < 4096 and not self.force_approximation_algorithm:
             self._small_data = True
             try:
                 # sklearn pairwise_distances fails for callable metric on sparse data
                 _m = self.metric if self._sparse_data else self._input_distance_func
-                dmat = pairwise_distances(X[index], metric=_m, **self._metric_kwds)
+                dmat = pairwise_distances(X_processed, metric=_m, **self._metric_kwds)
             except (ValueError, TypeError) as e:
                 # metric is numba.jit'd or not supported by sklearn,
                 # fallback to pairwise special
@@ -2797,21 +2804,21 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     if not callable(self.metric):
                         _m = dist.named_distances[self.metric]
                         dmat = dist.pairwise_special_metric(
-                            X[index].toarray(),
+                            X_processed.toarray(),
                             metric=_m,
                             kwds=self._metric_kwds,
                             ensure_all_finite=ensure_all_finite,
                         )
                     else:
                         dmat = dist.pairwise_special_metric(
-                            X[index],
+                            X_processed,
                             metric=self._input_distance_func,
                             kwds=self._metric_kwds,
                             ensure_all_finite=ensure_all_finite,
                         )
                 else:
                     dmat = dist.pairwise_special_metric(
-                        X[index],
+                        X_processed,
                         metric=self._input_distance_func,
                         kwds=self._metric_kwds,
                         ensure_all_finite=ensure_all_finite,
@@ -2868,7 +2875,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     self._knn_dists,
                     self._knn_search_index,
                 ) = nearest_neighbors(
-                    X[index],
+                    X_processed,
                     self._n_neighbors,
                     nn_metric,
                     self._metric_kwds,
@@ -2896,7 +2903,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self._rhos,
                 self.graph_dists_,
             ) = fuzzy_simplicial_set(
-                X[index],
+                X_processed,
                 self.n_neighbors,
                 random_state,
                 nn_metric,
@@ -2934,11 +2941,12 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     )
                 )
             if self.target_metric == "string":
-                y_ = y[index]
+                y_ = y[index] if self._data_was_uniqued else y
             else:
-                y_ = check_array(
+                y_full = check_array(
                     y, ensure_2d=False, ensure_all_finite=ensure_all_finite
-                )[index]
+                )
+                y_ = y_full[index] if self._data_was_uniqued else y_full
             if self.target_metric == "categorical":
                 if self.target_weight < 1.0:
                     far_dist = 2.5 * (1.0 / (1.0 - self.target_weight))
@@ -3050,11 +3058,11 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             epochs = (
                 self.n_epochs_list if self.n_epochs_list is not None else self.n_epochs
             )
-            self.embedding_, aux_data = self._fit_embed_data(
-                self._raw_data[index],
+            embedding_unique, aux_data = self._fit_embed_data(
+                X_processed,  # Use processed data directly
                 epochs,
                 init,
-                random_state,  # JH why raw data?
+                random_state,
                 **kwargs,
             )
 
@@ -3066,9 +3074,13 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                         "doesn't support the list of int for 'n_epochs'."
                     )
                 else:
-                    self.embedding_list_ = [
-                        e[inverse] for e in aux_data["embedding_list"]
-                    ]
+                    # Only apply inverse mapping if data was actually uniqued
+                    if self._data_was_uniqued:
+                        self.embedding_list_ = [
+                            e[inverse] for e in aux_data["embedding_list"]
+                        ]
+                    else:
+                        self.embedding_list_ = aux_data["embedding_list"]
 
             # Assign any points that are fully disconnected from our manifold(s) to have embedding
             # coordinates of np.nan.  These will be filtered by our plotting functions automatically.
@@ -3076,14 +3088,21 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             # Might be worth moving this into simplicial_set_embedding or _fit_embed_data
             disconnected_vertices = np.array(self.graph_.sum(axis=1)).flatten() == 0
             if len(disconnected_vertices) > 0:
-                self.embedding_[disconnected_vertices] = np.full(
+                embedding_unique[disconnected_vertices] = np.full(
                     self.n_components, np.nan
                 )
 
-            self.embedding_ = self.embedding_[inverse]
-            if self.output_dens:
-                self.rad_orig_ = aux_data["rad_orig"][inverse]
-                self.rad_emb_ = aux_data["rad_emb"][inverse]
+            # Only apply inverse mapping if data was actually uniqued
+            if self._data_was_uniqued:
+                self.embedding_ = embedding_unique[inverse]
+                if self.output_dens:
+                    self.rad_orig_ = aux_data["rad_orig"][inverse]
+                    self.rad_emb_ = aux_data["rad_emb"][inverse]
+            else:
+                self.embedding_ = embedding_unique
+                if self.output_dens:
+                    self.rad_orig_ = aux_data["rad_orig"]
+                    self.rad_emb_ = aux_data["rad_emb"]
 
         if self.verbose:
             print(ts() + " Finished embedding")
