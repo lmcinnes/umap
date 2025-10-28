@@ -1352,9 +1352,7 @@ def simplicial_set_embedding(
                 csr_indptr=graph.indptr,
                 csr_indices=graph.indices,
                 random_state=random_state,
-                good_initialization=isinstance(init, str)
-                and init in ["recursive"]
-                and n_epochs_max >= 400,
+                good_initialization=isinstance(init, str) and init in ["recursive"],
                 optimizer=optimizer,
                 negative_selection_range=negative_selection_range,
             )
