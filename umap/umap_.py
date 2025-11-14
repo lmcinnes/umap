@@ -1294,9 +1294,12 @@ def simplicial_set_embedding(
             aux_data["rad_orig"] = ro
 
     # Recenter
+    scale = (
+        np.log10(embedding.shape[0]) * 4 * np.sqrt(gamma)
+    )  # Added sqrt(gamma) to scale with repulsion strength
     embedding -= np.mean(embedding, 0)
     embedding *= (
-        20.0 / (np.quantile(embedding, 0.95, 0) - np.quantile(embedding, 0.05, 0))
+        scale / (np.quantile(embedding, 0.95, 0) - np.quantile(embedding, 0.05, 0))
     ).astype(np.float32, order="C")
 
     if euclidean_output:
