@@ -16,9 +16,10 @@ def inverse_data():
 
 @njit
 def nan_dist(a: np.ndarray, b: np.ndarray):
-    a[0] = np.nan
-    a[1] = np.inf
-    return 0, a
+    result = np.zeros(a.shape[0])
+    result[0] = np.nan
+    result[1] = np.inf
+    return 0, result
 
 
 def test_check_input_data(all_finite_data, inverse_data):
@@ -35,6 +36,7 @@ def test_check_input_data(all_finite_data, inverse_data):
     -------
 
     """
+
     inf_data = all_finite_data.copy()
     inf_data[0] = np.inf
     nan_data = all_finite_data.copy()

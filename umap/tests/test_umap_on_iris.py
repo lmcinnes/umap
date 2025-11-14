@@ -254,6 +254,12 @@ def test_umap_clusterability_on_supervised_iris(supervised_iris_model, iris):
     assert adjusted_rand_score(clusters, iris.target) >= 0.95
 
 
+def test_umap_clusterability_on_supervised_iris_adam(supervised_iris_model_adam, iris):
+    embedding = supervised_iris_model_adam.embedding_
+    clusters = KMeans(3).fit_predict(embedding)
+    assert adjusted_rand_score(clusters, iris.target) >= 0.95
+
+
 # UMAP Inverse transform on Iris
 # ------------------------------
 def test_umap_inverse_transform_on_iris(iris, iris_model):

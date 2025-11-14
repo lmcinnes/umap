@@ -205,9 +205,25 @@ def iris_subset_model_large(iris, iris_selection):
 
 @pytest.fixture(scope="session")
 def supervised_iris_model(iris):
-    return UMAP(n_neighbors=10, min_dist=0.01, n_epochs=200, random_state=42).fit(
-        iris.data, iris.target
-    )
+    return UMAP(
+        n_neighbors=10,
+        min_dist=0.01,
+        n_epochs=200,
+        random_state=42,
+        compatibility_layout=True,
+    ).fit(iris.data, iris.target)
+
+
+@pytest.fixture(scope="session")
+def supervised_iris_model_adam(iris):
+    return UMAP(
+        n_neighbors=10,
+        min_dist=0.1,
+        repulsion_strength=0.33,
+        n_epochs=200,
+        random_state=42,
+        optimizer="adam",
+    ).fit(iris.data, iris.target)
 
 
 @pytest.fixture(scope="session")

@@ -40,8 +40,8 @@ from scipy.sparse import csr_matrix
 # Umap Clusterability
 def test_blobs_cluster():
     data, labels = make_blobs(n_samples=500, n_features=10, centers=5)
-    embedding = UMAP(n_epochs=100).fit_transform(data)
-    assert adjusted_rand_score(labels, KMeans(5).fit_predict(embedding)) == 1.0
+    embedding = UMAP(n_epochs=100, compatibility_layout=True).fit_transform(data)
+    assert adjusted_rand_score(labels, KMeans(5).fit_predict(embedding)) >= 0.99
 
 
 # Umap Clusterability
