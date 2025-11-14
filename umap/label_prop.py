@@ -8,6 +8,7 @@ from sklearn.manifold import SpectralEmbedding, MDS
 
 from umap.layouts import optimize_layout_euclidean
 from umap.utils import tau_rand, tau_rand_int
+from umap.spectral import spectral_layout
 
 INT32_MIN = np.iinfo(np.int32).min + 1
 INT32_MAX = np.iinfo(np.int32).max - 1
@@ -143,23 +144,40 @@ def label_propagation_init(
     random_scale=1.0,
     random_state=None,
     recursive_init=True,
-    base_init_threshold=64,
+    base_init_threshold=256,
     upscaling="partition_expander",
+    depth=1,
+    verbose=False,
 ):
 
     if random_state is None:
         random_state = np.random.RandomState()
 
     if graph.shape[0] <= base_init_threshold:
-        result = random_state.normal(
-            loc=0.0, scale=1.0, size=(graph.shape[0], n_components)
+        result = spectral_layout(
+            None,
+            graph,
+            n_components,
+            random_state,
+            metric="euclidean",
+            metric_kwds={},
+            compatibility_layout=False,
+            verbose=verbose,
         )
-        norms = np.linalg.norm(result, axis=1, keepdims=True)
-        result = result / norms
-        return result.astype(np.float32)
+        return result.astype(np.float32, order="C")
+        # # We add a little noise to avoid local minima for optimization to come
+        # embedding = noisy_scale_coords(
+        #     embedding, random_state, max_coord=40, noise=0.01
+        # )
+        # result = random_state.normal(
+        #     loc=0.0, scale=1.0, size=(graph.shape[0], n_components)
+        # )
+        # norms = np.linalg.norm(result, axis=1, keepdims=True)
+        # result = result / norms
+        # return result.astype(np.float32)
 
     if approx_n_parts is None:
-        approx_n_parts = int(graph.shape[0] // 16)
+        approx_n_parts = max(base_init_threshold, int(graph.shape[0] // 16))
 
     # Ensure we have fewer parts than samples
     approx_n_parts = min(approx_n_parts, graph.shape[0] // 2)
@@ -198,7 +216,7 @@ def label_propagation_init(
     )
     normalized_reduction_map = normalize(base_reduction_map, axis=0, norm="l2")
     reduced_graph = normalized_reduction_map.T * graph * base_reduction_map
-    reduced_graph.data = np.clip(reduced_graph.data, 0.0, 1.0)
+    reduced_graph.data = np.clip(reduced_graph.data, 0.0, 1.0).astype(np.float32)
     if recursive_init:
         reduced_init = label_propagation_init(
             reduced_graph,
@@ -214,6 +232,8 @@ def label_propagation_init(
             recursive_init=True,
             upscaling=upscaling,
             base_init_threshold=base_init_threshold,
+            depth=depth + 1,
+            verbose=verbose,
         )
         good_initialization = approx_n_parts // 4 > base_init_threshold
     else:
@@ -236,12 +256,13 @@ def label_propagation_init(
         0.5,
         1,
         parallel=True,
-        verbose=True,
+        verbose=verbose,
         densmap_kwds={},
-        tqdm_kwds={},
+        tqdm_kwds={"desc": f"Init recursion depth {depth}", "position": 1},
         move_other=False,
         csr_indptr=reduced_graph.indptr,
         csr_indices=reduced_graph.indices,
+        csr_data=reduced_graph.data,
         random_state=random_state,
         optimizer="adam",
         good_initialization=good_initialization,
