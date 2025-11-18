@@ -64,7 +64,7 @@ The details for the underlying mathematics can be found in
 McInnes, L, Healy, J, *UMAP: Uniform Manifold Approximation and Projection
 for Dimension Reduction*, ArXiv e-prints 1802.03426, 2018
 
-A broader introduction to UMAP targetted the scientific community can be found 
+A broader introduction to UMAP targeted the scientific community can be found 
 in our `paper published in Nature Review Methods Primers  <https://doi.org/10.1038/s43586-024-00363-x>`_:
 
 Healy, J., McInnes, L. *Uniform manifold approximation and projection*. Nat Rev Methods 
@@ -241,7 +241,7 @@ please see `the UMAP documentation <https://umap-learn.readthedocs.io/>`_
 Benefits of UMAP
 ----------------
 
-UMAP has a few signficant wins in its current incarnation.
+UMAP has a few significant wins in its current incarnation.
 
 First of all UMAP is *fast*. It can handle large datasets and high
 dimensional data without too much difficulty, scaling beyond what most t-SNE
