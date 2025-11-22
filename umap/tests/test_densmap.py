@@ -18,9 +18,43 @@ def test_densmap_trustworthiness(nn_data):
         n_neighbors=10,
         min_dist=0.01,
         random_state=42,
-        n_epochs=100,
+        n_epochs=200,
         densmap=True,
         output_dens=True,
+    ).fit_transform(data)
+    trust = trustworthiness(data, embedding, n_neighbors=10)
+    assert (
+        trust >= 0.72
+    ), "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust)
+
+
+def test_densmap_trustworthiness_adam(nn_data):
+    data = nn_data[:50]
+    embedding, rad_h, rad_l = UMAP(
+        n_neighbors=10,
+        min_dist=0.01,
+        random_state=42,
+        n_epochs=200,
+        densmap=True,
+        output_dens=True,
+        optimizer="adam",
+    ).fit_transform(data)
+    trust = trustworthiness(data, embedding, n_neighbors=10)
+    assert (
+        trust >= 0.72
+    ), "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust)
+
+
+def test_densmap_trustworthiness_compatibility(nn_data):
+    data = nn_data[:50]
+    embedding, rad_h, rad_l = UMAP(
+        n_neighbors=10,
+        min_dist=0.01,
+        random_state=42,
+        n_epochs=200,
+        densmap=True,
+        output_dens=True,
+        compatibility_layout=True,
     ).fit_transform(data)
     trust = trustworthiness(data, embedding, n_neighbors=10)
     assert (

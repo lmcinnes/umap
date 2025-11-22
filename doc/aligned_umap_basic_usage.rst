@@ -365,7 +365,7 @@ coordinates.
     embedding_df['digit'] = np.tile(digits.target, n_embeddings)
 
 The next thing we can do to improve the visualization is to smooth out
-the curves rather than leaving them as piecewise linear lines. To to
+the curves rather than leaving them as piecewise linear lines. To do
 this we can use the ``scipy.interpolate`` functionality to create smooth
 cubic splines that pass through all the points of the curve we wish to
 create.

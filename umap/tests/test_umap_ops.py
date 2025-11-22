@@ -44,6 +44,27 @@ def test_blobs_cluster():
     assert adjusted_rand_score(labels, KMeans(5).fit_predict(embedding)) == 1.0
 
 
+# Umap Clusterability
+def test_blobs_cluster_adam():
+    data, labels = make_blobs(n_samples=500, n_features=10, centers=5)
+    embedding = UMAP(n_epochs=100, optimizer="adam").fit_transform(data)
+    assert adjusted_rand_score(labels, KMeans(5).fit_predict(embedding)) == 1.0
+
+
+# Umap Clusterability
+def test_blobs_cluster_compatibility_mode():
+    data, labels = make_blobs(n_samples=500, n_features=10, centers=5)
+    embedding = UMAP(n_epochs=100, compatibility_layout=True).fit_transform(data)
+    assert adjusted_rand_score(labels, KMeans(5).fit_predict(embedding)) == 1.0
+
+
+# Umap Clusterability
+def test_blobs_cluster_compatibility_optimizer():
+    data, labels = make_blobs(n_samples=500, n_features=10, centers=5)
+    embedding = UMAP(n_epochs=100, optimizer="compatibility").fit_transform(data)
+    assert adjusted_rand_score(labels, KMeans(5).fit_predict(embedding)) == 1.0
+
+
 # Multi-components Layout
 def test_multi_component_layout():
     data, labels = make_blobs(

@@ -44,6 +44,7 @@ from umap.layouts import (
     optimize_layout_generic,
     optimize_layout_inverse,
 )
+from umap.label_prop import label_propagation_init
 
 from pynndescent import NNDescent
 from pynndescent.distances import named_distances as pynn_named_distances
@@ -348,7 +349,10 @@ def nearest_neighbors(
             )
             knn_indices, knn_dists = knn_search_index.neighbor_graph
         else:
-            print(ts(), "Using alternative param NNDescent to find Nearest Neighbors")
+            if verbose:
+                print(
+                    ts(), "Using alternative param NNDescent to find Nearest Neighbors"
+                )
             n_trees = max(4, min(8, 5 + int(round((X.shape[0]) ** 0.5 / 20.0))))
             n_iters = max(5, int(round(np.log2(X.shape[0]))))
             effective_n_neighbors = int(1.5 * n_neighbors)
@@ -371,8 +375,8 @@ def nearest_neighbors(
                 compressed=False,
             )
             knn_indices, knn_dists = knn_search_index.neighbor_graph
-            knn_indices = knn_indices[:, :n_neighbors]
-            knn_dists = knn_dists[:, :n_neighbors]
+            # knn_indices = knn_indices[:, :n_neighbors]
+            # knn_dists = knn_dists[:, :n_neighbors]
 
     if verbose:
         print(ts(), "Finished Nearest Neighbor Search")
@@ -1097,6 +1101,7 @@ def simplicial_set_embedding(
             * 'spectral': use a spectral embedding of the fuzzy 1-skeleton
             * 'random': assign initial embedding positions at random.
             * 'pca': use the first n_components from PCA applied to the input data.
+            * 'recursive': use label propagation for hierarchical initialization.
             * A numpy array of initial embedding positions.
 
     random_state: numpy RandomState or equivalent
@@ -1211,6 +1216,7 @@ def simplicial_set_embedding(
             metric=metric,
             metric_kwds=metric_kwds,
             compatibility_layout=compatibility_layout,
+            verbose=verbose,
         )
         # We add a little noise to avoid local minima for optimization to come
         embedding = noisy_scale_coords(
@@ -1224,9 +1230,20 @@ def simplicial_set_embedding(
             random_state,
             metric=metric,
             metric_kwds=metric_kwds,
+            compatibility_layout=compatibility_layout,
+            verbose=verbose,
         )
         embedding = noisy_scale_coords(
             embedding, random_state, max_coord=20, noise=0.0001
+        )
+    elif isinstance(init, str) and init == "recursive":
+        # Use label propagation initialization
+        embedding = label_propagation_init(
+            graph,
+            a,
+            b,
+            n_components=n_components,
+            random_state=random_state,
         )
     else:
         init_data = np.array(init)
@@ -1242,9 +1259,7 @@ def simplicial_set_embedding(
                 embedding = init_data
 
     epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs_max)
-
     rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
-
     aux_data = {}
 
     if densmap or output_dens:
@@ -1277,14 +1292,14 @@ def simplicial_set_embedding(
         if output_dens:
             aux_data["rad_orig"] = ro
 
-    embedding = (
-        10.0
-        * (embedding - np.min(embedding, 0))
-        / (np.max(embedding, 0) - np.min(embedding, 0))
+    # Recenter
+    embedding -= np.mean(embedding, 0)
+    embedding *= (
+        20.0 / (np.quantile(embedding, 0.95, 0) - np.quantile(embedding, 0.05, 0))
     ).astype(np.float32, order="C")
 
     if euclidean_output:
-        if compatibility_layout:
+        if compatibility_layout or optimizer == "compatibility":
             coo_graph = graph.tocoo()
             head = coo_graph.row
             tail = coo_graph.col
@@ -1310,7 +1325,8 @@ def simplicial_set_embedding(
                 optimizer="compatibility",
             )
         else:
-            print(ts() + " Using new optimization code")
+            if verbose:
+                print(ts() + " Using new optimization code")
             optimizer = f"densmap_{optimizer}" if densmap else optimizer
             # csr_matrix = graph.tocsr()
             embedding = optimize_layout_euclidean(
@@ -1335,6 +1351,9 @@ def simplicial_set_embedding(
                 csr_indptr=graph.indptr,
                 csr_indices=graph.indices,
                 random_state=random_state,
+                good_initialization=isinstance(init, str)
+                and init in ["recursive"]
+                and n_epochs_max >= 400,
                 optimizer=optimizer,
             )
 
@@ -1390,6 +1409,9 @@ def simplicial_set_embedding(
                 csr_indices=graph.indices,
                 random_state=random_state,
                 optimizer=optimizer,
+                good_initialization=isinstance(init, str)
+                and init in ["recursive"]
+                and n_epochs_max >= 400,
             )
 
     if isinstance(embedding, list):
@@ -1636,6 +1658,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 "warm" up the eigensolver. This is intended as an alternative
                 to the 'spectral' method, if that takes an  excessively long
                 time to complete initialization (or fails to complete).
+            * 'recursive': use label propagation for hierarchical initialization.
             * A numpy array of initial embedding positions.
 
     min_dist: float (optional, default 0.1)
@@ -1846,7 +1869,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         output_metric_kwds=None,
         n_epochs=None,
         learning_rate=1.0,
-        init="spectral",
+        init="recursive",
         min_dist=0.1,
         spread=1.0,
         low_memory=True,
@@ -1920,6 +1943,10 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         self.disconnection_distance = disconnection_distance
         self.precomputed_knn = precomputed_knn
         self.compatibility_layout = compatibility_layout
+
+        # If compatibility_layout is set and init was default, change to spectral which was the old default
+        if self.compatibility_layout and self.init == "recursive":
+            self.init = "spectral"
         self.optimizer = optimizer
 
         self.n_jobs = n_jobs
@@ -1943,10 +1970,11 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             "spectral",
             "random",
             "tswspectral",
+            "recursive",
         ):
             raise ValueError(
                 'string init values must be one of: "pca", "tswspectral",'
-                ' "spectral" or "random"'
+                ' "spectral", "recursive", or "random"'
             )
         if (
             isinstance(self.init, np.ndarray)
@@ -3352,44 +3380,106 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         # )
 
         if self.output_metric == "euclidean":
-            embedding = optimize_layout_euclidean(
-                embedding,
-                self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217,
-                head,
-                tail,
-                n_epochs,
-                graph.shape[1],
-                epochs_per_sample,
-                self._a,
-                self._b,
-                rng_state,
-                self.repulsion_strength,
-                self._initial_alpha / 4.0,
-                self.negative_sample_rate,
-                self.random_state is None,
-                verbose=self.verbose,
-                tqdm_kwds=self.tqdm_kwds,
-            )
+            if self.compatibility_layout:
+                embedding = optimize_layout_euclidean(
+                    embedding,
+                    self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217,
+                    head,
+                    tail,
+                    n_epochs,
+                    graph.shape[1],
+                    epochs_per_sample,
+                    self._a,
+                    self._b,
+                    rng_state,
+                    self.repulsion_strength,
+                    self._initial_alpha / 4.0,
+                    self.negative_sample_rate,
+                    self.random_state is None,
+                    verbose=self.verbose,
+                    tqdm_kwds=self.tqdm_kwds,
+                    optimizer="compatibility",
+                )
+            else:
+                optimizer = (
+                    f"densmap_{self.optimizer}" if self.densmap else self.optimizer
+                )
+                print("Using new layout with optimizer", optimizer)
+                embedding = optimize_layout_euclidean(
+                    embedding,
+                    self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217,
+                    None,
+                    None,
+                    n_epochs,
+                    graph.shape[1],
+                    epochs_per_sample,
+                    self._a,
+                    self._b,
+                    rng_state,
+                    self.repulsion_strength,
+                    self._initial_alpha / 4.0,
+                    self.negative_sample_rate,
+                    parallel=self.random_state is None,
+                    verbose=self.verbose,
+                    tqdm_kwds=self.tqdm_kwds,
+                    optimizer=optimizer,
+                    csr_indptr=csr_graph.indptr,
+                    csr_indices=csr_graph.indices,
+                    good_initialization=False,
+                    move_other=False,
+                    densmap_kwds=self._densmap_kwds if self.densmap else None,
+                )
         else:
-            embedding = optimize_layout_generic(
-                embedding,
-                self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217
-                head,
-                tail,
-                n_epochs,
-                graph.shape[1],
-                epochs_per_sample,
-                self._a,
-                self._b,
-                rng_state,
-                self.repulsion_strength,
-                self._initial_alpha / 4.0,
-                self.negative_sample_rate,
-                self._output_distance_func,
-                tuple(self._output_metric_kwds.values()),
-                verbose=self.verbose,
-                tqdm_kwds=self.tqdm_kwds,
-            )
+            if self.compatibility_layout:
+                embedding = optimize_layout_generic(
+                    embedding,
+                    self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217
+                    head,
+                    tail,
+                    n_epochs,
+                    graph.shape[1],
+                    epochs_per_sample,
+                    self._a,
+                    self._b,
+                    rng_state,
+                    self.repulsion_strength,
+                    self._initial_alpha / 4.0,
+                    self.negative_sample_rate,
+                    self._output_distance_func,
+                    tuple(self._output_metric_kwds.values()),
+                    verbose=self.verbose,
+                    tqdm_kwds=self.tqdm_kwds,
+                )
+            else:
+                optimizer = (
+                    f"densmap_{self.optimizer}" if self.densmap else self.optimizer
+                )
+                print("Using new layout with optimizer", optimizer)
+                embedding = optimize_layout_generic(
+                    embedding,
+                    self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217
+                    None,
+                    None,
+                    n_epochs,
+                    graph.shape[1],
+                    epochs_per_sample,
+                    self._a,
+                    self._b,
+                    rng_state,
+                    self.repulsion_strength,
+                    self._initial_alpha / 4.0,
+                    self.negative_sample_rate,
+                    self._output_distance_func,
+                    tuple(self._output_metric_kwds.values()),
+                    verbose=self.verbose,
+                    tqdm_kwds=self.tqdm_kwds,
+                    optimizer=optimizer,
+                    csr_indptr=csr_graph.indptr,
+                    csr_indices=csr_graph.indices,
+                    good_initialization=False,
+                    move_other=False,
+                    densmap_kwds=self._densmap_kwds if self.densmap else None,
+                )
 
         return embedding
 

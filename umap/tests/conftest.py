@@ -176,6 +176,24 @@ def iris_subset_model(iris, iris_selection):
 
 
 @pytest.fixture(scope="session")
+def iris_subset_model_adam(iris, iris_selection):
+    return UMAP(n_neighbors=10, min_dist=0.01, random_state=42, optimizer="adam").fit(
+        iris.data[iris_selection]
+    )
+
+
+@pytest.fixture(scope="session")
+def iris_subset_model_compatibility(iris, iris_selection):
+    return UMAP(
+        n_neighbors=10,
+        min_dist=0.01,
+        random_state=42,
+        init="spectral",
+        compatibility_layout=True,
+    ).fit(iris.data[iris_selection])
+
+
+@pytest.fixture(scope="session")
 def iris_subset_model_large(iris, iris_selection):
     return UMAP(
         n_neighbors=10,

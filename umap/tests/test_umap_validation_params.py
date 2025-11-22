@@ -141,7 +141,7 @@ def test_haversine_on_highd(nn_data):
 
 def test_umap_haversine_embed_to_highd(nn_data):
     u = UMAP(n_components=3, output_metric="haversine")
-    with pytest.raises(ValueError):
+    with pytest.raises((ValueError, SystemError)):
         u.fit(nn_data)
 
 

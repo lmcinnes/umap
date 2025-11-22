@@ -1,8 +1,8 @@
 Better Preserving Local Density with DensMAP
 ============================================
 
-A notable assumption in UMAP is that the data is uniformly distributed
-on some manifold and that it is ultimately this manifold that we would
+A notable assumption in UMAP is that the data is uniformly distributepriority over the standard UMAP objective, while smaller values lean
+more towards classical UMAP. The default value is 2.0. Let's play withon some manifold and that it is ultimately this manifold that we would
 like to present. This is highly effective for many use cases, but it can
 be the case that one would like to preserve more information about the
 relative local density of data. A recent paper presented a technique
@@ -199,7 +199,7 @@ matplotlib and a scatter plot with larger point size:
 
 
 Aside from seeing the issues with overplotting we can see that there
-are, in fact, quite a few points that create a very soft halo of of
+are, in fact, quite a few points that create a very soft halo of
 sparse points around the fringes.
 
 Now let’s try going the other way and reduce ``dens_lambda`` to a small

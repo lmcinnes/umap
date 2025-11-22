@@ -13,6 +13,7 @@ from sklearn.metrics.pairwise import _VALID_METRICS as SKLEARN_PAIRWISE_VALID_ME
 
 from umap.distances import pairwise_special_metric, SPECIAL_METRICS
 from umap.sparse import SPARSE_SPECIAL_METRICS, sparse_named_distances
+from umap.utils import ts
 
 
 def component_layout(
@@ -23,6 +24,8 @@ def component_layout(
     random_state,
     metric="euclidean",
     metric_kwds={},
+    compatibility_layout=False,
+    verbose=False,
 ):
     """Provide a layout relating the separate connected components. This is done
     by taking the centroid of each component and then performing a spectral embedding
@@ -51,6 +54,17 @@ def component_layout(
         Keyword arguments to be passed to the metric function.
         If metric is 'precomputed', 'linkage' keyword can be used to specify
         'average', 'complete', or 'single' linkage. Default is 'average'
+
+    random_state: numpy RandomState or equivalent
+        A state capable being used as a numpy random state.
+
+    compatibility_layout: bool (optional, default False)
+        Whether to use the compatibility layout code for the embedding.
+        This is the original code used in UMAP, and is not as efficient as the
+        new code, but is kept available for compatibility with older versions of UMAP.
+
+    verbose: bool (optional, default False)
+        Whether to print out additional information during the computation.
 
     Returns
     -------
@@ -154,6 +168,8 @@ def multi_component_layout(
     init="random",
     tol=0.0,
     maxiter=0,
+    compatibility_layout=False,
+    verbose=False,
 ):
     """Specialised layout algorithm for dealing with graphs with many connected components.
     This will first find relative positions for the components by spectrally embedding
@@ -200,6 +216,14 @@ def multi_component_layout(
         Number of iterations the numerical algorithm will go through at most as it
         attempts to compute the embedding.
 
+    compatibility_layout: bool (optional, default False)
+        Whether to use the compatibility layout code for the embedding.
+        This is the original code used in UMAP, and is not as efficient as the
+        new code, but is kept available for compatibility with older versions of UMAP.
+
+    verbose: bool (optional, default False)
+        Whether to print out additional information during the computation.
+
     Returns
     -------
     embedding: array of shape (n_samples, dim)
@@ -208,54 +232,81 @@ def multi_component_layout(
 
     result = np.empty((graph.shape[0], dim), dtype=np.float32)
 
-    if n_components > 2 * dim:
-        meta_embedding = component_layout(
-            data,
-            n_components,
-            component_labels,
-            dim,
-            random_state,
-            metric=metric,
-            metric_kwds=metric_kwds,
-        )
-    else:
-        k = int(np.ceil(n_components / 2.0))
-        base = np.hstack([np.eye(k), np.zeros((k, dim - k))])
-        meta_embedding = np.vstack([base, -base])[:n_components]
+    if True:
+        if verbose:
+            print(ts(), "Computing component meta-layout...")
 
-    for label in range(n_components):
-        component_graph = graph.tocsr()[component_labels == label, :].tocsc()
-        component_graph = component_graph[:, component_labels == label].tocoo()
-
-        distances = pairwise_distances([meta_embedding[label]], meta_embedding)
-        data_range = distances[distances > 0.0].min() / 2.0
-
-        if component_graph.shape[0] < 2 * dim or component_graph.shape[0] <= dim + 1:
-            result[component_labels == label] = (
-                random_state.uniform(
-                    low=-data_range,
-                    high=data_range,
-                    size=(component_graph.shape[0], dim),
-                )
-                + meta_embedding[label]
-            )
-        else:
-            component_embedding = _spectral_layout(
-                data=None,
-                graph=component_graph,
-                dim=dim,
-                random_state=random_state,
+        if n_components > 2 * dim:
+            meta_embedding = component_layout(
+                data,
+                n_components,
+                component_labels,
+                dim,
+                random_state,
                 metric=metric,
                 metric_kwds=metric_kwds,
-                init=init,
-                tol=tol,
-                maxiter=maxiter,
             )
-            expansion = data_range / np.max(np.abs(component_embedding))
-            component_embedding *= expansion
-            result[component_labels == label] = (
-                component_embedding + meta_embedding[label]
-            )
+        else:
+            k = int(np.ceil(n_components / 2.0))
+            base = np.hstack([np.eye(k), np.zeros((k, dim - k))])
+            meta_embedding = np.vstack([base, -base])[:n_components]
+
+        for label in range(n_components):
+            component_graph = graph.tocsr()[component_labels == label, :].tocsc()
+            component_graph = component_graph[:, component_labels == label].tocoo()
+
+            distances = pairwise_distances([meta_embedding[label]], meta_embedding)
+            data_range = distances[distances > 0.0].min() / 2.0
+
+            if (
+                component_graph.shape[0] < 2 * dim
+                or component_graph.shape[0] <= dim + 1
+            ):
+                result[component_labels == label] = (
+                    random_state.uniform(
+                        low=-data_range,
+                        high=data_range,
+                        size=(component_graph.shape[0], dim),
+                    )
+                    + meta_embedding[label]
+                )
+            else:
+                component_embedding = _spectral_layout(
+                    data=None,
+                    graph=component_graph,
+                    dim=dim,
+                    random_state=random_state,
+                    metric=metric,
+                    metric_kwds=metric_kwds,
+                    init=init,
+                    tol=tol,
+                    maxiter=maxiter,
+                    compatibility_layout=compatibility_layout,
+                    verbose=verbose,
+                )
+                expansion = data_range / np.max(np.abs(component_embedding))
+                component_embedding *= expansion
+                result[component_labels == label] = (
+                    component_embedding + meta_embedding[label]
+                )
+    else:
+        if verbose:
+            print(ts(), "Computing Laplacian...")
+        sqrt_deg = np.sqrt(np.asarray(graph.sum(axis=0)).squeeze())
+
+        # Normalized Laplacian
+        D = scipy.sparse.spdiags(1.0 / sqrt_deg, 0, graph.shape[0], graph.shape[0])
+        A = D * graph * D
+
+        if verbose:
+            print(ts(), "Computing SVD of Laplacian...")
+
+        X = TruncatedSVD(
+            n_components=dim + 1,
+            random_state=random_state,
+            # algorithm="arpack"
+        ).fit_transform(A)
+        result = X[:, 1:]
 
     return result
 
@@ -270,6 +321,7 @@ def spectral_layout(
     tol=0.0,
     maxiter=0,
     compatibility_layout=False,
+    verbose=False,
 ):
     """
     Given a graph compute the spectral embedding of the graph. This is
@@ -297,10 +349,25 @@ def spectral_layout(
         Number of iterations the numerical algorithm will go through at most as it
         attempts to compute the embedding.
 
+    metric: string or callable (optional, default 'euclidean')
+        The metric used to measure distances among the source data points.
+        Used only if the multiple connected components are found in the
+        graph.
+
+    metric_kwds: dict (optional, default {})
+        Keyword arguments to be passed to the metric function.
+        If metric is 'precomputed', 'linkage' keyword can be used to specify
+        'average', 'complete', or 'single' linkage. Default is 'average'.
+        Used only if the multiple connected components are found in the
+        graph.
+
     compatibility_layout: bool (optional, default False)
         Whether to use the compatibility layout code for the embedding.
         This is the original code used in UMAP, and is not as efficient as the
         new code, but is kept available for compatibility with older versions of UMAP.
+
+    verbose: bool (optional, default False)
+        Whether to print out additional information during the computation.
 
     Returns
     -------
@@ -317,6 +384,8 @@ def spectral_layout(
         init="random",
         tol=tol,
         maxiter=maxiter,
+        verbose=verbose,
+        compatibility_layout=compatibility_layout,
     )
 
 
@@ -330,6 +399,8 @@ def tswspectral_layout(
     method=None,
     tol=0.0,
     maxiter=0,
+    compatibility_layout=False,
+    verbose=False,
 ):
     """Given a graph, compute the spectral embedding of the graph. This is
     simply the eigenvectors of the Laplacian of the graph. Here we use the
@@ -395,6 +466,8 @@ def tswspectral_layout(
         method=method,
         tol=tol,
         maxiter=maxiter,
+        compatibility_layout=compatibility_layout,
+        verbose=verbose,
     )
 
 
@@ -410,6 +483,7 @@ def _spectral_layout(
     tol=0.0,
     maxiter=0,
     compatibility_layout=False,
+    verbose=False,
 ):
     """General implementation of the spectral embedding of the graph, derived as
     a subset of the eigenvectors of the normalized Laplacian of the graph. The numerical
@@ -472,6 +546,8 @@ def _spectral_layout(
     embedding: array of shape (n_vertices, dim)
         The spectral embedding of the graph.
     """
+    if verbose:
+        print(ts(), "Checking components for spectral layout...")
     n_samples = graph.shape[0]
     n_components, labels = scipy.sparse.csgraph.connected_components(graph)
 
@@ -485,8 +561,12 @@ def _spectral_layout(
             random_state,
             metric=metric,
             metric_kwds=metric_kwds,
+            compatibility_layout=compatibility_layout,
+            verbose=verbose,
         )
 
+    if verbose:
+        print(ts(), "Computing Laplacian...")
     sqrt_deg = np.sqrt(np.asarray(graph.sum(axis=0)).squeeze())
 
     # Normalized Laplacian
@@ -507,25 +587,9 @@ def _spectral_layout(
     if not method:
         method = "lobpcg" if compatibility_layout and L.shape[0] >= 2000000 else "eigsh"
 
+    if verbose:
+        print(ts(), "Computing Eigenvectors...")
     try:
-        if init == "random":
-            X = gen.normal(size=(L.shape[0], k))
-        elif init == "tsvd":
-            X = TruncatedSVD(
-                n_components=k,
-                random_state=random_state,
-                # algorithm="arpack"
-            ).fit_transform(L)
-        else:
-            raise ValueError(
-                "The init parameter must be either 'random' or 'tsvd': "
-                f"{init} is invalid."
-            )
-        # For such a normalized Laplacian, the first eigenvector is always
-        # proportional to sqrt(degrees). We thus replace the first t-SVD guess
-        # with the exact value.
-        X[:, 0] = sqrt_deg / np.linalg.norm(sqrt_deg)
-
         if method == "eigsh":
             if compatibility_layout:
                 # Compatibility mode uses the original eigsh method
@@ -551,6 +615,23 @@ def _spectral_layout(
                 )
                 eigenvalues = [1.0 - eigenvalue for eigenvalue in eigenvalues]
         elif method == "lobpcg":
+            if init == "random":
+                X = gen.normal(size=(L.shape[0], k))
+            elif init == "tsvd":
+                X = TruncatedSVD(
+                    n_components=k,
+                    random_state=random_state,
+                    # algorithm="arpack"
+                ).fit_transform(L)
+            else:
+                raise ValueError(
+                    "The init parameter must be either 'random' or 'tsvd': "
+                    f"{init} is invalid."
+                )
+            # For such a normalized Laplacian, the first eigenvector is always
+            # proportional to sqrt(degrees). We thus replace the first t-SVD guess
+            # with the exact value.
+            X[:, 0] = sqrt_deg / np.linalg.norm(sqrt_deg)
             with warnings.catch_warnings():
                 warnings.filterwarnings(
                     category=UserWarning,
@@ -568,6 +649,8 @@ def _spectral_layout(
             raise ValueError("Method should either be None, 'eigsh' or 'lobpcg'")
 
         order = np.argsort(eigenvalues)[1:k]
+        if verbose:
+            print(ts(), "Eigenvectors computed, ordering them...")
         return eigenvectors[:, order]
     except (scipy.sparse.linalg.ArpackError, UserWarning):
         warn(
