@@ -252,7 +252,7 @@ def label_propagation_init(
         a,
         b,
         rng_state,
-        4.0,  # 1.5,
+        2.0,  # 1.5,
         0.5,
         1,
         parallel=True,

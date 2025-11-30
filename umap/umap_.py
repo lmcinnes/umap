@@ -1295,8 +1295,8 @@ def simplicial_set_embedding(
 
     # Recenter
     scale = (
-        np.log10(embedding.shape[0]) * 4 * np.sqrt(gamma)
-    )  # Added sqrt(gamma) to scale with repulsion strength
+        np.log10(embedding.shape[0]) * 3 * (np.log2(gamma + 1))
+    )  # Added log2(gamma) to scale with repulsion strength
     embedding -= np.mean(embedding, 0)
     embedding *= (
         scale / (np.quantile(embedding, 0.95, 0) - np.quantile(embedding, 0.05, 0))
