@@ -82,7 +82,7 @@ def label_outliers(indptr, indices, labels, rng_state):
             unlabelled = True
             n_iter = 0
 
-            while unlabelled and n_iter < 100:
+            while unlabelled and n_iter < 100 and len(node_queue) > 0:
 
                 n_iter += 1
                 current_node = node_queue.pop()
@@ -95,7 +95,7 @@ def label_outliers(indptr, indices, labels, rng_state):
                     else:
                         node_queue.append(j)
 
-            if n_iter >= 100:
+            if n_iter >= 100 or len(node_queue) == 0:
                 # Ensure we don't have modulo by zero
                 num_labels = max(max_label + 1, 1)
                 labels[i] = tau_rand_int(local_rng_state) % num_labels
@@ -126,6 +126,14 @@ def remap_labels(labels):
 def initialize_labels(labels, n_parts, rng_state):
     for i in range(n_parts):
         labels[tau_rand_int(rng_state) % labels.shape[0]] = i
+    return labels
+
+
+@numba.njit(cache=True)
+def initialize_labels_from_hubs(labels, n_parts, degrees):
+    hubs = np.argsort(degrees)[-n_parts:]
+    for i in range(n_parts):
+        labels[hubs[i]] = i
     return labels
 
 
@@ -187,7 +195,10 @@ def label_propagation_init(
     # Initialize the label propagation process
     rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
     labels = np.full(graph.shape[0], -1, dtype=np.int32)
-    labels = initialize_labels(labels, approx_n_parts, rng_state)
+    # labels = initialize_labels(labels, approx_n_parts, rng_state)
+    labels = initialize_labels_from_hubs(
+        labels, approx_n_parts, np.squeeze(np.asarray(graph.sum(axis=1)))
+    )
 
     # Perform the label propagation iterations
     for i in range(n_iter):
