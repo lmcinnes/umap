@@ -172,6 +172,12 @@ def label_propagation_init(
             compatibility_layout=False,
             verbose=verbose,
         )
+        # Recenter
+        scale = (
+            np.log10(result.shape[0]) * 3 * (np.log2(3 + 1))
+        )  # Added log2(gamma) to scale with repulsion strength
+        result -= np.mean(result, 0)
+        result *= scale / (np.quantile(result, 0.95, 0) - np.quantile(result, 0.05, 0))
         return result.astype(np.float32, order="C")
         # # We add a little noise to avoid local minima for optimization to come
         # embedding = noisy_scale_coords(
