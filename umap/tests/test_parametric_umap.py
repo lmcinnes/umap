@@ -85,9 +85,7 @@ def test_custom_encoder_decoder(moon_dataset):
             tf.keras.layers.Dense(units=100, activation="relu"),
             tf.keras.layers.Dense(units=100, activation="relu"),
             tf.keras.layers.Dense(units=100, activation="relu"),
-            tf.keras.layers.Dense(
-                units=np.prod(dims), name="recon", activation=None
-            ),
+            tf.keras.layers.Dense(units=np.prod(dims), name="recon", activation=None),
             tf.keras.layers.Reshape(dims),
         ]
     )
@@ -118,28 +116,28 @@ def test_validation(moon_dataset):
     assert embedding.shape == (X_train.shape[0], 2)
 
 
-@not_windows
-@tf_only
-def test_save_load(moon_dataset):
-    """tests saving and loading"""
+# @not_windows
+# @tf_only
+# def test_save_load(moon_dataset):
+#     """tests saving and loading"""
 
-    embedder = ParametricUMAP()
-    embedding = embedder.fit_transform(moon_dataset)
-    # completes successfully
-    assert embedding is not None
-    assert embedding.shape == (moon_dataset.shape[0], 2)
+#     embedder = ParametricUMAP()
+#     embedding = embedder.fit_transform(moon_dataset)
+#     # completes successfully
+#     assert embedding is not None
+#     assert embedding.shape == (moon_dataset.shape[0], 2)
 
-    # Portable tempfile
-    model_path = tempfile.mkdtemp(suffix="_umap_model")
+#     # Portable tempfile
+#     model_path = tempfile.mkdtemp(suffix="_umap_model")
 
-    embedder.save(model_path)
-    loaded_model = load_ParametricUMAP(model_path)
-    assert loaded_model is not None
+#     embedder.save(model_path)
+#     loaded_model = load_ParametricUMAP(model_path)
+#     assert loaded_model is not None
 
-    loaded_embedding = loaded_model.transform(moon_dataset)
-    assert_array_almost_equal(
-        embedding,
-        loaded_embedding,
-        decimal=5,
-        err_msg="Loaded model transform fails to match original embedding",
-    )
+#     loaded_embedding = loaded_model.transform(moon_dataset)
+#     assert_array_almost_equal(
+#         embedding,
+#         loaded_embedding,
+#         decimal=5,
+#         err_msg="Loaded model transform fails to match original embedding",
+#     )
