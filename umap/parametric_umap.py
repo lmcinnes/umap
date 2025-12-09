@@ -179,11 +179,8 @@ class ParametricUMAP(UMAP):
         if (self.prev_epoch_X is not None) & (landmark_positions is None):
             # Add the landmark points for training, then make a landmark vector.
             landmark_positions = np.stack(
-                [np.array([np.nan, np.nan])]*X.shape[0] + list(
-                    self.transform(
-                        self.prev_epoch_X
-                    )
-                )
+                [np.array([np.nan, np.nan])] * X.shape[0]
+                + list(self.transform(self.prev_epoch_X))
             )
             X = np.concatenate((X, self.prev_epoch_X))
 
@@ -245,11 +242,8 @@ class ParametricUMAP(UMAP):
         if (self.prev_epoch_X is not None) & (landmark_positions is None):
             # Add the landmark points for training, then make a landmark vector.
             landmark_positions = np.stack(
-                [np.array([np.nan, np.nan])]*X.shape[0] + list(
-                    self.transform(
-                        self.prev_epoch_X
-                    )
-                )
+                [np.array([np.nan, np.nan])] * X.shape[0]
+                + list(self.transform(self.prev_epoch_X))
             )
             X = np.concatenate((X, self.prev_epoch_X))
 
@@ -491,11 +485,12 @@ class ParametricUMAP(UMAP):
         raw_data = {}
         if exclude_raw_data:
             if hasattr(self, "_raw_data"):
-                raw_data['root'] = self._raw_data
+                raw_data["root"] = self._raw_data
                 del self._raw_data
-            if hasattr(self, "knn_search_index") and hasattr(self.knn_search_index,
-                                                             "_raw_data"):
-                raw_data['knn'] = self.knn_search_index._raw_data
+            if hasattr(self, "knn_search_index") and hasattr(
+                self.knn_search_index, "_raw_data"
+            ):
+                raw_data["knn"] = self.knn_search_index._raw_data
                 del self.knn_search_index._raw_data
 
         # # save model.pkl (ignoring unpickleable warnings)
@@ -509,10 +504,10 @@ class ParametricUMAP(UMAP):
 
         # Restore the original raw data to the object in memory
         if exclude_raw_data:
-            if 'root' in raw_data:
-                self._raw_data = raw_data['root']
-            if 'knn' in raw_data:
-                self.knn_search_index._raw_data = raw_data['knn']
+            if "root" in raw_data:
+                self._raw_data = raw_data["root"]
+            if "knn" in raw_data:
+                self.knn_search_index._raw_data = raw_data["knn"]
 
     def add_landmarks(
         self,
@@ -543,23 +538,19 @@ class ParametricUMAP(UMAP):
         if self.sample_mode == "uniform":
             self.prev_epoch_idx = list(
                 np.random.choice(
-                    range(X.shape[0]), int(X.shape[0]*sample_pct), replace=False
+                    range(X.shape[0]), int(X.shape[0] * sample_pct), replace=False
                 )
             )
             self.prev_epoch_X = X[self.prev_epoch_idx]
         elif self.sample_mode == "predetermined":
             if idx is None:
-                raise ValueError(
-                    "Choice of sample_mode is not supported."
-                )
+                raise ValueError("Choice of sample_mode is not supported.")
             else:
                 self.prev_epoch_idx = idx
                 self.prev_epoch_X = X[self.prev_epoch_idx]
 
         else:
-            raise ValueError(
-                "Choice of sample_mode is not supported."
-            )
+            raise ValueError("Choice of sample_mode is not supported.")
 
     def remove_landmarks(self):
         self.prev_epoch_X = None
@@ -1086,6 +1077,9 @@ def correlation(x, y=None, keepdims=False):
 class StopGradient(keras.layers.Layer):
     def call(self, x):
         return ops.stop_gradient(x)
+
+    def get_config(self):
+        return super().get_config()
 
 
 def _default_landmark_loss(y, y_pred):
