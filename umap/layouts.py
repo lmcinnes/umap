@@ -517,6 +517,144 @@ def optimize_layout_euclidean_single_epoch_adam(
 
 
 @numba.njit(
+    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], f4[:, ::1], f4[:, ::1], f8, f8, i4[::1], i4[::1], i8, i8)",
+    fastmath=True,
+    parallel=True,
+    locals={
+        "updates": numba.types.float32[:, ::1],
+        "from_node": numba.types.intp,
+        "to_node": numba.types.intp,
+        "raw_index": numba.types.intp,
+        "dist_squared": numba.types.float32,
+        "grad_coeff": numba.types.float32,
+        "grad_d": numba.types.float32,
+    },
+)
+def optimize_layout_euclidean_single_epoch_adam_new(
+    head_embedding,
+    tail_embedding,
+    csr_indptr,
+    csr_indices,
+    n_vertices,
+    epochs_per_sample,
+    gamma_k,  # Changed from 'a': Gamma shape parameter
+    gamma_theta,  # Changed from 'b': Gamma scale parameter
+    gamma,
+    dim,
+    alpha,
+    epochs_per_negative_sample,
+    epoch_of_next_negative_sample,
+    epoch_of_next_sample,
+    n,
+    updates,
+    adam_m,
+    adam_v,
+    beta1,
+    beta2,
+    from_node_order,
+    to_node_order,
+    block_size=256,
+    negative_selection_range=200_000,
+):
+    n_from_vertices = csr_indptr.shape[0] - 1
+    negative_selection_range = max(200, min(n_vertices, negative_selection_range))
+    negative_sample_scaling = negative_selection_range / n_vertices
+    transform_mode = from_node_order.shape[0] != to_node_order.shape[0]
+
+    for block_start in range(0, n_from_vertices, block_size):
+        block_end = min(block_start + block_size, n_from_vertices)
+        for raw_idx in numba.prange(block_start, block_end):
+            node_idx = from_node_order[raw_idx]
+            if transform_mode:
+                from_node = node_idx
+            else:
+                from_node = to_node_order[node_idx]
+            current = head_embedding[from_node]
+
+            for raw_index in range(csr_indptr[from_node], csr_indptr[from_node + 1]):
+                if epoch_of_next_sample[raw_index] <= n:
+                    to_node = csr_indices[raw_index]
+                    other = tail_embedding[to_node]
+
+                    dist_squared = rdist(current, other)
+
+                    if dist_squared > 0.0:
+                        # NEW: Simple quadratic attraction
+                        grad_coeff = -2.0 / np.sqrt(dist_squared)
+
+                        # grad_coeff = -2.0 * pow(dist_squared, 1.0 - 1.0)
+                        # grad_coeff /= pow(dist_squared, 1.0) + 1.0
+
+                        for d in range(dim):
+                            grad_d = grad_coeff * (current[d] - other[d])
+                            updates[from_node, d] += grad_d
+
+                    epoch_of_next_sample[raw_index] += epochs_per_sample[raw_index]
+
+                    # n_neg_samples = int(
+                    #     (n - epoch_of_next_negative_sample[raw_index])
+                    #     / epochs_per_negative_sample[raw_index]
+                    # )
+
+            n_neg_samples = 5
+            for p in range(n_neg_samples):
+                to_node_raw_selection = (
+                    raw_index * (n + p + 1)
+                ) % negative_selection_range
+                range_start = get_range_limits(
+                    node_idx, negative_selection_range, n_vertices
+                )
+                to_node = to_node_order[
+                    (range_start + to_node_raw_selection) % n_vertices
+                ]
+                other = tail_embedding[to_node]
+
+                dist_squared = rdist(current, other)
+
+                if dist_squared > 0.0:
+                    # NEW: Gamma distribution-based repulsion
+                    dist = np.sqrt(dist_squared)
+                    grad_coeff = (
+                        (gamma_k - 1.0) / dist_squared - 1.0 / (gamma_theta * dist)
+                    ) * negative_sample_scaling
+                    # grad_coeff = negative_sample_scaling * 2.0 * gamma
+                    # grad_coeff /= (0.001 + dist_squared) * (
+                    #     1 * pow(dist_squared, 1) + 1
+                    # )
+
+                    # Optional: clip for stability (similar to original tanh clipping)
+                    if grad_coeff > 0.0:
+                        grad_norm = np.sqrt(grad_coeff * grad_coeff * dist_squared)
+                        scale = gamma * np.tanh(grad_norm / gamma) / grad_norm
+                        for d in range(dim):
+                            updates[from_node, d] += grad_coeff * (
+                                current[d] - other[d]
+                            )  # * scale
+
+                    # epoch_of_next_negative_sample[raw_index] += (
+                    #     n_neg_samples * epochs_per_negative_sample[raw_index]
+                    # )
+
+        for node_idx in numba.prange(block_start, block_end):
+            from_node = from_node_order[node_idx]
+            for d in range(dim):
+                if updates[from_node, d] != 0.0:
+                    adam_m[from_node, d] = (
+                        beta1 * adam_m[from_node, d]
+                        + (1.0 - beta1) * updates[from_node, d]
+                    )
+                    adam_v[from_node, d] = (
+                        beta2 * adam_v[from_node, d]
+                        + (1.0 - beta2) * updates[from_node, d] ** 2
+                    )
+                    m_est = adam_m[from_node, d] / (1.0 - pow(beta1, n + 1))
+                    v_est = adam_v[from_node, d] / (1.0 - pow(beta2, n + 1))
+                    head_embedding[from_node, d] += (
+                        alpha * m_est / (np.sqrt(v_est) + 1e-4)
+                    )
+
+
+@numba.njit(
     "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], f4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], f4[:, ::1], f4[:, ::1], f8, f8, i4[::1], i4[::1])",
     fastmath=True,
     parallel=True,
@@ -1622,15 +1760,15 @@ def optimize_layout_euclidean(
                     to_node_order,
                 )
             else:
-                optimize_layout_euclidean_single_epoch_adam(
+                optimize_layout_euclidean_single_epoch_adam_new(
                     head_embedding,
                     tail_embedding,
                     csr_indptr,
                     csr_indices,
                     n_vertices,
                     epochs_per_sample,
-                    a,
-                    b,
+                    5.0,  # a,
+                    0.5,  # b,
                     gamma_schedule[n],
                     dim,
                     alpha_schedule[n],
