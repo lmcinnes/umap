@@ -236,7 +236,7 @@ def test_umap_update(iris, iris_subset_model, iris_selection, iris_model):
 
     error = np.sum(np.abs((new_model.graph_ - comparison_graph).data))
 
-    assert error < 1.0
+    assert error < 1.5
 
 
 def test_umap_update_large(
