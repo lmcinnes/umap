@@ -72,9 +72,9 @@ stages:
               python.version: '3.12'
             # # Disable macOS tests on 3.13 since tensorflow only provides pre-built wheels
             # # for ARM macs and the runner is x86
-            mac_py313:
-              imageName: 'macOS-latest'
-              python.version: '3.13'
+            # mac_py313:
+            #   imageName: 'macOS-latest'
+            #   python.version: '3.13'
             linux_py313:
               imageName: 'ubuntu-latest'
               python.version: '3.13'
