@@ -570,6 +570,7 @@ def optimize_layout_euclidean_single_epoch_adam_new(
             else:
                 from_node = to_node_order[node_idx]
             current = head_embedding[from_node]
+            degree = csr_indptr[from_node + 1] - csr_indptr[from_node]
 
             for raw_index in range(csr_indptr[from_node], csr_indptr[from_node + 1]):
                 if epoch_of_next_sample[raw_index] <= n:
@@ -580,7 +581,9 @@ def optimize_layout_euclidean_single_epoch_adam_new(
 
                     if dist_squared > 0.0:
                         # NEW: Simple quadratic attraction
-                        grad_coeff = -2.0 / np.sqrt(dist_squared)
+                        # grad_coeff = -2.0 / np.sqrt(dist_squared)
+
+                        grad_coeff = -max(2.0 - np.sqrt(dist_squared), 0.25) ** 2
 
                         # grad_coeff = -2.0 * pow(dist_squared, 1.0 - 1.0)
                         # grad_coeff /= pow(dist_squared, 1.0) + 1.0
@@ -596,10 +599,12 @@ def optimize_layout_euclidean_single_epoch_adam_new(
                     #     / epochs_per_negative_sample[raw_index]
                     # )
 
-            n_neg_samples = 5
+            n_neg_samples = degree
             for p in range(n_neg_samples):
                 to_node_raw_selection = (
-                    raw_index * (n + p + 1)
+                    # raw_index * (n + p + 1)
+                    (raw_idx + 1)
+                    * (n + p + 1)
                 ) % negative_selection_range
                 range_start = get_range_limits(
                     node_idx, negative_selection_range, n_vertices
@@ -614,9 +619,19 @@ def optimize_layout_euclidean_single_epoch_adam_new(
                 if dist_squared > 0.0:
                     # NEW: Gamma distribution-based repulsion
                     dist = np.sqrt(dist_squared)
+                    # grad_coeff = (
+                    #     (gamma_k - 1.0) / dist_squared - 1.0 / (gamma_theta * dist)
+                    # ) * negative_sample_scaling
+
+                    # grad_coeff = gamma * (1.0 / dist_squared) * negative_sample_scaling
+                    # grad_coeff = (
+                    #     gamma
+                    #     * np.exp(-((dist / (0.25 * gamma)) ** 2))
+                    #     * negative_sample_scaling
+                    # )
                     grad_coeff = (
-                        (gamma_k - 1.0) / dist_squared - 1.0 / (gamma_theta * dist)
-                    ) * negative_sample_scaling
+                        gamma * max(1.5 - dist, 0.0) ** 2 * negative_sample_scaling
+                    )
                     # grad_coeff = negative_sample_scaling * 2.0 * gamma
                     # grad_coeff /= (0.001 + dist_squared) * (
                     #     1 * pow(dist_squared, 1) + 1
@@ -625,7 +640,7 @@ def optimize_layout_euclidean_single_epoch_adam_new(
                     # Optional: clip for stability (similar to original tanh clipping)
                     if grad_coeff > 0.0:
                         grad_norm = np.sqrt(grad_coeff * grad_coeff * dist_squared)
-                        scale = gamma * np.tanh(grad_norm / gamma) / grad_norm
+                        scale = 4 * gamma * np.tanh(grad_norm / gamma) / grad_norm
                         for d in range(dim):
                             updates[from_node, d] += grad_coeff * (
                                 current[d] - other[d]
