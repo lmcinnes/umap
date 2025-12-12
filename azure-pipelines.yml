@@ -96,16 +96,16 @@ stages:
 
         # 1. Install the full LLVM package only if the OS is macOS
         - script: |
-            brew install llvm@15
+            brew install llvm@20
             # Homebrew formula names can change, so we ensure it links correctly if necessary
-            brew link --force --overwrite llvm@15
+            brew link --force --overwrite llvm@20
           displayName: 'Install LLVM via Homebrew (macOS only)'
           condition: eq(variables['Agent.OS'], 'Darwin')
 
         # 2. Find the Homebrew install path and set the environment variable only on macOS
         - script: |
             # Determine the LLVM install prefix dynamically
-            LLVM_PREFIX=$(brew --prefix llvm@15)
+            LLVM_PREFIX=$(brew --prefix llvm@20)
 
             # Set the LLVM_CONFIG environment variable used by llvmlite's build script
             echo "##vso[task.setvariable variable=LLVM_CONFIG]$LLVM_PREFIX/bin/llvm-config"
