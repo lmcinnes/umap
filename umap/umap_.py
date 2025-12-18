@@ -58,6 +58,7 @@ INT32_MAX = np.iinfo(np.int32).max - 1
 SMOOTH_K_TOLERANCE = 1e-5
 MIN_K_DIST_SCALE = 1e-3
 NPY_INFINITY = np.inf
+NPY_FLOATMAX = np.finfo(np.float32).max
 
 DISCONNECTION_DISTANCES = {
     "correlation": 2,
@@ -198,7 +199,7 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
 
     for i in numba.prange(distances.shape[0]):
         lo = 0.0
-        hi = NPY_INFINITY
+        hi = NPY_FLOATMAX
         mid = 1.0
 
         # TODO: This is very inefficient, but will do for now. FIXME
@@ -236,7 +237,7 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
                 mid = (lo + hi) / 2.0
             else:
                 lo = mid
-                if hi == NPY_INFINITY:
+                if hi >= NPY_FLOATMAX:
                     mid *= 2
                 else:
                     mid = (lo + hi) / 2.0
