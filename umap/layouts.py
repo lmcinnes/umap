@@ -517,7 +517,7 @@ def optimize_layout_euclidean_single_epoch_adam(
 
 
 @numba.njit(
-    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], f4[:, ::1], f4[:, ::1], f8, f8, i4[::1], i4[::1], i8, i8)",
+    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], f4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], f4[:, ::1], f4[:, ::1], f8, f8, i4[::1], i4[::1], i8, i8)",
     fastmath=True,
     parallel=True,
     locals={
@@ -535,6 +535,7 @@ def optimize_layout_euclidean_single_epoch_adam_new(
     tail_embedding,
     csr_indptr,
     csr_indices,
+    csr_data,
     n_vertices,
     epochs_per_sample,
     gamma_k,  # Changed from 'a': Gamma shape parameter
@@ -561,6 +562,16 @@ def optimize_layout_euclidean_single_epoch_adam_new(
     negative_sample_scaling = negative_selection_range / n_vertices
     transform_mode = from_node_order.shape[0] != to_node_order.shape[0]
 
+    alpha *= 0.25  # Adjust learning rate for stability with new gradients
+    degrees = np.zeros(n_vertices, dtype=np.int32)
+    for i in numba.prange(n_from_vertices):
+        from_node = from_node_order[i]
+        degrees[from_node] = np.sum(
+            csr_data[csr_indptr[from_node] : csr_indptr[from_node + 1]]
+        )
+
+    sigma = max(2.0 * (1.0 - n / 200) ** 2, 0.1)
+
     for block_start in range(0, n_from_vertices, block_size):
         block_end = min(block_start + block_size, n_from_vertices)
         for raw_idx in numba.prange(block_start, block_end):
@@ -572,34 +583,51 @@ def optimize_layout_euclidean_single_epoch_adam_new(
             current = head_embedding[from_node]
 
             for raw_index in range(csr_indptr[from_node], csr_indptr[from_node + 1]):
-                if epoch_of_next_sample[raw_index] <= n:
-                    to_node = csr_indices[raw_index]
-                    other = tail_embedding[to_node]
+                # if epoch_of_next_sample[raw_index] <= n:
+                to_node = csr_indices[raw_index]
+                other = tail_embedding[to_node]
+                weight = csr_data[raw_index]
 
-                    dist_squared = rdist(current, other)
+                dist_squared = rdist(current, other)
 
-                    if dist_squared > 0.0:
-                        # NEW: Simple quadratic attraction
-                        grad_coeff = -2.0 / np.sqrt(dist_squared)
-
-                        # grad_coeff = -2.0 * pow(dist_squared, 1.0 - 1.0)
-                        # grad_coeff /= pow(dist_squared, 1.0) + 1.0
-
-                        for d in range(dim):
-                            grad_d = grad_coeff * (current[d] - other[d])
-                            updates[from_node, d] += grad_d
-
-                    epoch_of_next_sample[raw_index] += epochs_per_sample[raw_index]
-
-                    # n_neg_samples = int(
-                    #     (n - epoch_of_next_negative_sample[raw_index])
-                    #     / epochs_per_negative_sample[raw_index]
+                if dist_squared > 0.0:
+                    # NEW: Simple quadratic attraction
+                    # grad_coeff = -2.0 / (1 + dist_squared)
+                    # grad_coeff = (
+                    #     -weight if np.sqrt(dist_squared) < 1.5 else weight / 10.0
                     # )
+                    # grad_coeff = -weight * (
+                    #     min(max(3.0 - np.sqrt(dist_squared), 0.0), 1.0) ** 2 + 0.01
+                    # )
+                    # grad_coeff = -2.0 * weight / np.sqrt(dist_squared)
+                    # grad_coeff = -weight * np.exp(-((np.sqrt(dist_squared) / 2.0)))
 
-            n_neg_samples = 5
+                    grad_coeff = -2.0 * weight * (np.exp(-dist_squared / sigma) + 0.01)
+
+                    # grad_coeff = -2.0 * weight * pow(dist_squared, 1.0 - 1.0)
+                    # grad_coeff /= pow(dist_squared, 1.0) + 1.0
+
+                    for d in range(dim):
+                        grad_d = grad_coeff * (current[d] - other[d])
+                        updates[from_node, d] += grad_d
+                        updates[to_node, d] -= grad_d
+
+                # epoch_of_next_sample[raw_index] += epochs_per_sample[raw_index]
+
+                # n_neg_samples = int(
+                #     (n - epoch_of_next_negative_sample[raw_index])
+                #     / epochs_per_negative_sample[raw_index]
+                # )
+
+            n_neg_samples = 50  # int(round(degrees[from_node]))
+            to_node = 1
+            weight_from = degrees[from_node]
             for p in range(n_neg_samples):
                 to_node_raw_selection = (
-                    raw_index * (n + p + 1)
+                    # raw_index * (n + p + 1)
+                    raw_idx
+                    * to_node
+                    * (n + p + 1)
                 ) % negative_selection_range
                 range_start = get_range_limits(
                     node_idx, negative_selection_range, n_vertices
@@ -608,18 +636,55 @@ def optimize_layout_euclidean_single_epoch_adam_new(
                     (range_start + to_node_raw_selection) % n_vertices
                 ]
                 other = tail_embedding[to_node]
+                weight_to = degrees[to_node]
 
                 dist_squared = rdist(current, other)
 
                 if dist_squared > 0.0:
                     # NEW: Gamma distribution-based repulsion
-                    dist = np.sqrt(dist_squared)
+                    # dist = np.sqrt(dist_squared)
+                    # grad_coeff = (
+                    #     gamma
+                    #     * (
+                    #         (gamma_k - 1.0) / dist_squared
+                    #         - 1.0 / (gamma_theta * dist)
+                    #     )
+                    #     * negative_sample_scaling
+                    # )
+                    # grad_coeff = (
+                    #     gamma
+                    #     * degrees[from_node]
+                    #     * (min(max(2.0 - np.sqrt(dist_squared), 0.0), 1.0) ** 2)
+                    #     * negative_sample_scaling
+                    # )
+                    # grad_coeff = (
+                    #     gamma
+                    #     * negative_sample_scaling
+                    #     * weight
+                    #     * (np.exp(-dist_squared / 3.0))
+                    #     / np.sqrt(dist_squared)
+                    # )
+                    # grad_coeff = (
+                    #     weight
+                    #     * negative_sample_scaling
+                    #     * gamma
+                    #     / np.sqrt(dist_squared + 1e-8)
+                    # )
                     grad_coeff = (
-                        (gamma_k - 1.0) / dist_squared - 1.0 / (gamma_theta * dist)
-                    ) * negative_sample_scaling
-                    # grad_coeff = negative_sample_scaling * 2.0 * gamma
-                    # grad_coeff /= (0.001 + dist_squared) * (
-                    #     1 * pow(dist_squared, 1) + 1
+                        2.0
+                        * np.sqrt(weight_from * weight_to)
+                        * negative_sample_scaling
+                        * gamma
+                    )
+                    grad_coeff /= (0.001 + dist_squared) * (
+                        1 * pow(dist_squared, 1) + 1
+                    )
+                    # grad_coeff = (
+                    #     negative_sample_scaling
+                    #     * np.sqrt(weight_from * weight_to)
+                    #     * gamma
+                    #     * (np.exp(-dist_squared) / sigma)
+                    #     / np.sqrt(dist_squared)
                     # )
 
                     # Optional: clip for stability (similar to original tanh clipping)
@@ -627,13 +692,18 @@ def optimize_layout_euclidean_single_epoch_adam_new(
                         grad_norm = np.sqrt(grad_coeff * grad_coeff * dist_squared)
                         scale = gamma * np.tanh(grad_norm / gamma) / grad_norm
                         for d in range(dim):
-                            updates[from_node, d] += grad_coeff * (
-                                current[d] - other[d]
-                            )  # * scale
+                            grad_d = (
+                                grad_coeff
+                                * (current[d] - other[d])
+                                * scale
+                                # / np.sqrt(dist_squared)
+                            )
+                            updates[from_node, d] += grad_d
+                            updates[to_node, d] -= grad_d
 
-                    # epoch_of_next_negative_sample[raw_index] += (
-                    #     n_neg_samples * epochs_per_negative_sample[raw_index]
-                    # )
+                        # epoch_of_next_negative_sample[raw_index] += (
+                        #     n_neg_samples * epochs_per_negative_sample[raw_index]
+                        # )
 
         for node_idx in numba.prange(block_start, block_end):
             from_node = from_node_order[node_idx]
@@ -1765,6 +1835,7 @@ def optimize_layout_euclidean(
                     tail_embedding,
                     csr_indptr,
                     csr_indices,
+                    csr_data,
                     n_vertices,
                     epochs_per_sample,
                     5.0,  # a,
