@@ -581,6 +581,7 @@ def optimize_layout_euclidean_single_epoch_adam_new(
             else:
                 from_node = to_node_order[node_idx]
             current = head_embedding[from_node]
+            degree = csr_indptr[from_node + 1] - csr_indptr[from_node]
 
             for raw_index in range(csr_indptr[from_node], csr_indptr[from_node + 1]):
                 # if epoch_of_next_sample[raw_index] <= n:
@@ -690,7 +691,7 @@ def optimize_layout_euclidean_single_epoch_adam_new(
                     # Optional: clip for stability (similar to original tanh clipping)
                     if grad_coeff > 0.0:
                         grad_norm = np.sqrt(grad_coeff * grad_coeff * dist_squared)
-                        scale = gamma * np.tanh(grad_norm / gamma) / grad_norm
+                        scale = 4 * gamma * np.tanh(grad_norm / gamma) / grad_norm
                         for d in range(dim):
                             grad_d = (
                                 grad_coeff
