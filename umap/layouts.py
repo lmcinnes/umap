@@ -538,8 +538,8 @@ def optimize_layout_euclidean_single_epoch_adam_new(
     csr_data,
     n_vertices,
     epochs_per_sample,
-    gamma_k,  # Changed from 'a': Gamma shape parameter
-    gamma_theta,  # Changed from 'b': Gamma scale parameter
+    sigma,
+    n_epochs,
     gamma,
     dim,
     alpha,
@@ -570,7 +570,9 @@ def optimize_layout_euclidean_single_epoch_adam_new(
             csr_data[csr_indptr[from_node] : csr_indptr[from_node + 1]]
         )
 
-    sigma = max(2.0 * (1.0 - n / 200) ** 2, 0.1)
+    # sigma = max(8.0 * (1.0 - n / n_epochs) ** 2, 0.01)
+    sigma = sigma
+    # print("sigma:", sigma)
 
     for block_start in range(0, n_from_vertices, block_size):
         block_end = min(block_start + block_size, n_from_vertices)
@@ -603,7 +605,7 @@ def optimize_layout_euclidean_single_epoch_adam_new(
                     # grad_coeff = -2.0 * weight / np.sqrt(dist_squared)
                     # grad_coeff = -weight * np.exp(-((np.sqrt(dist_squared) / 2.0)))
 
-                    grad_coeff = -2.0 * weight * (np.exp(-dist_squared / sigma) + 0.01)
+                    grad_coeff = -2.0 * weight * (np.exp(-dist_squared / sigma))
 
                     # grad_coeff = -2.0 * weight * pow(dist_squared, 1.0 - 1.0)
                     # grad_coeff /= pow(dist_squared, 1.0) + 1.0
@@ -611,7 +613,7 @@ def optimize_layout_euclidean_single_epoch_adam_new(
                     for d in range(dim):
                         grad_d = grad_coeff * (current[d] - other[d])
                         updates[from_node, d] += grad_d
-                        updates[to_node, d] -= grad_d
+                        # updates[to_node, d] -= grad_d
 
                 # epoch_of_next_sample[raw_index] += epochs_per_sample[raw_index]
 
@@ -620,8 +622,8 @@ def optimize_layout_euclidean_single_epoch_adam_new(
                 #     / epochs_per_negative_sample[raw_index]
                 # )
 
-            n_neg_samples = 50  # int(round(degrees[from_node]))
-            to_node = 1
+            n_neg_samples = int(round(degrees[from_node]))
+            to_node = 1  # 1773  # Initial value; will be overwritten
             weight_from = degrees[from_node]
             for p in range(n_neg_samples):
                 to_node_raw_selection = (
@@ -671,36 +673,42 @@ def optimize_layout_euclidean_single_epoch_adam_new(
                     #     * gamma
                     #     / np.sqrt(dist_squared + 1e-8)
                     # )
-                    grad_coeff = (
-                        2.0
-                        * np.sqrt(weight_from * weight_to)
-                        * negative_sample_scaling
-                        * gamma
-                    )
-                    grad_coeff /= (0.001 + dist_squared) * (
-                        1 * pow(dist_squared, 1) + 1
-                    )
+                    # grad_coeff = (
+                    #     2.0
+                    #     * np.sqrt(weight_from * weight_to)
+                    #     * negative_sample_scaling
+                    #     * gamma
+                    # )
+                    # grad_coeff /= (0.001 + dist_squared) * (
+                    #     1 * pow(dist_squared, 1) + 1
+                    # )
                     # grad_coeff = (
                     #     negative_sample_scaling
                     #     * np.sqrt(weight_from * weight_to)
                     #     * gamma
-                    #     * (np.exp(-dist_squared) / sigma)
+                    #     * (np.exp(-dist_squared / sigma))
                     #     / np.sqrt(dist_squared)
                     # )
+                    grad_coeff = (
+                        negative_sample_scaling
+                        * weight_to  # np.sqrt(weight_from * weight_to)
+                        * gamma
+                        * (np.exp(-(dist_squared / sigma))) ** 2
+                    )
 
                     # Optional: clip for stability (similar to original tanh clipping)
                     if grad_coeff > 0.0:
                         grad_norm = np.sqrt(grad_coeff * grad_coeff * dist_squared)
-                        scale = 4 * gamma * np.tanh(grad_norm / gamma) / grad_norm
+                        scale = gamma * np.tanh(grad_norm / gamma) / grad_norm
                         for d in range(dim):
                             grad_d = (
                                 grad_coeff
                                 * (current[d] - other[d])
-                                * scale
+                                # * scale
                                 # / np.sqrt(dist_squared)
                             )
                             updates[from_node, d] += grad_d
-                            updates[to_node, d] -= grad_d
+                            # updates[to_node, d] -= grad_d
 
                         # epoch_of_next_negative_sample[raw_index] += (
                         #     n_neg_samples * epochs_per_negative_sample[raw_index]
@@ -1344,6 +1352,7 @@ def _create_alpha_schedule(optimizer, n_epochs, initial_alpha, good_initializati
                     ],
                 ]
             )
+            # return np.full(n_epochs, 0.2, dtype=np.float32)
 
 
 def _create_momentum_schedule(optimizer, n_epochs, good_initialization):
@@ -1465,7 +1474,9 @@ def _create_adam_schedules(
             * gamma
             * max(np.sqrt(n_epochs / 100.0), 1.0)
         )
-        # gamma_schedule = np.full(n_epochs, gamma * max(np.sqrt(n_epochs / 100.0), 1.0), dtype=np.float32)
+        # gamma_schedule = np.full(
+        #     n_epochs, gamma * max(np.sqrt(n_epochs / 100.0), 1.0), dtype=np.float32
+        # )
 
     negative_selection_range_schedule = np.linspace(
         n_vertices,
@@ -1483,6 +1494,9 @@ def _create_adam_schedules(
         gamma_schedule,
         negative_selection_range_schedule,
     )
+
+
+import scipy.stats
 
 
 def optimize_layout_euclidean(
@@ -1648,6 +1662,12 @@ def optimize_layout_euclidean(
         n_vertices,
         negative_selection_range,
     )
+    sigma_schedule = scipy.stats.gamma.ppf(
+        np.linspace(1.0, 0.0, n_epochs + 2), a=1.0, scale=4.0
+    )[1:-1].astype(np.float32)
+    # np.random.shuffle(sigma_schedule)
+    # sigma_schedule = 8.0 * np.linspace(1.0, 0.1, n_epochs, dtype=np.float32) ** 2
+    # print(sigma_schedule)
 
     # Adjust negative sampling rates for non-compatibility optimizers
     if optimizer != "compatibility":
@@ -1839,8 +1859,8 @@ def optimize_layout_euclidean(
                     csr_data,
                     n_vertices,
                     epochs_per_sample,
-                    5.0,  # a,
-                    0.5,  # b,
+                    sigma_schedule[n],  # a,
+                    n_epochs,  # b,
                     gamma_schedule[n],
                     dim,
                     alpha_schedule[n],
