@@ -792,7 +792,7 @@ def prepare_networks(
                 keras.layers.Dense(units=100, activation="relu"),
                 keras.layers.Dense(units=100, activation="relu"),
                 keras.layers.Dense(units=100, activation="relu"),
-                keras.layers.Dense(units=n_components, name="z"),
+                keras.layers.Dense(units=int(n_components), name="z"),
             ]
         )
 
@@ -805,7 +805,7 @@ def prepare_networks(
                     keras.layers.Dense(units=100, activation="relu"),
                     keras.layers.Dense(units=100, activation="relu"),
                     keras.layers.Dense(
-                        units=np.prod(dims), name="recon", activation=None
+                        units=int(np.prod(dims)), name="recon", activation=None
                     ),
                     keras.layers.Reshape(dims),
                 ]
