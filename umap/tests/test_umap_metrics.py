@@ -6,6 +6,7 @@ import umap.sparse as spdist
 import re
 from sklearn.metrics import pairwise_distances
 from sklearn.neighbors import BallTree
+from sklearn import __version__ as sklearn_version_
 from scipy.version import full_version as scipy_full_version_
 import pytest
 
@@ -14,7 +15,10 @@ scipy_full_version = tuple(
     int(n)
     for n in re.findall(r"[0-9]+\.[0-9]+\.?[0-9]*", scipy_full_version_)[0].split(".")
 )
-
+sklearn_full_version = tuple(
+    int(n)
+    for n in re.findall(r"[0-9]+\.[0-9]+\.?[0-9]*", sklearn_version_)[0].split(".")
+)
 
 # ===================================================
 #  Metrics Test cases
@@ -322,10 +326,12 @@ def test_sparse_russellrao(sparse_binary_data):
     sparse_binary_check("russellrao", sparse_binary_data)
 
 
+@pytest.mark.skipif(sklearn_full_version >= (1, 8), reason="Removed in sklearn 1.8")
 def test_sparse_sokalmichener(sparse_binary_data):
     sparse_binary_check("sokalmichener", sparse_binary_data)
 
 
+@pytest.mark.skipif(sklearn_full_version >= (1, 8), reason="Removed in sklearn 1.8")
 def test_sparse_sokalsneath(sparse_binary_data):
     sparse_binary_check("sokalsneath", sparse_binary_data)
 
