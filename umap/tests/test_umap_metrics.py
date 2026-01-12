@@ -241,6 +241,7 @@ def test_russellrao(binary_data, binary_distances):
     binary_check("russellrao", binary_data, binary_distances)
 
 
+@pytest.mark.skipif(sklearn_full_version >= (1, 8), reason="Removed in sklearn 1.8")
 def test_sokalmichener(binary_data, binary_distances):
     binary_check("sokalmichener", binary_data, binary_distances)
 
@@ -326,7 +327,7 @@ def test_sparse_russellrao(sparse_binary_data):
     sparse_binary_check("russellrao", sparse_binary_data)
 
 
-@pytest.mark.skipif(sklearn_full_version >= (1, 6), reason="Removed in sklearn 1.6")
+@pytest.mark.skipif(sklearn_full_version >= (1, 8), reason="Removed in sklearn 1.8")
 def test_sparse_sokalmichener(sparse_binary_data):
     sparse_binary_check("sokalmichener", sparse_binary_data)
 
