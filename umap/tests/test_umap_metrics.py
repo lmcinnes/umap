@@ -326,7 +326,7 @@ def test_sparse_russellrao(sparse_binary_data):
     sparse_binary_check("russellrao", sparse_binary_data)
 
 
-@pytest.mark.skipif(sklearn_full_version >= (1, 8), reason="Removed in sklearn 1.8")
+@pytest.mark.skipif(sklearn_full_version >= (1, 6), reason="Removed in sklearn 1.6")
 def test_sparse_sokalmichener(sparse_binary_data):
     sparse_binary_check("sokalmichener", sparse_binary_data)
 
