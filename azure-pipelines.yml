@@ -149,7 +149,7 @@ stages:
           # Don't run this for PRs because they can't access pipeline secrets
           # The python client for coveralls currently does not support python 3.13
           # https://github.com/TheKevJames/coveralls-python/pull/542
-          condition: and(succeeded(), eq(variables.triggeredByPullRequest, false), ne(variables['python.version'], '3.13'), neq(variables['Agent.OS'], 'Windows'))
+          condition: and(succeeded(), eq(variables.triggeredByPullRequest, false), ne(variables['python.version'], '3.13'), ne(variables['Agent.OS'], 'Windows'))
           env:
             COVERALLS_REPO_TOKEN: $(COVERALLS_TOKEN)
 
