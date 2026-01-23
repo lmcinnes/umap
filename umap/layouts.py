@@ -430,9 +430,6 @@ def optimize_layout_euclidean(
 
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
 
-        if verbose and n % int(n_epochs / 10) == 0:
-            print("\tcompleted ", n, " / ", n_epochs, "epochs")
-
         if epochs_list is not None and n in epochs_list:
             embedding_list.append(head_embedding.copy())
 
