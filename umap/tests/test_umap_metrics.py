@@ -611,6 +611,12 @@ CORE_TESTS = [
     ("abc", "zabcz", 2),
     # Mixed operations
     ("abcdef", "azced", 3),
+    # Longer strings
+    (
+        "001122334455667788990a1b2c3d4e5f6g7h8i9j0k",
+        "0112x231455667y78390a1b2uc3d4e5f6gvh4i9j0k",
+        10,
+    ),
 ]
 
 
