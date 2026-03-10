@@ -1161,7 +1161,7 @@ def levenshtein_myers_ascii(x, y, normalisation=1.0, max_distance=20):
     normalisation : float, default=1.0
         Value by which the final distance is divided.
     max_distance : int, default=20
-        Maximum distance threshold for early termination.
+        Maximum distance threshold.
 
     Returns
     -------
