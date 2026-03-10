@@ -1098,33 +1098,132 @@ def count_distance(x, y, poisson_lambda=1.0, normalisation=1.0):
 
 @numba.njit()
 def levenshtein(x, y, normalisation=1.0, max_distance=20):
+    """
+    Compute the Levenshtein (edit) distance between two strings
+    using dynamic programming.
+
+    Parameters
+    ----------
+    x, y : str
+        Input strings.
+    normalisation : float, default=1.0
+        Value by which the final distance is divided.
+    max_distance : int, default=20
+        Maximum distance threshold.
+
+    Returns
+    -------
+    float
+        Normalised edit distance.
+    """
     x_len, y_len = len(x), len(y)
 
-    # Opt out of some comparisons
     if abs(x_len - y_len) > max_distance:
-        return abs(x_len - y_len) / normalisation
+        return float(max_distance) / normalisation
 
-    v0 = np.arange(y_len + 1).astype(np.float64)
-    v1 = np.zeros(y_len + 1)
+    if x_len == 0:
+        return float(y_len) / normalisation
+    if y_len == 0:
+        return float(x_len) / normalisation
+
+    v0 = np.arange(y_len + 1, dtype=np.float64)
+    v1 = np.empty(y_len + 1, dtype=np.float64)
 
     for i in range(x_len):
-
-        v1[i] = i + 1
+        # First column: cost of deleting all chars up to i
+        v1[0] = i + 1
 
         for j in range(y_len):
             deletion_cost = v0[j + 1] + 1
             insertion_cost = v1[j] + 1
-            substitution_cost = int(x[i] == y[j])
+            substitution_cost = v0[j] + (x[i] != y[j])
 
             v1[j + 1] = min(deletion_cost, insertion_cost, substitution_cost)
 
-        v0 = v1
+        v0, v1 = v1, v0
 
-        # Abort early if we've already exceeded max_dist
         if np.min(v0) > max_distance:
-            return max_distance / normalisation
+            return float(max_distance) / normalisation
 
-    return v0[y_len] / normalisation
+    return float(v0[y_len]) / normalisation
+
+
+@numba.njit()
+def levenshtein_myers_ascii(x, y, normalisation=1.0, max_distance=20):
+    """
+    Compute the Levenshtein (edit) distance between two ASCII strings
+    using Myers' bit-parallel algorithm.
+
+    Parameters
+    ----------
+    x, y : str
+        Input strings (ASCII only).
+    normalisation : float, default=1.0
+        Value by which the final distance is divided.
+    max_distance : int, default=20
+        Maximum distance threshold for early termination.
+
+    Returns
+    -------
+    float
+        Normalised edit distance.
+    """
+    x_len, y_len = len(x), len(y)
+
+    if abs(x_len - y_len) > max_distance:
+        return float(max_distance) / normalisation
+
+    # Myers' bit-parallel algorithm is limited to word size
+    # fall back to levenshtein if words are large
+    if x_len > 63 or y_len > 63:
+        return levenshtein(x, y, normalisation, max_distance)
+
+    # Peq[c]: bitmask with bit i set where x[i] == character c
+    Peq = np.zeros(128, dtype=np.int64)
+    for i in range(x_len):
+        c = ord(x[i])
+        if c < 128:
+            Peq[c] |= 1 << i
+
+    # Pv: positive vertical differences (initially all 1s)
+    Pv = (1 << x_len) - 1
+
+    # Mv: negative vertical differences (initially all 0s)
+    Mv = 0
+
+    # Initial edit distance: deleting all characters from x
+    score = x_len
+
+    # Mask for the highest bit (row x_len - 1)
+    top_bit = 1 << (x_len - 1)
+
+    for j in range(y_len):
+        c = ord(y[j])
+        Eq = Peq[c] if c < 128 else 0
+
+        Xv = Eq | Mv
+        Xh = (((Xv & Pv) + Pv) ^ Pv) | Xv
+
+        Ph = Mv | ~(Xh | Pv)
+        Mh = Pv & Xh
+
+        # Update score using the highest bit
+        if Ph & top_bit:
+            score += 1
+        elif Mh & top_bit:
+            score -= 1
+
+        # Prepare for next column
+        Ph = (Ph << 1) | 1
+        Mh <<= 1
+
+        Pv = Mh | ~(Xh | Ph)
+        Mv = Ph & Xh
+
+    if score > max_distance:
+        return float(max_distance) / normalisation
+
+    return float(score) / normalisation
 
 
 named_distances = {
@@ -1172,6 +1271,7 @@ named_distances = {
     "hierarchical_categorical": hierarchical_categorical_distance,
     "count": count_distance,
     "string": levenshtein,
+    "myers": levenshtein_myers_ascii,
 }
 
 named_distances_with_gradients = {
@@ -1213,6 +1313,7 @@ DISCRETE_METRICS = (
     "ordinal",
     "count",
     "string",
+    "myers",
 )
 
 SPECIAL_METRICS = (
