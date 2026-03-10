@@ -10,7 +10,6 @@ from sklearn import __version__ as sklearn_version_
 from scipy.version import full_version as scipy_full_version_
 import pytest
 
-
 scipy_full_version = tuple(
     int(n)
     for n in re.findall(r"[0-9]+\.[0-9]+\.?[0-9]*", scipy_full_version_)[0].split(".")
@@ -574,3 +573,108 @@ def test_grad_metrics_match_metrics(spatial_data, spatial_distances):
         dist_matrix,
         err_msg="Distances don't match " "for metric hellinger",
     )
+
+
+# --------------------
+# String metric Tests (Levenshtein/edit distances)
+# --------------------
+
+
+@pytest.fixture(params=[dist.levenshtein, dist.levenshtein_myers_ascii])
+def levenshtein_fn(request):
+    return request.param
+
+
+CORE_TESTS = [
+    # Identical strings
+    ("", "", 0),
+    ("a", "a", 0),
+    ("abc", "abc", 0),
+    # Empty vs non-empty
+    ("", "a", 1),
+    ("a", "", 1),
+    ("", "abc", 3),
+    # Single edit operations
+    ("a", "b", 1),  # substitution
+    ("ab", "a", 1),  # deletion
+    ("a", "ab", 1),  # insertion
+    # Multiple edits
+    ("kitten", "sitting", 3),
+    ("flaw", "lawn", 2),
+    ("gumbo", "gambol", 2),
+    # Repeated characters
+    ("aaaa", "aaa", 1),
+    ("aaaa", "bbbb", 4),
+    # Prefix / suffix changes
+    ("abc", "zabc", 1),
+    ("abc", "abcz", 1),
+    ("abc", "zabcz", 2),
+    # Mixed operations
+    ("abcdef", "azced", 3),
+    # Longer strings
+    (
+        "001122334455667788990a1b2c3d4e5f6g7h8i9j0k",
+        "0112x231455667y78390a1b2uc3d4e5f6gvh4i9j0k",
+        10,
+    ),
+]
+
+
+@pytest.mark.parametrize("x,y,expected", CORE_TESTS)
+def test_core_distances(levenshtein_fn, x, y, expected):
+    assert levenshtein_fn(x, y) == float(expected)
+    assert levenshtein_fn(y, x) == float(expected)
+
+
+ASCII_TESTS = [
+    ("\x00", "\x00", 0),  # NUL character
+    ("\x7f", "\x7f", 0),  # DEL character
+    ("\x00", "\x7f", 1),  # different ASCII extremes
+    ("ABC", "abc", 3),  # case-sensitive
+]
+
+
+@pytest.mark.parametrize("x,y,expected", ASCII_TESTS)
+def test_ascii_boundaries(levenshtein_fn, x, y, expected):
+    assert levenshtein_fn(x, y) == float(expected)
+
+
+def test_length_difference_guard(levenshtein_fn):
+    x = "a" * 30
+    y = "a"
+
+    d = levenshtein_fn(x, y, max_distance=20)
+    assert d == 20.0
+
+
+def test_length_difference_guard_normalised(levenshtein_fn):
+    x = "a" * 30
+    y = "a"
+
+    d = levenshtein_fn(x, y, max_distance=20, normalisation=10.0)
+    assert d == 2.0
+
+
+def test_max_dist_guard(levenshtein_fn):
+    x = "a" * 25
+    y = "b" * 25
+
+    d = levenshtein_fn(x, y, max_distance=10)
+    assert d == 10.0
+
+
+def test_max_dist_guard_normalised(levenshtein_fn):
+    x = "a" * 25
+    y = "b" * 25
+
+    d = levenshtein_fn(x, y, max_distance=10, normalisation=5.0)
+    assert d == 2.0
+
+
+def test_fallback_path(levenshtein_fn):
+    x = "a" * 64
+    y = "a" * 64
+
+    d = levenshtein_fn(x, y)
+    assert isinstance(d, float)
+    assert d == 0.0
