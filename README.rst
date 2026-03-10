@@ -64,6 +64,14 @@ The details for the underlying mathematics can be found in
 McInnes, L, Healy, J, *UMAP: Uniform Manifold Approximation and Projection
 for Dimension Reduction*, ArXiv e-prints 1802.03426, 2018
 
+A broader introduction to UMAP targetted the scientific community can be found 
+in our `paper published in Nature Review Methods Primers  <https://doi.org/10.1038/s43586-024-00363-x>`_:
+
+Healy, J., McInnes, L. *Uniform manifold approximation and projection*. Nat Rev Methods 
+Primers 4, 82 (2024). 
+
+A read only version of this paper can accessed via `link <https://rdcu.be/d0YZT>`_
+
 The important thing is that you don't need to worry about that—you can use
 UMAP right now for dimension reduction and visualisation as easily as a drop
 in replacement for scikit-learn's t-SNE.
@@ -132,7 +140,7 @@ to install all the plotting dependencies.
 
 If you wish to use Parametric UMAP, you need to install Tensorflow, which can be
 installed either using the instructions at https://www.tensorflow.org/install
-(reccomended) or using
+(recommended) or using
 
 .. code:: bash
 
@@ -408,6 +416,31 @@ An example of making use of these options (based on a subsample of the mnist_784
 
 See `the documentation <https://umap-learn.readthedocs.io/en/0.5dev/densmap_demo.html>`_ for more details.
 
+
+---------------------------------
+GPU-Accelerated UMAP with torchdr
+---------------------------------
+
+For GPU-accelerated UMAP computations, `torchdr <https://github.com/TorchDR/TorchDR>`_ provides a PyTorch-based implementation that significantly speed up the algorithm. 
+torchdr accelerates **every step** of the dimensionality reduction pipeline on GPU: kNN computation, affinity construction and embedding optimization.
+
+Using torchdr with UMAP is straightforward:
+
+.. code:: python
+
+    from torchdr import UMAP as torchdrUMAP
+    
+    umap_gpu = torchdrUMAP(
+        n_neighbors=15,
+        min_dist=0.1,
+        n_components=2,
+        device='cuda'
+    )
+    embedding = umap_gpu.fit_transform(data-maps)
+
+For more information and advanced usage, see the `torchdr documentation <https://torchdr.github.io/index.html>`_.
+
+
 ----------------
 Help and Support
 ----------------
@@ -456,6 +489,27 @@ current reference:
         year = 2018,
         month = feb,
    }
+
+If you found the Nature Primer introduction useful please cite the following reference:
+
+.. code:: bibtex
+
+    @article{Healy2024,
+      author={Healy, John
+      and McInnes, Leland},
+      title={Uniform manifold approximation and projection},
+      journal={Nature Reviews Methods Primers},
+      year={2024},
+      month={Nov},
+      day={21},
+      volume={4},
+      number={1},
+      pages={82},
+      abstract={Uniform manifold approximation and projection is a nonlinear dimension reduction method often used for visualizing data and as pre-processing for further machine-learning tasks such as clustering. In this Primer, we provide an introduction to the uniform manifold approximation and projection algorithm, the intuitions behind how it works, how best to apply it on data and how to interpret and understand results.},
+      issn={2662-8449},
+      doi={10.1038/s43586-024-00363-x},
+      url={https://doi.org/10.1038/s43586-024-00363-x}
+    }
 
 Additionally, if you use the densMAP algorithm in your work please cite the following reference:
 

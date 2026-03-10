@@ -341,6 +341,13 @@ of metrics, including:
 - sokalsneath
 - yule
 
+**Precomputed**
+
+All of the above metrics assume your input data is "raw" in some N-dimensional space.
+Sometimes, you have already calculated the pairwise distances between points,
+and your input data is a distance/similarity matrix.
+In this case, you can do something like ``UMAP(metric='precomputed').fit_transform(<distance matrix>)``.
+
 Any of which can be specified by setting ``metric='<metric name>'``; for
 example to use cosine distance as the metric you would use
 ``metric='cosine'``.

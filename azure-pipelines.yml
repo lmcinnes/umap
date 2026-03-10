@@ -17,6 +17,13 @@ pr:
     - doc/*
     - README.rst
 
+parameters:
+  - name: includeReleaseCandidates
+    displayName: "Allow pre-release dependencies"
+    type: boolean
+    default: false
+
+
 variables:
   triggeredByPullRequest: $[eq(variables['Build.Reason'], 'PullRequest')]
 
@@ -27,15 +34,6 @@ stages:
       - job: run_platform_tests
         strategy:
           matrix:
-            mac_py38:
-              imageName: 'macOS-latest'
-              python.version: '3.8'
-            linux_py38:
-              imageName: 'ubuntu-latest'
-              python.version: '3.8'
-            windows_py38:
-              imageName: 'windows-latest'
-              python.version: '3.8'
             mac_py39:
               imageName: 'macOS-latest'
               python.version: '3.9'
@@ -63,7 +61,26 @@ stages:
             windows_py311:
               imageName: 'windows-latest'
               python.version: '3.11'
-              
+            mac_py312:
+              imageName: 'macOS-latest'
+              python.version: '3.12'
+            linux_py312:
+              imageName: 'ubuntu-latest'
+              python.version: '3.12'
+            windows_py312:
+              imageName: 'windows-latest'
+              python.version: '3.12'
+            # # Disable macOS tests on 3.13 since tensorflow only provides pre-built wheels
+            # # for ARM macs and the runner is x86
+            # mac_py313:
+            #   imageName: 'macOS-latest'
+            #   python.version: '3.13'
+            linux_py313:
+              imageName: 'ubuntu-latest'
+              python.version: '3.13'
+            windows_py313:
+              imageName: 'windows-latest'
+              python.version: '3.13'
         pool:
           vmImage: $(imageName)
 
@@ -75,11 +92,51 @@ stages:
 
         - script: |
             python -m pip install --upgrade pip
+          displayName: 'Upgrade pip'
+
+        # 1. Install the full LLVM package only if the OS is macOS
+        - script: |
+            brew install llvm@20
+            # Homebrew formula names can change, so we ensure it links correctly if necessary
+            brew link --force --overwrite llvm@20
+          displayName: 'Install LLVM via Homebrew (macOS only)'
+          condition: eq(variables['Agent.OS'], 'Darwin')
+
+        # 2. Find the Homebrew install path and set the environment variable only on macOS
+        - script: |
+            # Determine the LLVM install prefix dynamically
+            LLVM_PREFIX=$(brew --prefix llvm@20)
+
+            # Set the LLVM_CONFIG environment variable used by llvmlite's build script
+            echo "##vso[task.setvariable variable=LLVM_CONFIG]$LLVM_PREFIX/bin/llvm-config"
+            echo "LLVM_CONFIG set to: $LLVM_CONFIG"
+
+            # Also set CMAKE_PREFIX_PATH in case other dependencies need it
+            echo "##vso[task.setvariable variable=CMAKE_PREFIX_PATH]$LLVM_PREFIX/lib/cmake"
+          displayName: 'Configure LLVM Environment Variables (macOS only)'
+          condition: eq(variables['Agent.OS'], 'Darwin')
+
+        - script: |
             pip install -e .
             pip install .[plot]
             pip install .[parametric_umap]
+          env:
+            # Ensure that the LLVM_CONFIG environment variable is available during installation
+            LLVM_CONFIG: $(LLVM_CONFIG)
+            CMAKE_PREFIX_PATH: $(CMAKE_PREFIX_PATH)
+          displayName: 'Install dependencies'
+          condition: ${{ eq(parameters.includeReleaseCandidates, false) }}
+
+        - script: |
+            pip install --pre -e .
+            pip install --pre .[plot]
+            pip install --pre .[parametric_umap]
+          displayName: 'Install dependencies (allow pre-releases)'
+          condition: ${{ eq(parameters.includeReleaseCandidates, true) }}
+
+        - script: |
             pip install pytest  pytest-azurepipelines pytest-cov pytest-benchmark coveralls
-          displayName: 'Install package'
+          displayName: 'Install pytest'
 
         - script: |
             # export NUMBA_DISABLE_JIT=1 # Disable numba coverage so tests run on time for now.
@@ -89,7 +146,10 @@ stages:
         - bash: |
             coveralls
           displayName: 'Publish to coveralls'
-          condition: and(succeeded(), eq(variables.triggeredByPullRequest, false)) # Don't run this for PRs because they can't access pipeline secrets
+          # Don't run this for PRs because they can't access pipeline secrets
+          # The python client for coveralls currently does not support python 3.13
+          # https://github.com/TheKevJames/coveralls-python/pull/542
+          condition: and(succeeded(), eq(variables.triggeredByPullRequest, false), ne(variables['python.version'], '3.13'), ne(variables['Agent.OS'], 'Windows'))
           env:
             COVERALLS_REPO_TOKEN: $(COVERALLS_TOKEN)
 
@@ -120,7 +180,8 @@ stages:
           displayName: 'Install package locally'
         
         - bash: |
-            python setup.py sdist bdist_wheel
+            pip install build
+            python -m build --wheel --sdist --outdir dist/ .
             ls -l dist/
           displayName: 'Build package'
 

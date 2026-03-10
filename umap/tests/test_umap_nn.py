@@ -15,6 +15,7 @@ from umap.umap_ import (
 #  Nearest Neighbour Test cases
 # ===================================================
 
+
 # nearest_neighbours metric parameter validation
 # -----------------------------------------------
 def test_nn_bad_metric(nn_data):
@@ -44,7 +45,7 @@ def knn(indices, nn_data):  # pragma: no cover
     true_indices = tree.query(nn_data, 10, return_distance=False)
     num_correct = 0.0
     for i in range(nn_data.shape[0]):
-        num_correct += np.sum(np.in1d(true_indices[i], indices[i]))
+        num_correct += np.sum(np.isin(true_indices[i], indices[i]))
     return num_correct / (nn_data.shape[0] * 10)
 
 

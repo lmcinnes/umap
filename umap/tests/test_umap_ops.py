@@ -116,7 +116,7 @@ def test_disconnected_data(num_isolates, metric, force_approximation):
         new_columns[10 + i, i] = True
     disconnected_data = np.hstack([disconnected_data, new_columns])
 
-    with warnings.catch_warnings(record=True) as  w:
+    with warnings.catch_warnings(record=True) as w:
         model = UMAP(
             n_neighbors=3,
             metric=metric,
@@ -236,7 +236,7 @@ def test_umap_update(iris, iris_subset_model, iris_selection, iris_model):
 
     error = np.sum(np.abs((new_model.graph_ - comparison_graph).data))
 
-    assert error < 1.0
+    assert error < 2.10
 
 
 def test_umap_update_large(

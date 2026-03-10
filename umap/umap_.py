@@ -8,8 +8,8 @@ from warnings import warn
 import time
 
 from scipy.optimize import curve_fit
-from sklearn.base import BaseEstimator
-from sklearn.utils import check_random_state, check_array
+from sklearn.base import BaseEstimator, ClassNamePrefixFeaturesOutMixin
+from sklearn.utils import check_array, check_random_state
 from sklearn.utils.validation import check_is_fitted
 from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import normalize
@@ -63,6 +63,7 @@ DISCONNECTION_DISTANCES = {
     "cosine": 2,
     "hellinger": 1,
     "jaccard": 1,
+    "bit_jaccard": 1,
     "dice": 1,
 }
 
@@ -735,10 +736,12 @@ def reprocess_row(probabilities, k=15, n_iters=32):
 @numba.njit()
 def reset_local_metrics(simplicial_set_indptr, simplicial_set_data):
     for i in range(simplicial_set_indptr.shape[0] - 1):
-        simplicial_set_data[
-            simplicial_set_indptr[i] : simplicial_set_indptr[i + 1]
-        ] = reprocess_row(
-            simplicial_set_data[simplicial_set_indptr[i] : simplicial_set_indptr[i + 1]]
+        simplicial_set_data[simplicial_set_indptr[i] : simplicial_set_indptr[i + 1]] = (
+            reprocess_row(
+                simplicial_set_data[
+                    simplicial_set_indptr[i] : simplicial_set_indptr[i + 1]
+                ]
+            )
         )
     return
 
@@ -1241,7 +1244,11 @@ def simplicial_set_embedding(
             print(ts() + " Computing embedding densities")
 
         # Compute graph in embedding
-        (knn_indices, knn_dists, rp_forest,) = nearest_neighbors(
+        (
+            knn_indices,
+            knn_dists,
+            rp_forest,
+        ) = nearest_neighbors(
             embedding,
             densmap_kwds["n_neighbors"],
             "euclidean",
@@ -1367,6 +1374,7 @@ def init_graph_transform(graph, embedding):
 
     return result
 
+
 @numba.njit()
 def init_update(current_init, n_original_samples, indices):
     for i in range(n_original_samples, indices.shape[0]):
@@ -1400,7 +1408,7 @@ def find_ab_params(spread, min_dist):
     return params[0], params[1]
 
 
-class UMAP(BaseEstimator):
+class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
     """Uniform Manifold Approximation and Projection
 
     Finds a low dimensional embedding of the data that approximates
@@ -1941,7 +1949,9 @@ class UMAP(BaseEstimator):
             raise ValueError("n_jobs must be a postive integer, or -1 (for all cores)")
         if self.n_jobs != 1 and self.random_state is not None:
             self.n_jobs = 1
-            warn(f"n_jobs value {self.n_jobs} overridden to 1 by setting random_state. Use no seed for parallelism.") 
+            warn(
+                f"n_jobs value {self.n_jobs} overridden to 1 by setting random_state. Use no seed for parallelism."
+            )
 
         if self.dens_lambda < 0.0:
             raise ValueError("dens_lambda cannot be negative")
@@ -2326,7 +2336,7 @@ class UMAP(BaseEstimator):
 
         return result
 
-    def fit(self, X, y=None, force_all_finite=True):
+    def fit(self, X, y=None, ensure_all_finite=True, **kwargs):
         """Fit X into an embedded space.
 
         Optionally use y for supervised dimension reduction.
@@ -2345,14 +2355,27 @@ class UMAP(BaseEstimator):
             The relevant attributes are ``target_metric`` and
             ``target_metric_kwds``.
 
-        force_all_finite : Whether to raise an error on np.inf, np.nan, pd.NA in array.
+        ensure_all_finite : Whether to raise an error on np.inf, np.nan, pd.NA in array.
             The possibilities are: - True: Force all values of array to be finite.
                                    - False: accepts np.inf, np.nan, pd.NA in array.
                                    - 'allow-nan': accepts only np.nan and pd.NA values in array.
                                      Values cannot be infinite.
-        """
 
-        X = check_array(X, dtype=np.float32, accept_sparse="csr", order="C", force_all_finite=force_all_finite)
+        **kwargs : optional
+            Any additional keyword arguments are passed to _fit_embed_data.
+        """
+        if self.metric in ("bit_hamming", "bit_jaccard"):
+            X = check_array(
+                X, dtype=np.uint8, order="C", ensure_all_finite=ensure_all_finite
+            )
+        else:
+            X = check_array(
+                X,
+                dtype=np.float32,
+                accept_sparse="csr",
+                order="C",
+                ensure_all_finite=ensure_all_finite,
+            )
         self._raw_data = X
 
         # Handle all the optional arguments, setting default
@@ -2363,7 +2386,12 @@ class UMAP(BaseEstimator):
             self._b = self.b
 
         if isinstance(self.init, np.ndarray):
-            init = check_array(self.init, dtype=np.float32, accept_sparse=False, force_all_finite=force_all_finite)
+            init = check_array(
+                self.init,
+                dtype=np.float32,
+                accept_sparse=False,
+                ensure_all_finite=ensure_all_finite,
+            )
         else:
             init = self.init
 
@@ -2464,9 +2492,7 @@ class UMAP(BaseEstimator):
             if not np.all(X.diagonal() == 0):
                 raise ValueError("Non-zero distances from samples to themselves!")
             if self.knn_dists is None:
-                self._knn_indices = np.zeros(
-                    (X.shape[0], self.n_neighbors), dtype=int
-                )
+                self._knn_indices = np.zeros((X.shape[0], self.n_neighbors), dtype=int)
                 self._knn_dists = np.zeros(self._knn_indices.shape, dtype=float)
                 for row_id in range(X.shape[0]):
                     # Find KNNs row-by-row
@@ -2539,21 +2565,21 @@ class UMAP(BaseEstimator):
                             X[index].toarray(),
                             metric=_m,
                             kwds=self._metric_kwds,
-                            force_all_finite=force_all_finite
+                            ensure_all_finite=ensure_all_finite,
                         )
                     else:
                         dmat = dist.pairwise_special_metric(
                             X[index],
                             metric=self._input_distance_func,
                             kwds=self._metric_kwds,
-                            force_all_finite=force_all_finite
+                            ensure_all_finite=ensure_all_finite,
                         )
                 else:
                     dmat = dist.pairwise_special_metric(
                         X[index],
                         metric=self._input_distance_func,
                         kwds=self._metric_kwds,
-                        force_all_finite=force_all_finite
+                        ensure_all_finite=ensure_all_finite,
                     )
             # set any values greater than disconnection_distance to be np.inf.
             # This will have no effect when _disconnection_distance is not set since it defaults to np.inf.
@@ -2674,7 +2700,9 @@ class UMAP(BaseEstimator):
             if self.target_metric == "string":
                 y_ = y[index]
             else:
-                y_ = check_array(y, ensure_2d=False, force_all_finite=force_all_finite)[index]
+                y_ = check_array(y, ensure_2d=False, ensure_all_finite=ensure_all_finite)[
+                    index
+                ]
             if self.target_metric == "categorical":
                 if self.target_weight < 1.0:
                     far_dist = 2.5 * (1.0 / (1.0 - self.target_weight))
@@ -2724,10 +2752,14 @@ class UMAP(BaseEstimator):
                             y_,
                             metric=self.target_metric,
                             kwds=self._target_metric_kwds,
-                            force_all_finite=force_all_finite
+                            ensure_all_finite=ensure_all_finite,
                         )
 
-                    (target_graph, target_sigmas, target_rhos,) = fuzzy_simplicial_set(
+                    (
+                        target_graph,
+                        target_sigmas,
+                        target_rhos,
+                    ) = fuzzy_simplicial_set(
                         ydmat,
                         target_n_neighbors,
                         random_state,
@@ -2742,7 +2774,11 @@ class UMAP(BaseEstimator):
                     )
                 else:
                     # Standard case
-                    (target_graph, target_sigmas, target_rhos,) = fuzzy_simplicial_set(
+                    (
+                        target_graph,
+                        target_sigmas,
+                        target_rhos,
+                    ) = fuzzy_simplicial_set(
                         y_,
                         target_n_neighbors,
                         random_state,
@@ -2783,6 +2819,7 @@ class UMAP(BaseEstimator):
                 epochs,
                 init,
                 random_state,  # JH why raw data?
+                **kwargs,
             )
 
             if self.n_epochs_list is not None:
@@ -2812,17 +2849,25 @@ class UMAP(BaseEstimator):
                 self.rad_orig_ = aux_data["rad_orig"][inverse]
                 self.rad_emb_ = aux_data["rad_emb"][inverse]
 
+
         if self.verbose:
             print(ts() + " Finished embedding")
 
         numba.set_num_threads(self._original_n_threads)
         self._input_hash = joblib.hash(self._raw_data)
 
+        if self.transform_mode == "embedding":
+            # Set number of features out for sklearn API
+            self._n_features_out = self.embedding_.shape[1]
+        else:
+            self._n_features_out = self.graph_.shape[1]
+
         return self
 
-    def _fit_embed_data(self, X, n_epochs, init, random_state):
+    def _fit_embed_data(self, X, n_epochs, init, random_state, **kwargs):
         """A method wrapper for simplicial_set_embedding that can be
-        replaced by subclasses.
+        replaced by subclasses. Arbitrary keyword arguments can be passed
+        through .fit() and .fit_transform().
         """
         return simplicial_set_embedding(
             X,
@@ -2849,7 +2894,7 @@ class UMAP(BaseEstimator):
             tqdm_kwds=self.tqdm_kwds,
         )
 
-    def fit_transform(self, X, y=None, force_all_finite=True):
+    def fit_transform(self, X, y=None, ensure_all_finite=True, **kwargs):
         """Fit X into an embedded space and return that transformed
         output.
 
@@ -2865,11 +2910,13 @@ class UMAP(BaseEstimator):
             The relevant attributes are ``target_metric`` and
             ``target_metric_kwds``.
 
-        force_all_finite : Whether to raise an error on np.inf, np.nan, pd.NA in array.
+        ensure_all_finite : Whether to raise an error on np.inf, np.nan, pd.NA in array.
             The possibilities are: - True: Force all values of array to be finite.
                                    - False: accepts np.inf, np.nan, pd.NA in array.
                                    - 'allow-nan': accepts only np.nan and pd.NA values in array.
                                      Values cannot be infinite.
+
+        **kwargs : Any additional keyword arguments are passed to _fit_embed_data.
 
         Returns
         -------
@@ -2885,7 +2932,7 @@ class UMAP(BaseEstimator):
         r_emb: array, shape (n_samples)
             Local radii of data points in the embedding (log-transformed).
         """
-        self.fit(X, y, force_all_finite)
+        self.fit(X, y, ensure_all_finite, **kwargs)
         if self.transform_mode == "embedding":
             if self.output_dens:
                 return self.embedding_, self.rad_orig_, self.rad_emb_
@@ -2900,7 +2947,7 @@ class UMAP(BaseEstimator):
                 )
             )
 
-    def transform(self, X, force_all_finite=True):
+    def transform(self, X, ensure_all_finite=True):
         """Transform X into the existing embedded space and return that
         transformed output.
 
@@ -2909,7 +2956,7 @@ class UMAP(BaseEstimator):
         X : array, shape (n_samples, n_features)
             New data to be transformed.
 
-        force_all_finite : Whether to raise an error on np.inf, np.nan, pd.NA in array.
+        ensure_all_finite : Whether to raise an error on np.inf, np.nan, pd.NA in array.
             The possibilities are: - True: Force all values of array to be finite.
                                    - False: accepts np.inf, np.nan, pd.NA in array.
                                    - 'allow-nan': accepts only np.nan and pd.NA values in array.
@@ -2926,7 +2973,18 @@ class UMAP(BaseEstimator):
                 "Transform unavailable when model was fit with only a single data sample."
             )
         # If we just have the original input then short circuit things
-        X = check_array(X, dtype=np.float32, accept_sparse="csr", order="C", force_all_finite=force_all_finite)
+        if self.metric in ("bit_hamming", "bit_jaccard"):
+            X = check_array(
+                X, dtype=np.uint8, order="C", ensure_all_finite=ensure_all_finite
+            )
+        else:
+            X = check_array(
+                X,
+                dtype=np.float32,
+                accept_sparse="csr",
+                order="C",
+                ensure_all_finite=ensure_all_finite,
+            )
         x_hash = joblib.hash(X)
         if x_hash == self._input_hash:
             if self.transform_mode == "embedding":
@@ -3001,7 +3059,7 @@ class UMAP(BaseEstimator):
                             self._raw_data.toarray(),
                             metric=_m,
                             kwds=self._metric_kwds,
-                            force_all_finite=force_all_finite
+                            ensure_all_finite=ensure_all_finite,
                         )
                     else:
                         dmat = dist.pairwise_special_metric(
@@ -3009,7 +3067,7 @@ class UMAP(BaseEstimator):
                             self._raw_data,
                             metric=self._input_distance_func,
                             kwds=self._metric_kwds,
-                            force_all_finite=force_all_finite
+                            ensure_all_finite=ensure_all_finite,
                         )
                 else:
                     dmat = dist.pairwise_special_metric(
@@ -3017,7 +3075,7 @@ class UMAP(BaseEstimator):
                         self._raw_data,
                         metric=self._input_distance_func,
                         kwds=self._metric_kwds,
-                        force_all_finite=force_all_finite
+                        ensure_all_finite=ensure_all_finite,
                     )
             indices = np.argpartition(dmat, self._n_neighbors)[:, : self._n_neighbors]
             dmat_shortened = submatrix(dmat, indices, self._n_neighbors)
@@ -3296,8 +3354,19 @@ class UMAP(BaseEstimator):
 
         return inv_transformed_points
 
-    def update(self, X, force_all_finite=True):
-        X = check_array(X, dtype=np.float32, accept_sparse="csr", order="C", force_all_finite=force_all_finite)
+    def update(self, X, ensure_all_finite=True):
+        if self.metric in ("bit_hamming", "bit_jaccard"):
+            X = check_array(
+                X, dtype=np.uint8, order="C", ensure_all_finite=ensure_all_finite
+            )
+        else:
+            X = check_array(
+                X,
+                dtype=np.float32,
+                accept_sparse="csr",
+                order="C",
+                ensure_all_finite=ensure_all_finite,
+            )
         random_state = check_random_state(self.transform_seed)
         rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
@@ -3335,21 +3404,21 @@ class UMAP(BaseEstimator):
                                 self._raw_data.toarray(),
                                 metric=_m,
                                 kwds=self._metric_kwds,
-                                force_all_finite=force_all_finite
+                                ensure_all_finite=ensure_all_finite,
                             )
                         else:
                             dmat = dist.pairwise_special_metric(
                                 self._raw_data,
                                 metric=self._input_distance_func,
                                 kwds=self._metric_kwds,
-                                force_all_finite=force_all_finite
+                                ensure_all_finite=ensure_all_finite,
                             )
                     else:
                         dmat = dist.pairwise_special_metric(
                             self._raw_data,
                             metric=self._input_distance_func,
                             kwds=self._metric_kwds,
-                            force_all_finite=force_all_finite
+                            ensure_all_finite=ensure_all_finite,
                         )
                 self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
                     dmat,
@@ -3515,17 +3584,6 @@ class UMAP(BaseEstimator):
         if self.output_dens:
             self.rad_orig_ = aux_data["rad_orig"]
             self.rad_emb_ = aux_data["rad_emb"]
-
-    def get_feature_names_out(self, feature_names_out=None):
-        """
-        Defines descriptive names for each output of the (fitted) estimator.
-        :param feature_names_out: Optional passthrough for feature names.
-        By default, feature names will be generated automatically.
-        :return: List of descriptive names for each output variable from the fitted estimator.
-        """
-        if feature_names_out is None:
-            feature_names_out = [f"umap_component_{i+1}" for i in range(self.n_components)]
-        return feature_names_out
 
     def __repr__(self):
         from sklearn.utils._pprint import _EstimatorPrettyPrinter

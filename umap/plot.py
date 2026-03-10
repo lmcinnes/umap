@@ -200,15 +200,17 @@ def _nhood_search(umap_object, nhood_size):
     return indices, dists
 
 
-@numba.jit(nopython=False)
+@numba.njit()
 def _nhood_compare(indices_left, indices_right):
     """Compute Jaccard index of two neighborhoods"""
     result = np.empty(indices_left.shape[0])
 
     for i in range(indices_left.shape[0]):
-        intersection_size = np.intersect1d(indices_left[i], indices_right[i], 
-                                           assume_unique=True).shape[0]
-        union_size = np.unique(np.hstack([indices_left[i], indices_right[i]])).shape[0]
+        with numba.objmode(intersection_size="intp"):
+            intersection_size = np.intersect1d(
+                indices_left[i], indices_right[i], assume_unique=True
+            ).shape[0]
+        union_size = np.unique(np.hstack((indices_left[i], indices_right[i]))).shape[0]
         result[i] = float(intersection_size) / float(union_size)
 
     return result
@@ -263,7 +265,6 @@ def _datashade_points(
     show_legend=True,
     alpha=255,
 ):
-
     """Use datashader to plot points"""
     extent = _get_extent(points)
     canvas = ds.Canvas(
@@ -948,7 +949,6 @@ def connectivity(
 
     return ax
 
-
 def diagnostic(
     umap_object,
     diagnostic_type="pca",
@@ -960,8 +960,10 @@ def diagnostic(
     background="white",
     width=800,
     height=800,
+    return_diagnostics=False,
+    plot_result=True
 ):
-    """Provide a diagnostic plot or plots for a UMAP embedding.
+    """Provide a diagnostic plot or plots for a UMAP embedding, with options to return diagnostics and control plotting.
     There are a number of plots that can be helpful for diagnostic
     purposes in understanding your embedding. Currently these are
     restricted to methods of coloring a scatterplot of the
@@ -980,8 +982,7 @@ def diagnostic(
     preserved, or how the estimated local dimension of the data
     varies. Both of these are available, although the local
     dimension estimation is the preferred option. You can
-    access these are diagnostic types ``'local_dim'`` and
-    ``'neighborhood'``.
+    access these are diagnostic types ``'local_dim'`` and ``'neighborhood'``.
 
     Finally the diagnostic type ``'all'`` will provide a
     grid of diagnostic plots.
@@ -1012,7 +1013,7 @@ def diagnostic(
 
     ax: matplotlib axis (optional, default None)
         A matplotlib axis to plot to, or, if None, a new
-        axis will be created and returned.
+        axis will be created and returned. Ignored if plot_result=False.
 
     cmap: str (optional, default 'viridis')
         The name of a matplotlib colormap to use for coloring
@@ -1024,12 +1025,33 @@ def diagnostic(
         plot(s). If None then a suitable point size will
         be estimated from the data.
 
+    background: str (optional, default 'white')
+        The background color for the plot.
+
+    width: int (optional, default 800)
+        The width of the plot in pixels.
+
+    height: int (optional, default 800)
+        The height of the plot in pixels.
+
+    return_diagnostics: bool (optional, default False)
+        If True, returns the diagnostic data (e.g., color projections or metrics)
+        instead of or in addition to the axis, depending on plot_result.
+
+    plot_result: bool (optional, default True)
+        If False, no plot is generated, and the function returns either the
+        diagnostic data (if return_diagnostics=True) or None.
+
     Returns
     -------
-    result: matplotlib axis
-        The result is a matplotlib axis with the relevant plot displayed.
-        If you are using a notebook and have ``%matplotlib inline`` set
-        then this will simply display inline.
+    result: matplotlib axis or tuple or array
+        If return_diagnostics=False and plot_result=True, returns a matplotlib axis
+        with the relevant plot displayed.
+        If return_diagnostics=True and plot_result=True, returns a tuple of
+        (matplotlib axis, diagnostic data).
+        If return_diagnostics=True and plot_result=False, returns the diagnostic data.
+        If return_diagnostics=False and plot_result=False, returns None.
+        If using a notebook with ``%matplotlib inline``, plots may display inline.
     """
 
     points = _get_embedding(umap_object)
@@ -1040,16 +1062,16 @@ def diagnostic(
     if point_size is None:
         point_size = 100.0 / np.sqrt(points.shape[0])
 
-    if ax is None:
+    if ax is None and plot_result and diagnostic_type != "all":
         dpi = plt.rcParams["figure.dpi"]
         if diagnostic_type in ("local_dim", "neighborhood"):
             width *= 1.1
-
-    font_color = _select_font_color(background)
-
-    if ax is None and diagnostic_type != "all":
-        fig = plt.figure()
+        fig = plt.figure(figsize=(width/dpi, height/dpi))
         ax = fig.add_subplot(111)
+
+    font_color = _select_font_color(background) if plot_result else None
+
+    diagnostic_data = None
 
     if diagnostic_type == "pca":
         color_proj = sklearn.decomposition.PCA(n_components=3).fit_transform(
@@ -1057,20 +1079,22 @@ def diagnostic(
         )
         color_proj -= np.min(color_proj)
         color_proj /= np.max(color_proj, axis=0)
+        diagnostic_data = color_proj
 
-        ax.scatter(points[:, 0], points[:, 1], s=point_size, c=color_proj, alpha=0.66)
-        ax.set_title("Colored by RGB coords of PCA embedding")
-        ax.text(
-            0.99,
-            0.01,
-            "UMAP: n_neighbors={}, min_dist={}".format(
-                umap_object.n_neighbors, umap_object.min_dist
-            ),
-            transform=ax.transAxes,
-            horizontalalignment="right",
-            color=font_color,
-        )
-        ax.set(xticks=[], yticks=[])
+        if plot_result:
+            ax.scatter(points[:, 0], points[:, 1], s=point_size, c=color_proj, alpha=0.66)
+            ax.set_title("Colored by RGB coords of PCA embedding")
+            ax.text(
+                0.99,
+                0.01,
+                "UMAP: n_neighbors={}, min_dist={}".format(
+                    umap_object.n_neighbors, umap_object.min_dist
+                ),
+                transform=ax.transAxes,
+                horizontalalignment="right",
+                color=font_color,
+            )
+            ax.set(xticks=[], yticks=[])
 
     elif diagnostic_type == "ica":
         color_proj = sklearn.decomposition.FastICA(n_components=3).fit_transform(
@@ -1078,20 +1102,22 @@ def diagnostic(
         )
         color_proj -= np.min(color_proj)
         color_proj /= np.max(color_proj, axis=0)
+        diagnostic_data = color_proj
 
-        ax.scatter(points[:, 0], points[:, 1], s=point_size, c=color_proj, alpha=0.66)
-        ax.set_title("Colored by RGB coords of FastICA embedding")
-        ax.text(
-            0.99,
-            0.01,
-            "UMAP: n_neighbors={}, min_dist={}".format(
-                umap_object.n_neighbors, umap_object.min_dist
-            ),
-            transform=ax.transAxes,
-            horizontalalignment="right",
-            color=font_color,
-        )
-        ax.set(xticks=[], yticks=[])
+        if plot_result:
+            ax.scatter(points[:, 0], points[:, 1], s=point_size, c=color_proj, alpha=0.66)
+            ax.set_title("Colored by RGB coords of FastICA embedding")
+            ax.text(
+                0.99,
+                0.01,
+                "UMAP: n_neighbors={}, min_dist={}".format(
+                    umap_object.n_neighbors, umap_object.min_dist
+                ),
+                transform=ax.transAxes,
+                horizontalalignment="right",
+                color=font_color,
+            )
+            ax.set(xticks=[], yticks=[])
 
     elif diagnostic_type == "vq":
         color_projector = sklearn.cluster.KMeans(n_clusters=3).fit(
@@ -1102,20 +1128,22 @@ def diagnostic(
         )
         color_proj -= np.min(color_proj)
         color_proj /= np.max(color_proj, axis=0)
+        diagnostic_data = color_proj
 
-        ax.scatter(points[:, 0], points[:, 1], s=point_size, c=color_proj, alpha=0.66)
-        ax.set_title("Colored by RGB coords of Vector Quantization")
-        ax.text(
-            0.99,
-            0.01,
-            "UMAP: n_neighbors={}, min_dist={}".format(
-                umap_object.n_neighbors, umap_object.min_dist
-            ),
-            transform=ax.transAxes,
-            horizontalalignment="right",
-            color=font_color,
-        )
-        ax.set(xticks=[], yticks=[])
+        if plot_result:
+            ax.scatter(points[:, 0], points[:, 1], s=point_size, c=color_proj, alpha=0.66)
+            ax.set_title("Colored by RGB coords of Vector Quantization")
+            ax.text(
+                0.99,
+                0.01,
+                "UMAP: n_neighbors={}, min_dist={}".format(
+                    umap_object.n_neighbors, umap_object.min_dist
+                ),
+                transform=ax.transAxes,
+                horizontalalignment="right",
+                color=font_color,
+            )
+            ax.set(xticks=[], yticks=[])
 
     elif diagnostic_type == "neighborhood":
         highd_indices, highd_dists = _nhood_search(umap_object, nhood_size)
@@ -1124,34 +1152,36 @@ def diagnostic(
         accuracy = _nhood_compare(
             highd_indices.astype(np.int32), lowd_indices.astype(np.int32)
         )
+        diagnostic_data = accuracy
 
-        vmin = np.percentile(accuracy, 5)
-        vmax = np.percentile(accuracy, 95)
-        ax.scatter(
-            points[:, 0],
-            points[:, 1],
-            s=point_size,
-            c=accuracy,
-            cmap=cmap,
-            vmin=vmin,
-            vmax=vmax,
-        )
-        ax.set_title("Colored by neighborhood Jaccard index")
-        ax.text(
-            0.99,
-            0.01,
-            "UMAP: n_neighbors={}, min_dist={}".format(
-                umap_object.n_neighbors, umap_object.min_dist
-            ),
-            transform=ax.transAxes,
-            horizontalalignment="right",
-            color=font_color,
-        )
-        ax.set(xticks=[], yticks=[])
-        norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
-        mappable = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap)
-        mappable.set_array(accuracy)
-        plt.colorbar(mappable, ax=ax)
+        if plot_result:
+            vmin = np.percentile(accuracy, 5)
+            vmax = np.percentile(accuracy, 95)
+            ax.scatter(
+                points[:, 0],
+                points[:, 1],
+                s=point_size,
+                c=accuracy,
+                cmap=cmap,
+                vmin=vmin,
+                vmax=vmax,
+            )
+            ax.set_title("Colored by neighborhood Jaccard index")
+            ax.text(
+                0.99,
+                0.01,
+                "UMAP: n_neighbors={}, min_dist={}".format(
+                    umap_object.n_neighbors, umap_object.min_dist
+                ),
+                transform=ax.transAxes,
+                horizontalalignment="right",
+                color=font_color,
+            )
+            ax.set(xticks=[], yticks=[])
+            norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
+            mappable = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap)
+            mappable.set_array(accuracy)
+            plt.colorbar(mappable, ax=ax)
 
     elif diagnostic_type == "local_dim":
         highd_indices, highd_dists = _nhood_search(umap_object, umap_object.n_neighbors)
@@ -1159,52 +1189,73 @@ def diagnostic(
         local_dim = np.empty(data.shape[0], dtype=np.int64)
         for i in range(data.shape[0]):
             pca = sklearn.decomposition.PCA().fit(data[highd_indices[i]])
-            local_dim[i] = np.where(
-                np.cumsum(pca.explained_variance_ratio_) > local_variance_threshold
-            )[0][0]
-        vmin = np.percentile(local_dim, 5)
-        vmax = np.percentile(local_dim, 95)
-        ax.scatter(
-            points[:, 0],
-            points[:, 1],
-            s=point_size,
-            c=local_dim,
-            cmap=cmap,
-            vmin=vmin,
-            vmax=vmax,
-        )
-        ax.set_title("Colored by approx local dimension")
-        ax.text(
-            0.99,
-            0.01,
-            "UMAP: n_neighbors={}, min_dist={}".format(
-                umap_object.n_neighbors, umap_object.min_dist
-            ),
-            transform=ax.transAxes,
-            horizontalalignment="right",
-            color=font_color,
-        )
-        ax.set(xticks=[], yticks=[])
-        norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
-        mappable = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap)
-        mappable.set_array(local_dim)
-        plt.colorbar(mappable, ax=ax)
+            try:
+                local_dim[i] = np.where(
+                    np.cumsum(pca.explained_variance_ratio_) > local_variance_threshold
+                )[0][0]
+            except IndexError:
+                local_dim[i] = -1
+        diagnostic_data = local_dim
+
+        if plot_result:
+            vmin = np.percentile(local_dim, 5)
+            vmax = np.percentile(local_dim, 95)
+            ax.scatter(
+                points[:, 0],
+                points[:, 1],
+                s=point_size,
+                c=local_dim,
+                cmap=cmap,
+                vmin=vmin,
+                vmax=vmax,
+            )
+            ax.set_title("Colored by approx local dimension")
+            ax.text(
+                0.99,
+                0.01,
+                "UMAP: n_neighbors={}, min_dist={}".format(
+                    umap_object.n_neighbors, umap_object.min_dist
+                ),
+                transform=ax.transAxes,
+                horizontalalignment="right",
+                color=font_color,
+            )
+            ax.set(xticks=[], yticks=[])
+            norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
+            mappable = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap)
+            mappable.set_array(local_dim)
+            plt.colorbar(mappable, ax=ax)
 
     elif diagnostic_type == "all":
-        cols = int(len(_diagnostic_types) ** 0.5 // 1)
-        rows = len(_diagnostic_types) // cols + 1
-
-        fig, axs = plt.subplots(rows, cols, figsize=(10, 10), constrained_layout=True)
-        axs = axs.flat
-        for ax in axs[len(_diagnostic_types) :]:
-            ax.remove()
-        for ax, plt_type in zip(axs, _diagnostic_types):
-            diagnostic(
-                umap_object,
-                diagnostic_type=plt_type,
-                ax=ax,
-                point_size=point_size / 4.0,
-            )
+        if plot_result:
+            cols = int(len(_diagnostic_types) ** 0.5 // 1)
+            rows = len(_diagnostic_types) // cols + 1
+            fig, axs = plt.subplots(rows, cols, figsize=(10, 10), constrained_layout=True)
+            axs = axs.flat
+            for ax in axs[len(_diagnostic_types):]:
+                ax.remove()
+            diagnostic_data = {}
+            for ax, plt_type in zip(axs, _diagnostic_types):
+                _, sub_diagnostic = diagnostic(
+                    umap_object,
+                    diagnostic_type=plt_type,
+                    ax=ax,
+                    point_size=point_size / 4.0,
+                    return_diagnostics=True,
+                    plot_result=True
+                )
+                diagnostic_data[plt_type] = sub_diagnostic
+        else:
+            diagnostic_data = {}
+            for plt_type in _diagnostic_types:
+                _, sub_diagnostic = diagnostic(
+                    umap_object,
+                    diagnostic_type=plt_type,
+                    point_size=point_size / 4.0,
+                    return_diagnostics=True,
+                    plot_result=False
+                )
+                diagnostic_data[plt_type] = sub_diagnostic
 
     else:
         raise ValueError(
@@ -1213,8 +1264,12 @@ def diagnostic(
             + ' or "all"'
         )
 
-    return ax
-
+    if return_diagnostics and plot_result:
+        return ax, diagnostic_data
+    elif return_diagnostics:
+        return diagnostic_data
+    else:
+        return ax
 
 def interactive(
     umap_object,
@@ -1465,7 +1520,11 @@ def interactive(
             width=width,
             height=height,
             tooltips=None if not tooltip_needed else tooltips,
-            tools=tools if tools is not None else "pan,wheel_zoom,box_zoom,save,reset,help",
+            tools=(
+                tools
+                if tools is not None
+                else "pan,wheel_zoom,box_zoom,save,reset,help"
+            ),
             background_fill_color=background,
         )
         plot.circle(
@@ -1545,9 +1604,7 @@ def interactive(
                 "be displayed. Sorry; try subsampling your data."
             )
         if interactive_text_search:
-            warn(
-                "Too many points for text search." "Sorry; try subsampling your data."
-            )
+            warn("Too many points for text search." "Sorry; try subsampling your data.")
         if alpha is not None:
             warn("Alpha parameter will not be applied on holoviews plots")
         hv.extension("bokeh")
