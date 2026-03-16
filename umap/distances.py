@@ -187,6 +187,7 @@ def minkowski_grad(x, y, p=2):
 
     return result ** (1.0 / p), grad
 
+
 @numba.njit()
 def minkowski_grad_fixed(x, y, p=2.0):
     r"""Minkowski distance.
@@ -209,15 +210,12 @@ def minkowski_grad_fixed(x, y, p=2.0):
     if S == 0.0:
         return dist, grad
 
-    inv_denom = pow(S, (1.0-p) / p )
+    inv_denom = pow(S, (1.0 - p) / p)
     for i in range(x.shape[0]):
-        grad[i] = (
-            pow(np.abs(x[i]-y[i]), p-1.0)
-            * sign(x[i]-y[i])
-            * inv_denom
-        )
+        grad[i] = pow(np.abs(x[i] - y[i]), p - 1.0) * sign(x[i] - y[i]) * inv_denom
 
     return dist, grad
+
 
 @numba.njit()
 def poincare(u, v):
@@ -300,6 +298,7 @@ def weighted_minkowski_grad(x, y, w=_mock_ones, p=2):
 
     return result ** (1.0 / p), grad
 
+
 @numba.njit()
 def weighted_minkowski_grad_fixed(x, y, w=_mock_ones, p=2.0):
     r"""A weighted version of Minkowski distance with gradient.
@@ -324,13 +323,11 @@ def weighted_minkowski_grad_fixed(x, y, w=_mock_ones, p=2.0):
     inv_denom = pow(S, (1.0 - p) / p)
     for i in range(x.shape[0]):
         grad[i] = (
-            w[i]
-            * pow(np.abs(x[i] - y[i]) , p - 1.0)
-            * sign(x[i] - y[i])
-            * inv_denom
+            w[i] * pow(np.abs(x[i] - y[i]), p - 1.0) * sign(x[i] - y[i]) * inv_denom
         )
 
     return dist, grad
+
 
 @numba.njit()
 def mahalanobis(x, y, vinv=_mock_identity):
@@ -655,6 +652,7 @@ def cosine_grad(x, y):
 
     return dist, grad
 
+
 @numba.njit(fastmath=True)
 def cosine_grad_fixed(x, y):
     result = 0.0
@@ -679,12 +677,13 @@ def cosine_grad_fixed(x, y):
     grad = np.empty(x.shape[0], dtype=np.float32)
 
     inv_nx_ny = 1.0 / (nx * ny)
-    inv_nx3_ny = 1.0 / (norm_x * nx * ny) 
+    inv_nx3_ny = 1.0 / (norm_x * nx * ny)
 
     for i in range(x.shape[0]):
         grad[i] = x[i] * result * inv_nx3_ny - y[i] * inv_nx_ny
 
     return dist, grad
+
 
 @numba.njit()
 def correlation(x, y):
@@ -765,6 +764,7 @@ def hellinger_grad(x, y):
 
     return dist, grad
 
+
 @numba.njit()
 def hellinger_grad_fixed(x, y):
     result = 0.0
@@ -802,6 +802,7 @@ def hellinger_grad_fixed(x, y):
         grad[i] = (grad_numer_const - term) / grad_denom
 
     return dist, grad
+
 
 @numba.njit()
 def approx_log_Gamma(x):
@@ -973,6 +974,7 @@ def correlation_grad(x, y):
 
     return dist, grad
 
+
 @numba.njit(fastmath=True)
 def correlation_grad_fixed(x, y):
     n = x.shape[0]
@@ -1022,6 +1024,7 @@ def correlation_grad_fixed(x, y):
         grad[i] -= mean_grad
 
     return dist, grad
+
 
 @numba.njit(fastmath=True)
 def sinkhorn_distance(

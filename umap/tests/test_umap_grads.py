@@ -3,17 +3,26 @@ import pytest
 
 
 from umap.distances import (
-    euclidean, euclidean_grad,
-    manhattan, manhattan_grad,
-    minkowski, minkowski_grad_fixed as minkowski_grad,
-    weighted_minkowski, weighted_minkowski_grad_fixed as weighted_minkowski_grad,
-    cosine, cosine_grad_fixed as cosine_grad,
-    bray_curtis, bray_curtis_grad,
-    hellinger, hellinger_grad_fixed as hellinger_grad,
-    chebyshev, chebyshev_grad,
-    correlation, correlation_grad_fixed as correlation_grad
-    
+    euclidean,
+    euclidean_grad,
+    manhattan,
+    manhattan_grad,
+    minkowski,
+    minkowski_grad_fixed as minkowski_grad,
+    weighted_minkowski,
+    weighted_minkowski_grad_fixed as weighted_minkowski_grad,
+    cosine,
+    cosine_grad_fixed as cosine_grad,
+    bray_curtis,
+    bray_curtis_grad,
+    hellinger,
+    hellinger_grad_fixed as hellinger_grad,
+    chebyshev,
+    chebyshev_grad,
+    correlation,
+    correlation_grad_fixed as correlation_grad,
 )
+
 
 def numerical_gradient(f, x, eps=1e-6, forward_only=False):
     """
@@ -49,20 +58,23 @@ def numerical_gradient(f, x, eps=1e-6, forward_only=False):
 
     return grad
 
+
 def numerical_grad_x(dist, x, y, eps=1e-6, dist_kwargs=None, forward_only=False):
     """
     Numerical gradient of dist(x, y) with respect to x only.
     """
     return numerical_gradient(lambda z: dist(z, y, **dist_kwargs), x, eps, forward_only)
 
-def sample_normal_pairs(n,d,rng=None):
+
+def sample_normal_pairs(n, d, rng=None):
     if rng is None:
         rng = np.random.default_rng()
 
     x = rng.normal(size=(n, d))
-    y = rng.normal(size=(n, d)) 
-    return x, y  
-    
+    y = rng.normal(size=(n, d))
+    return x, y
+
+
 def sample_dirichlet_pairs(n, d, alpha=1.0, rng=None):
     # For hellinger
     if rng is None:
@@ -70,6 +82,7 @@ def sample_dirichlet_pairs(n, d, alpha=1.0, rng=None):
     x = rng.dirichlet(alpha=np.full(d, alpha), size=n)
     y = rng.dirichlet(alpha=np.full(d, alpha), size=n)
     return x, y
+
 
 def sample_abundance_pairs(n, d, shape=2.0, scale=1.0, rng=None):
     # For bray curtis
@@ -79,27 +92,33 @@ def sample_abundance_pairs(n, d, shape=2.0, scale=1.0, rng=None):
     y = rng.gamma(shape=shape, scale=scale, size=(n, d))
     return x, y
 
+
 def assert_gradient_matches_finite_diff(
     dist,
     grad,
-    dist_kwargs=None, 
-    sampler=sample_normal_pairs, 
-    dim=8, 
+    dist_kwargs=None,
+    sampler=sample_normal_pairs,
+    dim=8,
     n_samples=1_000,
     forward_only=False,
     skip_close_coords=False,
     max_tol=1e-5,
     mean_tol=1e-6,
-    ):
+):
 
     rng = np.random.default_rng(0)
-    x,y =sampler(n_samples, dim, rng=rng)
+    x, y = sampler(n_samples, dim, rng=rng)
 
     if dist_kwargs is None:
-        dist_kwargs=dict()
+        dist_kwargs = dict()
 
     numeric_grad = np.vstack(
-        [numerical_grad_x(dist, x[i], y[i], dist_kwargs=dist_kwargs, forward_only=forward_only) for i in range(len(x))]
+        [
+            numerical_grad_x(
+                dist, x[i], y[i], dist_kwargs=dist_kwargs, forward_only=forward_only
+            )
+            for i in range(len(x))
+        ]
     )
 
     analytic_dist, analytic_grad = zip(
@@ -116,26 +135,29 @@ def assert_gradient_matches_finite_diff(
         close_coords = (np.abs(x) < 1e-3) | (np.abs(y) < 1e-3)
         numeric_grad[close_coords] = 0
         analytic_grad[close_coords] = 0
-    #errors = np.linalg.norm(numeric_grad - analytic_grad, axis=1)
+    # errors = np.linalg.norm(numeric_grad - analytic_grad, axis=1)
 
     coord_errors = np.abs(numeric_grad - analytic_grad)
 
     assert coord_errors.max() < max_tol, "Max tol exceeded"
     assert coord_errors.mean() < mean_tol, "Mean tol exceeded"
-    
 
     # ### Check grad dists match with non-grad dists
     true_dist = np.array([dist(x[i], y[i], **dist_kwargs) for i in range(len(x))])
-    assert np.max(np.abs(true_dist-analytic_dist))<1e-6, "Distance mismatch"
+    assert np.max(np.abs(true_dist - analytic_dist)) < 1e-6, "Distance mismatch"
+
 
 @pytest.mark.parametrize("dim", [4, 16, 64])
-def test_euclidean_gradient(dim,):
+def test_euclidean_gradient(
+    dim,
+):
     assert_gradient_matches_finite_diff(
         euclidean,
         euclidean_grad,
         sampler=sample_normal_pairs,
         dim=dim,
     )
+
 
 @pytest.mark.parametrize("dim", [4, 16, 64])
 @pytest.mark.parametrize("p", [1, 2, 3, 4])
@@ -145,9 +167,10 @@ def test_minkowski_gradient(dim, p):
         minkowski_grad,
         sampler=sample_normal_pairs,
         dim=dim,
-        dist_kwargs={"p":p},
-        forward_only= p==1,
+        dist_kwargs={"p": p},
+        forward_only=p == 1,
     )
+
 
 @pytest.mark.parametrize("dim", [4, 16, 64])
 @pytest.mark.parametrize("p", [1, 2, 3, 4])
@@ -158,12 +181,15 @@ def test_weighted_minkowski_gradient(dim, p):
         weighted_minkowski_grad,
         sampler=sample_normal_pairs,
         dim=dim,
-        dist_kwargs={"p":p, "w":rng.uniform(size=dim)},
-        forward_only= p==1,
+        dist_kwargs={"p": p, "w": rng.uniform(size=dim)},
+        forward_only=p == 1,
     )
 
+
 @pytest.mark.parametrize("dim", [4, 16, 64])
-def test_cosine_gradient(dim,):
+def test_cosine_gradient(
+    dim,
+):
     assert_gradient_matches_finite_diff(
         cosine,
         cosine_grad,
@@ -171,19 +197,25 @@ def test_cosine_gradient(dim,):
         dim=dim,
     )
 
+
 @pytest.mark.parametrize("dim", [4, 16, 64])
-def test_manhattan_gradient(dim,):
+def test_manhattan_gradient(
+    dim,
+):
     assert_gradient_matches_finite_diff(
         manhattan,
         manhattan_grad,
         sampler=sample_normal_pairs,
         dim=dim,
-        forward_only=True
-        #skip_close_coords=True,
+        forward_only=True,
+        # skip_close_coords=True,
     )
 
+
 @pytest.mark.parametrize("dim", [4, 16, 64])
-def test_chebyshev_gradient(dim,):
+def test_chebyshev_gradient(
+    dim,
+):
     assert_gradient_matches_finite_diff(
         chebyshev,
         chebyshev_grad,
@@ -191,8 +223,11 @@ def test_chebyshev_gradient(dim,):
         dim=dim,
     )
 
+
 @pytest.mark.parametrize("dim", [4, 16, 64])
-def test_correlation_gradient(dim,):
+def test_correlation_gradient(
+    dim,
+):
     assert_gradient_matches_finite_diff(
         correlation,
         correlation_grad,
@@ -200,8 +235,11 @@ def test_correlation_gradient(dim,):
         dim=dim,
     )
 
+
 @pytest.mark.parametrize("dim", [4, 16, 64])
-def test_braycurtis_gradient(dim,):
+def test_braycurtis_gradient(
+    dim,
+):
     assert_gradient_matches_finite_diff(
         bray_curtis,
         bray_curtis_grad,
@@ -209,7 +247,8 @@ def test_braycurtis_gradient(dim,):
         dim=dim,
     )
 
-@pytest.mark.parametrize("dim", [4,16,64])
+
+@pytest.mark.parametrize("dim", [4, 16, 64])
 def test_hellinger_gradient(dim):
     assert_gradient_matches_finite_diff(
         hellinger,
