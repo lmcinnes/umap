@@ -120,13 +120,13 @@ def assert_gradient_matches_finite_diff(
 
     coord_errors = np.abs(numeric_grad - analytic_grad)
 
-    assert coord_errors.max() < max_tol
-    assert coord_errors.mean() < mean_tol
+    assert coord_errors.max() < max_tol, "Max tol exceeded"
+    assert coord_errors.mean() < mean_tol, "Mean tol exceeded"
     
 
     # ### Check grad dists match with non-grad dists
     true_dist = np.array([dist(x[i], y[i], **dist_kwargs) for i in range(len(x))])
-    assert np.max(np.abs(true_dist-analytic_dist))<1e-6
+    assert np.max(np.abs(true_dist-analytic_dist))<1e-6, "Distance mismatch"
 
 @pytest.mark.parametrize("dim", [4, 16, 64])
 def test_euclidean_gradient(dim,):
