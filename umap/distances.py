@@ -794,7 +794,7 @@ def hellinger_grad_fixed(x, y):
     grad_numer_const = (l1_norm_y * result) / (2.0 * dist_denom**3)
 
     for i in range(x.shape[0]):
-        if x[i] > 0.0:
+        if x[i] > 0.0 and grad_term[i] > 0:
             term = y[i] / (2.0 * grad_term[i] * dist_denom)
         else:
             term = 0.0
