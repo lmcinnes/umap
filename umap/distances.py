@@ -187,6 +187,37 @@ def minkowski_grad(x, y, p=2):
 
     return result ** (1.0 / p), grad
 
+@numba.njit()
+def minkowski_grad_fixed(x, y, p=2.0):
+    r"""Minkowski distance.
+
+    ..math::
+        D(x, y) = \left(\sum_i |x_i - y_i|^p\right)^{\frac{1}{p}}
+
+    This is a general distance. For p=1 it is equivalent to
+    manhattan distance, for p=2 it is Euclidean distance, and
+    for p=infinity it is Chebyshev distance. In general it is better
+    to use the more specialised functions for those distances.
+    """
+    S = 0.0
+    for i in range(x.shape[0]):
+        S += np.abs(x[i] - y[i]) ** p
+
+    dist = S ** (1.0 / p)
+    grad = np.zeros(x.shape[0], dtype=np.float32)
+
+    if S == 0.0:
+        return dist, grad
+
+    inv_denom = pow(S, (1.0-p) / p )
+    for i in range(x.shape[0]):
+        grad[i] = (
+            pow(np.abs(x[i]-y[i]), p-1.0)
+            * sign(x[i]-y[i])
+            * inv_denom
+        )
+
+    return dist, grad
 
 @numba.njit()
 def poincare(u, v):
@@ -269,6 +300,37 @@ def weighted_minkowski_grad(x, y, w=_mock_ones, p=2):
 
     return result ** (1.0 / p), grad
 
+@numba.njit()
+def weighted_minkowski_grad_fixed(x, y, w=_mock_ones, p=2.0):
+    r"""A weighted version of Minkowski distance with gradient.
+
+    ..math::
+        D(x, y) = \left(\sum_i w_i |x_i - y_i|^p\right)^{\frac{1}{p}}
+
+    If weights w_i are inverse standard deviations of data in each dimension
+    then this represents a standardised Minkowski distance (and is
+    equivalent to standardised Euclidean distance for p=1).
+    """
+    S = 0.0
+    for i in range(x.shape[0]):
+        S += w[i] * (np.abs(x[i] - y[i])) ** p
+
+    dist = S ** (1.0 / p)
+    grad = np.zeros(x.shape[0], dtype=np.float32)
+
+    if S == 0.0:
+        return dist, grad
+
+    inv_denom = pow(S, (1.0 - p) / p)
+    for i in range(x.shape[0]):
+        grad[i] = (
+            w[i]
+            * pow(np.abs(x[i] - y[i]) , p - 1.0)
+            * sign(x[i] - y[i])
+            * inv_denom
+        )
+
+    return dist, grad
 
 @numba.njit()
 def mahalanobis(x, y, vinv=_mock_identity):
@@ -593,6 +655,36 @@ def cosine_grad(x, y):
 
     return dist, grad
 
+@numba.njit(fastmath=True)
+def cosine_grad_fixed(x, y):
+    result = 0.0
+    norm_x = 0.0
+    norm_y = 0.0
+
+    for i in range(x.shape[0]):
+        result += x[i] * y[i]
+        norm_x += x[i] * x[i]
+        norm_y += y[i] * y[i]
+
+    if norm_x == 0.0 and norm_y == 0.0:
+        return 0.0, np.zeros(x.shape, dtype=np.float32)
+
+    if norm_x == 0.0 or norm_y == 0.0:
+        return 1.0, np.zeros(x.shape, dtype=np.float32)
+
+    nx = np.sqrt(norm_x)
+    ny = np.sqrt(norm_y)
+
+    dist = 1.0 - result / (nx * ny)
+    grad = np.empty(x.shape[0], dtype=np.float32)
+
+    inv_nx_ny = 1.0 / (nx * ny)
+    inv_nx3_ny = 1.0 / (norm_x * nx * ny) 
+
+    for i in range(x.shape[0]):
+        grad[i] = x[i] * result * inv_nx3_ny - y[i] * inv_nx_ny
+
+    return dist, grad
 
 @numba.njit()
 def correlation(x, y):
@@ -673,6 +765,43 @@ def hellinger_grad(x, y):
 
     return dist, grad
 
+@numba.njit()
+def hellinger_grad_fixed(x, y):
+    result = 0.0
+    l1_norm_x = 0.0
+    l1_norm_y = 0.0
+
+    grad_term = np.empty(x.shape[0])
+
+    for i in range(x.shape[0]):
+        grad_term[i] = np.sqrt(x[i] * y[i])
+        result += grad_term[i]
+        l1_norm_x += x[i]
+        l1_norm_y += y[i]
+
+    if l1_norm_x == 0.0 and l1_norm_y == 0.0:
+        return 0.0, np.zeros(x.shape)
+
+    if l1_norm_x == 0.0 or l1_norm_y == 0.0:
+        return 1.0, np.zeros(x.shape)
+
+    dist_denom = np.sqrt(l1_norm_x * l1_norm_y)
+    inner = 1.0 - result / dist_denom
+    dist = np.sqrt(inner)
+
+    grad = np.empty(x.shape[0])
+    grad_denom = 2.0 * dist
+    grad_numer_const = (l1_norm_y * result) / (2.0 * dist_denom**3)
+
+    for i in range(x.shape[0]):
+        if x[i] > 0.0:
+            term = y[i] / (2.0 * grad_term[i] * dist_denom)
+        else:
+            term = 0.0
+
+        grad[i] = (grad_numer_const - term) / grad_denom
+
+    return dist, grad
 
 @numba.njit()
 def approx_log_Gamma(x):
