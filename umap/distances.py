@@ -973,6 +973,55 @@ def correlation_grad(x, y):
 
     return dist, grad
 
+@numba.njit(fastmath=True)
+def correlation_grad_fixed(x, y):
+    n = x.shape[0]
+
+    mu_x = 0.0
+    mu_y = 0.0
+    for i in range(n):
+        mu_x += x[i]
+        mu_y += y[i]
+    mu_x /= n
+    mu_y /= n
+
+    dot = 0.0
+    norm_x = 0.0
+    norm_y = 0.0
+
+    for i in range(n):
+        cx = x[i] - mu_x
+        cy = y[i] - mu_y
+        dot += cx * cy
+        norm_x += cx * cx
+        norm_y += cy * cy
+
+    if norm_x == 0.0 and norm_y == 0.0:
+        return 0.0, np.zeros(n, dtype=np.float32)
+
+    if norm_x == 0.0 or norm_y == 0.0:
+        return 1.0, np.zeros(n, dtype=np.float32)
+
+    nx = np.sqrt(norm_x)
+    ny = np.sqrt(norm_y)
+
+    dist = 1.0 - dot / (nx * ny)
+    grad = np.empty(n, dtype=np.float32)
+
+    inv_nx_ny = 1.0 / (nx * ny)
+    inv_nx3_ny = 1.0 / (norm_x * nx * ny)
+
+    mean_grad = 0.0
+    for i in range(n):
+        cx = x[i] - mu_x
+        grad[i] = cx * dot * inv_nx3_ny - (y[i] - mu_y) * inv_nx_ny
+        mean_grad += grad[i]
+
+    mean_grad /= n
+    for i in range(n):
+        grad[i] -= mean_grad
+
+    return dist, grad
 
 @numba.njit(fastmath=True)
 def sinkhorn_distance(
