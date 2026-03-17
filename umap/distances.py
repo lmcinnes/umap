@@ -162,34 +162,7 @@ def minkowski(x, y, p=2):
 
 
 @numba.njit()
-def minkowski_grad(x, y, p=2):
-    r"""Minkowski distance with gradient.
-
-    ..math::
-        D(x, y) = \left(\sum_i |x_i - y_i|^p\right)^{\frac{1}{p}}
-
-    This is a general distance. For p=1 it is equivalent to
-    manhattan distance, for p=2 it is Euclidean distance, and
-    for p=infinity it is Chebyshev distance. In general it is better
-    to use the more specialised functions for those distances.
-    """
-    result = 0.0
-    for i in range(x.shape[0]):
-        result += (np.abs(x[i] - y[i])) ** p
-
-    grad = np.empty(x.shape[0], dtype=np.float32)
-    for i in range(x.shape[0]):
-        grad[i] = (
-            pow(np.abs(x[i] - y[i]), (p - 1.0))
-            * sign(x[i] - y[i])
-            * pow(result, (1.0 / (p - 1)))
-        )
-
-    return result ** (1.0 / p), grad
-
-
-@numba.njit()
-def minkowski_grad_fixed(x, y, p=2.0):
+def minkowski_grad(x, y, p=2.0):
     r"""Minkowski distance.
 
     ..math::
@@ -273,34 +246,7 @@ def weighted_minkowski(x, y, w=_mock_ones, p=2):
 
 
 @numba.njit()
-def weighted_minkowski_grad(x, y, w=_mock_ones, p=2):
-    r"""A weighted version of Minkowski distance with gradient.
-
-    ..math::
-        D(x, y) = \left(\sum_i w_i |x_i - y_i|^p\right)^{\frac{1}{p}}
-
-    If weights w_i are inverse standard deviations of data in each dimension
-    then this represented a standardised Minkowski distance (and is
-    equivalent to standardised Euclidean distance for p=1).
-    """
-    result = 0.0
-    for i in range(x.shape[0]):
-        result += w[i] * (np.abs(x[i] - y[i])) ** p
-
-    grad = np.empty(x.shape[0], dtype=np.float32)
-    for i in range(x.shape[0]):
-        grad[i] = (
-            w[i]
-            * pow(np.abs(x[i] - y[i]), (p - 1.0))
-            * sign(x[i] - y[i])
-            * pow(result, (1.0 / (p - 1)))
-        )
-
-    return result ** (1.0 / p), grad
-
-
-@numba.njit()
-def weighted_minkowski_grad_fixed(x, y, w=_mock_ones, p=2.0):
+def weighted_minkowski_grad(x, y, w=_mock_ones, p=2.0):
     r"""A weighted version of Minkowski distance with gradient.
 
     ..math::
@@ -654,29 +600,6 @@ def cosine_grad(x, y):
     result = 0.0
     norm_x = 0.0
     norm_y = 0.0
-    for i in range(x.shape[0]):
-        result += x[i] * y[i]
-        norm_x += x[i] ** 2
-        norm_y += y[i] ** 2
-
-    if norm_x == 0.0 and norm_y == 0.0:
-        dist = 0.0
-        grad = np.zeros(x.shape)
-    elif norm_x == 0.0 or norm_y == 0.0:
-        dist = 1.0
-        grad = np.zeros(x.shape)
-    else:
-        grad = -(x * result - y * norm_x) / np.sqrt(norm_x**3 * norm_y)
-        dist = 1.0 - (result / np.sqrt(norm_x * norm_y))
-
-    return dist, grad
-
-
-@numba.njit(fastmath=True)
-def cosine_grad_fixed(x, y):
-    result = 0.0
-    norm_x = 0.0
-    norm_y = 0.0
 
     for i in range(x.shape[0]):
         result += x[i] * y[i]
@@ -755,37 +678,6 @@ def hellinger(x, y):
 
 @numba.njit()
 def hellinger_grad(x, y):
-    result = 0.0
-    l1_norm_x = 0.0
-    l1_norm_y = 0.0
-
-    grad_term = np.empty(x.shape[0])
-
-    for i in range(x.shape[0]):
-        grad_term[i] = np.sqrt(x[i] * y[i])
-        result += grad_term[i]
-        l1_norm_x += x[i]
-        l1_norm_y += y[i]
-
-    if l1_norm_x == 0 and l1_norm_y == 0:
-        dist = 0.0
-        grad = np.zeros(x.shape)
-    elif l1_norm_x == 0 or l1_norm_y == 0:
-        dist = 1.0
-        grad = np.zeros(x.shape)
-    else:
-        dist_denom = np.sqrt(l1_norm_x * l1_norm_y)
-        dist = np.sqrt(1 - result / dist_denom)
-        grad_denom = 2 * dist
-        grad_numer_const = (l1_norm_y * result) / (2 * dist_denom**3)
-
-        grad = (grad_numer_const - (y / grad_term * dist_denom)) / grad_denom
-
-    return dist, grad
-
-
-@numba.njit()
-def hellinger_grad_fixed(x, y):
     result = 0.0
     l1_norm_x = 0.0
     l1_norm_y = 0.0
@@ -959,43 +851,8 @@ def symmetric_kl_grad(x, y, z=1e-11):  # pragma: no cover
     return dist, grad
 
 
-@numba.njit()
-def correlation_grad(x, y):
-    mu_x = 0.0
-    mu_y = 0.0
-    norm_x = 0.0
-    norm_y = 0.0
-    dot_product = 0.0
-
-    for i in range(x.shape[0]):
-        mu_x += x[i]
-        mu_y += y[i]
-
-    mu_x /= x.shape[0]
-    mu_y /= x.shape[0]
-
-    for i in range(x.shape[0]):
-        shifted_x = x[i] - mu_x
-        shifted_y = y[i] - mu_y
-        norm_x += shifted_x**2
-        norm_y += shifted_y**2
-        dot_product += shifted_x * shifted_y
-
-    if norm_x == 0.0 and norm_y == 0.0:
-        dist = 0.0
-        grad = np.zeros(x.shape)
-    elif dot_product == 0.0:
-        dist = 1.0
-        grad = np.zeros(x.shape)
-    else:
-        dist = 1.0 - (dot_product / np.sqrt(norm_x * norm_y))
-        grad = ((x - mu_x) / norm_x - (y - mu_y) / dot_product) * dist
-
-    return dist, grad
-
-
 @numba.njit(fastmath=True)
-def correlation_grad_fixed(x, y):
+def correlation_grad(x, y):
     n = x.shape[0]
 
     mu_x = 0.0
@@ -1495,7 +1352,6 @@ named_distances_with_gradients = {
     # Other distances
     "canberra": canberra_grad,
     "cosine": cosine_grad,
-    "cosine_fixed": cosine_grad_fixed,
     "correlation": correlation_grad,
     "hellinger": hellinger_grad,
     "haversine": haversine_grad,
