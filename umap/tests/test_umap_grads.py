@@ -21,6 +21,11 @@ from umap.distances import (
     chebyshev_grad,
     correlation,
     correlation_grad_fixed as correlation_grad,
+    standardised_euclidean,
+    standardised_euclidean_grad,
+    mahalanobis,
+    mahalanobis_f64,
+    mahalanobis_grad,
 )
 
 
@@ -99,7 +104,7 @@ def assert_gradient_matches_finite_diff(
     dist_kwargs=None,
     sampler=sample_normal_pairs,
     dim=8,
-    n_samples=1_000,
+    n_samples=1_00,
     forward_only=False,
     skip_close_coords=False,
     max_tol=1e-5,
@@ -135,14 +140,13 @@ def assert_gradient_matches_finite_diff(
         close_coords = (np.abs(x) < 1e-3) | (np.abs(y) < 1e-3)
         numeric_grad[close_coords] = 0
         analytic_grad[close_coords] = 0
-    # errors = np.linalg.norm(numeric_grad - analytic_grad, axis=1)
 
     coord_errors = np.abs(numeric_grad - analytic_grad)
 
-    assert coord_errors.max() < max_tol, "Max tol exceeded"
-    assert coord_errors.mean() < mean_tol, "Mean tol exceeded"
+    assert coord_errors.max() < max_tol, f"Max tol exceeded: {coord_errors.max()}"
+    assert coord_errors.mean() < mean_tol, f"Mean tol exceeded: {coord_errors.mean()}"
 
-    # ### Check grad dists match with non-grad dists
+    ### Check grad dists match with non-grad dists
     true_dist = np.array([dist(x[i], y[i], **dist_kwargs) for i in range(len(x))])
     assert np.max(np.abs(true_dist - analytic_dist)) < 1e-6, "Distance mismatch"
 
@@ -255,6 +259,43 @@ def test_hellinger_gradient(dim):
         hellinger_grad,
         sampler=sample_dirichlet_pairs,
         dim=dim,
-        forward_only=False,
         skip_close_coords=True,
     )
+
+
+@pytest.mark.parametrize("dim", [4, 16, 64])
+def test_standardised_euclidean_gradient(dim):
+    rng = np.random.default_rng(0)
+    sigma = rng.uniform(low=0.5, high=2.0, size=dim).astype(np.float64)
+    assert_gradient_matches_finite_diff(
+        standardised_euclidean,
+        standardised_euclidean_grad,
+        sampler=sample_normal_pairs,
+        dim=dim,
+        dist_kwargs={"sigma": sigma},
+    )
+
+
+@pytest.mark.parametrize("dim", [4, 16, 64])
+def test_mahalanobis_gradient(dim):
+    rng = np.random.default_rng(0)
+    diag = rng.uniform(low=0.5, high=2.0, size=dim).astype(np.float64)
+    vinv = np.diag(diag)
+    # require float64 mahalanobis accuracy for finite difference method
+    assert_gradient_matches_finite_diff(
+        mahalanobis_f64,
+        mahalanobis_grad,
+        sampler=sample_normal_pairs,
+        dim=dim,
+        dist_kwargs={"vinv": vinv},
+    )
+
+
+# TODO
+# canberra
+# symmetric_kl
+# haversine
+# hyperboloid
+# gaussian_energy
+# spherical_gaussian_energy
+# diagonal_gaussian_energy

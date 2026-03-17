@@ -348,6 +348,25 @@ def mahalanobis(x, y, vinv=_mock_identity):
 
 
 @numba.njit()
+def mahalanobis_f64(x, y, vinv=_mock_identity):
+    "float64 version of mahalanobis. Used for testing (need accuracy in finite differences)"
+    result = 0.0
+
+    diff = np.empty(x.shape[0], dtype=np.float64)
+
+    for i in range(x.shape[0]):
+        diff[i] = x[i] - y[i]
+
+    for i in range(x.shape[0]):
+        tmp = 0.0
+        for j in range(x.shape[0]):
+            tmp += vinv[i, j] * diff[j]
+        result += tmp * diff[i]
+
+    return np.sqrt(result)
+
+
+@numba.njit()
 def mahalanobis_grad(x, y, vinv=_mock_identity):
     result = 0.0
 
@@ -1476,6 +1495,7 @@ named_distances_with_gradients = {
     # Other distances
     "canberra": canberra_grad,
     "cosine": cosine_grad,
+    "cosine_fixed": cosine_grad_fixed,
     "correlation": correlation_grad,
     "hellinger": hellinger_grad,
     "haversine": haversine_grad,
