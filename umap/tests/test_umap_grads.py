@@ -1,31 +1,7 @@
 import numpy as np
 import pytest
 
-
-from umap.distances import (
-    euclidean,
-    euclidean_grad,
-    manhattan,
-    manhattan_grad,
-    minkowski,
-    minkowski_grad,
-    weighted_minkowski,
-    weighted_minkowski_grad,
-    cosine,
-    cosine_grad,
-    bray_curtis,
-    bray_curtis_grad,
-    hellinger,
-    hellinger_grad,
-    chebyshev,
-    chebyshev_grad,
-    correlation,
-    correlation_grad,
-    standardised_euclidean,
-    standardised_euclidean_grad,
-    mahalanobis_f64,
-    mahalanobis_grad,
-)
+import umap.distances as dist
 
 
 def numerical_gradient(f, x, eps=1e-6, forward_only=False):
@@ -155,8 +131,8 @@ def test_euclidean_gradient(
     dim,
 ):
     assert_gradient_matches_finite_diff(
-        euclidean,
-        euclidean_grad,
+        dist.euclidean,
+        dist.euclidean_grad,
         sampler=sample_normal_pairs,
         dim=dim,
     )
@@ -166,8 +142,8 @@ def test_euclidean_gradient(
 @pytest.mark.parametrize("p", [1, 2, 3, 4])
 def test_minkowski_gradient(dim, p):
     assert_gradient_matches_finite_diff(
-        minkowski,
-        minkowski_grad,
+        dist.minkowski,
+        dist.minkowski_grad,
         sampler=sample_normal_pairs,
         dim=dim,
         dist_kwargs={"p": p},
@@ -180,8 +156,8 @@ def test_minkowski_gradient(dim, p):
 def test_weighted_minkowski_gradient(dim, p):
     rng = np.random.default_rng(0)
     assert_gradient_matches_finite_diff(
-        weighted_minkowski,
-        weighted_minkowski_grad,
+        dist.weighted_minkowski,
+        dist.weighted_minkowski_grad,
         sampler=sample_normal_pairs,
         dim=dim,
         dist_kwargs={"p": p, "w": rng.uniform(size=dim)},
@@ -194,8 +170,8 @@ def test_cosine_gradient(
     dim,
 ):
     assert_gradient_matches_finite_diff(
-        cosine,
-        cosine_grad,
+        dist.cosine,
+        dist.cosine_grad,
         sampler=sample_normal_pairs,
         dim=dim,
     )
@@ -206,8 +182,8 @@ def test_manhattan_gradient(
     dim,
 ):
     assert_gradient_matches_finite_diff(
-        manhattan,
-        manhattan_grad,
+        dist.manhattan,
+        dist.manhattan_grad,
         sampler=sample_normal_pairs,
         dim=dim,
         forward_only=True,
@@ -220,8 +196,8 @@ def test_chebyshev_gradient(
     dim,
 ):
     assert_gradient_matches_finite_diff(
-        chebyshev,
-        chebyshev_grad,
+        dist.chebyshev,
+        dist.chebyshev_grad,
         sampler=sample_normal_pairs,
         dim=dim,
     )
@@ -232,8 +208,8 @@ def test_correlation_gradient(
     dim,
 ):
     assert_gradient_matches_finite_diff(
-        correlation,
-        correlation_grad,
+        dist.correlation,
+        dist.correlation_grad,
         sampler=sample_normal_pairs,
         dim=dim,
     )
@@ -244,8 +220,8 @@ def test_braycurtis_gradient(
     dim,
 ):
     assert_gradient_matches_finite_diff(
-        bray_curtis,
-        bray_curtis_grad,
+        dist.bray_curtis,
+        dist.bray_curtis_grad,
         sampler=sample_abundance_pairs,
         dim=dim,
     )
@@ -254,8 +230,8 @@ def test_braycurtis_gradient(
 @pytest.mark.parametrize("dim", [4, 16, 64])
 def test_hellinger_gradient(dim):
     assert_gradient_matches_finite_diff(
-        hellinger,
-        hellinger_grad,
+        dist.hellinger,
+        dist.hellinger_grad,
         sampler=sample_dirichlet_pairs,
         dim=dim,
         skip_close_coords=True,
@@ -267,8 +243,8 @@ def test_standardised_euclidean_gradient(dim):
     rng = np.random.default_rng(0)
     sigma = rng.uniform(low=0.5, high=2.0, size=dim).astype(np.float64)
     assert_gradient_matches_finite_diff(
-        standardised_euclidean,
-        standardised_euclidean_grad,
+        dist.standardised_euclidean,
+        dist.standardised_euclidean_grad,
         sampler=sample_normal_pairs,
         dim=dim,
         dist_kwargs={"sigma": sigma},
@@ -282,8 +258,8 @@ def test_mahalanobis_gradient(dim):
     vinv = np.diag(diag)
     # require float64 mahalanobis accuracy for finite difference method
     assert_gradient_matches_finite_diff(
-        mahalanobis_f64,
-        mahalanobis_grad,
+        dist.mahalanobis_f64,
+        dist.mahalanobis_grad,
         sampler=sample_normal_pairs,
         dim=dim,
         dist_kwargs={"vinv": vinv},
