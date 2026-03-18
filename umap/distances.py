@@ -18,6 +18,7 @@ def sign(a):
     else:
         return 1
 
+
 @numba.njit()
 def softmax(z):
     n = z.shape[0]
@@ -42,6 +43,7 @@ def softmax(z):
             out[i] *= invs
 
     return out
+
 
 @numba.njit(fastmath=True)
 def euclidean(x, y):
@@ -772,6 +774,7 @@ def softmax_hellinger_grad(x, y):
         grad_x[i] = p[i] * (g_p[i] - dot_gp_p)
 
     return dist, grad_x
+
 
 @numba.njit()
 def approx_log_Gamma(x):

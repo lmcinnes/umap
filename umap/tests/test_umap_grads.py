@@ -265,6 +265,7 @@ def test_mahalanobis_gradient(dim):
         dist_kwargs={"vinv": vinv},
     )
 
+
 @pytest.mark.parametrize("dim", [4, 16, 64])
 def test_softmax_hellinger_gradient(
     dim,
