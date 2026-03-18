@@ -18,6 +18,30 @@ def sign(a):
     else:
         return 1
 
+@numba.njit()
+def softmax(z):
+    n = z.shape[0]
+    out = np.empty(n)
+
+    zmax = z[0]
+    for i in range(1, n):
+        if z[i] > zmax:
+            zmax = z[i]
+
+    s = 0.0
+    for i in range(n):
+        out[i] = np.exp(z[i] - zmax)
+        s += out[i]
+
+    if s == 0.0:
+        for i in range(n):
+            out[i] = 1.0 / n
+    else:
+        invs = 1.0 / s
+        for i in range(n):
+            out[i] *= invs
+
+    return out
 
 @numba.njit(fastmath=True)
 def euclidean(x, y):
@@ -691,16 +715,19 @@ def hellinger_grad(x, y):
         l1_norm_y += y[i]
 
     if l1_norm_x == 0.0 and l1_norm_y == 0.0:
-        return 0.0, np.zeros(x.shape)
+        return 0.0, np.zeros(x.shape, dtype=np.float32)
 
     if l1_norm_x == 0.0 or l1_norm_y == 0.0:
-        return 1.0, np.zeros(x.shape)
+        return 1.0, np.zeros(x.shape, dtype=np.float32)
 
     dist_denom = np.sqrt(l1_norm_x * l1_norm_y)
     inner = 1.0 - result / dist_denom
     dist = np.sqrt(inner)
 
-    grad = np.empty(x.shape[0])
+    if dist == 0.0:
+        return dist, np.zeros(x.shape[0], dtype=np.float32)
+
+    grad = np.empty(x.shape[0], dtype=np.float32)
     grad_denom = 2.0 * dist
     grad_numer_const = (l1_norm_y * result) / (2.0 * dist_denom**3)
 
@@ -714,6 +741,37 @@ def hellinger_grad(x, y):
 
     return dist, grad
 
+
+@numba.njit()
+def softmax_hellinger(x, y):
+    """
+    Hellinger distance between softmax(x) and softmax(y).
+    """
+    p = softmax(x)
+    q = softmax(y)
+
+    return hellinger(p, q)
+
+
+@numba.njit()
+def softmax_hellinger_grad(x, y):
+    """
+    Hellinger distance and grad between softmax(x) and softmax(y).
+    """
+    p = softmax(x)
+    q = softmax(y)
+
+    dist, g_p = hellinger_grad(p, q)
+
+    dot_gp_p = 0.0
+    for i in range(p.shape[0]):
+        dot_gp_p += g_p[i] * p[i]
+
+    grad_x = np.empty(x.shape[0])
+    for i in range(x.shape[0]):
+        grad_x[i] = p[i] * (g_p[i] - dot_gp_p)
+
+    return dist, grad_x
 
 @numba.njit()
 def approx_log_Gamma(x):
@@ -1307,6 +1365,7 @@ named_distances = {
     "cosine": cosine,
     "correlation": correlation,
     "hellinger": hellinger,
+    "softmax_hellinger": softmax_hellinger,
     "haversine": haversine,
     "braycurtis": bray_curtis,
     "ll_dirichlet": ll_dirichlet,
@@ -1354,6 +1413,7 @@ named_distances_with_gradients = {
     "cosine": cosine_grad,
     "correlation": correlation_grad,
     "hellinger": hellinger_grad,
+    "softmax_hellinger": softmax_hellinger_grad,
     "haversine": haversine_grad,
     "braycurtis": bray_curtis_grad,
     "symmetric_kl": symmetric_kl_grad,
