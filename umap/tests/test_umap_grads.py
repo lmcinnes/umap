@@ -265,6 +265,17 @@ def test_mahalanobis_gradient(dim):
         dist_kwargs={"vinv": vinv},
     )
 
+@pytest.mark.parametrize("dim", [4, 16, 64])
+def test_softmax_hellinger_gradient(
+    dim,
+):
+    assert_gradient_matches_finite_diff(
+        dist.softmax_hellinger,
+        dist.softmax_hellinger_grad,
+        sampler=sample_normal_pairs,
+        dim=dim,
+    )
+
 
 # TODO
 # canberra
