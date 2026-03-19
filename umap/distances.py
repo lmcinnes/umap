@@ -723,7 +723,7 @@ def hellinger_grad(x, y):
         return 1.0, np.zeros(x.shape, dtype=np.float32)
 
     dist_denom = np.sqrt(l1_norm_x * l1_norm_y)
-    inner = 1.0 - result / dist_denom
+    inner = max(0.0, 1.0 - result / dist_denom)
     dist = np.sqrt(inner)
 
     if dist == 0.0:
