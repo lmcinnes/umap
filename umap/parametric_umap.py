@@ -176,8 +176,10 @@ class ParametricUMAP(UMAP):
         """
         if (self.prev_epoch_X is not None) & (landmark_positions is None):
             # Add the landmark points for training, then make a landmark vector.
+            nan_array = np.empty(self.n_components)
+            nan_array.fill(np.nan)
             landmark_positions = np.stack(
-                [np.array([np.nan, np.nan])] * X.shape[0]
+                [nan_array] * X.shape[0]
                 + list(self.transform(self.prev_epoch_X))
             )
             X = np.concatenate((X, self.prev_epoch_X))
@@ -235,8 +237,10 @@ class ParametricUMAP(UMAP):
         """
         if (self.prev_epoch_X is not None) & (landmark_positions is None):
             # Add the landmark points for training, then make a landmark vector.
+            nan_array = np.empty(self.n_components)
+            nan_array.fill(np.nan)
             landmark_positions = np.stack(
-                [np.array([np.nan, np.nan])] * X.shape[0]
+                [nan_array] * X.shape[0]
                 + list(self.transform(self.prev_epoch_X))
             )
             X = np.concatenate((X, self.prev_epoch_X))
