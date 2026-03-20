@@ -19,6 +19,32 @@ def sign(a):
         return 1
 
 
+@numba.njit()
+def softmax(z):
+    n = z.shape[0]
+    out = np.empty(n)
+
+    zmax = z[0]
+    for i in range(1, n):
+        if z[i] > zmax:
+            zmax = z[i]
+
+    s = 0.0
+    for i in range(n):
+        out[i] = np.exp(z[i] - zmax)
+        s += out[i]
+
+    if s == 0.0:
+        for i in range(n):
+            out[i] = 1.0 / n
+    else:
+        invs = 1.0 / s
+        for i in range(n):
+            out[i] *= invs
+
+    return out
+
+
 @numba.njit(fastmath=True)
 def euclidean(x, y):
     r"""Standard euclidean distance.
@@ -162,8 +188,8 @@ def minkowski(x, y, p=2):
 
 
 @numba.njit()
-def minkowski_grad(x, y, p=2):
-    r"""Minkowski distance with gradient.
+def minkowski_grad(x, y, p=2.0):
+    r"""Minkowski distance.
 
     ..math::
         D(x, y) = \left(\sum_i |x_i - y_i|^p\right)^{\frac{1}{p}}
@@ -173,19 +199,21 @@ def minkowski_grad(x, y, p=2):
     for p=infinity it is Chebyshev distance. In general it is better
     to use the more specialised functions for those distances.
     """
-    result = 0.0
+    S = 0.0
     for i in range(x.shape[0]):
-        result += (np.abs(x[i] - y[i])) ** p
+        S += np.abs(x[i] - y[i]) ** p
 
-    grad = np.empty(x.shape[0], dtype=np.float32)
+    dist = S ** (1.0 / p)
+    grad = np.zeros(x.shape[0], dtype=np.float32)
+
+    if S == 0.0:
+        return dist, grad
+
+    inv_denom = pow(S, (1.0 - p) / p)
     for i in range(x.shape[0]):
-        grad[i] = (
-            pow(np.abs(x[i] - y[i]), (p - 1.0))
-            * sign(x[i] - y[i])
-            * pow(result, (1.0 / (p - 1)))
-        )
+        grad[i] = pow(np.abs(x[i] - y[i]), p - 1.0) * sign(x[i] - y[i]) * inv_denom
 
-    return result ** (1.0 / p), grad
+    return dist, grad
 
 
 @numba.njit()
@@ -244,30 +272,33 @@ def weighted_minkowski(x, y, w=_mock_ones, p=2):
 
 
 @numba.njit()
-def weighted_minkowski_grad(x, y, w=_mock_ones, p=2):
+def weighted_minkowski_grad(x, y, w=_mock_ones, p=2.0):
     r"""A weighted version of Minkowski distance with gradient.
 
     ..math::
         D(x, y) = \left(\sum_i w_i |x_i - y_i|^p\right)^{\frac{1}{p}}
 
     If weights w_i are inverse standard deviations of data in each dimension
-    then this represented a standardised Minkowski distance (and is
+    then this represents a standardised Minkowski distance (and is
     equivalent to standardised Euclidean distance for p=1).
     """
-    result = 0.0
+    S = 0.0
     for i in range(x.shape[0]):
-        result += w[i] * (np.abs(x[i] - y[i])) ** p
+        S += w[i] * (np.abs(x[i] - y[i])) ** p
 
-    grad = np.empty(x.shape[0], dtype=np.float32)
+    dist = S ** (1.0 / p)
+    grad = np.zeros(x.shape[0], dtype=np.float32)
+
+    if S == 0.0:
+        return dist, grad
+
+    inv_denom = pow(S, (1.0 - p) / p)
     for i in range(x.shape[0]):
         grad[i] = (
-            w[i]
-            * pow(np.abs(x[i] - y[i]), (p - 1.0))
-            * sign(x[i] - y[i])
-            * pow(result, (1.0 / (p - 1)))
+            w[i] * pow(np.abs(x[i] - y[i]), p - 1.0) * sign(x[i] - y[i]) * inv_denom
         )
 
-    return result ** (1.0 / p), grad
+    return dist, grad
 
 
 @numba.njit()
@@ -275,6 +306,25 @@ def mahalanobis(x, y, vinv=_mock_identity):
     result = 0.0
 
     diff = np.empty(x.shape[0], dtype=np.float32)
+
+    for i in range(x.shape[0]):
+        diff[i] = x[i] - y[i]
+
+    for i in range(x.shape[0]):
+        tmp = 0.0
+        for j in range(x.shape[0]):
+            tmp += vinv[i, j] * diff[j]
+        result += tmp * diff[i]
+
+    return np.sqrt(result)
+
+
+@numba.njit()
+def mahalanobis_f64(x, y, vinv=_mock_identity):
+    "float64 version of mahalanobis. Used for testing (need accuracy in finite differences)"
+    result = 0.0
+
+    diff = np.empty(x.shape[0], dtype=np.float64)
 
     for i in range(x.shape[0]):
         diff[i] = x[i] - y[i]
@@ -576,20 +626,29 @@ def cosine_grad(x, y):
     result = 0.0
     norm_x = 0.0
     norm_y = 0.0
+
     for i in range(x.shape[0]):
         result += x[i] * y[i]
-        norm_x += x[i] ** 2
-        norm_y += y[i] ** 2
+        norm_x += x[i] * x[i]
+        norm_y += y[i] * y[i]
 
     if norm_x == 0.0 and norm_y == 0.0:
-        dist = 0.0
-        grad = np.zeros(x.shape)
-    elif norm_x == 0.0 or norm_y == 0.0:
-        dist = 1.0
-        grad = np.zeros(x.shape)
-    else:
-        grad = -(x * result - y * norm_x) / np.sqrt(norm_x**3 * norm_y)
-        dist = 1.0 - (result / np.sqrt(norm_x * norm_y))
+        return 0.0, np.zeros(x.shape, dtype=np.float32)
+
+    if norm_x == 0.0 or norm_y == 0.0:
+        return 1.0, np.zeros(x.shape, dtype=np.float32)
+
+    nx = np.sqrt(norm_x)
+    ny = np.sqrt(norm_y)
+
+    dist = 1.0 - result / (nx * ny)
+    grad = np.empty(x.shape[0], dtype=np.float32)
+
+    inv_nx_ny = 1.0 / (nx * ny)
+    inv_nx3_ny = 1.0 / (norm_x * nx * ny)
+
+    for i in range(x.shape[0]):
+        grad[i] = x[i] * result * inv_nx3_ny - y[i] * inv_nx_ny
 
     return dist, grad
 
@@ -657,21 +716,64 @@ def hellinger_grad(x, y):
         l1_norm_x += x[i]
         l1_norm_y += y[i]
 
-    if l1_norm_x == 0 and l1_norm_y == 0:
-        dist = 0.0
-        grad = np.zeros(x.shape)
-    elif l1_norm_x == 0 or l1_norm_y == 0:
-        dist = 1.0
-        grad = np.zeros(x.shape)
-    else:
-        dist_denom = np.sqrt(l1_norm_x * l1_norm_y)
-        dist = np.sqrt(1 - result / dist_denom)
-        grad_denom = 2 * dist
-        grad_numer_const = (l1_norm_y * result) / (2 * dist_denom**3)
+    if l1_norm_x == 0.0 and l1_norm_y == 0.0:
+        return 0.0, np.zeros(x.shape, dtype=np.float32)
 
-        grad = (grad_numer_const - (y / grad_term * dist_denom)) / grad_denom
+    if l1_norm_x == 0.0 or l1_norm_y == 0.0:
+        return 1.0, np.zeros(x.shape, dtype=np.float32)
+
+    dist_denom = np.sqrt(l1_norm_x * l1_norm_y)
+    inner = max(0.0, 1.0 - result / dist_denom)
+    dist = np.sqrt(inner)
+
+    if dist == 0.0:
+        return dist, np.zeros(x.shape[0], dtype=np.float32)
+
+    grad = np.empty(x.shape[0], dtype=np.float32)
+    grad_denom = 2.0 * dist
+    grad_numer_const = (l1_norm_y * result) / (2.0 * dist_denom**3)
+
+    for i in range(x.shape[0]):
+        if x[i] > 0.0 and grad_term[i] > 0:
+            term = y[i] / (2.0 * grad_term[i] * dist_denom)
+        else:
+            term = 0.0
+
+        grad[i] = (grad_numer_const - term) / grad_denom
 
     return dist, grad
+
+
+@numba.njit()
+def softmax_hellinger(x, y):
+    """
+    Hellinger distance between softmax(x) and softmax(y).
+    """
+    p = softmax(x)
+    q = softmax(y)
+
+    return hellinger(p, q)
+
+
+@numba.njit()
+def softmax_hellinger_grad(x, y):
+    """
+    Hellinger distance and grad between softmax(x) and softmax(y).
+    """
+    p = softmax(x)
+    q = softmax(y)
+
+    dist, g_p = hellinger_grad(p, q)
+
+    dot_gp_p = 0.0
+    for i in range(p.shape[0]):
+        dot_gp_p += g_p[i] * p[i]
+
+    grad_x = np.empty(x.shape[0])
+    for i in range(x.shape[0]):
+        grad_x[i] = p[i] * (g_p[i] - dot_gp_p)
+
+    return dist, grad_x
 
 
 @numba.njit()
@@ -810,37 +912,53 @@ def symmetric_kl_grad(x, y, z=1e-11):  # pragma: no cover
     return dist, grad
 
 
-@numba.njit()
+@numba.njit(fastmath=True)
 def correlation_grad(x, y):
+    n = x.shape[0]
+
     mu_x = 0.0
     mu_y = 0.0
-    norm_x = 0.0
-    norm_y = 0.0
-    dot_product = 0.0
-
-    for i in range(x.shape[0]):
+    for i in range(n):
         mu_x += x[i]
         mu_y += y[i]
+    mu_x /= n
+    mu_y /= n
 
-    mu_x /= x.shape[0]
-    mu_y /= x.shape[0]
+    dot = 0.0
+    norm_x = 0.0
+    norm_y = 0.0
 
-    for i in range(x.shape[0]):
-        shifted_x = x[i] - mu_x
-        shifted_y = y[i] - mu_y
-        norm_x += shifted_x**2
-        norm_y += shifted_y**2
-        dot_product += shifted_x * shifted_y
+    for i in range(n):
+        cx = x[i] - mu_x
+        cy = y[i] - mu_y
+        dot += cx * cy
+        norm_x += cx * cx
+        norm_y += cy * cy
 
     if norm_x == 0.0 and norm_y == 0.0:
-        dist = 0.0
-        grad = np.zeros(x.shape)
-    elif dot_product == 0.0:
-        dist = 1.0
-        grad = np.zeros(x.shape)
-    else:
-        dist = 1.0 - (dot_product / np.sqrt(norm_x * norm_y))
-        grad = ((x - mu_x) / norm_x - (y - mu_y) / dot_product) * dist
+        return 0.0, np.zeros(n, dtype=np.float32)
+
+    if norm_x == 0.0 or norm_y == 0.0:
+        return 1.0, np.zeros(n, dtype=np.float32)
+
+    nx = np.sqrt(norm_x)
+    ny = np.sqrt(norm_y)
+
+    dist = 1.0 - dot / (nx * ny)
+    grad = np.empty(n, dtype=np.float32)
+
+    inv_nx_ny = 1.0 / (nx * ny)
+    inv_nx3_ny = 1.0 / (norm_x * nx * ny)
+
+    mean_grad = 0.0
+    for i in range(n):
+        cx = x[i] - mu_x
+        grad[i] = cx * dot * inv_nx3_ny - (y[i] - mu_y) * inv_nx_ny
+        mean_grad += grad[i]
+
+    mean_grad /= n
+    for i in range(n):
+        grad[i] -= mean_grad
 
     return dist, grad
 
@@ -1250,6 +1368,7 @@ named_distances = {
     "cosine": cosine,
     "correlation": correlation,
     "hellinger": hellinger,
+    "softmax_hellinger": softmax_hellinger,
     "haversine": haversine,
     "braycurtis": bray_curtis,
     "ll_dirichlet": ll_dirichlet,
@@ -1297,6 +1416,7 @@ named_distances_with_gradients = {
     "cosine": cosine_grad,
     "correlation": correlation_grad,
     "hellinger": hellinger_grad,
+    "softmax_hellinger": softmax_hellinger_grad,
     "haversine": haversine_grad,
     "braycurtis": bray_curtis_grad,
     "symmetric_kl": symmetric_kl_grad,
