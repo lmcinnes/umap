@@ -57,6 +57,7 @@ INT32_MAX = np.iinfo(np.int32).max - 1
 SMOOTH_K_TOLERANCE = 1e-5
 MIN_K_DIST_SCALE = 1e-3
 NPY_INFINITY = np.inf
+NPY_FLOATMAX = np.finfo(np.float32).max
 
 DISCONNECTION_DISTANCES = {
     "correlation": 2,
@@ -147,8 +148,8 @@ def raise_disconnected_warning(
         "mid": numba.types.float32,
         "hi": numba.types.float32,
     },
-    fastmath=True,
-)  # benchmarking `parallel=True` shows it to *decrease* performance
+    parallel=True,
+)
 def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0):
     """Compute a continuous version of the distance to the kth nearest
     neighbor. That is, this is similar to knn-distance but allows continuous
@@ -194,9 +195,9 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
 
     mean_distances = np.mean(distances)
 
-    for i in range(distances.shape[0]):
+    for i in numba.prange(distances.shape[0]):
         lo = 0.0
-        hi = NPY_INFINITY
+        hi = NPY_FLOATMAX
         mid = 1.0
 
         # TODO: This is very inefficient, but will do for now. FIXME
@@ -234,7 +235,7 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
                 mid = (lo + hi) / 2.0
             else:
                 lo = mid
-                if hi == NPY_INFINITY:
+                if hi >= NPY_FLOATMAX:
                     mid *= 2
                 else:
                     mid = (lo + hi) / 2.0
@@ -356,7 +357,6 @@ def nearest_neighbors(
         "val": numba.types.float32,
     },
     parallel=True,
-    fastmath=True,
 )
 def compute_membership_strengths(
     knn_indices,
@@ -2700,9 +2700,9 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             if self.target_metric == "string":
                 y_ = y[index]
             else:
-                y_ = check_array(y, ensure_2d=False, ensure_all_finite=ensure_all_finite)[
-                    index
-                ]
+                y_ = check_array(
+                    y, ensure_2d=False, ensure_all_finite=ensure_all_finite
+                )[index]
             if self.target_metric == "categorical":
                 if self.target_weight < 1.0:
                     far_dist = 2.5 * (1.0 / (1.0 - self.target_weight))
@@ -2848,7 +2848,6 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             if self.output_dens:
                 self.rad_orig_ = aux_data["rad_orig"][inverse]
                 self.rad_emb_ = aux_data["rad_emb"][inverse]
-
 
         if self.verbose:
             print(ts() + " Finished embedding")
