@@ -234,6 +234,14 @@ def label_propagation_init(
     normalized_reduction_map = normalize(base_reduction_map, axis=0, norm="l2")
     reduced_graph = normalized_reduction_map.T * graph * base_reduction_map
     reduced_graph.data = np.clip(reduced_graph.data, 0.0, 1.0).astype(np.float32)
+    # complement_graph = graph.astype(np.float64)
+    # complement_graph.data = np.log1p(-np.clip(complement_graph.data, 0.0, 1.0 - 1e-16))
+    # reduced_graph = base_reduction_map.T * complement_graph * base_reduction_map
+    # reduced_graph.data = 1.0 - np.exp(reduced_graph.data)
+    # reduced_graph.setdiag(0)
+    # reduced_graph.eliminate_zeros()
+    # reduced_graph = reduced_graph.astype(np.float32)
+
     if recursive_init:
         reduced_init = label_propagation_init(
             reduced_graph,
@@ -287,20 +295,16 @@ def label_propagation_init(
     )
 
     if upscaling == "partition_expander":
-        data_expander = normalize(
-            (graph.multiply(graph.T)) @ normalized_reduction_map, norm="l1"
-        )
+        data_expander = normalize(graph @ base_reduction_map, norm="l1")
         result = (
             data_expander @ reduced_layout
-            + normalize(normalized_reduction_map, norm="l1") @ reduced_layout
+            + normalize(base_reduction_map, norm="l1") @ reduced_layout
         ) / 2.0
     elif upscaling == "jitter_expander":
-        data_expander = normalize(
-            (graph.multiply(graph.T)) @ normalized_reduction_map, norm="l1"
-        )
+        data_expander = normalize(graph @ base_reduction_map, norm="l1")
         expanded = (
             data_expander @ reduced_layout
-            + normalize(normalized_reduction_map, norm="l1") @ reduced_layout
+            + normalize(base_reduction_map, norm="l1") @ reduced_layout
         ) / 2.0
         jittered = reduced_layout[labels]
         jittered += random_state.normal(
