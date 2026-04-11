@@ -2931,12 +2931,16 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         r_emb: array, shape (n_samples)
             Local radii of data points in the embedding (log-transformed).
         """
+        _input_dtype = getattr(X, "dtype", None)
         self.fit(X, y, ensure_all_finite, **kwargs)
         if self.transform_mode == "embedding":
+            embedding = self.embedding_
+            if _input_dtype is not None and np.issubdtype(_input_dtype, np.floating):
+                embedding = embedding.astype(_input_dtype, copy=False)
             if self.output_dens:
-                return self.embedding_, self.rad_orig_, self.rad_emb_
+                return embedding, self.rad_orig_, self.rad_emb_
             else:
-                return self.embedding_
+                return embedding
         elif self.transform_mode == "graph":
             return self.graph_
         else:
@@ -2966,6 +2970,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         X_new : array, shape (n_samples, n_components)
             Embedding of the new data in low-dimensional space.
         """
+        _input_dtype = getattr(X, "dtype", None)
         # If we fit just a single instance then error
         if self._raw_data.shape[0] == 1:
             raise ValueError(
@@ -2987,7 +2992,12 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         x_hash = joblib.hash(X)
         if x_hash == self._input_hash:
             if self.transform_mode == "embedding":
-                return self.embedding_
+                embedding = self.embedding_
+                if _input_dtype is not None and np.issubdtype(
+                    _input_dtype, np.floating
+                ):
+                    embedding = embedding.astype(_input_dtype, copy=False)
+                return embedding
             elif self.transform_mode == "graph":
                 return self.graph_
             else:
@@ -3184,6 +3194,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 tqdm_kwds=self.tqdm_kwds,
             )
 
+        if _input_dtype is not None and np.issubdtype(_input_dtype, np.floating):
+            embedding = embedding.astype(_input_dtype, copy=False)
         return embedding
 
     def inverse_transform(self, X):
