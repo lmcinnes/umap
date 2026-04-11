@@ -220,11 +220,11 @@ def _optimize_layout_euclidean_densmap_epoch_init(
 
 
 _nb_optimize_layout_euclidean_single_epoch = numba.njit(
-    _optimize_layout_euclidean_single_epoch, fastmath=True, parallel=False
+    _optimize_layout_euclidean_single_epoch, parallel=False
 )
 
 _nb_optimize_layout_euclidean_single_epoch_parallel = numba.njit(
-    _optimize_layout_euclidean_single_epoch, fastmath=True, parallel=True
+    _optimize_layout_euclidean_single_epoch, parallel=True
 )
 
 
@@ -336,7 +336,6 @@ def optimize_layout_euclidean(
     if densmap:
         dens_init_fn = numba.njit(
             _optimize_layout_euclidean_densmap_epoch_init,
-            fastmath=True,
             parallel=parallel,
         )
 
@@ -620,7 +619,6 @@ def optimize_layout_generic(
 
     optimize_fn = numba.njit(
         _optimize_layout_generic_single_epoch,
-        fastmath=True,
     )
 
     if tqdm_kwds is None:
@@ -837,7 +835,6 @@ def optimize_layout_inverse(
 
     optimize_fn = numba.njit(
         _optimize_layout_inverse_single_epoch,
-        fastmath=True,
     )
 
     if tqdm_kwds is None:
@@ -1066,7 +1063,6 @@ def optimize_layout_aligned_euclidean(
 
     optimize_fn = numba.njit(
         _optimize_layout_aligned_euclidean_single_epoch,
-        fastmath=True,
         parallel=parallel,
     )
 
