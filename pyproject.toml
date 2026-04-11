@@ -67,3 +67,4 @@ zip-safe = false
 
 [tool.setuptools.package-data]
 "*" = ["*.pyx", "*.pxd"]
+"umap" = ["py.typed"]
