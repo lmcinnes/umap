@@ -238,7 +238,7 @@ def _select_font_color(background):
         font_color = "white"
     elif background.startswith("#"):
         mean_val = np.mean(
-            [int("0x" + c) for c in (background[1:3], background[3:5], background[5:7])]
+            [int(c, 16) for c in (background[1:3], background[3:5], background[5:7])]
         )
         if mean_val > 126:
             font_color = "black"
