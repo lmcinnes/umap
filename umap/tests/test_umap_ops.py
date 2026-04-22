@@ -9,6 +9,7 @@ from sklearn.metrics import adjusted_rand_score, pairwise_distances
 from sklearn.preprocessing import normalize
 from numpy.testing import assert_array_equal
 from umap import UMAP
+from umap.umap_ import compute_membership_strengths
 from umap.spectral import component_layout
 import numpy as np
 import scipy.sparse
@@ -177,6 +178,41 @@ def test_bad_transform_data(nn_data):
     u = UMAP().fit([[1, 1, 1, 1]])
     with pytest.raises(ValueError):
         u.transform([[0, 0, 0, 0]])
+
+
+def test_compute_membership_strengths_handles_standard_and_bipartite_cases():
+    knn_indices = np.array([[0, 1, -1], [1, 0, 2]], dtype=np.int32)
+    knn_dists = np.array([[0.0, 0.3, 0.0], [0.0, 0.2, 0.8]], dtype=np.float32)
+    sigmas = np.array([0.5, 0.25], dtype=np.float32)
+    rhos = np.array([0.1, 0.1], dtype=np.float32)
+
+    rows, cols, vals, dists = compute_membership_strengths(
+        knn_indices, knn_dists, sigmas, rhos, return_dists=True
+    )
+
+    expected_vals = np.array(
+        [
+            0.0,
+            np.exp(-((0.3 - 0.1) / 0.5)),
+            0.0,
+            0.0,
+            np.exp(-((0.2 - 0.1) / 0.25)),
+            np.exp(-((0.8 - 0.1) / 0.25)),
+        ],
+        dtype=np.float32,
+    )
+
+    assert_array_equal(rows, np.array([0, 0, 0, 1, 1, 1], dtype=np.int32))
+    assert_array_equal(cols, np.array([0, 1, 0, 1, 0, 2], dtype=np.int32))
+    np.testing.assert_allclose(vals, expected_vals)
+    np.testing.assert_allclose(dists, np.array([0.0, 0.3, 0.0, 0.0, 0.2, 0.8]))
+
+    _, _, bipartite_vals, bipartite_dists = compute_membership_strengths(
+        knn_indices, knn_dists, sigmas, rhos, bipartite=True
+    )
+    assert bipartite_dists is None
+    assert bipartite_vals[0] == 1.0
+    assert bipartite_vals[3] == 1.0
 
 
 # Transform Stability

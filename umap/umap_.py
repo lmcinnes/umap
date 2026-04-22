@@ -358,12 +358,11 @@ def nearest_neighbors(
     },
     parallel=True,
 )
-def compute_membership_strengths(
+def _compute_membership_strengths(
     knn_indices,
     knn_dists,
     sigmas,
     rhos,
-    return_dists=False,
     bipartite=False,
 ):
     """Construct the membership strength data for the 1-skeleton of each local
@@ -412,31 +411,98 @@ def compute_membership_strengths(
     rows = np.zeros(knn_indices.size, dtype=np.int32)
     cols = np.zeros(knn_indices.size, dtype=np.int32)
     vals = np.zeros(knn_indices.size, dtype=np.float32)
-    if return_dists:
-        dists = np.zeros(knn_indices.size, dtype=np.float32)
-    else:
-        dists = None
-
-    for i in range(n_samples):
+    for i in numba.prange(n_samples):
+        row_offset = i * n_neighbors
+        rho = rhos[i]
+        sigma = sigmas[i]
         for j in range(n_neighbors):
-            if knn_indices[i, j] == -1:
+            neighbor = knn_indices[i, j]
+            if neighbor == -1:
                 continue  # We didn't get the full knn for i
             # If applied to an adjacency matrix points shouldn't be similar to themselves.
             # If applied to an incidence matrix (or bipartite) then the row and column indices are different.
-            if (bipartite == False) & (knn_indices[i, j] == i):
+            dist = knn_dists[i, j]
+            if (not bipartite) and (neighbor == i):
                 val = 0.0
-            elif knn_dists[i, j] - rhos[i] <= 0.0 or sigmas[i] == 0.0:
+            elif dist - rho <= 0.0 or sigma == 0.0:
                 val = 1.0
             else:
-                val = np.exp(-((knn_dists[i, j] - rhos[i]) / (sigmas[i])))
+                val = np.exp(-((dist - rho) / sigma))
 
-            rows[i * n_neighbors + j] = i
-            cols[i * n_neighbors + j] = knn_indices[i, j]
-            vals[i * n_neighbors + j] = val
-            if return_dists:
-                dists[i * n_neighbors + j] = knn_dists[i, j]
+            rows[row_offset + j] = i
+            cols[row_offset + j] = neighbor
+            vals[row_offset + j] = val
+
+    return rows, cols, vals
+
+
+@numba.njit(
+    locals={
+        "knn_dists": numba.types.float32[:, ::1],
+        "sigmas": numba.types.float32[::1],
+        "rhos": numba.types.float32[::1],
+        "val": numba.types.float32,
+    },
+    parallel=True,
+)
+def _compute_membership_strengths_with_dists(
+    knn_indices,
+    knn_dists,
+    sigmas,
+    rhos,
+    bipartite=False,
+):
+    n_samples = knn_indices.shape[0]
+    n_neighbors = knn_indices.shape[1]
+
+    rows = np.zeros(knn_indices.size, dtype=np.int32)
+    cols = np.zeros(knn_indices.size, dtype=np.int32)
+    vals = np.zeros(knn_indices.size, dtype=np.float32)
+    dists = np.zeros(knn_indices.size, dtype=np.float32)
+
+    for i in numba.prange(n_samples):
+        row_offset = i * n_neighbors
+        rho = rhos[i]
+        sigma = sigmas[i]
+        for j in range(n_neighbors):
+            neighbor = knn_indices[i, j]
+            if neighbor == -1:
+                continue  # We didn't get the full knn for i
+            # If applied to an adjacency matrix points shouldn't be similar to themselves.
+            # If applied to an incidence matrix (or bipartite) then the row and column indices are different.
+            dist = knn_dists[i, j]
+            if (not bipartite) and (neighbor == i):
+                val = 0.0
+            elif dist - rho <= 0.0 or sigma == 0.0:
+                val = 1.0
+            else:
+                val = np.exp(-((dist - rho) / sigma))
+
+            rows[row_offset + j] = i
+            cols[row_offset + j] = neighbor
+            vals[row_offset + j] = val
+            dists[row_offset + j] = dist
 
     return rows, cols, vals, dists
+
+
+def compute_membership_strengths(
+    knn_indices,
+    knn_dists,
+    sigmas,
+    rhos,
+    return_dists=False,
+    bipartite=False,
+):
+    if return_dists:
+        return _compute_membership_strengths_with_dists(
+            knn_indices, knn_dists, sigmas, rhos, bipartite
+        )
+
+    rows, cols, vals = _compute_membership_strengths(
+        knn_indices, knn_dists, sigmas, rhos, bipartite
+    )
+    return rows, cols, vals, None
 
 
 def fuzzy_simplicial_set(
