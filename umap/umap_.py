@@ -149,6 +149,7 @@ def raise_disconnected_warning(
         "hi": numba.types.float32,
     },
     parallel=True,
+    cache=True,
 )
 def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0):
     """Compute a continuous version of the distance to the kth nearest
@@ -218,7 +219,6 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
             rho[i] = np.max(non_zero_dists)
 
         for n in range(n_iter):
-
             psum = 0.0
             for j in range(1, distances.shape[1]):
                 d = distances[i, j] - rho[i]
@@ -357,6 +357,7 @@ def nearest_neighbors(
         "val": numba.types.float32,
     },
     parallel=True,
+    cache=True,
 )
 def compute_membership_strengths(
     knn_indices,
@@ -712,7 +713,6 @@ def reprocess_row(probabilities, k=15, n_iters=32):
     mid = 1.0
 
     for n in range(n_iters):
-
         psum = 0.0
         for j in range(probabilities.shape[0]):
             psum += pow(probabilities[j], mid)
@@ -2005,7 +2005,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         if hasattr(self, "knn_dists") and self.knn_dists is not None:
             if self.unique:
                 raise ValueError(
-                    "unique is not currently available for " "precomputed_knn."
+                    "unique is not currently available for precomputed_knn."
                 )
             if not isinstance(self.knn_indices, np.ndarray):
                 raise ValueError("precomputed_knn[0] must be ndarray object.")
@@ -3386,10 +3386,9 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         if self.metric == "precomputed":
             raise ValueError("Update does not currently support precomputed metrics")
         if self._supervised:
-            raise ValueError("Updating supervised models is not currently " "supported")
+            raise ValueError("Updating supervised models is not currently supported")
 
         if self._small_data:
-
             if self._sparse_data:
                 self._raw_data = scipy.sparse.vstack([self._raw_data, X])
             else:

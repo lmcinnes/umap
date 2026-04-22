@@ -6,7 +6,7 @@ import umap.distances as dist
 from umap.utils import tau_rand_int
 
 
-@numba.njit()
+@numba.njit(cache=True)
 def clip(val):
     """Standard clamping of a value into a fixed range (in this case -4.0 to
     4.0)

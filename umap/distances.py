@@ -45,7 +45,7 @@ def softmax(z):
     return out
 
 
-@numba.njit(fastmath=True)
+@numba.njit(fastmath=True, cache=True)
 def euclidean(x, y):
     r"""Standard euclidean distance.
 
@@ -603,7 +603,7 @@ def yule(x, y):
         )
 
 
-@numba.njit()
+@numba.njit(cache=True)
 def cosine(x, y):
     result = 0.0
     norm_x = 0.0
