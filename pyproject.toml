@@ -22,12 +22,12 @@ classifiers = [
     "Operating System :: POSIX",
     "Operating System :: Unix",
     "Operating System :: MacOS",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "numpy >= 1.23",
     "scipy >= 1.3.1",
@@ -60,6 +60,9 @@ plot = [
 parametric_umap = ["tensorflow >= 2.1"]
 tbb = ["tbb >= 2019.0"]
 test = ["pytest"]
+
+[dependency-groups]
+cicd = ["pytest", "pytest-azurepipelines", "pytest-cov", "pytest-benchmark"]
 
 [tool.setuptools]
 packages = ["umap"]
