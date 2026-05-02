@@ -34,36 +34,27 @@ stages:
       - job: run_platform_tests
         strategy:
           matrix:
-            mac_py39:
-              imageName: 'macOS-latest'
-              python.version: '3.9'
-            linux_py39:
-              imageName: 'ubuntu-latest'
-              python.version: '3.9'
-            windows_py39:
-              imageName: 'windows-latest'
-              python.version: '3.9'
-            mac_py310:
-              imageName: 'macOS-latest'
-              python.version: '3.10'
+            # mac_py310:
+            #   imageName: 'macOS-latest'
+            #   python.version: '3.10'
             linux_py310:
               imageName: 'ubuntu-latest'
               python.version: '3.10'
             windows_py310:
               imageName: 'windows-latest'
               python.version: '3.10'
-            mac_py311:
-              imageName: 'macOS-latest'
-              python.version: '3.11'
+            # mac_py311:
+            #   imageName: 'macOS-latest'
+            #   python.version: '3.11'
             linux_py311:
               imageName: 'ubuntu-latest'
               python.version: '3.11'
             windows_py311:
               imageName: 'windows-latest'
               python.version: '3.11'
-            mac_py312:
-              imageName: 'macOS-latest'
-              python.version: '3.12'
+            # mac_py312:
+            #   imageName: 'macOS-latest'
+            #   python.version: '3.12'
             linux_py312:
               imageName: 'ubuntu-latest'
               python.version: '3.12'
@@ -117,9 +108,8 @@ stages:
           condition: eq(variables['Agent.OS'], 'Darwin')
 
         - script: |
-            pip install -e .
-            pip install .[plot]
-            pip install .[parametric_umap]
+            python -m pip install -U uv
+            uv sync --group cicd --extra plot --extra parametric_umap
           env:
             # Ensure that the LLVM_CONFIG environment variable is available during installation
             LLVM_CONFIG: $(LLVM_CONFIG)
@@ -128,30 +118,9 @@ stages:
           condition: ${{ eq(parameters.includeReleaseCandidates, false) }}
 
         - script: |
-            pip install --pre -e .
-            pip install --pre .[plot]
-            pip install --pre .[parametric_umap]
-          displayName: 'Install dependencies (allow pre-releases)'
-          condition: ${{ eq(parameters.includeReleaseCandidates, true) }}
-
-        - script: |
-            pip install pytest  pytest-azurepipelines pytest-cov pytest-benchmark coveralls
-          displayName: 'Install pytest'
-
-        - script: |
             # export NUMBA_DISABLE_JIT=1 # Disable numba coverage so tests run on time for now.
-            pytest umap/tests --show-capture=no -v --disable-warnings --junitxml=junit/test-results.xml --cov=umap/ --cov-report=xml --cov-report=html
+            uv run pytest umap/tests --show-capture=no -v --disable-warnings --junitxml=junit/test-results.xml --cov=umap/ --cov-report=xml --cov-report=html
           displayName: 'Run tests'
-
-        - bash: |
-            coveralls
-          displayName: 'Publish to coveralls'
-          # Don't run this for PRs because they can't access pipeline secrets
-          # The python client for coveralls currently does not support python 3.13
-          # https://github.com/TheKevJames/coveralls-python/pull/542
-          condition: and(succeeded(), eq(variables.triggeredByPullRequest, false), ne(variables['python.version'], '3.13'), ne(variables['Agent.OS'], 'Windows'))
-          env:
-            COVERALLS_REPO_TOKEN: $(COVERALLS_TOKEN)
 
         - task: PublishTestResults@2
           inputs:
@@ -161,7 +130,7 @@ stages:
 
   - stage: BuildPublishArtifact
     dependsOn: RunAllTests
-    condition: and(succeeded(), startsWith(variables['Build.SourceBranch'], 'refs/tags/'), eq(variables.triggeredByPullRequest, false))
+    condition: and(succeeded(), startsWith(variables['Build.SourceBranch'], 'refs/tags/release-'), eq(variables.triggeredByPullRequest, false))
     jobs:
       - job: BuildArtifacts
         displayName: Build source dists and wheels    
@@ -170,23 +139,21 @@ stages:
         steps:
         - task: UsePythonVersion@0
           inputs:
-            versionSpec: '3.10'
-          displayName: 'Use Python 3.10'
+            versionSpec: '3.13'
+          displayName: 'Use Python 3.13'
 
         - script: |
             python -m pip install --upgrade pip
-            pip install wheel
-            pip install -e .
-          displayName: 'Install package locally'
-        
-        - bash: |
-            pip install build
-            python -m build --wheel --sdist --outdir dist/ .
-            ls -l dist/
+            python -m pip install -U uv
+            uv sync
+          displayName: 'Install dependencies'
+
+        - script: |
+            uv build --no-sources --sdist --wheel
           displayName: 'Build package'
 
         - bash: |
-            export PACKAGE_VERSION="$(python setup.py --version)"
+            export PACKAGE_VERSION="$(uv version --short)"
             echo "Package Version: ${PACKAGE_VERSION}"
             echo "##vso[task.setvariable variable=packageVersionFormatted;]release-${PACKAGE_VERSION}"
           displayName: 'Get package version'
@@ -204,8 +171,8 @@ stages:
             secureFile: 'pypirc'  
 
         - script: |
-            pip install twine
-            twine upload --repository pypi --config-file $(PYPIRC_CONFIG.secureFilePath) dist/*
+            uvx twine check dist/*
+            uvx twine upload --repository pypi --config-file $(PYPIRC_CONFIG.secureFilePath) dist/*
           displayName: 'Upload to PyPI'
           condition: and(succeeded(), eq(variables['Build.SourceBranchName'], variables['packageVersionFormatted']))
 
