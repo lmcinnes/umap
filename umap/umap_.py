@@ -3244,6 +3244,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         simplices = deltri.simplices
         k = simplices.shape[1]
         n_s = simplices.shape[0]
+        # All (vertex_a, vertex_b) pairs within each simplex — k² pairs × n_simplices
         rows = np.empty(n_s * k * k, dtype=np.int32)
         cols = np.empty(n_s * k * k, dtype=np.int32)
         for a in range(k):
