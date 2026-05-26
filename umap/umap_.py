@@ -3240,19 +3240,22 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             self.embedding_, incremental=True, qhull_options="QJ"
         )
         neighbors = deltri.simplices[deltri.find_simplex(X)]
-        adjmat = scipy.sparse.lil_matrix(
-            (self.embedding_.shape[0], self.embedding_.shape[0]), dtype=int
+        n_embed = self.embedding_.shape[0]
+        simplices = deltri.simplices
+        k = simplices.shape[1]
+        n_s = simplices.shape[0]
+        # All (vertex_a, vertex_b) pairs within each simplex — k² pairs × n_simplices
+        rows = np.empty(n_s * k * k, dtype=np.int32)
+        cols = np.empty(n_s * k * k, dtype=np.int32)
+        for a in range(k):
+            for b in range(k):
+                off = (a * k + b) * n_s
+                rows[off : off + n_s] = simplices[:, a]
+                cols[off : off + n_s] = simplices[:, b]
+        adjmat = scipy.sparse.csr_matrix(
+            (np.ones(n_s * k * k, dtype=np.int8), (rows, cols)),
+            shape=(n_embed, n_embed),
         )
-        for i in np.arange(0, deltri.simplices.shape[0]):
-            for j in deltri.simplices[i]:
-                if j < self.embedding_.shape[0]:
-                    idx = deltri.simplices[i][
-                        deltri.simplices[i] < self.embedding_.shape[0]
-                    ]
-                    adjmat[j, idx] = 1
-                    adjmat[idx, j] = 1
-
-        adjmat = scipy.sparse.csr_matrix(adjmat)
 
         min_vertices = min(self._raw_data.shape[-1], self._raw_data.shape[0])
 
