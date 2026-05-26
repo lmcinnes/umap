@@ -2448,8 +2448,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         # If we aren't asking for unique use the full index.
         # This will save special cases later.
         else:
-            index = list(range(X.shape[0]))
-            inverse = list(range(X.shape[0]))
+            index = np.arange(X.shape[0])
+            inverse = np.arange(X.shape[0])
 
         # Error check n_neighbors based on data size
         if X[index].shape[0] <= self.n_neighbors:
