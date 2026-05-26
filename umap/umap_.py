@@ -935,6 +935,26 @@ def noisy_scale_coords(coords, random_state, max_coord=10.0, noise=0.0001):
     )
 
 
+@numba.njit()
+def _densmap_original_densities(
+    head, tail, graph_data, dists_indptr, dists_indices, dists_data, ro, mu_sum
+):
+    for i in range(len(head)):
+        j = head[i]
+        k = tail[i]
+        d_val = 0.0
+        for idx in range(dists_indptr[j], dists_indptr[j + 1]):
+            if dists_indices[idx] == k:
+                d_val = dists_data[idx]
+                break
+        D = d_val * d_val
+        mu = graph_data[i]
+        ro[j] += mu * D
+        ro[k] += mu * D
+        mu_sum[j] += mu
+        mu_sum[k] += mu
+
+
 def simplicial_set_embedding(
     data,
     graph,
@@ -1161,17 +1181,12 @@ def simplicial_set_embedding(
 
         mu_sum = np.zeros(n_vertices, dtype=np.float32)
         ro = np.zeros(n_vertices, dtype=np.float32)
-        for i in range(len(head)):
-            j = head[i]
-            k = tail[i]
-
-            D = dists[j, k] * dists[j, k]  # match sq-Euclidean used for embedding
-            mu = graph.data[i]
-
-            ro[j] += mu * D
-            ro[k] += mu * D
-            mu_sum[j] += mu
-            mu_sum[k] += mu
+        dists_csr = dists.tocsr()
+        _densmap_original_densities(
+            head, tail, graph.data,
+            dists_csr.indptr, dists_csr.indices, dists_csr.data,
+            ro, mu_sum,
+        )
 
         epsilon = 1e-8
         ro = np.log(epsilon + (ro / mu_sum))
