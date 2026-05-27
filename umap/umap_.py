@@ -4,6 +4,7 @@
 from __future__ import print_function
 
 import locale
+from collections import deque
 from warnings import warn
 import time
 
@@ -84,14 +85,13 @@ def flattened(container):
 
 def breadth_first_search(adjmat, start, min_vertices):
     explored = []
-    queue = [start]
-    levels = {}
-    levels[start] = 0
+    queue = deque([start])
+    levels = {start: 0}
     max_level = np.inf
-    visited = [start]
+    visited = {start}
 
     while queue:
-        node = queue.pop(0)
+        node = queue.popleft()
         explored.append(node)
         if max_level == np.inf and len(explored) > min_vertices:
             max_level = max(levels.values())
@@ -101,7 +101,7 @@ def breadth_first_search(adjmat, start, min_vertices):
             for neighbour in neighbors:
                 if neighbour not in visited:
                     queue.append(neighbour)
-                    visited.append(neighbour)
+                    visited.add(neighbour)
 
                     levels[neighbour] = levels[node] + 1
 
@@ -1373,19 +1373,31 @@ def init_graph_transform(graph, embedding):
     new_embedding: array of shape (n_new_samples, dim)
         An initial embedding of the new sample points.
     """
-    result = np.zeros((graph.shape[0], embedding.shape[1]), dtype=np.float32)
+    n_new = graph.shape[0]
+    result = np.zeros((n_new, embedding.shape[1]), dtype=np.float32)
 
-    for row_index in range(graph.shape[0]):
-        graph_row = graph[row_index]
-        if graph_row.nnz == 0:
-            result[row_index] = np.nan
-            continue
-        row_sum = graph_row.sum()
-        for graph_value, col_index in zip(graph_row.data, graph_row.indices):
-            if graph_value == 1:
-                result[row_index, :] = embedding[col_index, :]
-                break
-            result[row_index] += graph_value / row_sum * embedding[col_index]
+    row_nnz = np.diff(graph.indptr)
+    empty_mask = row_nnz == 0
+    result[empty_mask] = np.nan
+
+    has_exact = np.zeros(n_new, dtype=bool)
+    exact_data_mask = graph.data == 1.0
+    if exact_data_mask.any():
+        exact_positions = np.where(exact_data_mask)[0]
+        exact_rows = np.searchsorted(graph.indptr, exact_positions, side="right") - 1
+        _, first_idx = np.unique(exact_rows, return_index=True)
+        unique_rows = exact_rows[first_idx]
+        exact_cols = graph.indices[exact_positions[first_idx]]
+        has_exact[unique_rows] = True
+        result[unique_rows] = embedding[exact_cols]
+
+    avg_mask = ~empty_mask & ~has_exact
+    if np.any(avg_mask):
+        avg_graph = graph[avg_mask]
+        row_sums = np.array(avg_graph.sum(axis=1)).flatten()
+        inv_sums = scipy.sparse.diags(1.0 / row_sums)
+        normalized = inv_sums @ avg_graph
+        result[avg_mask] = (normalized @ embedding).astype(np.float32)
 
     return result
 
