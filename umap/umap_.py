@@ -2502,7 +2502,9 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                         raise ValueError(
                             "Some rows contain fewer than n_neighbors distances!"
                         )
-                    row_nn_data_indices = np.argsort(row_data)[: self._n_neighbors]
+                    # argpartition selects the k smallest in O(d) vs O(d·log d) for argsort
+                    row_nn_data_indices = np.argpartition(row_data, self._n_neighbors)[: self._n_neighbors]
+                    row_nn_data_indices = row_nn_data_indices[np.argsort(row_data[row_nn_data_indices])]
                     self._knn_indices[row_id] = row_indices[row_nn_data_indices]
                     self._knn_dists[row_id] = row_data[row_nn_data_indices]
             else:
