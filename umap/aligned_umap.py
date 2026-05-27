@@ -40,6 +40,14 @@ def procrustes_align(embedding_base, embedding_to_align, anchors):
     return embedding_to_align @ R
 
 
+def _dict_to_lookup(d, size):
+    arr = np.full(size, -1, dtype=np.int32)
+    for k, v in d.items():
+        if k < size:
+            arr[k] = v
+    return arr
+
+
 def expand_relations(relation_dicts, window_size=3):
     max_n_samples = (
         max(
@@ -53,31 +61,33 @@ def expand_relations(relation_dicts, window_size=3):
         -1,
         dtype=np.int32,
     )
-    reverse_relation_dicts = [invert_dict(d) for d in relation_dicts]
+    fwd_lookups = [_dict_to_lookup(d, max_n_samples) for d in relation_dicts]
+    rev_lookups = [_dict_to_lookup(invert_dict(d), max_n_samples) for d in relation_dicts]
+
     for i in range(result.shape[0]):
         for j in range(window_size):
             result_index = (window_size) + (j + 1)
             if i + j + 1 >= len(relation_dicts):
-                result[i, result_index] = np.full(max_n_samples, -1, dtype=np.int32)
-            else:
-                mapping = np.arange(max_n_samples)
-                for k in range(j + 1):
-                    mapping = np.array(
-                        [relation_dicts[i + k].get(n, -1) for n in mapping]
-                    )
-                result[i, result_index] = mapping
+                continue
+            mapping = np.arange(max_n_samples, dtype=np.int32)
+            for k in range(j + 1):
+                valid = mapping >= 0
+                out = np.full(max_n_samples, -1, dtype=np.int32)
+                out[valid] = fwd_lookups[i + k][mapping[valid]]
+                mapping = out
+            result[i, result_index] = mapping
 
         for j in range(0, -window_size, -1):
             result_index = (window_size) + (j - 1)
             if i + j - 1 < 0:
-                result[i, result_index] = np.full(max_n_samples, -1, dtype=np.int32)
-            else:
-                mapping = np.arange(max_n_samples)
-                for k in range(0, j - 1, -1):
-                    mapping = np.array(
-                        [reverse_relation_dicts[i + k - 1].get(n, -1) for n in mapping]
-                    )
-                result[i, result_index] = mapping
+                continue
+            mapping = np.arange(max_n_samples, dtype=np.int32)
+            for k in range(0, j - 1, -1):
+                valid = mapping >= 0
+                out = np.full(max_n_samples, -1, dtype=np.int32)
+                out[valid] = rev_lookups[i + k - 1][mapping[valid]]
+                mapping = out
+            result[i, result_index] = mapping
 
     return result
 
