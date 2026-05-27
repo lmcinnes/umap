@@ -3063,8 +3063,11 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     indices[i] = X[i].indices[data_indices[: self._n_neighbors]]
                     dists[i] = X[i].data[data_indices[: self._n_neighbors]]
             else:
-                indices = np.argsort(X, axis=1)[:, : self._n_neighbors].astype(np.int32)
+                indices = np.argpartition(X, self._n_neighbors, axis=1)[:, : self._n_neighbors]
                 dists = np.take_along_axis(X, indices, axis=1)
+                sorted_idx = np.argsort(dists, axis=1)
+                indices = np.take_along_axis(indices, sorted_idx, axis=1).astype(np.int32)
+                dists = np.take_along_axis(dists, sorted_idx, axis=1)
             assert np.min(indices) >= 0 and np.min(dists) >= 0.0
         elif self._small_data:
             try:
