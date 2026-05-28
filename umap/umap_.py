@@ -955,6 +955,26 @@ def _densmap_original_densities(
         mu_sum[k] += mu
 
 
+@numba.njit()
+def _densmap_embedding_densities(
+    head, tail, graph_data, dists_indptr, dists_indices, dists_data, re, mu_sum
+):
+    for i in range(len(head)):
+        j = head[i]
+        k = tail[i]
+        d_val = 0.0
+        for idx in range(dists_indptr[j], dists_indptr[j + 1]):
+            if dists_indices[idx] == k:
+                d_val = dists_data[idx]
+                break
+        mu = graph_data[i]
+        weighted = mu * d_val
+        re[j] += weighted
+        re[k] += weighted
+        mu_sum[j] += mu
+        mu_sum[k] += mu
+
+
 def simplicial_set_embedding(
     data,
     graph,
@@ -1296,17 +1316,12 @@ def simplicial_set_embedding(
 
         head = emb_graph.row
         tail = emb_graph.col
-        for i in range(len(head)):
-            j = head[i]
-            k = tail[i]
-
-            D = emb_dists[j, k]
-            mu = emb_graph.data[i]
-
-            re[j] += mu * D
-            re[k] += mu * D
-            mu_sum[j] += mu
-            mu_sum[k] += mu
+        emb_dists_csr = emb_dists.tocsr()
+        _densmap_embedding_densities(
+            head, tail, emb_graph.data,
+            emb_dists_csr.indptr, emb_dists_csr.indices, emb_dists_csr.data,
+            re, mu_sum,
+        )
 
         epsilon = 1e-8
         re = np.log(epsilon + (re / mu_sum))
