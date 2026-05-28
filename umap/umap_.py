@@ -3082,13 +3082,16 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 )
                 dists = np.full_like(indices, dtype=np.float32, fill_value=-1)
                 for i in range(X.shape[0]):
-                    data_indices = np.argsort(X[i].data)
-                    if len(data_indices) < self._n_neighbors:
+                    row_data = X[i].data
+                    row_indices = X[i].indices
+                    if len(row_data) < self._n_neighbors:
                         raise ValueError(
                             f"Need at least n_neighbors ({self.n_neighbors}) distances for each row!"
                         )
-                    indices[i] = X[i].indices[data_indices[: self._n_neighbors]]
-                    dists[i] = X[i].data[data_indices[: self._n_neighbors]]
+                    row_nn_data_indices = np.argpartition(row_data, self._n_neighbors)[: self._n_neighbors]
+                    row_nn_data_indices = row_nn_data_indices[np.argsort(row_data[row_nn_data_indices])]
+                    indices[i] = row_indices[row_nn_data_indices]
+                    dists[i] = row_data[row_nn_data_indices]
             else:
                 indices = np.argpartition(X, self._n_neighbors, axis=1)[:, : self._n_neighbors]
                 dists = np.take_along_axis(X, indices, axis=1)
