@@ -88,7 +88,8 @@ def breadth_first_search(adjmat, start, min_vertices):
     queue = deque([start])
     levels = {start: 0}
     max_level = np.inf
-    visited = {start}
+    visited = np.zeros(adjmat.shape[0], dtype=np.bool_)
+    visited[start] = True
 
     while queue:
         node = queue.popleft()
@@ -99,9 +100,9 @@ def breadth_first_search(adjmat, start, min_vertices):
         if levels[node] + 1 < max_level:
             neighbors = adjmat[node].indices
             for neighbour in neighbors:
-                if neighbour not in visited:
+                if not visited[neighbour]:
                     queue.append(neighbour)
-                    visited.add(neighbour)
+                    visited[neighbour] = True
 
                     levels[neighbour] = levels[node] + 1
 
