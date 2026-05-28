@@ -30,6 +30,33 @@ def invert_dict(d):
     return {value: key for key, value in d.items()}
 
 
+def relation_lut(d, n_samples):
+    """Materialize a relation dict as a lookup array: lut[key] = value, else -1.
+
+    Keys and values are bounded by n_samples (see expand_relations), so an
+    array of length n_samples covers every entry and turns each dict.get(n, -1)
+    into a C-level gather instead of a Python-level lookup.
+    """
+    lut = np.full(n_samples, -1, dtype=np.int32)
+    if d:
+        keys = np.fromiter(d.keys(), dtype=np.int64, count=len(d))
+        vals = np.fromiter(d.values(), dtype=np.int64, count=len(d))
+        lut[keys] = vals
+    return lut
+
+
+def chain_relation_lut(lut, mapping):
+    """Apply one relation step: mapping[i] -> lut[mapping[i]], propagating -1.
+
+    Mirrors `np.array([d.get(n, -1) for n in mapping])` where negative sentinels
+    (and missing keys) map to -1, but with masked fancy indexing in C.
+    """
+    nxt = np.full(mapping.shape, -1, dtype=np.int32)
+    valid = mapping >= 0
+    nxt[valid] = lut[mapping[valid]]
+    return nxt
+
+
 @numba.njit()
 def procrustes_align(embedding_base, embedding_to_align, anchors):
     subset1 = embedding_base[anchors[0]]
@@ -53,18 +80,19 @@ def expand_relations(relation_dicts, window_size=3):
         -1,
         dtype=np.int32,
     )
-    reverse_relation_dicts = [invert_dict(d) for d in relation_dicts]
+    # Precompute each relation (and its inverse) as a lookup array once, so the
+    # windowed chaining below uses C-level gathers instead of Python dict.get.
+    luts = [relation_lut(d, max_n_samples) for d in relation_dicts]
+    reverse_luts = [relation_lut(invert_dict(d), max_n_samples) for d in relation_dicts]
     for i in range(result.shape[0]):
         for j in range(window_size):
             result_index = (window_size) + (j + 1)
             if i + j + 1 >= len(relation_dicts):
                 result[i, result_index] = np.full(max_n_samples, -1, dtype=np.int32)
             else:
-                mapping = np.arange(max_n_samples)
+                mapping = np.arange(max_n_samples, dtype=np.int32)
                 for k in range(j + 1):
-                    mapping = np.array(
-                        [relation_dicts[i + k].get(n, -1) for n in mapping]
-                    )
+                    mapping = chain_relation_lut(luts[i + k], mapping)
                 result[i, result_index] = mapping
 
         for j in range(0, -window_size, -1):
@@ -72,11 +100,9 @@ def expand_relations(relation_dicts, window_size=3):
             if i + j - 1 < 0:
                 result[i, result_index] = np.full(max_n_samples, -1, dtype=np.int32)
             else:
-                mapping = np.arange(max_n_samples)
+                mapping = np.arange(max_n_samples, dtype=np.int32)
                 for k in range(0, j - 1, -1):
-                    mapping = np.array(
-                        [reverse_relation_dicts[i + k - 1].get(n, -1) for n in mapping]
-                    )
+                    mapping = chain_relation_lut(reverse_luts[i + k - 1], mapping)
                 result[i, result_index] = mapping
 
     return result
@@ -295,7 +321,7 @@ class AlignedUMAP(BaseEstimator):
     def fit(self, X, y=None, **fit_params):
         if "relations" not in fit_params:
             raise ValueError(
-                "Aligned UMAP requires relations between data to be " "specified"
+                "Aligned UMAP requires relations between data to be specified"
             )
 
         self.dict_relations_ = fit_params["relations"]
@@ -446,7 +472,7 @@ class AlignedUMAP(BaseEstimator):
     def update(self, X, y=None, **fit_params):
         if "relations" not in fit_params:
             raise ValueError(
-                "Aligned UMAP requires relations between data to be " "specified"
+                "Aligned UMAP requires relations between data to be specified"
             )
 
         new_dict_relations = fit_params["relations"]
