@@ -442,7 +442,9 @@ class ParametricUMAP(UMAP):
                 self._history[key] += history.history[key]
 
         # get the final embedding
-        embedding = self.encoder.predict(X, verbose=self.verbose)
+        embedding = self.encoder.predict(
+            X, batch_size=self.batch_size, verbose=self.verbose
+        )
 
         return embedding, {}
 
