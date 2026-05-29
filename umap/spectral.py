@@ -70,22 +70,40 @@ def component_layout(
         distance_matrix = np.zeros((n_components, n_components), dtype=np.float64)
         linkage = metric_kwds.get("linkage", "average")
         if linkage == "average":
-            linkage = np.mean
-        elif linkage == "complete":
-            linkage = np.max
-        elif linkage == "single":
-            linkage = np.min
-        else:
-            raise ValueError(
-                "Unrecognized linkage '%s'. Please choose from "
-                "'average', 'complete', or 'single'" % linkage
+            # Mean linkage is linear, so every pairwise block mean can be
+            # computed with one grouped matrix product instead of an
+            # O(n_components^2) Python loop. `membership` is a sparse
+            # (n_samples, n_components) indicator; grouping rows first
+            # (membership.T @ data) keeps the intermediate at (n_components,
+            # n_samples) so no (n_samples, n_samples) temporary is built.
+            n_samples = data.shape[0]
+            membership = scipy.sparse.csr_matrix(
+                (
+                    np.ones(n_samples),
+                    (np.arange(n_samples), component_labels),
+                ),
+                shape=(n_samples, n_components),
             )
-        for c_i in range(n_components):
-            dm_i = data[component_labels == c_i]
-            for c_j in range(c_i + 1, n_components):
-                dist = linkage(dm_i[:, component_labels == c_j])
-                distance_matrix[c_i, c_j] = dist
-                distance_matrix[c_j, c_i] = dist
+            counts = np.asarray(membership.sum(axis=0)).ravel()
+            block_sums = np.asarray((membership.T @ data) @ membership)
+            distance_matrix = block_sums / np.outer(counts, counts)
+            np.fill_diagonal(distance_matrix, 0.0)
+        else:
+            if linkage == "complete":
+                reducer = np.max
+            elif linkage == "single":
+                reducer = np.min
+            else:
+                raise ValueError(
+                    "Unrecognized linkage '%s'. Please choose from "
+                    "'average', 'complete', or 'single'" % linkage
+                )
+            for c_i in range(n_components):
+                dm_i = data[component_labels == c_i]
+                for c_j in range(c_i + 1, n_components):
+                    dist = reducer(dm_i[:, component_labels == c_j])
+                    distance_matrix[c_i, c_j] = dist
+                    distance_matrix[c_j, c_i] = dist
     else:
         for label in range(n_components):
             component_centroids[label] = data[component_labels == label].mean(axis=0)
