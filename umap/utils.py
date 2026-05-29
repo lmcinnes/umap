@@ -30,10 +30,16 @@ def fast_knn_indices(X, n_neighbors):
     """
     knn_indices = np.empty((X.shape[0], n_neighbors), dtype=np.int32)
     for row in numba.prange(X.shape[0]):
-        # v = np.argsort(X[row])  # Need to call argsort this way for numba
-        v = X[row].argsort(kind="mergesort")
-        v = v[:n_neighbors]
-        knn_indices[row] = v
+        # Select the n_neighbors smallest distances in O(n) via argpartition
+        # instead of fully sorting the row (O(n log n)). We then sort only the
+        # selected candidates. To reproduce the stable argsort(mergesort) result
+        # (ties broken by ascending original index) we pre-sort the candidate
+        # indices ascending before the stable sort by distance.
+        r = X[row]
+        candidates = np.argpartition(r, n_neighbors - 1)[:n_neighbors]
+        candidates.sort()
+        order = np.argsort(r[candidates], kind="mergesort")
+        knn_indices[row] = candidates[order].astype(np.int32)
     return knn_indices
 
 
