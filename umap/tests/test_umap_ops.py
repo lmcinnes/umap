@@ -15,7 +15,7 @@ import scipy.sparse
 import pytest
 import warnings
 from umap.distances import pairwise_special_metric
-from umap.utils import disconnected_vertices
+from umap.utils import disconnected_vertices, fast_knn_indices
 from scipy.sparse import csr_matrix
 
 # Transform isn't stable under batching; hard to opt out of this.
@@ -38,6 +38,36 @@ from scipy.sparse import csr_matrix
 
 
 # Umap Clusterability
+def test_fast_knn_indices_matches_argsort():
+    # fast_knn_indices uses argpartition + partial sort for O(n) selection.
+    # On distinct (no-tie) distances it must reproduce the stable argsort result
+    # exactly, including ordering.
+    rng = np.random.RandomState(0)
+    D = rng.rand(200, 200).astype(np.float32)
+    D = (D + D.T) / 2
+    np.fill_diagonal(D, 0.0)
+    k = 15
+    expected = np.argsort(D, axis=1, kind="mergesort")[:, :k]
+    result = fast_knn_indices(D, k)
+    np.testing.assert_array_equal(result, expected)
+
+
+def test_fast_knn_indices_preserves_distances_with_ties():
+    # With heavy distance ties the chosen index among equidistant points may
+    # differ from argsort, but the selected neighbor *distances* must be
+    # identical (the k smallest distances are still returned).
+    rng = np.random.RandomState(1)
+    D = rng.randint(0, 5, size=(150, 150)).astype(np.float32)
+    D = np.minimum(D, D.T)
+    np.fill_diagonal(D, 0.0)
+    k = 15
+    expected = np.argsort(D, axis=1, kind="mergesort")[:, :k]
+    result = fast_knn_indices(D, k)
+    expected_dists = np.take_along_axis(D, expected, axis=1)
+    result_dists = np.take_along_axis(D, result, axis=1)
+    np.testing.assert_array_equal(result_dists, expected_dists)
+
+
 def test_blobs_cluster():
     data, labels = make_blobs(n_samples=500, n_features=10, centers=5)
     embedding = UMAP(n_epochs=100).fit_transform(data)
