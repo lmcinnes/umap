@@ -112,6 +112,7 @@ def expand_relations(relation_dicts, window_size=3):
 def build_neighborhood_similarities(graphs_indptr, graphs_indices, relations):
     result = np.zeros(relations.shape, dtype=np.float32)
     center_index = (relations.shape[1] - 1) // 2
+    n_samples = relations.shape[2]
     for i in range(relations.shape[0]):
         base_graph_indptr = graphs_indptr[i]
         base_graph_indices = graphs_indices[i]
@@ -121,16 +122,30 @@ def build_neighborhood_similarities(graphs_indptr, graphs_indices, relations):
 
             comparison_graph_indptr = graphs_indptr[i + j - center_index]
             comparison_graph_indices = graphs_indices[i + j - center_index]
-            for k in range(relations.shape[2]):
-                comparison_index = relations[i, j, k]
+
+            # relations[i, j] is constant across k, so precompute once which
+            # comparison-model indices appear as values in it. This replaces the
+            # per-sample set(relations[i, j]) rebuild inside in1d (an
+            # O(n_samples) cost paid for every k) with an O(degree) membership
+            # lookup. A value >= n_samples can never appear in relations[i, j],
+            # so it maps to False, exactly matching in1d's set-membership result.
+            relation_row = relations[i, j]
+            present = np.zeros(n_samples, dtype=np.bool_)
+            for b in range(n_samples):
+                v = relation_row[b]
+                if v >= 0:
+                    present[v] = True
+
+            for k in range(n_samples):
+                comparison_index = relation_row[k]
                 if comparison_index < 0:
                     continue
 
                 raw_base_graph_indices = base_graph_indices[
                     base_graph_indptr[k] : base_graph_indptr[k + 1]
                 ].copy()
-                base_indices = relations[i, j][
-                    raw_base_graph_indices[raw_base_graph_indices < relations.shape[2]]
+                base_indices = relation_row[
+                    raw_base_graph_indices[raw_base_graph_indices < n_samples]
                 ]
                 base_indices = base_indices[base_indices >= 0]
                 comparison_indices = comparison_graph_indices[
@@ -138,9 +153,14 @@ def build_neighborhood_similarities(graphs_indptr, graphs_indices, relations):
                         comparison_index + 1
                     ]
                 ]
-                comparison_indices = comparison_indices[
-                    in1d(comparison_indices, relations[i, j])
-                ]
+                comparison_mask = np.empty(comparison_indices.shape[0], dtype=np.bool_)
+                for idx in range(comparison_indices.shape[0]):
+                    c = comparison_indices[idx]
+                    if c < n_samples:
+                        comparison_mask[idx] = present[c]
+                    else:
+                        comparison_mask[idx] = False
+                comparison_indices = comparison_indices[comparison_mask]
 
                 intersection_size = intersect1d(base_indices, comparison_indices).shape[
                     0
