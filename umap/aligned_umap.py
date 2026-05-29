@@ -389,12 +389,13 @@ class AlignedUMAP(BaseEstimator):
         epochs_per_samples = numba.typed.List.empty_list(numba.types.float64[::1])
 
         for mapper in self.mappers_:
+            graph_coo = mapper.graph_.tocoo()
             indptr_list.append(mapper.graph_.indptr)
             indices_list.append(mapper.graph_.indices)
-            heads.append(mapper.graph_.tocoo().row)
-            tails.append(mapper.graph_.tocoo().col)
+            heads.append(graph_coo.row)
+            tails.append(graph_coo.col)
             epochs_per_samples.append(
-                make_epochs_per_sample(mapper.graph_.tocoo().data, n_epochs)
+                make_epochs_per_sample(graph_coo.data, n_epochs)
             )
 
         rng_state_transform = np.random.RandomState(self.transform_seed)
