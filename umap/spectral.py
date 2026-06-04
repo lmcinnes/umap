@@ -223,8 +223,9 @@ def multi_component_layout(
         base = np.hstack([np.eye(k), np.zeros((k, dim - k))])
         meta_embedding = np.vstack([base, -base])[:n_components]
 
+    graph_csr = graph.tocsr()  # hoisted: was rebuilt from scratch every iteration
     for label in range(n_components):
-        component_graph = graph.tocsr()[component_labels == label, :].tocsc()
+        component_graph = graph_csr[component_labels == label, :].tocsc()
         component_graph = component_graph[:, component_labels == label].tocoo()
 
         distances = pairwise_distances([meta_embedding[label]], meta_embedding)
