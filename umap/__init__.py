@@ -13,6 +13,23 @@ except ImportError:
 
     # Add a dummy class to raise an error
     class ParametricUMAP(object):
+        """A placeholder class for ParametricUMAP when TensorFlow is not installed.
+
+        This class provides a graceful error message when users attempt to instantiate
+        ParametricUMAP without having TensorFlow installed. The real implementation
+        requires TensorFlow >= 2.0 and is loaded from umap.parametric_umap.
+
+        Examples
+        --------
+        >>> try:
+        ...     from umap import ParametricUMAP
+        ... except ImportError:
+        ...     pass  # TensorFlow not available
+
+        See Also
+        --------
+        load_ParametricUMAP : Load a saved ParametricUMAP model
+        """
         def __init__(self, **kwds):
             warn(
                 """The umap.parametric_umap package requires Tensorflow > 2.0 to be installed.
