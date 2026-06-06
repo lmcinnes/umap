@@ -34,7 +34,6 @@ import umap.distances as dist
 import umap.sparse as sparse
 
 from umap.utils import (
-    submatrix,
     ts,
     csr_unique,
     fast_knn_indices,
@@ -318,7 +317,9 @@ def nearest_neighbors(
         # knn_indices = np.argsort(X)[:, :n_neighbors]
         # Compute the nearest neighbor distances
         #   (equivalent to np.sort(X)[:,:n_neighbors])
-        knn_dists = X[np.arange(X.shape[0])[:, None], knn_indices].copy()
+        # Advanced indexing already returns a fresh contiguous array, so no
+        # extra .copy() is needed here.
+        knn_dists = X[np.arange(X.shape[0])[:, None], knn_indices]
         # Prune any nearest neighbours that are infinite distance apart.
         disconnected_index = knn_dists == np.inf
         knn_indices[disconnected_index] = -1
@@ -574,7 +575,7 @@ def fuzzy_simplicial_set(
             verbose=verbose,
         )
 
-    knn_dists = knn_dists.astype(np.float32)
+    knn_dists = knn_dists.astype(np.float32, copy=False)
 
     sigmas, rhos = smooth_knn_dist(
         knn_dists,
@@ -596,10 +597,18 @@ def fuzzy_simplicial_set(
 
         prod_matrix = result.multiply(transpose)
 
-        result = (
-            set_op_mix_ratio * (result + transpose - prod_matrix)
-            + (1.0 - set_op_mix_ratio) * prod_matrix
-        )
+        if set_op_mix_ratio == 1.0:
+            # Default fuzzy union: the (1 - ratio) * prod_matrix term is zero, so
+            # skip building/scaling/adding it (saves redundant sparse temporaries).
+            result = result + transpose - prod_matrix
+        elif set_op_mix_ratio == 0.0:
+            # Pure fuzzy intersection.
+            result = prod_matrix
+        else:
+            result = (
+                set_op_mix_ratio * (result + transpose - prod_matrix)
+                + (1.0 - set_op_mix_ratio) * prod_matrix
+            )
 
     result.eliminate_zeros()
 
@@ -920,9 +929,10 @@ def make_epochs_per_sample(weights, n_epochs):
     -------
     An array of number of epochs per sample, one for each 1-simplex.
     """
-    result = -1.0 * np.ones(weights.shape[0], dtype=np.float64)
+    result = np.full(weights.shape[0], -1.0, dtype=np.float64)
     n_samples = n_epochs * (weights / weights.max())
-    result[n_samples > 0] = float(n_epochs) / np.float64(n_samples[n_samples > 0])
+    positive = n_samples > 0  # compute the mask once instead of twice
+    result[positive] = float(n_epochs) / np.float64(n_samples[positive])
     return result
 
 
@@ -2494,9 +2504,18 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             index = np.arange(X.shape[0])
             inverse = np.arange(X.shape[0])
 
+        # Compute the indexed copy of X exactly once and reuse it everywhere
+        # below. Previously X[index] was re-materialized at each call site (and
+        # several times just to read .shape[0]), allocating the full N x D matrix
+        # repeatedly. A single copy is kept: it also preserves UMAP's contract of
+        # never mutating the caller's data (and self._raw_data) when a distance
+        # metric writes into the array it is handed.
+        n_index_samples = index.shape[0]
+        X_indexed = X[index]
+
         # Error check n_neighbors based on data size
-        if X[index].shape[0] <= self.n_neighbors:
-            if X[index].shape[0] == 1:
+        if n_index_samples <= self.n_neighbors:
+            if n_index_samples == 1:
                 self.embedding_ = np.zeros(
                     (1, self.n_components)
                 )  # needed to sklearn comparability
@@ -2506,7 +2525,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 "n_neighbors is larger than the dataset size; truncating to "
                 "X.shape[0] - 1"
             )
-            self._n_neighbors = X[index].shape[0] - 1
+            self._n_neighbors = n_index_samples - 1
             if self.densmap:
                 self._densmap_kwds["n_neighbors"] = self._n_neighbors
         else:
@@ -2569,7 +2588,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self._rhos,
                 self.graph_dists_,
             ) = fuzzy_simplicial_set(
-                X[index],
+                X_indexed,
                 self.n_neighbors,
                 random_state,
                 "precomputed",
@@ -2596,12 +2615,12 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 verbose=self.verbose,
             )
         # Handle small cases efficiently by computing all distances
-        elif X[index].shape[0] < 4096 and not self.force_approximation_algorithm:
+        elif n_index_samples < 4096 and not self.force_approximation_algorithm:
             self._small_data = True
             try:
                 # sklearn pairwise_distances fails for callable metric on sparse data
                 _m = self.metric if self._sparse_data else self._input_distance_func
-                dmat = pairwise_distances(X[index], metric=_m, **self._metric_kwds)
+                dmat = pairwise_distances(X_indexed, metric=_m, **self._metric_kwds)
             except (ValueError, TypeError) as e:
                 # metric is numba.jit'd or not supported by sklearn,
                 # fallback to pairwise special
@@ -2611,29 +2630,36 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     if not callable(self.metric):
                         _m = dist.named_distances[self.metric]
                         dmat = dist.pairwise_special_metric(
-                            X[index].toarray(),
+                            X_indexed.toarray(),
                             metric=_m,
                             kwds=self._metric_kwds,
                             ensure_all_finite=ensure_all_finite,
                         )
                     else:
                         dmat = dist.pairwise_special_metric(
-                            X[index],
+                            X_indexed,
                             metric=self._input_distance_func,
                             kwds=self._metric_kwds,
                             ensure_all_finite=ensure_all_finite,
                         )
                 else:
                     dmat = dist.pairwise_special_metric(
-                        X[index],
+                        X_indexed,
                         metric=self._input_distance_func,
                         kwds=self._metric_kwds,
                         ensure_all_finite=ensure_all_finite,
                     )
             # set any values greater than disconnection_distance to be np.inf.
             # This will have no effect when _disconnection_distance is not set since it defaults to np.inf.
-            edges_removed = np.sum(dmat >= self._disconnection_distance)
-            dmat[dmat >= self._disconnection_distance] = np.inf
+            # The default (inf) makes the comparison an all-False no-op, so skip
+            # the two N x N boolean temporaries entirely; otherwise compute the
+            # mask once and reuse it for both the count and the in-place fill.
+            if np.isfinite(self._disconnection_distance):
+                disconnected_mask = dmat >= self._disconnection_distance
+                edges_removed = disconnected_mask.sum()
+                dmat[disconnected_mask] = np.inf
+            else:
+                edges_removed = 0
             (
                 self.graph_,
                 self._sigmas,
@@ -2682,7 +2708,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     self._knn_dists,
                     self._knn_search_index,
                 ) = nearest_neighbors(
-                    X[index],
+                    X_indexed,
                     self._n_neighbors,
                     nn_metric,
                     self._metric_kwds,
@@ -2709,7 +2735,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self._rhos,
                 self.graph_dists_,
             ) = fuzzy_simplicial_set(
-                X[index],
+                X_indexed,
                 self.n_neighbors,
                 random_state,
                 nn_metric,
@@ -2863,6 +2889,9 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             epochs = (
                 self.n_epochs_list if self.n_epochs_list is not None else self.n_epochs
             )
+            # Use a fresh copy of the (unmutated) raw data here, independent of
+            # X_indexed: a distance metric that writes into the array it is
+            # handed could otherwise corrupt the data PCA-init / densMAP read.
             self.embedding_, aux_data = self._fit_embed_data(
                 self._raw_data[index],
                 epochs,
@@ -3145,11 +3174,24 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                         kwds=self._metric_kwds,
                         ensure_all_finite=ensure_all_finite,
                     )
-            indices = np.argpartition(dmat, self._n_neighbors)[:, : self._n_neighbors]
-            dmat_shortened = submatrix(dmat, indices, self._n_neighbors)
-            indices_sorted = np.argsort(dmat_shortened)
-            indices = submatrix(indices, indices_sorted, self._n_neighbors)
-            dists = submatrix(dmat_shortened, indices_sorted, self._n_neighbors)
+            # Select the k nearest in row-blocks so the argpartition index
+            # temporary is (block x N) rather than a full (M x N) int64 array
+            # kept alive by the [:, :k] view. Per-row results are identical to
+            # the full-matrix argpartition/argsort (rows are independent).
+            k = self._n_neighbors
+            n_t = dmat.shape[0]
+            indices = np.empty((n_t, k), dtype=np.int64)
+            dists = np.empty((n_t, k), dtype=dmat.dtype)
+            block = 1024
+            for s in range(0, n_t, block):
+                e = min(s + block, n_t)
+                d_block = dmat[s:e]
+                part = np.argpartition(d_block, k, axis=1)[:, :k]
+                r = np.arange(e - s)[:, None]
+                bd = d_block[r, part]
+                order = np.argsort(bd, axis=1)
+                indices[s:e] = part[r, order]
+                dists[s:e] = bd[r, order]
         else:
             epsilon = 0.24 if self._knn_search_index._angular_trees else 0.12
             indices, dists = self._knn_search_index.query(
