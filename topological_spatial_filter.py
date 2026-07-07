@@ -162,7 +162,12 @@ def umap_cross_entropy_loss(y: torch.Tensor, v_ij: torch.Tensor, a: float, b: fl
     # Apply mask over the NxN dimensions and sum them up
     # We can multiply by mask then sum over dim 1 and 2
     masked_loss = loss_matrix * mask.unsqueeze(0)
-    losses = masked_loss.sum(dim=(1, 2)) # Shape: (K,)
+
+    # Take the mean over all valid pairs (N * (N - 1)) to keep the loss scale
+    # invariant to the number of epochs (N). This prevents massive loss values
+    # and stabilizes gradients.
+    valid_pairs = N * (N - 1)
+    losses = masked_loss.sum(dim=(1, 2)) / valid_pairs # Shape: (K,)
 
     return losses
 
