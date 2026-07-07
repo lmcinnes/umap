@@ -41,6 +41,42 @@
 .. _joss_paper: https://doi.org/10.21105/joss.00861
 
 ====
+
+Topological Spatial Filter for EEG/MEG (PyTorch)
+------------------------------------------------
+
+UMAP-learn now features an experimental `topological_spatial_filter.py` module leveraging **PyTorch**.
+It constructs linear spatial filters $\mathbf{w} \in \mathbb{R}^{M \times 1}$ projecting Covariance Matrix Data ($M \times M$) into a 1D Log-Power space using UMAP-rules fuzzy connectivity logic, aiming to preserve high-dimensional manifold characteristics extracted from Tangent Spaces graphs.
+
+You can initialize and evaluate multiple parallel spatial filters $K$ simultaneously over batches:
+
+.. code-block:: python
+
+    import torch
+    import numpy as np
+    from topological_spatial_filter import fit_filters
+
+    N_epochs, M_channels, K_filters = 150, 16, 5
+
+    # Tangent Space vectors (N_epochs, D)
+    T_features = np.random.randn(N_epochs, M_channels * (M_channels + 1) // 2)
+
+    # Symmetric Positive Definite Covariances (N_epochs, M_channels, M_channels)
+    C_matrices = torch.randn(N_epochs, M_channels, M_channels)
+    C_matrices = torch.matmul(C_matrices, C_matrices.transpose(1, 2))
+
+    # Fit the K parallel topological filters
+    w_opt, final_losses = fit_filters(
+        C=C_matrices,
+        T_features=T_features,
+        K=K_filters,
+        n_neighbors=15,
+        epochs=100,
+        lr=0.05
+    )
+
+
+====
 UMAP
 ====
 

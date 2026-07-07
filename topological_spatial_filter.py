@@ -4,20 +4,20 @@ import torch.optim as optim
 import umap
 from umap.umap_ import nearest_neighbors, fuzzy_simplicial_set, find_ab_params
 import numpy as np
-import scipy.sparse
 
-def get_umap_graph(X: np.ndarray, n_neighbors: int = 15, metric: str = 'euclidean') -> tuple[scipy.sparse.coo_matrix, float, float]:
+def get_umap_graph(T_features: np.ndarray, n_neighbors: int = 15, metric: str = 'euclidean') -> tuple[torch.Tensor, float, float]:
     """
     Constructs the high-dimensional UMAP connectivity graph.
 
     Args:
-        X: Feature matrix of shape (N, D).
+        T_features: Feature matrix of shape (N_epochs, D), representing vectorized
+                    covariance features in tangent space.
         n_neighbors: The size of local neighborhood (in terms of number of neighboring sample points)
                      used for manifold approximation.
         metric: The metric to use to compute distances in high dimensional space.
 
     Returns:
-        v_ij: A sparse matrix representing the fuzzy simplicial set (connection probabilities).
+        v_ij: A dense PyTorch tensor representing the fuzzy simplicial set (connection probabilities).
         a: The a parameter of the UMAP layout curve.
         b: The b parameter of the UMAP layout curve.
     """
@@ -25,7 +25,7 @@ def get_umap_graph(X: np.ndarray, n_neighbors: int = 15, metric: str = 'euclidea
 
     # 1. Find nearest neighbors
     knn_indices, knn_dists, forest = nearest_neighbors(
-        X,
+        T_features,
         n_neighbors=n_neighbors,
         metric=metric,
         metric_kwds={},
@@ -34,8 +34,8 @@ def get_umap_graph(X: np.ndarray, n_neighbors: int = 15, metric: str = 'euclidea
     )
 
     # 2. Compute fuzzy simplicial set
-    v_ij, sigmas, rhos = fuzzy_simplicial_set(
-        X=X,
+    v_ij_sparse, sigmas, rhos = fuzzy_simplicial_set(
+        X=T_features,
         n_neighbors=n_neighbors,
         random_state=random_state,
         metric=metric,
@@ -47,202 +47,230 @@ def get_umap_graph(X: np.ndarray, n_neighbors: int = 15, metric: str = 'euclidea
         local_connectivity=1.0,
     )
 
+    # Convert sparse scipy matrix to dense PyTorch tensor
+    v_ij = torch.tensor(v_ij_sparse.toarray(), dtype=torch.float32)
+
     # 3. Get layout curve parameters for optimization
-    # Note: UMAP typically uses spread=1.0, min_dist=0.1
     a, b = find_ab_params(spread=1.0, min_dist=0.1)
 
     return v_ij, a, b
 
-
-class TopologicalFilter(nn.Module):
+class TopologicalFilterBatch(nn.Module):
     """
-    Topological spatial filter for EEG/MEG data.
-    Finds an optimal linear spatial filter w in R^(Mx1) such that the extracted log-powers
-    preserve a given graph topology (UMAP connectivity matrix).
+    Batched topological spatial filter for EEG/MEG data.
+    Evaluates K independent spatial filters W in R^(K x M x 1) in parallel.
     """
-    def __init__(self, num_channels: int, w_init: torch.Tensor = None):
+    def __init__(self, M: int, K: int, w_init: torch.Tensor = None):
         super().__init__()
+        self.M = M
+        self.K = K
+
+        # Initialize filters
+        w_tensor = torch.randn(K, M, 1)
         if w_init is not None:
-            self.w = nn.Parameter(w_init.clone())
-        else:
-            self.w = nn.Parameter(torch.randn(num_channels, 1))
+            K_init = w_init.shape[0]
+            if K_init > K:
+                raise ValueError("w_init has more filters than K.")
+            # Overwrite the first K_init filters with the provided ones
+            w_tensor[:K_init] = w_init.clone()
+
+        self.w = nn.Parameter(w_tensor)
 
     def forward(self, C: torch.Tensor) -> torch.Tensor:
         """
-        Calculates log-power projections for given covariance matrices.
+        Calculates batched log-power projections for given covariance matrices.
 
         Args:
-            C: Tensor of shape (N, M, M), SPD covariance matrices.
+            C: Tensor of shape (N_epochs, M, M), SPD covariance matrices.
 
         Returns:
-            y: Tensor of shape (N, 1), the 1D log-power coordinate for each epoch.
+            y: Tensor of shape (K, N_epochs), 1D log-power coordinates.
         """
-        # Calculate C @ w -> (N, M, 1)
-        Cw = torch.matmul(C, self.w)
+        # We need to compute p_{k,i} = w_k^T C_i w_k
+        # C shape: (N, M, M)
+        # w shape: (K, M, 1)
 
-        # Calculate w^T @ (C @ w) -> (N, 1, 1)
-        # Using batched dot product for efficiency
-        w_t = self.w.t().unsqueeze(0)  # (1, 1, M)
-        p = torch.matmul(w_t, Cw).squeeze(-1)  # (N, 1) keeping y as (N, 1) output vector as requested
+        # Using einsum for efficient batched matrix multiplication over independent dimensions
+        # 'nml' -> n=N, m=M, l=M (C_i matrix)
+        # 'kmj' -> k=K, m=M, j=1 (w_k vector)
+        # Result of C_i w_k for all k: (K, N, M, 1)
+        # However, we can compute the bilinear form directly:
+        # p_{k,i} = sum_{m,l} w_{k,m,1} * C_{i,m,l} * w_{k,l,1}
+
+        # In einsum:
+        # w_k^T: 'km...' (using just 'km' since the last dim is 1)
+        # C_i: 'nml'
+        # w_k: 'kl...'
+
+        # Flatten w to (K, M) for easier einsum
+        w_flat = self.w.squeeze(-1) # (K, M)
+
+        # Equation: k: filter index, n: epoch index, m: row index, l: col index
+        p = torch.einsum('km, nml, kl -> kn', w_flat, C, w_flat)
 
         # Protect against negative values or exact zeros from numerical instability
         p_clamped = torch.clamp(p, min=1e-8)
 
-        # Calculate coordinate y_k = log(p_k)
+        # Calculate coordinate y_{k,i} = log(p_{k,i})
         y = torch.log(p_clamped)
         return y
 
-
 def umap_cross_entropy_loss(y: torch.Tensor, v_ij: torch.Tensor, a: float, b: float) -> torch.Tensor:
     """
-    Computes the UMAP Fuzzy Set Cross Entropy Loss based on 1D coordinates.
+    Computes the UMAP Fuzzy Set Cross Entropy Loss for K batched filters.
 
     Args:
-        y: Tensor of shape (N, 1), 1D coordinates.
-        v_ij: Tensor of shape (N, N), high-dimensional connections (probabilities, dense).
+        y: Tensor of shape (K, N_epochs), 1D coordinates.
+        v_ij: Tensor of shape (N_epochs, N_epochs), high-dimensional connection probabilities.
         a: UMAP constant a.
         b: UMAP constant b.
 
     Returns:
-        Scalar tensor representing the total loss.
+        losses: Tensor of shape (K,), representing the loss for each filter.
     """
-    N = v_ij.shape[0]
+    K, N = y.shape
 
-    # Distance calculation: d_ij^2 = (y_i - y_j)^2
-    # y is (N, 1), y.t() is (1, N)
-    dist_sq = torch.pow(y - y.t(), 2)  # Broadcasting -> (N, N)
+    # Calculate pairwise squared distances d_{k,ij}^2 = (y_{k,i} - y_{k,j})^2
+    # y.unsqueeze(2): (K, N, 1)
+    # y.unsqueeze(1): (K, 1, N)
+    # dist_sq: (K, N, N)
+    dist_sq = torch.pow(y.unsqueeze(2) - y.unsqueeze(1), 2)
 
-    # Low-dimensional probabilities w_ij = 1 / (1 + a * (d_ij^2)^b)
+    # Low-dimensional probabilities w_{k,ij} = 1 / (1 + a * (d_{k,ij}^2)^b)
     # Add a tiny epsilon before power to avoid nan gradients when distance is exactly 0
-    w_ij = 1.0 / (1.0 + a * torch.pow(dist_sq + 1e-12, b))
+    w_kij = 1.0 / (1.0 + a * torch.pow(dist_sq + 1e-8, b))
 
-    # We do not use w_ij.fill_diagonal_(0.0) here as it modifies the tensor in-place,
-    # crashing PyTorch's backward pass. The diagonal is naturally ignored later by the mask anyway.
-
-    # Clamp w_ij and v_ij to prevent log(0) resulting in NaN
-    w_ij_clamped = torch.clamp(w_ij, min=1e-7, max=1.0 - 1e-7)
+    # Clamp w_kij and v_ij to prevent log(0) resulting in NaN
+    w_kij_clamped = torch.clamp(w_kij, min=1e-7, max=1.0 - 1e-7)
     v_ij_clamped = torch.clamp(v_ij, min=1e-7, max=1.0 - 1e-7)
 
+    # Broadcast v_ij (N, N) -> (1, N, N) to match w_kij (K, N, N)
+    v_ij_bc = v_ij_clamped.unsqueeze(0)
+
     # Fuzzy Set Cross Entropy calculation
-    term1 = v_ij_clamped * torch.log(v_ij_clamped / w_ij_clamped)
-    term2 = (1.0 - v_ij_clamped) * torch.log((1.0 - v_ij_clamped) / (1.0 - w_ij_clamped))
+    term1 = v_ij_bc * torch.log(v_ij_bc / w_kij_clamped)
+    term2 = (1.0 - v_ij_bc) * torch.log((1.0 - v_ij_bc) / (1.0 - w_kij_clamped))
 
-    loss_matrix = term1 + term2
+    loss_matrix = term1 + term2  # Shape: (K, N, N)
 
-    # Mask out the diagonal elements completely to ignore them from sum
-    mask = ~torch.eye(N, dtype=torch.bool, device=v_ij.device)
+    # Mask out the diagonal elements (where i == j) to ignore them from the sum
+    mask = ~torch.eye(N, dtype=torch.bool, device=y.device) # Shape: (N, N)
 
-    # Sum over all i != j
-    total_loss = torch.sum(loss_matrix[mask])
-    return total_loss
+    # Compute sum over i != j for each k
+    # Apply mask over the NxN dimensions and sum them up
+    # We can multiply by mask then sum over dim 1 and 2
+    masked_loss = loss_matrix * mask.unsqueeze(0)
+    losses = masked_loss.sum(dim=(1, 2)) # Shape: (K,)
 
+    return losses
 
-def fit_topological_filter(
+def fit_filters(
     C: torch.Tensor,
-    v_ij: torch.Tensor,
-    a: float,
-    b: float,
+    T_features: np.ndarray,
+    K: int,
     w_init: torch.Tensor = None,
-    n_restarts: int = 5,
+    n_neighbors: int = 15,
     epochs: int = 500,
     lr: float = 0.01
-) -> tuple[torch.Tensor, float]:
+) -> tuple[torch.Tensor, torch.Tensor]:
     """
-    Trains the topological spatial filter using multistart optimization.
+    Trains K batched topological spatial filters.
 
     Args:
-        C: Tensor of shape (N, M, M), SPD covariance matrices.
-        v_ij: Tensor of shape (N, N), fuzzy simplicial set from UMAP (dense).
-        a: UMAP curve parameter.
-        b: UMAP curve parameter.
-        w_init: Optional initial weights tensor of shape (M, 1).
-        n_restarts: Number of independent training restarts to avoid local minima.
-        epochs: Number of training epochs per restart.
+        C: Tensor of shape (N_epochs, M, M), SPD covariance matrices.
+        T_features: Numpy array of shape (N_epochs, D), tangent space features for graph building.
+        K: Number of independent filters to optimize.
+        w_init: Optional initial weights tensor of shape (K_init, M, 1).
+        n_neighbors: UMAP graph neighbors parameter.
+        epochs: Number of training epochs.
         lr: Learning rate for Adam optimizer.
 
     Returns:
-        w_best: Tensor of shape (M, 1), the best trained spatial filter weights.
-        best_loss: The final loss achieved by w_best.
+        w_final: Tensor of shape (K, M, 1), the trained spatial filter weights.
+        final_losses: Tensor of shape (K,), the final loss achieved by each filter.
     """
     N, M, _ = C.shape
     device = C.device
+
+    print("Building UMAP graph from tangent space features...")
+    v_ij, a, b = get_umap_graph(T_features, n_neighbors=n_neighbors)
     v_ij = v_ij.to(device)
 
-    best_loss = float('inf')
-    w_best = None
+    model = TopologicalFilterBatch(M=M, K=K, w_init=w_init)
+    model.to(device)
 
-    for restart in range(n_restarts):
-        # Determine initialization
-        if restart == 0 and w_init is not None:
-            init_tensor = w_init.clone().to(device)
-        else:
-            init_tensor = torch.randn(M, 1, device=device)
+    optimizer = optim.Adam(model.parameters(), lr=lr)
 
-        model = TopologicalFilter(num_channels=M, w_init=init_tensor)
-        model.to(device)
+    for epoch in range(epochs):
+        optimizer.zero_grad()
 
-        optimizer = optim.Adam(model.parameters(), lr=lr)
+        # Forward pass -> y shape: (K, N)
+        y = model(C)
 
-        final_loss = None
+        # Loss calculation -> losses shape: (K,)
+        losses = umap_cross_entropy_loss(y, v_ij, a, b)
 
-        for epoch in range(epochs):
-            optimizer.zero_grad()
+        # We can optimize all filters independently by taking the mean (or sum) of their losses
+        total_loss = losses.mean()
 
-            # Forward pass
-            y = model(C)
+        # Backward pass
+        total_loss.backward()
+        optimizer.step()
 
-            # Loss calculation
-            loss = umap_cross_entropy_loss(y, v_ij, a, b)
+        # Normalize weights to prevent them from blowing up: w_k = w_k / ||w_k||_2
+        # self.w shape is (K, M, 1)
+        with torch.no_grad():
+            w_norms = torch.norm(model.w, p=2, dim=1, keepdim=True) # Shape: (K, 1, 1)
+            model.w.div_(w_norms + 1e-8)
 
-            # Backward pass
-            loss.backward()
-            optimizer.step()
+        if (epoch + 1) % 50 == 0:
+            print(f"Epoch {epoch+1}/{epochs}, Average Loss: {total_loss.item():.4f}")
 
-            # Normalize weights to prevent them from blowing up: w = w / ||w||_2
-            with torch.no_grad():
-                w_norm = torch.norm(model.w, p=2)
-                model.w.div_(w_norm + 1e-8)
+    # Return the final weights and their individual losses
+    with torch.no_grad():
+        final_y = model(C)
+        final_losses = umap_cross_entropy_loss(final_y, v_ij, a, b)
+        w_final = model.w.detach().clone()
 
-            final_loss = loss.item()
-
-        # Record best
-        if final_loss is not None and final_loss < best_loss:
-            best_loss = final_loss
-            w_best = model.w.detach().cpu().clone()
-
-        print(f"Restart {restart+1}/{n_restarts} completed with loss: {final_loss:.4f}")
-
-    return w_best, best_loss
-
+    return w_final, final_losses
 
 if __name__ == "__main__":
-    # Integration test
+    # Integration test for the entire batched pipeline
     torch.manual_seed(42)
     np.random.seed(42)
 
-    N, M = 150, 16
+    N_epochs = 150
+    M_channels = 16
+    K_filters = 5
+    K_init = 2
+    D_tangent = M_channels * (M_channels + 1) // 2
 
-    # 1. Create Mock data for UMAP Graph (flat features, e.g. tangent space features)
-    D_flat = M * (M + 1) // 2
-    X_mock = np.random.randn(N, D_flat)
-
-    print("Computing UMAP Graph...")
-    v_sparse, param_a, param_b = get_umap_graph(X_mock, n_neighbors=15)
-
-    # Convert sparse scipy matrix to dense PyTorch tensor
-    v_dense = torch.tensor(v_sparse.toarray(), dtype=torch.float32)
+    print("Generating mock data...")
+    # 1. Create Mock Tangent Space Features
+    T_mock = np.random.randn(N_epochs, D_tangent)
 
     # 2. Create Mock Covariance matrices (N, M, M) - must be SPD
-    A = torch.randn(N, M, M)
+    A = torch.randn(N_epochs, M_channels, M_channels)
     C_mock = torch.matmul(A, A.transpose(1, 2))
 
-    # 3. Fit filter
-    print("Fitting Topological Filter...")
-    w_opt, min_loss = fit_topological_filter(
-        C_mock, v_dense, param_a, param_b,
-        n_restarts=3, epochs=100, lr=0.05
+    # 3. Create partial w_init for the first K_init filters
+    w_init_mock = torch.randn(K_init, M_channels, 1)
+
+    # 4. Fit all filters concurrently
+    print(f"Fitting {K_filters} Topological Filters in parallel...")
+    w_opt, final_losses = fit_filters(
+        C=C_mock,
+        T_features=T_mock,
+        K=K_filters,
+        w_init=w_init_mock,
+        n_neighbors=15,
+        epochs=100,
+        lr=0.05
     )
 
-    print(f"Best weight vector shape: {w_opt.shape}")
-    print(f"Minimum loss achieved: {min_loss:.4f}")
-    print("Pipeline finished successfully.")
+    print("\n--- Training Results ---")
+    print(f"Optimized Weight Tensor Shape: {w_opt.shape}")
+    for k in range(K_filters):
+        print(f"Filter {k+1} Final Loss: {final_losses[k].item():.4f}")
+
+    print("Batched pipeline finished successfully.")
