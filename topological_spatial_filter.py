@@ -4,6 +4,8 @@ import torch.optim as optim
 import umap
 from umap.umap_ import nearest_neighbors, fuzzy_simplicial_set, find_ab_params
 import numpy as np
+from tqdm.auto import tqdm
+import matplotlib.pyplot as plt
 
 def get_umap_graph(T_features: np.ndarray, n_neighbors: int = 15, metric: str = 'euclidean') -> tuple[torch.Tensor, float, float]:
     """
@@ -170,9 +172,12 @@ def fit_filters(
     K: int,
     w_init: torch.Tensor = None,
     n_neighbors: int = 15,
+    metric: str = 'euclidean',
     epochs: int = 500,
-    lr: float = 0.01
-) -> tuple[torch.Tensor, torch.Tensor]:
+    lr: float = 0.01,
+    device: str = None,
+    verbose: bool = True
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Trains K batched topological spatial filters.
 
@@ -184,24 +189,39 @@ def fit_filters(
         n_neighbors: UMAP graph neighbors parameter.
         epochs: Number of training epochs.
         lr: Learning rate for Adam optimizer.
+        device: Hardware device to run optimization ('cuda', 'cpu', etc.). Auto-detects if None.
+        verbose: Whether to display a tqdm progress bar with loss logs.
 
     Returns:
-        w_final: Tensor of shape (K, M, 1), the trained spatial filter weights.
-        final_losses: Tensor of shape (K,), the final loss achieved by each filter.
+        w_final: Tensor of shape (K, M, 1), the trained spatial filter weights (sorted by loss).
+        final_losses: Tensor of shape (K,), the final loss achieved by each filter (sorted).
+        loss_history: Tensor of shape (epochs, K), the recorded loss history.
     """
     N, M, _ = C.shape
-    device = C.device
 
-    print("Building UMAP graph from tangent space features...")
-    v_ij, a, b = get_umap_graph(T_features, n_neighbors=n_neighbors)
+    if device is None:
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    # Move C to correct device
+    C = C.to(device)
+
+    if verbose:
+        print(f"Building UMAP graph from tangent space features (moving to {device})...")
+
+    v_ij, a, b = get_umap_graph(T_features, n_neighbors=n_neighbors, metric=metric)
     v_ij = v_ij.to(device)
 
     model = TopologicalFilterBatch(M=M, K=K, w_init=w_init)
     model.to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    optimizer = optim.AdamW(model.parameters(), lr=lr)
+    # verbose argument was deprecated/removed in newer PyTorch versions for schedulers in favor of logging
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=10, factor=0.5)
 
-    for epoch in range(epochs):
+    loss_history = torch.zeros(epochs, K)
+
+    pbar = tqdm(range(epochs), disable=not verbose, desc="Optimizing Filters")
+    for epoch in pbar:
         optimizer.zero_grad()
 
         # Forward pass -> y shape: (K, N)
@@ -223,27 +243,38 @@ def fit_filters(
             w_norms = torch.norm(model.w, p=2, dim=1, keepdim=True) # Shape: (K, 1, 1)
             model.w.div_(w_norms + 1e-8)
 
-        if (epoch + 1) % 50 == 0:
-            print(f"Epoch {epoch+1}/{epochs}, Average Loss: {total_loss.item():.4f}")
+        # Update loss history
+        loss_history[epoch] = losses.detach().cpu()
 
-    # Return the final weights and their individual losses
+        # Update scheduler and progress bar
+        current_loss_val = total_loss.item()
+        scheduler.step(current_loss_val)
+        pbar.set_postfix(mean_loss=f"{current_loss_val:.4f}")
+
+    # Process and sort the final outputs
     with torch.no_grad():
         final_y = model(C)
-        final_losses = umap_cross_entropy_loss(final_y, v_ij, a, b)
-        w_final = model.w.detach().clone()
+        final_losses = umap_cross_entropy_loss(final_y, v_ij, a, b).detach().cpu()
+        w_final = model.w.detach().cpu().clone()
 
-    return w_final, final_losses
+        # Sort filters based on their final loss ascending
+        sorted_indices = torch.argsort(final_losses)
+        w_opt = w_final[sorted_indices]
+        final_losses_sorted = final_losses[sorted_indices]
+        loss_history_sorted = loss_history[:, sorted_indices]
+
+    return w_opt, final_losses_sorted, loss_history_sorted
 
 if __name__ == "__main__":
     # Integration test for the entire batched pipeline
     torch.manual_seed(42)
     np.random.seed(42)
 
-    N_epochs = 150
+    N_epochs = 200
     M_channels = 16
     K_filters = 5
     K_init = 2
-    D_tangent = M_channels * (M_channels + 1) // 2
+    D_tangent = 136 # equivalent to 16 * (16 + 1) // 2
 
     print("Generating mock data...")
     # 1. Create Mock Tangent Space Features
@@ -258,19 +289,36 @@ if __name__ == "__main__":
 
     # 4. Fit all filters concurrently
     print(f"Fitting {K_filters} Topological Filters in parallel...")
-    w_opt, final_losses = fit_filters(
+    w_opt, final_losses, loss_history = fit_filters(
         C=C_mock,
         T_features=T_mock,
         K=K_filters,
         w_init=w_init_mock,
         n_neighbors=15,
         epochs=100,
-        lr=0.05
+        lr=0.05,
+        verbose=True
     )
 
     print("\n--- Training Results ---")
     print(f"Optimized Weight Tensor Shape: {w_opt.shape}")
+    print(f"Loss History Tensor Shape: {loss_history.shape}")
+
     for k in range(K_filters):
-        print(f"Filter {k+1} Final Loss: {final_losses[k].item():.4f}")
+        print(f"Filter {k+1} (Best #{k+1}) Final Loss: {final_losses[k].item():.4f}")
+
+    print("Plotting Loss History...")
+    plt.figure(figsize=(10, 6))
+    for k in range(K_filters):
+        plt.plot(loss_history[:, k].numpy(), label=f'Filter {k+1} (Final: {final_losses[k].item():.1f})')
+
+    plt.title('Topological Spatial Filter Training Convergence')
+    plt.xlabel('Epochs')
+    plt.ylabel('UMAP Fuzzy Cross-Entropy Loss')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig('convergence_plot.png')
+    print("Plot saved to 'convergence_plot.png'.")
 
     print("Batched pipeline finished successfully.")

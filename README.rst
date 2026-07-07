@@ -66,7 +66,7 @@ You can initialize and evaluate multiple parallel spatial filters $K$ simultaneo
     C_matrices = torch.matmul(C_matrices, C_matrices.transpose(1, 2))
 
     # Fit the K parallel topological filters
-    w_opt, final_losses = fit_filters(
+    w_opt, final_losses, loss_history = fit_filters(
         C=C_matrices,
         T_features=T_features,
         K=K_filters,
