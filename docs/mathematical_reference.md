@@ -28,22 +28,14 @@ $$\mathcal{L} = \frac{1}{N(N-1)} \sum_{i \neq j} \left[ V_{ij} \log\left(\frac{V
 
 This objective forces the spatial filter to arrange the log-powers $y_i$ such that their 1D topology matches the high-dimensional manifold of the original data.
 
-## 4. Deflation (Gram-Schmidt Orthogonalization)
+## 4. Independent Multi-Start Optimization
 
-To find $K > 1$ distinct components, we must ensure that each new spatial filter $\mathbf{w}_k$ captures unique information not explained by the previous filters $\{\mathbf{w}_1, \dots, \mathbf{w}_{k-1}\}$. We use an iterative deflation process based on Gram-Schmidt orthogonalization.
+The UMAP Cross-Entropy loss landscape is highly non-convex and features many local minima. To combat this, the algorithm trains $K$ completely independent spatial filters in parallel.
 
-Given a newly optimized weight vector $\mathbf{v}$, we project it out of the subspace spanned by the previously found filters. If we arrange the normalized previously found filters in a matrix $B$, the orthogonalized component $\mathbf{w}_k$ is obtained by:
-
-$$\mathbf{w}_{k, \text{ortho}} = \mathbf{v} - B B^T \mathbf{v}$$
-
-Followed by L2-normalization:
-
-$$\mathbf{w}_k = \frac{\mathbf{w}_{k, \text{ortho}}}{\|\mathbf{w}_{k, \text{ortho}}\|_2}$$
-
-*Alternatively, orthogonal penalties can be added directly to the loss function during simultaneous batched optimization.*
+At the end of the optimization process, the algorithm evaluates all $K$ independent filters, ranks them by their final Cross-Entropy loss, and selects the one that achieved the absolute minimum loss as the optimal spatial filter $\mathbf{w}_{best}$.
 
 ## 5. Pre-calculated Initialization ($\mathbf{W}_{init}$)
 
-Gradient descent on the highly non-convex UMAP Cross-Entropy landscape is susceptible to local minima. Providing a pre-calculated matrix $\mathbf{W}_{init}$ (e.g., from SSD or mSPoC) significantly accelerates convergence.
+Providing a pre-calculated matrix $\mathbf{W}_{init}$ (e.g., from SSD or mSPoC) for some of the $K$ initializations significantly accelerates convergence.
 
 When $\mathbf{W}_{init}$ is provided, the algorithm begins its search in a structurally meaningful region of the parameter space rather than a random state. The gradient descent then acts as a fine-tuning mechanism—adjusting the pre-calculated filter weights to "stretch" and "compress" the spatial projections so they perfectly align with the target graph topology without needing to escape massive local minima plateaus.

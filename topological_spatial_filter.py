@@ -171,37 +171,46 @@ def umap_cross_entropy_loss(y: torch.Tensor, v_ij: torch.Tensor, a: float, b: fl
 
     return losses
 
+from typing import Union, Tuple
+
 def fit_filters(
-    C: torch.Tensor,
+    C: Union[np.ndarray, torch.Tensor],
     T_features: np.ndarray,
     K: int,
-    w_init: torch.Tensor = None,
+    w_init: Union[np.ndarray, torch.Tensor] = None,
     n_neighbors: int = 15,
     metric: str = 'euclidean',
     epochs: int = 500,
     lr: float = 0.01,
     device: str = None,
     verbose: bool = True
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Trains K batched topological spatial filters.
 
     Args:
-        C: Tensor of shape (N_epochs, M, M), SPD covariance matrices.
+        C: Array or Tensor of shape (N_epochs, M, M), SPD covariance matrices.
         T_features: Numpy array of shape (N_epochs, D), tangent space features for graph building.
         K: Number of independent filters to optimize.
-        w_init: Optional initial weights tensor of shape (K_init, M, 1).
+        w_init: Optional initial weights array/tensor of shape (K_init, M, 1).
         n_neighbors: UMAP graph neighbors parameter.
+        metric: The metric to use to compute distances in high dimensional space.
         epochs: Number of training epochs.
         lr: Learning rate for Adam optimizer.
         device: Hardware device to run optimization ('cuda', 'cpu', etc.). Auto-detects if None.
         verbose: Whether to display a tqdm progress bar with loss logs.
 
     Returns:
-        w_final: Tensor of shape (K, M, 1), the trained spatial filter weights (sorted by loss).
-        final_losses: Tensor of shape (K,), the final loss achieved by each filter (sorted).
-        loss_history: Tensor of shape (epochs, K), the recorded loss history.
+        w_final: Numpy array of shape (K, M, 1), the trained spatial filter weights (sorted by loss).
+        final_losses: Numpy array of shape (K,), the final loss achieved by each filter (sorted).
+        loss_history: Numpy array of shape (epochs, K), the recorded loss history.
     """
+    if isinstance(C, np.ndarray):
+        C = torch.tensor(C, dtype=torch.float32)
+
+    if w_init is not None and isinstance(w_init, np.ndarray):
+        w_init = torch.tensor(w_init, dtype=torch.float32)
+
     N, M, _ = C.shape
 
     if device is None:
@@ -264,9 +273,9 @@ def fit_filters(
 
         # Sort filters based on their final loss ascending
         sorted_indices = torch.argsort(final_losses)
-        w_opt = w_final[sorted_indices]
-        final_losses_sorted = final_losses[sorted_indices]
-        loss_history_sorted = loss_history[:, sorted_indices]
+        w_opt = w_final[sorted_indices].numpy()
+        final_losses_sorted = final_losses[sorted_indices].numpy()
+        loss_history_sorted = loss_history[:, sorted_indices].numpy()
 
     return w_opt, final_losses_sorted, loss_history_sorted
 
@@ -282,15 +291,15 @@ if __name__ == "__main__":
     D_tangent = 136 # equivalent to 16 * (16 + 1) // 2
 
     print("Generating mock data...")
-    # 1. Create Mock Tangent Space Features
+    # 1. Create Mock Tangent Space Features (Numpy)
     T_mock = np.random.randn(N_epochs, D_tangent)
 
-    # 2. Create Mock Covariance matrices (N, M, M) - must be SPD
-    A = torch.randn(N_epochs, M_channels, M_channels)
-    C_mock = torch.matmul(A, A.transpose(1, 2))
+    # 2. Create Mock Covariance matrices (Numpy SPD)
+    A = np.random.randn(N_epochs, M_channels, M_channels)
+    C_mock = A @ A.transpose(0, 2, 1)
 
-    # 3. Create partial w_init for the first K_init filters
-    w_init_mock = torch.randn(K_init, M_channels, 1)
+    # 3. Create partial w_init for the first K_init filters (Numpy)
+    w_init_mock = np.random.randn(K_init, M_channels, 1)
 
     # 4. Fit all filters concurrently
     print(f"Fitting {K_filters} Topological Filters in parallel...")
@@ -306,16 +315,16 @@ if __name__ == "__main__":
     )
 
     print("\n--- Training Results ---")
-    print(f"Optimized Weight Tensor Shape: {w_opt.shape}")
-    print(f"Loss History Tensor Shape: {loss_history.shape}")
+    print(f"Optimized Weight Tensor Shape: {w_opt.shape} ({type(w_opt)})")
+    print(f"Loss History Tensor Shape: {loss_history.shape} ({type(loss_history)})")
 
     for k in range(K_filters):
-        print(f"Filter {k+1} (Best #{k+1}) Final Loss: {final_losses[k].item():.4f}")
+        print(f"Filter {k+1} (Best #{k+1}) Final Loss: {final_losses[k]:.4f}")
 
     print("Plotting Loss History...")
     plt.figure(figsize=(10, 6))
     for k in range(K_filters):
-        plt.plot(loss_history[:, k].numpy(), label=f'Filter {k+1} (Final: {final_losses[k].item():.1f})')
+        plt.plot(loss_history[:, k], label=f'Filter {k+1} (Final: {final_losses[k]:.1f})')
 
     plt.title('Topological Spatial Filter Training Convergence')
     plt.xlabel('Epochs')
