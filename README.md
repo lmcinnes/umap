@@ -60,13 +60,14 @@ A = np.random.randn(N_epochs, M_channels, M_channels)
 C_matrices = A @ A.transpose(0, 2, 1)
 
 # Optional pre-calculated initializations (e.g. from SSD)
-w_init = np.random.randn(K_filters, M_channels, 1)
+w_init = np.random.randn(K_filters, 2, M_channels)
 
-# Fit the K parallel topological filters
+# Fit the K parallel topological filters finding a 2D embedding space
 w_opt, final_losses, loss_history = fit_filters(
     C=C_matrices,
     T_features=T_features,
-    K=K_filters,
+    N_dim=2,
+    K_restarts=K_filters,
     w_init=w_init,
     n_neighbors=15,
     epochs=100,

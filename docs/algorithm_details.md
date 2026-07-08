@@ -22,23 +22,23 @@ Before optimization begins, we build a reference topology representing the "true
 
 The core of the algorithm is a custom PyTorch module (`TopologicalFilterBatch`). Instead of looking for a single spatial filter, we simultaneously optimize a batch of $K$ independent linear spatial filters $\mathbf{W} \in \mathbb{R}^{K \times M \times 1}$.
 
-For every filter $k$ and every epoch $i$, the algorithm projects the $M \times M$ covariance matrix $C_i$ into a **1D Log-Power coordinate** ($y_{k,i}$):
+For every restart $k$ and every epoch $i$, the algorithm projects the $M \times M$ covariance matrix $C_i$ using $N_{dim}$ parallel spatial filters to form an **$N_{dim}$-dimensional Log-Power coordinate** vector $\mathbf{y}_{k,i}$:
 
-$$y_{k,i} = \log(\mathbf{w}_k^T C_i \mathbf{w}_k)$$
+$$y_{k,i,d} = \log(\mathbf{w}_{k,d}^T C_i \mathbf{w}_{k,d})$$
 
 **Implementation Details:**
-- **Vectorization:** Instead of slow loops, this bilinear projection is executed entirely in parallel using `torch.einsum('km, nml, kl -> kn')`.
-- **Clamping:** To prevent numerical instabilities (like $\log(0)$ or negative values causing `NaN`s), the raw power $(\mathbf{w}_k^T C_i \mathbf{w}_k)$ is clamped to a minimum value of `1e-8` before the logarithm is applied.
+- **Vectorization:** Instead of slow loops, this multi-dimensional projection is executed entirely in parallel using `torch.einsum('kdm, nml, kdl -> knd')`.
+- **Clamping:** To prevent numerical instabilities (like $\log(0)$ or negative values causing `NaN`s), the raw power is clamped to a minimum value of `1e-8` before the logarithm is applied.
 
 ---
 
-## 3. Distance & 1D Low-Dimensional Graph
+## 3. Distance & Low-Dimensional Graph
 
-Once projected, we measure the topology of the newly formed 1D spaces. For each filter $k$, we compute the squared Euclidean distance between every pair of epochs $(i, j)$:
+Once projected, we measure the topology of the newly formed $N_{dim}$-dimensional spaces. For each restart $k$, we compute the squared Euclidean distance between every pair of epochs $(i, j)$ by summing across all embedded dimensions $d$:
 
-$$d_{k,ij}^2 = (y_{k,i} - y_{k,j})^2$$
+$$d_{k,ij}^2 = \|\mathbf{y}_{k,i} - \mathbf{y}_{k,j}\|^2 = \sum_d (y_{k,i,d} - y_{k,j,d})^2$$
 
-These 1D distances are then translated into low-dimensional connection probabilities ($w_{k,ij}$) using the UMAP family of curves (with parameters $a$ and $b$):
+These multi-dimensional distances are then translated into low-dimensional connection probabilities ($w_{k,ij}$) using the UMAP family of curves (with parameters $a$ and $b$):
 
 $$w_{k,ij} = \frac{1}{1 + a \cdot (d_{k,ij}^2 + \epsilon)^b}$$
 

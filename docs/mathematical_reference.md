@@ -1,41 +1,49 @@
-# Mathematical Reference for Topological Spatial Filtering
+# Mathematical Reference: Topological Spatial Filtering
 
-This document details the mathematical framework for optimizing linear spatial filters using UMAP Cross-Entropy loss.
+The proposed methodology aims to discover linear spatial filters that extract source-power envelopes whose topological structure maximally matches the intrinsic Riemannian geometry of the high-dimensional data. This document outlines the process for mapping data into an $N_{dim}$-dimensional embedding space.
 
-## 1. Log-Power Projection
+## 1. Signal Enhancement via Spatio-Spectral Decomposition (SSD)
+To maximize the signal-to-noise ratio (SNR) of the oscillatory activity of interest, we first apply Spatio-Spectral Decomposition (SSD). The raw multi-channel EEG/MEG signals are filtered into a target frequency band to obtain the signal matrix $\mathbf{X}_S$, and into flanking broadband/stopband frequencies to obtain the noise matrix $\mathbf{X}_N$. We compute the corresponding covariance matrices $\mathbf{C}_S$ and $\mathbf{C}_N$ and solve the generalized eigenvalue problem:
+$$ \mathbf{C}_S \mathbf{W}_{SSD} = \mathbf{C}_N \mathbf{W}_{SSD} \mathbf{\Lambda} $$
+We retain the first $N_{comp}$ components that exhibit the highest SNR. The continuous data is then projected into the reduced SSD space: $\mathbf{X}_{proj} = \mathbf{W}_{SSD}^T \mathbf{X}_{S}$.
 
-Given a set of covariance matrices $C_i \in \mathbb{R}^{M \times M}$ (where $M$ is the number of channels) and a linear spatial filter $\mathbf{w} \in \mathbb{R}^{M \times 1}$, the log-power projection $y_i$ for the $i$-th epoch is computed as:
+## 2. Epoching and Riemannian Tangent Space Mapping
+The continuous projected signals are segmented into $N_{epochs}$ overlapping epochs. For each epoch $i \in \{1, \dots, N_{epochs}\}$, we estimate the spatial covariance matrix $\mathbf{C}_i \in \mathbb{R}^{N_{comp} \times N_{comp}}$. Since these matrices lie on the non-Euclidean Symmetric Positive Definite (SPD) manifold, we map them to a Euclidean tangent space at the Riemannian Fréchet mean $\bar{\mathbf{C}}$:
+$$ \mathbf{S}_i = \log \left( \bar{\mathbf{C}}^{-1/2} \mathbf{C}_i \bar{\mathbf{C}}^{-1/2} \right) $$
+The upper triangular elements of the symmetric matrix $\mathbf{S}_i$ are vectorized to form the feature vectors $\mathbf{t}_i \in \mathbb{R}^{D}$.
 
-$$y_i = \log(\mathbf{w}^T C_i \mathbf{w})$$
+## 3. Topological Graph Construction
+Using the Euclidean tangent space vectors $\mathbf{t}_i$, we construct a high-dimensional fuzzy simplicial set (a weighted k-nearest neighbors graph) according to the UMAP algorithm. Let $d(\mathbf{t}_i, \mathbf{t}_j)$ be the Euclidean distance. We compute the directed edge weights as:
+$$ v_{i|j} = \exp\left(-\frac{\max(0, d(\mathbf{t}_i, \mathbf{t}_j) - \rho_i)}{\sigma_i}\right) $$
+where $\rho_i$ is the distance to the nearest neighbor of $\mathbf{t}_i$, and $\sigma_i$ is a scaling parameter. The final symmetric adjacency matrix $V$ representing the topological similarity between epoch $i$ and epoch $j$ is computed as:
+$$ v_{ij} = v_{i|j} + v_{j|i} - v_{i|j}v_{j|i} $$
 
-## 2. 1D UMAP Probabilities
+## 4. Multi-Dimensional Topological Spatial Filtering
+Instead of relying on an external behavioral variable or searching for unconstrained low-dimensional points, we force the $N_{dim}$-dimensional embedding to be a direct physical projection of the covariance matrices. We seek a set of spatial filters (forming a matrix $\mathbf{W} \in \mathbb{R}^{N_{comp} \times N_{dim}}$) such that the logarithmic power of the extracted components for epoch $i$ forms a vector $\mathbf{y}_i \in \mathbb{R}^{N_{dim}}$:
+$$ y_{i,d}(\mathbf{W}) = \log(\mathbf{w}_d^T \mathbf{C}_i \mathbf{w}_d), \quad \text{for } d=1,\dots,N_{dim} $$
+This multidimensional projection must preserve the topological structure of $V$. We define the pairwise squared Euclidean distance in this $N_{dim}$-projected space as:
+$$ d_{ij}^2(\mathbf{W}) = \|\mathbf{y}_i - \mathbf{y}_j\|^2 = \sum_{d=1}^{N_{dim}} \left(y_{i,d} - y_{j,d}\right)^2 $$
 
-Once the data is projected into the 1D space, we compute the squared pairwise Euclidean distances between epochs:
+Following UMAP's Student t-distribution approximation, the low-dimensional connection probabilities $q_{ij}(\mathbf{W})$ are modeled as:
+$$ q_{ij}(\mathbf{W}) = \frac{1}{1 + a \left( d_{ij}^2(\mathbf{W}) \right)^b} $$
+where $a$ and $b$ are hyper-parameters controlling the tightness of the embedding. The optimal filter matrix $\mathbf{W}$ is found by minimizing the fuzzy set cross-entropy loss $\mathcal{L}(\mathbf{W})$:
+$$ \mathcal{L}(\mathbf{W}) = \frac{1}{N_{pairs}} \sum_{i \neq j} \left[ v_{ij} \log \left( \frac{v_{ij}}{q_{ij}(\mathbf{W})} \right) + (1 - v_{ij}) \log \left( \frac{1 - v_{ij}}{1 - q_{ij}(\mathbf{W})} \right) \right] $$
 
-$$d_{ij}^2 = (y_i - y_j)^2$$
+## 5. Optimization Strategy and Multi-Start
+The objective function $\mathcal{L}(\mathbf{W})$ represents the fuzzy set cross-entropy. Optimizing this loss directly is challenging because the projection function combined with the Student-t distribution yields a highly non-convex loss landscape.
 
-Using the UMAP curve parameters $a$ and $b$, these distances are converted into low-dimensional connection probabilities $w_{ij}$:
+To address this, the optimization is solved using Automatic Differentiation (PyTorch). The training process involves:
+1. **Forward Pass:** Batches of covariance matrices $\mathbf{C}_i$ are multiplied by the filters $\mathbf{w}_d$ to yield $N_{dim}$-dimensional log-power coordinates $\mathbf{y}_i$. Pairwise distances and probabilities $q_{ij}(\mathbf{W})$ are computed.
+2. **Backpropagation:** The cross-entropy loss $\mathcal{L}(\mathbf{W})$ is evaluated against $v_{ij}$. Gradients are computed.
+3. **Weight Update:** The spatial filters are updated using AdamW.
+4. **L2 Normalization:** To prevent scale explosions due to the scale-invariance of the log-distances, each filter $\mathbf{w}_d$ is independently L2-normalized after each step.
 
-$$w_{ij} = \frac{1}{1 + a \cdot (d_{ij}^2)^b}$$
+**Independent Multi-Start Mechanism:**
+To ensure we find the global minimum for the $N_{dim}$-dimensional subspace, we evaluate $K_{restarts}$ completely independent filter matrices in parallel. The algorithm returns the matrix $\mathbf{W}$ that produced the absolute lowest final Cross-Entropy loss.
 
-*(A small constant $\epsilon$ is typically added to the denominator or the squared distance to ensure numerical stability and prevent division by zero or NaN gradients).*
+## 6. Self-Explained Features
+A fundamental advantage of Topological Spatial Filtering is its ability to directly answer *why* data separates into specific clusters. While standard embeddings are black boxes, our approach guarantees that the resulting axes are driven by the power fluctuations of distinct, linearly mixed neural sources.
 
-## 3. UMAP Cross-Entropy Loss
-
-The spatial filter $\mathbf{w}$ is optimized by minimizing the Fuzzy Set Cross-Entropy between the predefined high-dimensional reference probabilities $V_{ij}$ and the 1D probabilities $w_{ij}$:
-
-$$\mathcal{L} = \frac{1}{N(N-1)} \sum_{i \neq j} \left[ V_{ij} \log\left(\frac{V_{ij}}{w_{ij}}\right) + (1 - V_{ij}) \log\left(\frac{1 - V_{ij}}{1 - w_{ij}}\right) \right]$$
-
-This objective forces the spatial filter to arrange the log-powers $y_i$ such that their 1D topology matches the high-dimensional manifold of the original data.
-
-## 4. Independent Multi-Start Optimization
-
-The UMAP Cross-Entropy loss landscape is highly non-convex and features many local minima. To combat this, the algorithm trains $K$ completely independent spatial filters in parallel.
-
-At the end of the optimization process, the algorithm evaluates all $K$ independent filters, ranks them by their final Cross-Entropy loss, and selects the one that achieved the absolute minimum loss as the optimal spatial filter $\mathbf{w}_{best}$.
-
-## 5. Pre-calculated Initialization ($\mathbf{W}_{init}$)
-
-Providing a pre-calculated matrix $\mathbf{W}_{init}$ (e.g., from SSD or mSPoC) for some of the $K$ initializations significantly accelerates convergence.
-
-When $\mathbf{W}_{init}$ is provided, the algorithm begins its search in a structurally meaningful region of the parameter space rather than a random state. The gradient descent then acts as a fine-tuning mechanism—adjusting the pre-calculated filter weights to "stretch" and "compress" the spatial projections so they perfectly align with the target graph topology without needing to escape massive local minima plateaus.
+By mapping the spatial filters back to the sensor space, we compute the corresponding spatial patterns (forward models) $\mathbf{a}_d$:
+$$ \mathbf{a}_d = \frac{\mathbf{C}_x \mathbf{w}_d}{\mathbf{w}_d^T \mathbf{C}_x \mathbf{w}_d} $$
+where $\mathbf{C}_x$ is the average sensor-space covariance matrix.
