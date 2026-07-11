@@ -8,18 +8,47 @@ import matplotlib.pyplot as plt
 from tqdm.auto import tqdm
 from typing import Union, Tuple
 
-def get_umap_graph(T_features: np.ndarray, n_neighbors: int = 15, metric: str = 'euclidean') -> tuple[torch.Tensor, float, float]:
+def get_umap_graph(
+    T_features: np.ndarray = None,
+    D_matrix: np.ndarray = None,
+    n_neighbors: int = 15,
+    metric: str = 'euclidean'
+) -> tuple[torch.Tensor, float, float]:
+    """
+    Constructs the high-dimensional UMAP connectivity graph from either features or a precomputed distance matrix.
+    """
+    if T_features is None and D_matrix is None:
+        raise ValueError("Must provide either T_features or D_matrix.")
+    if T_features is not None and D_matrix is not None:
+        raise ValueError("Cannot provide both T_features and D_matrix.")
+
     random_state = np.random.RandomState(42)
-    knn_indices, knn_dists, forest = nearest_neighbors(
-        T_features, n_neighbors=n_neighbors, metric=metric,
-        metric_kwds={}, angular=False, random_state=random_state,
-    )
-    v_ij_sparse, sigmas, rhos = fuzzy_simplicial_set(
-        X=T_features, n_neighbors=n_neighbors, random_state=random_state,
-        metric=metric, metric_kwds={}, knn_indices=knn_indices,
-        knn_dists=knn_dists, angular=False, set_op_mix_ratio=1.0,
-        local_connectivity=1.0,
-    )
+
+    if D_matrix is not None:
+        # Precomputed distance matrix pathway
+        knn_indices, knn_dists, forest = nearest_neighbors(
+            D_matrix, n_neighbors=n_neighbors, metric='precomputed',
+            metric_kwds={}, angular=False, random_state=random_state,
+        )
+        v_ij_sparse, sigmas, rhos = fuzzy_simplicial_set(
+            X=D_matrix, n_neighbors=n_neighbors, random_state=random_state,
+            metric='precomputed', metric_kwds={}, knn_indices=knn_indices,
+            knn_dists=knn_dists, angular=False, set_op_mix_ratio=1.0,
+            local_connectivity=1.0,
+        )
+    else:
+        # Standard features pathway
+        knn_indices, knn_dists, forest = nearest_neighbors(
+            T_features, n_neighbors=n_neighbors, metric=metric,
+            metric_kwds={}, angular=False, random_state=random_state,
+        )
+        v_ij_sparse, sigmas, rhos = fuzzy_simplicial_set(
+            X=T_features, n_neighbors=n_neighbors, random_state=random_state,
+            metric=metric, metric_kwds={}, knn_indices=knn_indices,
+            knn_dists=knn_dists, angular=False, set_op_mix_ratio=1.0,
+            local_connectivity=1.0,
+        )
+
     v_ij = torch.tensor(v_ij_sparse.toarray(), dtype=torch.float32)
     a, b = find_ab_params(spread=1.0, min_dist=0.1)
     return v_ij, a, b
@@ -102,9 +131,10 @@ def umap_cross_entropy_loss(y: torch.Tensor, v_ij: torch.Tensor, a: float, b: fl
 
 def fit_filters(
     C: Union[np.ndarray, torch.Tensor],
-    T_features: np.ndarray,
     N_dim: int,
     K_restarts: int,
+    T_features: np.ndarray = None,
+    D_matrix: np.ndarray = None,
     w_init: Union[np.ndarray, torch.Tensor] = None,
     n_neighbors: int = 15,
     metric: str = 'euclidean',
@@ -121,6 +151,9 @@ def fit_filters(
         final_losses: Numpy array of shape (K_restarts,)
         loss_history: Numpy array of shape (epochs, K_restarts)
     """
+    if T_features is None and D_matrix is None:
+        raise ValueError("Must provide either T_features or D_matrix to fit_filters.")
+
     if isinstance(C, np.ndarray):
         C = torch.tensor(C, dtype=torch.float32)
     if w_init is not None and isinstance(w_init, np.ndarray):
@@ -134,9 +167,9 @@ def fit_filters(
     C = C.to(device)
 
     if verbose:
-        print(f"Building UMAP graph from tangent space features (moving to {device})...")
+        print(f"Building UMAP graph (moving to {device})...")
 
-    v_ij, a, b = get_umap_graph(T_features, n_neighbors=n_neighbors, metric=metric)
+    v_ij, a, b = get_umap_graph(T_features=T_features, D_matrix=D_matrix, n_neighbors=n_neighbors, metric=metric)
     v_ij = v_ij.to(device)
 
     model = TopologicalFilterBatch(M=M_channels, N_dim=N_dim, K_restarts=K_restarts, w_init=w_init)

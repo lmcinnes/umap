@@ -17,13 +17,21 @@ def run_example():
     A = np.random.randn(N_epochs, M_channels, M_channels)
     covmats_current = A @ A.transpose(0, 2, 1)
 
+    # 3. Alternative: Mock Precomputed Distance Matrix
+    # Just setting it to random for the sake of example to show the signature
+    D_matrix_mock = np.random.rand(N_epochs, N_epochs)
+    np.fill_diagonal(D_matrix_mock, 0)
+    D_matrix_mock = (D_matrix_mock + D_matrix_mock.T) / 2
+
     print(f"\n=== Fitting {K_restarts} Parallel Topological {N_dim}D Embeddings ===")
 
     w_opt, final_losses, loss_history = fit_filters(
         C=covmats_current,
-        T_features=ts_current,
         N_dim=N_dim,
         K_restarts=K_restarts,
+        T_features=ts_current,
+        # Alternatively, you can use:
+        # D_matrix=D_matrix_mock,
         n_neighbors=15,
         epochs=100,
         lr=0.05,

@@ -54,6 +54,9 @@ N_epochs, M_channels, K_filters = 200, 16, 5
 # Tangent Space vectors (N_epochs, D)
 T_features = np.random.randn(N_epochs, 136)
 
+# Alternatively, you can use a precomputed Distance Matrix instead of T_features:
+# D_matrix = np.random.rand(N_epochs, N_epochs)
+
 # Symmetric Positive Definite Covariances (N_epochs, M_channels, M_channels)
 # C_matrices can be numpy array or torch Tensor
 A = np.random.randn(N_epochs, M_channels, M_channels)
@@ -65,9 +68,10 @@ w_init = np.random.randn(K_filters, 2, M_channels)
 # Fit the K parallel topological filters finding a 2D embedding space
 w_opt, final_losses, loss_history = fit_filters(
     C=C_matrices,
-    T_features=T_features,
     N_dim=2,
     K_restarts=K_filters,
+    T_features=T_features,
+    # D_matrix=D_matrix,
     w_init=w_init,
     n_neighbors=15,
     epochs=100,
