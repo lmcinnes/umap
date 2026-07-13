@@ -95,6 +95,51 @@ class TopologicalFilterBatch(nn.Module):
         y = torch.log(p_clamped) # shape: (K, N_epochs, N_dim)
         return y
 
+
+class NormalizedPatternFilterBatch(nn.Module):
+    """
+    Batched multi-dimensional normalized pattern spatial filter.
+    Evaluates K independent restarts, each finding an N_dim-dimensional embedding space.
+    a shape: (K_restarts, N_dim, M_channels)
+    """
+    def __init__(self, M: int, N_dim: int, K_restarts: int, a_init: torch.Tensor = None):
+        super().__init__()
+        self.M = M
+        self.N_dim = N_dim
+        self.K = K_restarts
+
+        # Initialize patterns (K, N_dim, M)
+        a_tensor = torch.randn(K_restarts, N_dim, M) * 0.1
+        if a_init is not None:
+            # a_init shape should be (K_init, N_dim, M)
+            K_init = a_init.shape[0]
+            if K_init > K_restarts:
+                raise ValueError("a_init has more restarts than K_restarts.")
+            a_tensor[:K_init] = a_init.clone()
+
+        self.a = nn.Parameter(a_tensor)
+
+    def forward(self, C_num: torch.Tensor, C_den: torch.Tensor) -> torch.Tensor:
+        """
+        Calculates batched normalized log-power projections.
+        C_num: (N_epochs, M, M) (Numerator pseudo-covariance)
+        C_den: (N_epochs, M, M) (Denominator inverse local background)
+        Returns y shape: (K_restarts, N_epochs, N_dim)
+        """
+        # num = a^T C_num a -> shape (K, N_epochs, N_dim)
+        # den = a^T C_den a -> shape (K, N_epochs, N_dim)
+
+        # 'kdm' -> k=K, d=N_dim, m=M
+        # 'nml' -> n=N_epochs, m=M, l=M
+        # 'kdl' -> k=K, d=N_dim, l=M
+        num = torch.einsum('kdm, nml, kdl -> knd', self.a, C_num, self.a)
+        den = torch.einsum('kdm, nml, kdl -> knd', self.a, C_den, self.a) ** 2
+
+        power = num / (den + 1e-8)
+
+        y = torch.log(power + 1e-8)
+        return y
+
 def umap_cross_entropy_loss(y: torch.Tensor, v_ij: torch.Tensor, a: float, b: float) -> torch.Tensor:
     """
     Computes UMAP loss for multi-dimensional embeddings across K restarts.
@@ -213,3 +258,92 @@ def fit_filters(
         loss_history_sorted = loss_history[:, sorted_indices].numpy()
 
     return w_opt, final_losses_sorted, loss_history_sorted
+
+def fit_patterns(
+    C_num: Union[np.ndarray, torch.Tensor],
+    C_den: Union[np.ndarray, torch.Tensor],
+    N_dim: int,
+    K_restarts: int,
+    T_features: np.ndarray = None,
+    D_matrix: np.ndarray = None,
+    a_init: Union[np.ndarray, torch.Tensor] = None,
+    n_neighbors: int = 15,
+    metric: str = 'euclidean',
+    epochs: int = 500,
+    lr: float = 0.01,
+    device: str = None,
+    verbose: bool = True
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Trains K restarts of an N_dim-dimensional normalized pattern spatial filter.
+
+    Returns:
+        a_final: Numpy array of shape (K_restarts, N_dim, M)
+        final_losses: Numpy array of shape (K_restarts,)
+        loss_history: Numpy array of shape (epochs, K_restarts)
+    """
+    if T_features is None and D_matrix is None:
+        raise ValueError("Must provide either T_features or D_matrix to fit_patterns.")
+
+    if isinstance(C_num, np.ndarray):
+        C_num = torch.tensor(C_num, dtype=torch.float32)
+    if isinstance(C_den, np.ndarray):
+        C_den = torch.tensor(C_den, dtype=torch.float32)
+    if a_init is not None and isinstance(a_init, np.ndarray):
+        a_init = torch.tensor(a_init, dtype=torch.float32)
+
+    N_epochs, M_channels, _ = C_num.shape
+
+    if device is None:
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    C_num = C_num.to(device)
+    C_den = C_den.to(device)
+
+    if verbose:
+        print(f"Building UMAP graph (moving to {device})...")
+
+    v_ij, a, b = get_umap_graph(T_features=T_features, D_matrix=D_matrix, n_neighbors=n_neighbors, metric=metric)
+    v_ij = v_ij.to(device)
+
+    model = NormalizedPatternFilterBatch(M=M_channels, N_dim=N_dim, K_restarts=K_restarts, a_init=a_init)
+    model.to(device)
+
+    optimizer = optim.AdamW(model.parameters(), lr=lr)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=10, factor=0.5)
+
+    loss_history = torch.zeros(epochs, K_restarts)
+
+    pbar = tqdm(range(epochs), disable=not verbose, desc="Optimizing Patterns")
+    for epoch in pbar:
+        optimizer.zero_grad()
+
+        y = model(C_num, C_den) # (K, N_epochs, N_dim)
+        losses = umap_cross_entropy_loss(y, v_ij, a, b)
+        total_loss = losses.mean()
+
+        total_loss.backward()
+        optimizer.step()
+
+        # Independent L2 Normalization across the M_channels dimension for each pattern
+        # model.a shape: (K, N_dim, M)
+        with torch.no_grad():
+            a_norms = torch.norm(model.a, p=2, dim=2, keepdim=True) # (K, N_dim, 1)
+            model.a.div_(a_norms + 1e-8)
+
+        loss_history[epoch] = losses.detach().cpu()
+        current_loss_val = total_loss.item()
+        scheduler.step(current_loss_val)
+        pbar.set_postfix(mean_loss=f"{current_loss_val:.4f}")
+
+    with torch.no_grad():
+        final_y = model(C_num, C_den)
+        final_losses = umap_cross_entropy_loss(final_y, v_ij, a, b).detach().cpu()
+        a_final = model.a.detach().cpu().clone()
+
+        sorted_indices = torch.argsort(final_losses)
+        a_opt = a_final[sorted_indices].numpy()
+        final_losses_sorted = final_losses[sorted_indices].numpy()
+        loss_history_sorted = loss_history[:, sorted_indices].numpy()
+
+    return a_opt, final_losses_sorted, loss_history_sorted
