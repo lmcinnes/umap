@@ -185,7 +185,7 @@ def fit_filters(
     metric: str = 'euclidean',
     epochs: int = 500,
     lr: float = 0.01,
-    device: str = None,
+    device: str = 'cuda',
     verbose: bool = True
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
