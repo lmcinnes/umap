@@ -3,11 +3,10 @@ import numba
 
 from scipy.sparse import csr_matrix
 from sklearn.preprocessing import normalize
-from sklearn.decomposition import PCA
-from sklearn.manifold import SpectralEmbedding, MDS
+from sklearn.utils.extmath import randomized_svd
 
 from umap.layouts import optimize_layout_euclidean
-from umap.utils import tau_rand, tau_rand_int
+from umap.utils import tau_rand, tau_rand_int, ts
 from umap.spectral import spectral_layout
 
 INT32_MIN = np.iinfo(np.int32).min + 1
@@ -19,6 +18,22 @@ def make_epochs_per_sample(weights, n_epochs):
     n_samples = n_epochs * (weights / weights.max())
     result[n_samples > 0] = float(n_epochs) / np.float64(n_samples[n_samples > 0])
     return result
+
+
+@numba.njit("f8[:, ::1](f4[:, ::1], f4[:, ::1])", cache=True)
+def procrustes_align(e1: np.ndarray, e2: np.ndarray) -> np.ndarray:
+    e1_shift = e1 - np.sum(e1, axis=0) / e1.shape[0]
+    e2_shift = e2 - np.sum(e2, axis=0) / e2.shape[0]
+    e1_scale_factor = np.sqrt(np.mean(e1_shift**2))
+    e2_scale_factor = np.sqrt(np.mean(e2_shift**2))
+    e1_scaled = e1_shift / e1_scale_factor
+    e2_scaled = e2_shift / e2_scale_factor
+    covariance = e2_scaled.T @ e1_scaled
+    u, s, vh = np.linalg.svd(covariance)
+    if np.linalg.det(u @ vh) < 0:
+        u[:, -1] *= -1
+    rotation = u @ vh
+    return rotation
 
 
 @numba.njit(fastmath=True, parallel=True, cache=True)
@@ -72,8 +87,9 @@ def label_prop_iteration(
 def label_outliers(indptr, indices, labels, rng_state):
     n_rows = indptr.shape[0] - 1
     max_label = labels.max()
+    num_labels = max(max_label + 1, 1)
 
-    for i in numba.prange(n_rows):
+    for i in range(n_rows):
         # Create a local rng state for this iteration
         local_rng_state = rng_state + i
         if labels[i] < 0:
@@ -95,9 +111,7 @@ def label_outliers(indptr, indices, labels, rng_state):
                     else:
                         node_queue.append(j)
 
-            if n_iter >= 100 or len(node_queue) == 0:
-                # Ensure we don't have modulo by zero
-                num_labels = max(max_label + 1, 1)
+            if unlabelled:
                 labels[i] = tau_rand_int(local_rng_state) % num_labels
 
     return labels
@@ -137,76 +151,58 @@ def initialize_labels_from_hubs(labels, n_parts, degrees):
     return labels
 
 
-import matplotlib.pyplot as plt
-
-
 def label_propagation_init(
     graph,
+    data,
+    subset_mask,
     a,
     b,
     n_iter=100,
-    n_epochs=32,
+    n_embedding_epochs=64,
     approx_n_parts=None,
     n_components=2,
     scaling=1.0,
     random_scale=1.0,
     random_state=None,
     recursive_init=True,
-    base_init_threshold=256,
-    upscaling="partition_expander",
+    base_init_threshold=1024,
     depth=1,
     verbose=False,
 ):
-
-    if random_state is None:
-        random_state = np.random.RandomState()
-
     if graph.shape[0] <= base_init_threshold:
-        result = spectral_layout(
-            None,
-            graph,
-            n_components,
-            random_state,
-            metric="euclidean",
-            metric_kwds={},
-            compatibility_layout=False,
-            verbose=verbose,
-        )
+        result = data
         # Recenter
         scale = (
-            np.log10(result.shape[0]) * 3 * (np.log2(3 + 1))
+            np.log10(result.shape[0]) * 3 * (np.log2(depth + 1))
         )  # Added log2(gamma) to scale with repulsion strength
         result -= np.mean(result, 0)
         result *= scale / (np.quantile(result, 0.95, 0) - np.quantile(result, 0.05, 0))
-        return result.astype(np.float32, order="C")
-        # # We add a little noise to avoid local minima for optimization to come
-        # embedding = noisy_scale_coords(
-        #     embedding, random_state, max_coord=40, noise=0.01
-        # )
-        # result = random_state.normal(
-        #     loc=0.0, scale=1.0, size=(graph.shape[0], n_components)
-        # )
-        # norms = np.linalg.norm(result, axis=1, keepdims=True)
-        # result = result / norms
-        # return result.astype(np.float32)
+
+        return result.astype(np.float32)
 
     if approx_n_parts is None:
-        approx_n_parts = max(base_init_threshold, int(graph.shape[0] // 16))
+        approx_n_parts = max(base_init_threshold, int(graph.shape[0] // 4))
 
     # Ensure we have fewer parts than samples
     approx_n_parts = min(approx_n_parts, graph.shape[0] // 2)
     if approx_n_parts < 2:
         approx_n_parts = 2
 
+    if verbose:
+        print(
+            ts()
+            + f" Initializing with label propagation: {approx_n_parts} parts, and a graph with {graph.shape[0]} nodes. {a=}, {b=}.",
+            flush=True,
+        )
+
     # Initialize the label propagation process
     rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
     labels = np.full(graph.shape[0], -1, dtype=np.int32)
-    # labels = initialize_labels(labels, approx_n_parts, rng_state)
     labels = initialize_labels_from_hubs(
         labels, approx_n_parts, np.squeeze(np.asarray(graph.sum(axis=1)))
     )
 
-    # Perform the label propagation iterations
+    prev_unlabeled = np.sum(labels < 0)
     for i in range(n_iter):
         labels = label_prop_iteration(
             graph.indptr,
@@ -215,7 +211,12 @@ def label_propagation_init(
             labels,
             rng_state,
         )
+        if i % 5 == 0:
+            unlabeled = np.sum(labels < 0)
+            if unlabeled == 0 or unlabeled == prev_unlabeled:
+                break
 
+        prev_unlabeled = unlabeled
     # Handle outliers
     labels = label_outliers(
         graph.indptr,
@@ -223,7 +224,6 @@ def label_propagation_init(
         labels,
         rng_state,
     )
-
     # Remap labels to a contiguous range
     labels = remap_labels(labels)
 
@@ -231,47 +231,53 @@ def label_propagation_init(
         (np.ones(labels.shape[0]), labels, np.arange(labels.shape[0] + 1)),
         shape=(labels.shape[0], labels.max() + 1),
     )
-    normalized_reduction_map = normalize(base_reduction_map, axis=0, norm="l2")
-    reduced_graph = normalized_reduction_map.T * graph * base_reduction_map
-    reduced_graph.data = np.clip(reduced_graph.data, 0.0, 1.0).astype(np.float32)
-    # complement_graph = graph.astype(np.float64)
-    # complement_graph.data = np.log1p(-np.clip(complement_graph.data, 0.0, 1.0 - 1e-16))
-    # reduced_graph = base_reduction_map.T * complement_graph * base_reduction_map
-    # reduced_graph.data = 1.0 - np.exp(reduced_graph.data)
-    # reduced_graph.setdiag(0)
-    # reduced_graph.eliminate_zeros()
-    # reduced_graph = reduced_graph.astype(np.float32)
+    complement_graph = graph.astype(np.float64)
+    complement_graph.data = np.log1p(-np.clip(complement_graph.data, 0.0, 1.0 - 1e-16))
+    reduced_graph = base_reduction_map.T * complement_graph * base_reduction_map
+    reduced_graph.data = 1.0 - np.exp(reduced_graph.data)
+    reduced_graph.eliminate_zeros()
+    reduced_graph = reduced_graph.astype(np.float32)
+
+    if not np.all(subset_mask):
+        subset_reduction_map = normalize(
+            base_reduction_map[subset_mask], axis=0, norm="l1"
+        )
+        reduced_data = (subset_reduction_map.T * data).astype(np.float32)
+    else:
+        l1_normalized_reduction_map = normalize(base_reduction_map, axis=0, norm="l1")
+        reduced_data = (l1_normalized_reduction_map.T * data).astype(np.float32)
 
     if recursive_init:
         reduced_init = label_propagation_init(
             reduced_graph,
-            a,
-            b,
+            reduced_data,
+            np.ones(reduced_graph.shape[0], dtype=np.bool_),
+            np.cbrt(a),
+            np.cbrt(b),
             n_iter=n_iter,
             approx_n_parts=approx_n_parts // 4,
-            n_epochs=n_epochs * 2,
+            n_embedding_epochs=int(n_embedding_epochs * np.pow(2, 0.25)),
             n_components=n_components,
             scaling=scaling,
             random_scale=random_scale,
             random_state=random_state,
             recursive_init=True,
-            upscaling=upscaling,
             base_init_threshold=base_init_threshold,
             depth=depth + 1,
             verbose=verbose,
-        )
+        ).astype(np.float32)
         good_initialization = approx_n_parts // 4 > base_init_threshold
     else:
         reduced_init = None
         good_initialization = False
 
-    epochs_per_sample = make_epochs_per_sample(reduced_graph.data, n_epochs)
+    epochs_per_sample = make_epochs_per_sample(reduced_graph.data, n_embedding_epochs)
     reduced_layout = optimize_layout_euclidean(
         reduced_init,
         reduced_init,
         None,
         None,
-        n_epochs,
+        n_embedding_epochs,
         reduced_graph.shape[0],
         epochs_per_sample,
         a,
@@ -294,28 +300,73 @@ def label_propagation_init(
         negative_selection_range=reduced_init.shape[0],
     )
 
-    if upscaling == "partition_expander":
-        data_expander = normalize(graph @ base_reduction_map, norm="l1")
-        result = (
-            data_expander @ reduced_layout
-            + normalize(base_reduction_map, norm="l1") @ reduced_layout
-        ) / 2.0
-    elif upscaling == "jitter_expander":
-        data_expander = normalize(graph @ base_reduction_map, norm="l1")
-        expanded = (
-            data_expander @ reduced_layout
-            + normalize(base_reduction_map, norm="l1") @ reduced_layout
-        ) / 2.0
-        jittered = reduced_layout[labels]
-        jittered += random_state.normal(
-            scale=random_scale / 4.0, size=(labels.shape[0], reduced_layout.shape[1])
-        )
-        result = (expanded + jittered) / 2.0
-    else:
-        result = reduced_layout[labels]
-        result += random_state.normal(
-            scale=random_scale, size=(labels.shape[0], reduced_layout.shape[1])
-        )
+    data_expander = normalize(graph @ base_reduction_map, norm="l1")
+    result = (
+        data_expander @ reduced_layout
+        + normalize(base_reduction_map, norm="l1") @ reduced_layout
+    ) / 2.0
 
     result = (scaling * (result - result.mean(axis=0))).astype(np.float32)
+
+    # Procustes alignment to PCA of the original data for better stability
+    rotation = procrustes_align(data, result[subset_mask])
+    result = result @ rotation
+
     return result
+
+
+def recursive_init(
+    graph,
+    data,
+    a,
+    b,
+    n_components=2,
+    base_init_threshold=1024,
+    n_embedding_epochs=64,
+    approx_n_parts=None,
+    random_state=None,
+    verbose=False,
+):
+    if random_state is None:
+        random_state = np.random.RandomState()
+
+    n = data.shape[0]
+    sample_size = min(16384, n)
+
+    if sample_size < n:
+        sample = np.sort(random_state.choice(n, size=sample_size, replace=False))
+        pca_sample_mask = np.zeros(n, dtype=np.bool_)
+        pca_sample_mask[sample] = True
+        data_sample = data[sample]
+    else:
+        pca_sample_mask = np.ones(n, dtype=np.bool_)
+        data_sample = data
+
+    X = data_sample - data_sample.mean(axis=0)
+    U, S, _ = randomized_svd(
+        X,
+        n_components=n_components,
+        n_iter=1,
+        n_oversamples=8,
+        random_state=random_state,
+    )
+
+    pca = (U * S).astype(np.float32, order="C")
+
+    pca -= pca.min(axis=0)
+    pca /= pca.max(axis=0) - pca.min(axis=0)
+    pca *= 10.0
+    init = label_propagation_init(
+        graph,
+        pca,
+        pca_sample_mask,
+        a=np.cbrt(a),
+        b=np.cbrt(b),
+        n_components=n_components,
+        base_init_threshold=base_init_threshold,
+        n_embedding_epochs=n_embedding_epochs,
+        approx_n_parts=approx_n_parts,
+        random_state=random_state,
+        verbose=verbose,
+    )
+    return init.astype(np.float32)
