@@ -1187,86 +1187,94 @@ def _create_adam_schedules(
     else:
         n_warm_up_epochs = int(min(n_epochs // 2, 100))  # Use n_epochs/2 but cap at 100
 
-    beta1_schedule = np.concatenate(
-        [
-            [
-                0.2 + (0.7 * (float(n) / float(n_warm_up_epochs)))
-                for n in range(n_warm_up_epochs)
-            ],
-            np.full(n_epochs - n_warm_up_epochs, 0.9),
-        ]
-    )
+    # beta1_schedule = np.concatenate(
+    #     [
+    #         [
+    #             0.2 + (0.7 * (float(n) / float(n_warm_up_epochs)))
+    #             for n in range(n_warm_up_epochs)
+    #         ],
+    #         np.full(n_epochs - n_warm_up_epochs, 0.9),
+    #     ]
+    # )
+    beta1_schedule = np.full(n_epochs, 0.9, dtype=np.float32)
 
-    beta2_schedule = np.concatenate(
-        [
-            [
-                0.79 + (0.2 * ((float(n) / float(n_warm_up_epochs))))
-                for n in range(n_warm_up_epochs)
-            ],
-            np.full(n_epochs - n_warm_up_epochs, 0.99),
-        ]
-    )
+    # beta2_schedule = np.concatenate(
+    #     [
+    #         [
+    #             0.79 + (0.2 * ((float(n) / float(n_warm_up_epochs))))
+    #             for n in range(n_warm_up_epochs)
+    #         ],
+    #         np.full(n_epochs - n_warm_up_epochs, 0.99),
+    #     ]
+    # )
+    beta2_schedule = np.full(n_epochs, 0.99, dtype=np.float32)
 
     if good_initialization:
-        gamma_schedule = (
-            np.concatenate(
-                [
-                    [
-                        1.5 * np.sqrt(float(n) / float(n_warm_up_epochs))
-                        for n in range(n_warm_up_epochs)
-                    ],
-                    [
-                        0.5
-                        * (
-                            1.0
-                            - (
-                                float(n - n_warm_up_epochs)
-                                / float(n_epochs - n_warm_up_epochs)
-                            )
-                        )
-                        + 1.0
-                        for n in range(n_warm_up_epochs, n_epochs)
-                    ],
-                ]
-            )
-            * gamma
-            * max(np.sqrt(n_epochs / 100.0), 1.0)
-        )
-        # gamma_schedule = np.full(n_epochs, gamma * max(np.sqrt(n_epochs / 100.0), 1.0), dtype=np.float32)
+        # gamma_schedule = (
+        #     np.concatenate(
+        #         [
+        #             [
+        #                 1.5 * np.sqrt(float(n) / float(n_warm_up_epochs))
+        #                 for n in range(n_warm_up_epochs)
+        #             ],
+        #             [
+        #                 0.5
+        #                 * (
+        #                     1.0
+        #                     - (
+        #                         float(n - n_warm_up_epochs)
+        #                         / float(n_epochs - n_warm_up_epochs)
+        #                     )
+        #                 )
+        #                 + 1.0
+        #                 for n in range(n_warm_up_epochs, n_epochs)
+        #             ],
+        #         ]
+        #     )
+        #     * gamma
+        #     * max(np.sqrt(n_epochs / 100.0), 1.0)
+        # )
+        # gamma_schedule = np.full(
+        #     n_epochs, gamma * max(np.sqrt(n_epochs / 100.0), 1.0), dtype=np.float32
+        # )
+        gamma_schedule = np.full(n_epochs, gamma, dtype=np.float32)
     else:
-        gamma_schedule = (
-            np.concatenate(
-                [
-                    [
-                        3.0 * np.sqrt(float(n) / float(n_warm_up_epochs))
-                        for n in range(n_warm_up_epochs)
-                    ],
-                    [
-                        1.0
-                        * (
-                            1.0
-                            - float(n - n_warm_up_epochs)
-                            / float(n_epochs - n_warm_up_epochs)
-                        )
-                        + 2.0
-                        for n in range(n_warm_up_epochs, n_epochs)
-                    ],
-                ]
-            )
-            * gamma
-            * max(np.sqrt(n_epochs / 100.0), 1.0)
-        )
-        # gamma_schedule = np.full(n_epochs, gamma * max(np.sqrt(n_epochs / 100.0), 1.0), dtype=np.float32)
+        # gamma_schedule = (
+        #     np.concatenate(
+        #         [
+        #             [
+        #                 3.0 * np.sqrt(float(n) / float(n_warm_up_epochs))
+        #                 for n in range(n_warm_up_epochs)
+        #             ],
+        #             [
+        #                 1.0
+        #                 * (
+        #                     1.0
+        #                     - float(n - n_warm_up_epochs)
+        #                     / float(n_epochs - n_warm_up_epochs)
+        #                 )
+        #                 + 2.0
+        #                 for n in range(n_warm_up_epochs, n_epochs)
+        #             ],
+        #         ]
+        #     )
+        #     * gamma
+        #     * max(np.sqrt(n_epochs / 100.0), 1.0)
+        # )
+        # gamma_schedule = np.full(
+        #     n_epochs, gamma * max(np.sqrt(n_epochs / 100.0), 1.0), dtype=np.float32
+        # )
+        gamma_schedule = np.full(n_epochs, gamma, dtype=np.float32)
 
-    negative_selection_range_schedule = np.linspace(
-        n_vertices,
-        negative_selection_range,
-        n_epochs,
-        dtype=np.int32,
-    )
-    # negative_selection_range_schedule = np.full(
-    #     n_epochs, negative_selection_range, dtype=np.int32
+    # negative_selection_range_schedule = np.linspace(
+    #     n_vertices,
+    #     negative_selection_range,
+    #     n_epochs,
+    #     dtype=np.int32,
     # )
+    negative_selection_range_schedule = np.full(
+        n_epochs, negative_selection_range, dtype=np.int32
+    )
 
     return (
         beta1_schedule,
@@ -1439,6 +1447,7 @@ def optimize_layout_euclidean(
         n_vertices,
         negative_selection_range,
     )
+    b_schedule = np.full(n_epochs, b)  # np.linspace(1.0, b, n_epochs)
 
     # Adjust negative sampling rates for non-compatibility optimizers
     if optimizer != "compatibility":
@@ -1630,7 +1639,7 @@ def optimize_layout_euclidean(
                     n_vertices,
                     epochs_per_sample,
                     a,
-                    b,
+                    b_schedule[n],
                     gamma_schedule[n],
                     dim,
                     alpha_schedule[n],
