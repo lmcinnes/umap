@@ -44,7 +44,7 @@ from umap.layouts import (
     optimize_layout_generic,
     optimize_layout_inverse,
 )
-from umap.label_prop import label_propagation_init
+from umap.label_prop import label_propagation_init, recursive_init
 
 from pynndescent import NNDescent
 from pynndescent.distances import named_distances as pynn_named_distances
@@ -1239,12 +1239,14 @@ def simplicial_set_embedding(
         )
     elif isinstance(init, str) and init == "recursive":
         # Use label propagation initialization
-        embedding = label_propagation_init(
+        embedding = recursive_init(
             graph,
+            data,
             a,
             b,
             n_components=n_components,
             random_state=random_state,
+            verbose=verbose,
         )
     else:
         init_data = np.array(init)
