@@ -70,22 +70,40 @@ def component_layout(
         distance_matrix = np.zeros((n_components, n_components), dtype=np.float64)
         linkage = metric_kwds.get("linkage", "average")
         if linkage == "average":
-            linkage = np.mean
-        elif linkage == "complete":
-            linkage = np.max
-        elif linkage == "single":
-            linkage = np.min
-        else:
-            raise ValueError(
-                "Unrecognized linkage '%s'. Please choose from "
-                "'average', 'complete', or 'single'" % linkage
+            # Mean linkage is linear, so every pairwise block mean can be
+            # computed with one grouped matrix product instead of an
+            # O(n_components^2) Python loop. `membership` is a sparse
+            # (n_samples, n_components) indicator; grouping rows first
+            # (membership.T @ data) keeps the intermediate at (n_components,
+            # n_samples) so no (n_samples, n_samples) temporary is built.
+            n_samples = data.shape[0]
+            membership = scipy.sparse.csr_matrix(
+                (
+                    np.ones(n_samples),
+                    (np.arange(n_samples), component_labels),
+                ),
+                shape=(n_samples, n_components),
             )
-        for c_i in range(n_components):
-            dm_i = data[component_labels == c_i]
-            for c_j in range(c_i + 1, n_components):
-                dist = linkage(dm_i[:, component_labels == c_j])
-                distance_matrix[c_i, c_j] = dist
-                distance_matrix[c_j, c_i] = dist
+            counts = np.asarray(membership.sum(axis=0)).ravel()
+            block_sums = np.asarray((membership.T @ data) @ membership)
+            distance_matrix = block_sums / np.outer(counts, counts)
+            np.fill_diagonal(distance_matrix, 0.0)
+        else:
+            if linkage == "complete":
+                reducer = np.max
+            elif linkage == "single":
+                reducer = np.min
+            else:
+                raise ValueError(
+                    "Unrecognized linkage '%s'. Please choose from "
+                    "'average', 'complete', or 'single'" % linkage
+                )
+            for c_i in range(n_components):
+                dm_i = data[component_labels == c_i]
+                for c_j in range(c_i + 1, n_components):
+                    dist = reducer(dm_i[:, component_labels == c_j])
+                    distance_matrix[c_i, c_j] = dist
+                    distance_matrix[c_j, c_i] = dist
     else:
         for label in range(n_components):
             component_centroids[label] = data[component_labels == label].mean(axis=0)
@@ -153,7 +171,7 @@ def multi_component_layout(
     metric_kwds={},
     init="random",
     tol=0.0,
-    maxiter=0
+    maxiter=0,
 ):
     """Specialised layout algorithm for dealing with graphs with many connected components.
     This will first find relative positions for the components by spectrally embedding
@@ -223,8 +241,9 @@ def multi_component_layout(
         base = np.hstack([np.eye(k), np.zeros((k, dim - k))])
         meta_embedding = np.vstack([base, -base])[:n_components]
 
+    graph_csr = graph.tocsr()  # hoisted: was rebuilt from scratch every iteration
     for label in range(n_components):
-        component_graph = graph.tocsr()[component_labels == label, :].tocsc()
+        component_graph = graph_csr[component_labels == label, :].tocsc()
         component_graph = component_graph[:, component_labels == label].tocoo()
 
         distances = pairwise_distances([meta_embedding[label]], meta_embedding)
@@ -249,7 +268,7 @@ def multi_component_layout(
                 metric_kwds=metric_kwds,
                 init=init,
                 tol=tol,
-                maxiter=maxiter
+                maxiter=maxiter,
             )
             expansion = data_range / np.max(np.abs(component_embedding))
             component_embedding *= expansion
@@ -268,7 +287,7 @@ def spectral_layout(
     metric="euclidean",
     metric_kwds={},
     tol=0.0,
-    maxiter=0
+    maxiter=0,
 ):
     """
     Given a graph compute the spectral embedding of the graph. This is
@@ -310,7 +329,7 @@ def spectral_layout(
         metric_kwds=metric_kwds,
         init="random",
         tol=tol,
-        maxiter=maxiter
+        maxiter=maxiter,
     )
 
 
@@ -323,7 +342,7 @@ def tswspectral_layout(
     metric_kwds={},
     method=None,
     tol=0.0,
-    maxiter=0
+    maxiter=0,
 ):
     """Given a graph, compute the spectral embedding of the graph. This is
     simply the eigenvectors of the Laplacian of the graph. Here we use the
@@ -388,7 +407,7 @@ def tswspectral_layout(
         init="tsvd",
         method=method,
         tol=tol,
-        maxiter=maxiter
+        maxiter=maxiter,
     )
 
 
@@ -402,7 +421,7 @@ def _spectral_layout(
     init="random",
     method=None,
     tol=0.0,
-    maxiter=0
+    maxiter=0,
 ):
     """General implementation of the spectral embedding of the graph, derived as
     a subset of the eigenvectors of the normalized Laplacian of the graph. The numerical
@@ -481,9 +500,7 @@ def _spectral_layout(
     # L = D - graph
     # Normalized Laplacian
     I = scipy.sparse.identity(graph.shape[0], dtype=np.float64)
-    D = scipy.sparse.spdiags(
-        1.0 / sqrt_deg, 0, graph.shape[0], graph.shape[0]
-    )
+    D = scipy.sparse.spdiags(1.0 / sqrt_deg, 0, graph.shape[0], graph.shape[0])
     L = I - D * graph * D
     if not scipy.sparse.issparse(L):
         L = np.asarray(L)
@@ -532,14 +549,14 @@ def _spectral_layout(
                 warnings.filterwarnings(
                     category=UserWarning,
                     message=r"(?ms).*not reaching the requested tolerance",
-                    action="error"
+                    action="error",
                 )
                 eigenvalues, eigenvectors = scipy.sparse.linalg.lobpcg(
                     L,
                     np.asarray(X),
                     largest=False,
                     tol=tol or 1e-4,
-                    maxiter=maxiter or 5 * graph.shape[0]
+                    maxiter=maxiter or 5 * graph.shape[0],
                 )
         else:
             raise ValueError("Method should either be None, 'eigsh' or 'lobpcg'")

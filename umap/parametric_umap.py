@@ -4,7 +4,7 @@ from warnings import warn, catch_warnings, filterwarnings
 from numba import TypingError
 import os
 from umap.spectral import spectral_layout
-from sklearn.utils import check_random_state
+from sklearn.utils import check_random_state, check_array
 import codecs, pickle
 from sklearn.neighbors import KDTree
 
@@ -12,26 +12,34 @@ try:
     # Used for tf.data.
     import tensorflow as tf
 except ImportError:
-    warn(
-        """The umap.parametric_umap package requires Tensorflow > 2.0 to be installed.
+    warn("""The umap.parametric_umap package requires Tensorflow > 2.0 to be installed.
     You can install Tensorflow at https://www.tensorflow.org/install
     
     or you can install the CPU version of Tensorflow using 
 
     pip install umap-learn[parametric_umap]
 
-    """
-    )
+    """)
     raise ImportError("umap.parametric_umap requires Tensorflow >= 2.0") from None
 
 try:
     import keras
     from keras import ops
 except ImportError:
-    warn(
-        """The umap.parametric_umap package requires Keras >= 3 to be installed."""
-    )
+    warn("""The umap.parametric_umap package requires Keras >= 3 to be installed.""")
     raise ImportError("umap.parametric_umap requires Keras") from None
+
+torch_imported = True
+try:
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as F
+    import numpy as np
+    import torch.onnx
+    import torchvision
+except ImportError:
+    warn("""Torch and ONNX required for exporting to those formats.""")
+    torch_imported = False
 
 
 class ParametricUMAP(UMAP):
@@ -47,8 +55,10 @@ class ParametricUMAP(UMAP):
         autoencoder_loss=False,
         reconstruction_validation=None,
         global_correlation_loss_weight=0,
+        landmark_loss_fn=None,
+        landmark_loss_weight=1.0,
         keras_fit_kwargs={},
-        **kwargs
+        **kwargs,
     ):
         """
         Parametric UMAP subclassing UMAP-learn, based on keras/tensorflow.
@@ -78,6 +88,10 @@ class ParametricUMAP(UMAP):
             validation X data for reconstruction loss, by default None
         global_correlation_loss_weight : float, optional
             Whether to additionally train on correlation of global pairwise relationships (>0), by default 0
+        landmark_loss_fn : callable, optional
+            The function to use for landmark loss, by default the euclidean distance
+        landmark_loss_weight : float, optional
+            How to weight the landmark loss relative to umap loss, by default 1.0
         keras_fit_kwargs : dict, optional
             additional arguments for model.fit (like callbacks), by default {}
         """
@@ -96,12 +110,22 @@ class ParametricUMAP(UMAP):
         self.batch_size = batch_size
         self.loss_report_frequency = 10
         self.global_correlation_loss_weight = global_correlation_loss_weight
+        self.landmark_loss_fn = landmark_loss_fn
+        self.landmark_loss_weight = landmark_loss_weight
+        self.prev_epoch_X = None
+        self.window_vals = None
 
         self.reconstruction_validation = (
             reconstruction_validation  # holdout data for reconstruction acc
         )
         self.keras_fit_kwargs = keras_fit_kwargs  # arguments for model.fit
         self.parametric_model = None
+
+        # Pass the random state on to keras. This will set the numpy,
+        # backend, and python random seeds
+        # For reproducable training.
+        if isinstance(self.random_state, int):
+            keras.utils.set_random_seed(self.random_state)
 
         # How many epochs to train for
         # (different than n_epochs which is specific to each sample)
@@ -122,54 +146,155 @@ class ParametricUMAP(UMAP):
                     )
                 )
 
-    def fit(self, X, y=None, precomputed_distances=None):
+    def fit(self, X, y=None, precomputed_distances=None, landmark_positions=None):
+        """Fit X into an embedded space.
+
+        Optionally use a precomputed distance matrix, y for supervised
+        dimension reduction, or landmarked positions.
+
+        Parameters
+        ----------
+        X : array, shape (n_samples, n_features)
+            Contains a sample per row. If the method is 'exact', X may
+            be a sparse matrix of type 'csr', 'csc' or 'coo'.
+            Unlike UMAP, ParametricUMAP requires precomputed distances to
+            be passed seperately.
+
+        y : array, shape (n_samples)
+            A target array for supervised dimension reduction. How this is
+            handled is determined by parameters UMAP was instantiated with.
+            The relevant attributes are ``target_metric`` and
+            ``target_metric_kwds``.
+
+        precomputed_distances : array, shape (n_samples, n_samples), optional
+            A precomputed a square distance matrix. Unlike UMAP, ParametricUMAP
+            still requires X to be passed seperately for training.
+
+        landmark_positions : array, shape (n_samples, n_components), optional
+            The desired position in low-dimensional space of each sample in X.
+            Points that are not landmarks should have nan coordinates.
+        """
+        if (self.prev_epoch_X is not None) & (landmark_positions is None):
+            # Add the landmark points for training, then make a landmark vector.
+            nan_array = np.empty(self.n_components)
+            nan_array.fill(np.nan)
+            landmark_positions = np.stack(
+                [nan_array] * X.shape[0]
+                + list(self.transform(self.prev_epoch_X))
+            )
+            X = np.concatenate((X, self.prev_epoch_X))
+
+        if landmark_positions is not None:
+            len_X = len(X)
+            len_land = len(landmark_positions)
+            if len_X != len_land:
+                raise ValueError(f"Length of x = {len_X}, length of landmark_positions \
+                    = {len_land}, while it must be equal.")
+
         if self.metric == "precomputed":
             if precomputed_distances is None:
-                raise ValueError(
-                    "Precomputed distances must be supplied if metric \
-                    is precomputed."
-                )
+                raise ValueError("Precomputed distances must be supplied if metric \
+                    is precomputed.")
             # prepare X for training the network
             self._X = X
             # geneate the graph on precomputed distances
-            return super().fit(precomputed_distances, y)
-        else:
-            return super().fit(X, y)
+            return super().fit(
+                precomputed_distances, y, landmark_positions=landmark_positions
+            )
 
-    def fit_transform(self, X, y=None, precomputed_distances=None):
+        else:
+            return super().fit(X, y, landmark_positions=landmark_positions)
+
+    def fit_transform(
+        self, X, y=None, precomputed_distances=None, landmark_positions=None
+    ):
+        """Fit X into an embedded space.
+
+        Optionally use a precomputed distance matrix, y for supervised
+        dimension reduction, or landmarked positions.
+
+        Parameters
+        ----------
+        X : array, shape (n_samples, n_features)
+            Contains a sample per row. If the method is 'exact', X may
+            be a sparse matrix of type 'csr', 'csc' or 'coo'.
+            Unlike UMAP, ParametricUMAP requires precomputed distances to
+            be passed seperately.
+
+        y : array, shape (n_samples)
+            A target array for supervised dimension reduction. How this is
+            handled is determined by parameters UMAP was instantiated with.
+            The relevant attributes are ``target_metric`` and
+            ``target_metric_kwds``.
+
+        precomputed_distances : array, shape (n_samples, n_samples), optional
+            A precomputed a square distance matrix. Unlike UMAP, ParametricUMAP
+            still requires X to be passed seperately for training.
+
+        landmark_positions : array, shape (n_samples, n_components), optional
+            The desired position in low-dimensional space of each sample in X.
+            Points that are not landmarks should have nan coordinates.
+        """
+        if (self.prev_epoch_X is not None) & (landmark_positions is None):
+            # Add the landmark points for training, then make a landmark vector.
+            nan_array = np.empty(self.n_components)
+            nan_array.fill(np.nan)
+            landmark_positions = np.stack(
+                [nan_array] * X.shape[0]
+                + list(self.transform(self.prev_epoch_X))
+            )
+            X = np.concatenate((X, self.prev_epoch_X))
+
+        if landmark_positions is not None:
+            len_X = len(X)
+            len_land = len(landmark_positions)
+            if len_X != len_land:
+                raise ValueError(f"Length of x = {len_X}, length of landmark_positions \
+                    = {len_land}, while it must be equal.")
 
         if self.metric == "precomputed":
             if precomputed_distances is None:
-                raise ValueError(
-                    "Precomputed distances must be supplied if metric \
-                    is precomputed."
-                )
+                raise ValueError("Precomputed distances must be supplied if metric \
+                    is precomputed.")
             # prepare X for training the network
             self._X = X
             # generate the graph on precomputed distances
-            return super().fit_transform(precomputed_distances, y)
+            # landmark positions are cleaned up inside the
+            # .fit() component of .fit_transform()
+            return super().fit_transform(
+                precomputed_distances, y, landmark_positions=landmark_positions
+            )
         else:
-            return super().fit_transform(X, y)
+            # landmark positions are cleaned up inside the
+            # .fit() component of .fit_transform()
+            return super().fit_transform(X, y, landmark_positions=landmark_positions)
 
-    def transform(self, X):
+    def transform(self, X, batch_size=None):
         """Transform X into the existing embedded space and return that
         transformed output.
+
         Parameters
         ----------
         X : array, shape (n_samples, n_features)
             New data to be transformed.
+        batch_size : int, optional
+            Batch size for inference, defaults to the self.batch_size used in training.
+
         Returns
         -------
         X_new : array, shape (n_samples, n_components)
             Embedding of the new data in low-dimensional space.
         """
+        batch_size = batch_size if batch_size else self.batch_size
+
         return self.encoder.predict(
-            np.asanyarray(X), batch_size=self.batch_size, verbose=self.verbose
+            np.asanyarray(X), batch_size=batch_size, verbose=self.verbose
         )
 
     def inverse_transform(self, X):
-        """ Transform X in the existing embedded space back into the input
+        """Transform X in the existing embedded space back into the input
         data space and return that transformed output.
+
         Parameters
         ----------
         X : array, shape (n_samples, n_components)
@@ -200,9 +325,12 @@ class ParametricUMAP(UMAP):
             parametric_reconstruction_loss_weight=prlw,
             global_correlation_loss_weight=self.global_correlation_loss_weight,
             autoencoder_loss=self.autoencoder_loss,
+            landmark_loss_fn=self.landmark_loss_fn,
+            landmark_loss_weight=self.landmark_loss_weight,
+            optimizer=self.optimizer,
         )
 
-    def _fit_embed_data(self, X, n_epochs, init, random_state):
+    def _fit_embed_data(self, X, n_epochs, init, random_state, landmark_positions=None):
 
         if self.metric == "precomputed":
             X = self._X
@@ -220,6 +348,14 @@ class ParametricUMAP(UMAP):
                 "Data should be scaled to the range 0-1 for cross-entropy reconstruction loss."
             )
 
+        # Make sure landmark_positions is float32.
+        if landmark_positions is not None:
+            landmark_positions = check_array(
+                landmark_positions,
+                dtype=np.float32,
+                ensure_all_finite="allow-nan",
+            )
+
         # get dataset of edges
         (
             edge_dataset,
@@ -235,31 +371,31 @@ class ParametricUMAP(UMAP):
             self.batch_size,
             self.parametric_reconstruction,
             self.global_correlation_loss_weight,
+            landmark_positions=landmark_positions,
         )
         self.head = ops.array(ops.expand_dims(head.astype(np.int64), 0))
         self.tail = ops.array(ops.expand_dims(tail.astype(np.int64), 0))
 
-        init_embedding = None
+        if self.parametric_model is None:
+            init_embedding = None
 
-        # create encoder and decoder model
-        n_data = len(X)
-        self.encoder, self.decoder = prepare_networks(
-            self.encoder,
-            self.decoder,
-            self.n_components,
-            self.dims,
-            n_data,
-            self.parametric_reconstruction,
-            init_embedding,
-        )
+            # create encoder and decoder model
+            n_data = len(X)
+            self.encoder, self.decoder = prepare_networks(
+                self.encoder,
+                self.decoder,
+                self.n_components,
+                self.dims,
+                n_data,
+                self.parametric_reconstruction,
+                init_embedding,
+            )
 
-        # create the model
-        self._define_model()
+            # create the model
+            self._define_model()
 
         # report every loss_report_frequency subdivision of an epochs
-        steps_per_epoch = int(
-            n_edges / self.batch_size / self.loss_report_frequency
-        )
+        steps_per_epoch = int(n_edges / self.batch_size / self.loss_report_frequency)
 
         # Validation dataset for reconstruction
         if (
@@ -284,19 +420,31 @@ class ParametricUMAP(UMAP):
         else:
             validation_data = None
 
+        # Make sure landmmark params are propagated correctly to the parametric model
+        if self.parametric_model is not None:
+            self.parametric_model.landmark_loss_weight = self.landmark_loss_weight
+            if self.landmark_loss_fn is not None:
+                self.parametric_model.landmark_loss_fn = self.landmark_loss_fn
+
         # create embedding
         history = self.parametric_model.fit(
             edge_dataset,
             epochs=self.loss_report_frequency * self.n_training_epochs,
             steps_per_epoch=steps_per_epoch,
             validation_data=validation_data,
-            **self.keras_fit_kwargs
+            **self.keras_fit_kwargs,
         )
-        # save loss history dictionary
-        self._history = history.history
+        # Add loss history from this training iteration.
+        if not hasattr(self, "_history"):
+            self._history = history.history
+        else:
+            for key in history.history.keys():
+                self._history[key] += history.history[key]
 
         # get the final embedding
-        embedding = self.encoder.predict(X, verbose=self.verbose)
+        embedding = self.encoder.predict(
+            X, batch_size=self.batch_size, verbose=self.verbose
+        )
 
         return embedding, {}
 
@@ -305,10 +453,11 @@ class ParametricUMAP(UMAP):
         return dict(
             (k, v)
             for (k, v) in self.__dict__.items()
-            if should_pickle(k, v) and k not in ("optimizer", "encoder", "decoder", "parametric_model")
+            if should_pickle(k, v)
+            and k not in ("optimizer", "encoder", "decoder", "parametric_model")
         )
 
-    def save(self, save_location, verbose=True):
+    def save(self, save_location, verbose=True, exclude_raw_data=False):
 
         # save encoder
         if self.encoder is not None:
@@ -326,10 +475,25 @@ class ParametricUMAP(UMAP):
 
         # save parametric_model
         if self.parametric_model is not None:
-            parametric_model_output = os.path.join(save_location, "parametric_model.keras")
+            parametric_model_output = os.path.join(
+                save_location, "parametric_model.keras"
+            )
             self.parametric_model.save(parametric_model_output)
             if verbose:
                 print("Keras full model saved to {}".format(parametric_model_output))
+
+        # Temporarily delete the raw data in the object, before saving it,
+        # backing it up in raw_data
+        raw_data = {}
+        if exclude_raw_data:
+            if hasattr(self, "_raw_data"):
+                raw_data["root"] = self._raw_data
+                del self._raw_data
+            if hasattr(self, "knn_search_index") and hasattr(
+                self.knn_search_index, "_raw_data"
+            ):
+                raw_data["knn"] = self.knn_search_index._raw_data
+                del self.knn_search_index._raw_data
 
         # # save model.pkl (ignoring unpickleable warnings)
         with catch_warnings():
@@ -339,6 +503,89 @@ class ParametricUMAP(UMAP):
                 pickle.dump(self, output, pickle.HIGHEST_PROTOCOL)
             if verbose:
                 print("Pickle of ParametricUMAP model saved to {}".format(model_output))
+
+        # Restore the original raw data to the object in memory
+        if exclude_raw_data:
+            if "root" in raw_data:
+                self._raw_data = raw_data["root"]
+            if "knn" in raw_data:
+                self.knn_search_index._raw_data = raw_data["knn"]
+
+    def add_landmarks(
+        self,
+        X,
+        sample_pct=0.01,
+        sample_mode="uniform",
+        landmark_loss_weight=0.01,
+        idx=None,
+        reset_optimizer=True,
+    ):
+        """Add some points from a dataset X as "landmarks."
+
+        Parameters
+        ----------
+        X : array, shape (n_samples, n_features)
+            Old data to be retained.
+        sample_pct : float, optional
+            Percentage of old data to use as landmarks.
+        sample_mode : str, optional
+            Method for sampling points. Allows "uniform" and "predefined."
+        landmark_loss_weight : float, optional
+            Multiplier for landmark loss function.
+        reset_optimizer : bool, optional
+            Whether to reset optimizer to default state. Can prevent gradient issues when re-training.
+
+        """
+        self.sample_pct = sample_pct
+        self.sample_mode = sample_mode
+        self.landmark_loss_weight = landmark_loss_weight
+        self.parametric_model.landmark_loss_weight = landmark_loss_weight
+
+        if self.sample_mode == "uniform":
+            self.prev_epoch_idx = list(
+                np.random.choice(
+                    range(X.shape[0]), int(X.shape[0] * sample_pct), replace=False
+                )
+            )
+            self.prev_epoch_X = X[self.prev_epoch_idx]
+        elif self.sample_mode == "predetermined":
+            if idx is None:
+                raise ValueError("Choice of sample_mode is not supported.")
+            else:
+                self.prev_epoch_idx = idx
+                self.prev_epoch_X = X[self.prev_epoch_idx]
+
+        else:
+            raise ValueError("Choice of sample_mode is not supported.")
+
+        # Adding landmarks causes a sharp discontinuity in the loss function.
+        # This can raise issues with the internal momentum of the optimizer.
+        # It is good practice to re-initialise the optimizer when adding landmarks.
+        #
+        if reset_optimizer:
+            if (
+                self.parametric_model is not None
+                and self.parametric_model.optimizer is not None
+            ):
+                self.parametric_model.optimizer.build(
+                    self.parametric_model.trainable_variables
+                )
+
+    def remove_landmarks(self):
+        self.prev_epoch_X = None
+
+    def to_ONNX(self, save_location):
+        """Exports trained parametric UMAP as ONNX."""
+        # Extract encoder
+        km = self.encoder
+        # Extract weights
+        pm = PumapNet(self.dims[0], self.n_components)
+        pm = weight_copier(km, pm)
+
+        # Put in ONNX
+        dummy_input = torch.randn(1, self.dims[0])
+        # Invoke export
+        return torch.onnx.export(pm, dummy_input, save_location)
 
 
 def get_graph_elements(graph_, n_epochs):
@@ -503,9 +750,7 @@ def compute_cross_entropy(
 
     """
     # cross entropy
-    attraction_term = -probabilities_graph * ops.log_sigmoid(
-        log_probabilities_distance
-    )
+    attraction_term = -probabilities_graph * ops.log_sigmoid(log_probabilities_distance)
     # use numerically stable repellent term
     # Shi et al. 2022 (https://arxiv.org/abs/2111.08851)
     # log(1 - sigmoid(logits)) = log(sigmoid(logits)) - logits
@@ -518,7 +763,6 @@ def compute_cross_entropy(
     # balance the expected losses between attraction and repel
     CE = attraction_term + repellant_term
     return attraction_term, repellant_term, CE
-
 
 
 def prepare_networks(
@@ -567,7 +811,7 @@ def prepare_networks(
                 keras.layers.Dense(units=100, activation="relu"),
                 keras.layers.Dense(units=100, activation="relu"),
                 keras.layers.Dense(units=100, activation="relu"),
-                keras.layers.Dense(units=n_components, name="z"),
+                keras.layers.Dense(units=int(n_components), name="z"),
             ]
         )
 
@@ -580,7 +824,7 @@ def prepare_networks(
                     keras.layers.Dense(units=100, activation="relu"),
                     keras.layers.Dense(units=100, activation="relu"),
                     keras.layers.Dense(
-                        units=np.product(dims), name="recon", activation=None
+                        units=int(np.prod(dims)), name="recon", activation=None
                     ),
                     keras.layers.Reshape(dims),
                 ]
@@ -596,6 +840,7 @@ def construct_edge_dataset(
     batch_size,
     parametric_reconstruction,
     global_correlation_loss_weight,
+    landmark_positions=None,
 ):
     """
     Construct a tf.data.Dataset of edges, sampled by edge weight.
@@ -612,25 +857,35 @@ def construct_edge_dataset(
         batch size
     parametric_reconstruction : bool
         Whether the decoder is parametric or non-parametric
+    landmark_positions : array, shape (n_samples, n_components), optional
+        The desired position in low-dimensional space of each sample in X.
+        Points that are not landmarks should have nan coordinates.
     """
-    def gather_index(index):
-        return X[index]
+
+    def gather_index(tensor, index):
+        return tensor[index]
 
     # if X is > 512Mb in size, we need to use a different, slower method for
     #    batching data.
     gather_indices_in_python = True if X.nbytes * 1e-9 > 0.5 else False
+    if landmark_positions is not None:
+        gather_landmark_indices_in_python = (
+            True if landmark_positions.nbytes * 1e-9 > 0.5 else False
+        )
 
     def gather_X(edge_to, edge_from):
         # gather data from indexes (edges) in either numpy of tf, depending on array size
         if gather_indices_in_python:
-            edge_to_batch = tf.py_function(gather_index, [edge_to], [tf.float32])[0]
-            edge_from_batch = tf.py_function(gather_index, [edge_from], [tf.float32])[0]
+            edge_to_batch = tf.py_function(gather_index, [X, edge_to], [tf.float32])[0]
+            edge_from_batch = tf.py_function(
+                gather_index, [X, edge_from], [tf.float32]
+            )[0]
         else:
             edge_to_batch = tf.gather(X, edge_to)
             edge_from_batch = tf.gather(X, edge_from)
-        return edge_to_batch, edge_from_batch
+        return edge_to, edge_from, edge_to_batch, edge_from_batch
 
-    def get_outputs(edge_to_batch, edge_from_batch):
+    def get_outputs(edge_to, edge_from, edge_to_batch, edge_from_batch):
         outputs = {"umap": ops.repeat(0, batch_size)}
         if global_correlation_loss_weight > 0:
             outputs["global_correlation"] = edge_to_batch
@@ -638,6 +893,15 @@ def construct_edge_dataset(
             # add reconstruction to iterator output
             # edge_out = ops.concatenate([edge_to_batch, edge_from_batch], axis=0)
             outputs["reconstruction"] = edge_to_batch
+        if landmark_positions is not None:
+            if gather_landmark_indices_in_python:
+                outputs["landmark_to"] = tf.py_function(
+                    gather_index, [landmark_positions, edge_to], [tf.float32]
+                )[0]
+            else:
+                # Make sure we explicitly cast landmark_positions to float32,
+                # as it's user-provided and needs to play nice with loss functions.
+                outputs["landmark_to"] = tf.gather(landmark_positions, edge_to)
         return (edge_to_batch, edge_from_batch), outputs
 
     # get data from graph
@@ -661,9 +925,7 @@ def construct_edge_dataset(
     edges_from_exp = edges_from_exp[shuffle_mask].astype(np.int64)
 
     # create edge iterator
-    edge_dataset = tf.data.Dataset.from_tensor_slices(
-        (edges_to_exp, edges_from_exp)
-    )
+    edge_dataset = tf.data.Dataset.from_tensor_slices((edges_to_exp, edges_from_exp))
     edge_dataset = edge_dataset.repeat()
     edge_dataset = edge_dataset.shuffle(10000)
     edge_dataset = edge_dataset.batch(batch_size, drop_remainder=True)
@@ -750,26 +1012,22 @@ def load_ParametricUMAP(save_location, verbose=True):
         if verbose:
             print("Keras encoder model loaded from {}".format(encoder_output))
 
-    # save decoder
+    # load decoder
     decoder_output = os.path.join(save_location, "decoder.keras")
     if os.path.exists(decoder_output):
         model.decoder = keras.models.load_model(decoder_output)
         print("Keras decoder model loaded from {}".format(decoder_output))
 
-    # save parametric_model
+    # load parametric_model
     parametric_model_output = os.path.join(save_location, "parametric_model")
     if os.path.exists(parametric_model_output):
-        model.parametric_model = keras.models.load_model(
-            parametric_model_output
-        )
+        model.parametric_model = keras.models.load_model(parametric_model_output)
         print("Keras full model loaded from {}".format(parametric_model_output))
 
     return model
 
 
-def covariance(x,
-               y=None,
-               keepdims=False):
+def covariance(x, y=None, keepdims=False):
     """Adapted from TF Probability."""
     x = ops.convert_to_tensor(x)
     # Covariance *only* uses the centered versions of x (and y).
@@ -777,8 +1035,7 @@ def covariance(x,
 
     if y is None:
         y = x
-        event_axis = ops.mean(
-          x * ops.conj(y), axis=0, keepdims=keepdims)
+        event_axis = ops.mean(x * ops.conj(y), axis=0, keepdims=keepdims)
     else:
         y = ops.convert_to_tensor(y, dtype=x.dtype)
         y = y - ops.mean(y, axis=0, keepdims=True)
@@ -795,20 +1052,16 @@ def covariance(x,
     n_samples = ops.shape(x_permed)[1]
 
     # Flatten sample_axis into one long dim.
-    x_permed_flat = ops.reshape(
-        x_permed, (n_events, n_samples))
-    y_permed_flat = ops.reshape(
-        y_permed, (n_events, n_samples))
+    x_permed_flat = ops.reshape(x_permed, (n_events, n_samples))
+    y_permed_flat = ops.reshape(y_permed, (n_events, n_samples))
     # Do the same for event_axis.
-    x_permed_flat = ops.reshape(
-        x_permed, (n_events, n_samples))
-    y_permed_flat = ops.reshape(
-        y_permed, (n_events, n_samples))
+    x_permed_flat = ops.reshape(x_permed, (n_events, n_samples))
+    y_permed_flat = ops.reshape(y_permed, (n_events, n_samples))
 
     # After matmul, cov.shape = batch_shape + [n_events, n_events]
-    cov = ops.matmul(
-        x_permed_flat, ops.transpose(y_permed_flat)) / ops.cast(
-            n_samples, x.dtype)
+    cov = ops.matmul(x_permed_flat, ops.transpose(y_permed_flat)) / ops.cast(
+        n_samples, x.dtype
+    )
 
     cov = ops.reshape(
         cov,
@@ -833,37 +1086,48 @@ def covariance(x,
     return cov
 
 
-def correlation(x,
-                y=None,
-                keepdims=False):
+def correlation(x, y=None, keepdims=False):
     x = x / ops.std(x, axis=0, keepdims=True)
     if y is not None:
         y = y / ops.std(y, axis=0, keepdims=True)
-    return covariance(
-        x=x,
-        y=y,
-        keepdims=keepdims)
+    return covariance(x=x, y=y, keepdims=keepdims)
 
 
 class StopGradient(keras.layers.Layer):
     def call(self, x):
         return ops.stop_gradient(x)
 
+    def get_config(self):
+        return super().get_config()
+
+
+def _default_landmark_loss(y, y_pred):
+    # Euclidean distance between points.
+    # Use sqrt(sum_sq + eps) instead of norm to avoid NaN gradient at zero.
+    # Relu activation smooths gradients.
+    sq_diff = ops.sum((y_pred - y) ** 2, axis=1)
+    safe_dist = ops.sqrt(sq_diff + 1e-10)
+    return keras.activations.relu(ops.mean(safe_dist))
+
 
 class UMAPModel(keras.Model):
-    def __init__(self,
-                 umap_loss_a,
-                 umap_loss_b,
-                 negative_sample_rate,
-                 encoder,
-                 decoder,
-                 optimizer=None,
-                 parametric_reconstruction_loss_fn=None,
-                 parametric_reconstruction=False,
-                 parametric_reconstruction_loss_weight=1.,
-                 global_correlation_loss_weight=0.,
-                 autoencoder_loss=False,
-                 name="umap_model"):
+    def __init__(
+        self,
+        umap_loss_a,
+        umap_loss_b,
+        negative_sample_rate,
+        encoder,
+        decoder,
+        optimizer=None,
+        parametric_reconstruction_loss_fn=None,
+        parametric_reconstruction=False,
+        parametric_reconstruction_loss_weight=1.0,
+        global_correlation_loss_weight=0.0,
+        autoencoder_loss=False,
+        landmark_loss_fn=None,
+        landmark_loss_weight=1.0,
+        name="umap_model",
+    ):
         super().__init__(name=name)
 
         self.encoder = encoder
@@ -877,6 +1141,8 @@ class UMAPModel(keras.Model):
         self.umap_loss_a = umap_loss_a
         self.umap_loss_b = umap_loss_b
         self.autoencoder_loss = autoencoder_loss
+        self.landmark_loss_fn = landmark_loss_fn
+        self.landmark_loss_weight = landmark_loss_weight
 
         optimizer = optimizer or keras.optimizers.Adam(1e-3, clipvalue=4.0)
         self.compile(optimizer=optimizer)
@@ -888,9 +1154,12 @@ class UMAPModel(keras.Model):
                 from_logits=True
             )
         else:
-            self.parametric_reconstruction_loss_fn = (
-                parametric_reconstruction_loss_fn
-            )
+            self.parametric_reconstruction_loss_fn = parametric_reconstruction_loss_fn
+
+        if landmark_loss_fn is None:
+            self.landmark_loss_fn = _default_landmark_loss
+        else:
+            self.landmark_loss_fn = landmark_loss_fn
 
     def call(self, inputs):
         to_x, from_x = inputs
@@ -911,9 +1180,7 @@ class UMAPModel(keras.Model):
             y_pred["reconstruction"] = embedding_to_recon
         return y_pred
 
-    def compute_loss(
-        self, x=None, y=None, y_pred=None, sample_weight=None, **kwargs
-    ):
+    def compute_loss(self, x=None, y=None, y_pred=None, sample_weight=None, **kwargs):
         losses = []
         # Regularization losses.
         for loss in self.losses:
@@ -930,6 +1197,10 @@ class UMAPModel(keras.Model):
         if self.parametric_reconstruction:
             losses.append(self._parametric_reconstruction_loss(y, y_pred))
 
+        # landmark loss, present if landmarks are provided in fit() or fit_transform()
+        if "landmark_to" in y:
+            losses.append(self._landmark_loss(y, y_pred))
+
         return ops.sum(losses)
 
     def _umap_loss(self, y_pred, repulsion_strength=1.0):
@@ -943,12 +1214,11 @@ class UMAPModel(keras.Model):
 
         repeat_neg_batch_dim = ops.shape(repeat_neg)[0]
         shuffled_indices = keras.random.shuffle(
-            ops.arange(repeat_neg_batch_dim), seed=self.seed_generator)
+            ops.arange(repeat_neg_batch_dim), seed=self.seed_generator
+        )
 
         if keras.config.backend() == "tensorflow":
-            embedding_neg_from = tf.gather(
-                repeat_neg, shuffled_indices
-            )
+            embedding_neg_from = tf.gather(repeat_neg, shuffled_indices)
         else:
             embedding_neg_from = repeat_neg[shuffled_indices]
 
@@ -973,11 +1243,11 @@ class UMAPModel(keras.Model):
                 ops.ones((batch_size,)),
                 ops.zeros((batch_size * self.negative_sample_rate,)),
             ],
-            axis=0
+            axis=0,
         )
 
         # compute cross entropy
-        (attraction_loss, repellant_loss, ce_loss) = compute_cross_entropy(
+        attraction_loss, repellant_loss, ce_loss = compute_cross_entropy(
             probabilities_graph,
             log_probabilities_distance,
             repulsion_strength=repulsion_strength,
@@ -1009,13 +1279,112 @@ class UMAPModel(keras.Model):
 
         # compute correlation
         corr_d = ops.squeeze(
-            correlation(
-                x=ops.expand_dims(dx, -1), y=ops.expand_dims(dz, -1)
-            )
+            correlation(x=ops.expand_dims(dx, -1), y=ops.expand_dims(dz, -1))
         )
         return -corr_d * self.global_correlation_loss_weight
 
     def _parametric_reconstruction_loss(self, y, y_pred):
         loss = self.parametric_reconstruction_loss_fn(
-            y["reconstruction"], y_pred["reconstruction"])
+            y["reconstruction"], y_pred["reconstruction"]
+        )
         return loss * self.parametric_reconstruction_loss_weight
+
+    def _landmark_loss(self, y, y_pred):
+        y_to = y["landmark_to"]
+
+        # make a mask for landmark points
+        is_landmark = ~ops.any(ops.isnan(y_to), axis=1)
+
+        # Boolean-index to select only landmark entries
+        landmark_pred = y_pred["embedding_to"][is_landmark]
+        landmark_target = y_to[is_landmark]
+
+        # Make sure there are landmarks in this batch -
+        # otherwise we get nans from the mean of an empty tensor.
+        n_landmarks = ops.sum(ops.cast(is_landmark, "int32"))
+        loss = tf.cond(
+            n_landmarks > 0,
+            lambda: self.landmark_loss_fn(landmark_target, landmark_pred),
+            lambda: 0.0,
+        )
+
+        return loss * self.landmark_loss_weight
+
+
+##################################################
+# 1. Pytorch version of parametric UMAP network. #
+##################################################
+
+if torch_imported:
+
+    class PumapNet(nn.Module):
+
+        def __init__(self, indim, outdim):
+
+            super(PumapNet, self).__init__()
+            self.dense1 = nn.Linear(indim, 100)
+            self.dense2 = nn.Linear(100, 100)
+            self.dense3 = nn.Linear(100, 100)
+            self.dense4 = nn.Linear(100, outdim)
+
+            """
+            Creates the same network as the one used by parametric UMAP.
+            Note: shape of network is fixed.
+
+            Parameters
+            ----------
+            indim : int
+                dimension of input to network.
+            outdim : int
+                dimension of output of network.
+            """
+
+        def forward(self, x):
+            x = self.dense1(x)
+            x = F.relu(x)
+            x = self.dense2(x)
+            x = F.relu(x)
+            x = self.dense3(x)
+            x = F.relu(x)
+            x = self.dense4(x)
+            x = F.relu(x)
+            return x
+
+    ######################
+    # 2. Copying weights #
+    ######################
+
+    def weight_copier(km, pm):
+        """Copies weights from a parametric UMAP encoder to pytorch.
+        Parameters
+        ----------
+        km : encoder extracted from parametric UMAP.
+        pm: a PumapNet object. Will be overwritten.
+        Returns
+        -------
+        pm : PumapNet Object.
+            Net with copied weights.
+        """
+        kweights = km.get_weights()
+        n_layers = int(len(kweights) / 2)  # The actual number of layers
+
+        # Get the names of the pytorch layers
+        all_keys = [x for x in pm.state_dict().keys()]
+        pm_names = [all_keys[2 * i].split(".")[0] for i in range(4)]
+
+        # Set a variable for the state dict
+        pyt_state_dict = pm.state_dict()
+
+        for i in range(n_layers):
+            pyt_state_dict[pm_names[i] + ".bias"] = kweights[2 * i + 1]
+            pyt_state_dict[pm_names[i] + ".weight"] = np.transpose(kweights[2 * i])
+
+        for key in pyt_state_dict.keys():
+            pyt_state_dict[key] = torch.from_numpy(pyt_state_dict[key])
+
+        # Update
+        pm.load_state_dict(pyt_state_dict)
+        return pm
+
+else:
+    pass

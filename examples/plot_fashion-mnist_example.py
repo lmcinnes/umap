@@ -11,6 +11,7 @@ problem. It supports coloring by categorical variables
 (as shown in this example), or by continuous variables,
 or by density (as is common in datashader examples).
 """
+
 import umap
 import numpy as np
 import pandas as pd

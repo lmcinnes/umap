@@ -17,6 +17,13 @@ pr:
     - doc/*
     - README.rst
 
+parameters:
+  - name: includeReleaseCandidates
+    displayName: "Allow pre-release dependencies"
+    type: boolean
+    default: false
+
+
 variables:
   triggeredByPullRequest: $[eq(variables['Build.Reason'], 'PullRequest')]
 
@@ -27,43 +34,44 @@ stages:
       - job: run_platform_tests
         strategy:
           matrix:
-            mac_py39:
-              imageName: 'macOS-latest'
-              python.version: '3.9'
-            linux_py39:
-              imageName: 'ubuntu-latest'
-              python.version: '3.9'
-            windows_py39:
-              imageName: 'windows-latest'
-              python.version: '3.9'
-            mac_py310:
-              imageName: 'macOS-latest'
-              python.version: '3.10'
+            # mac_py310:
+            #   imageName: 'macOS-latest'
+            #   python.version: '3.10'
             linux_py310:
               imageName: 'ubuntu-latest'
               python.version: '3.10'
             windows_py310:
               imageName: 'windows-latest'
               python.version: '3.10'
-            mac_py311:
-              imageName: 'macOS-latest'
-              python.version: '3.11'
+            # mac_py311:
+            #   imageName: 'macOS-latest'
+            #   python.version: '3.11'
             linux_py311:
               imageName: 'ubuntu-latest'
               python.version: '3.11'
             windows_py311:
               imageName: 'windows-latest'
               python.version: '3.11'
-            mac_py312:
-              imageName: 'macOS-latest'
-              python.version: '3.12'
+            # mac_py312:
+            #   imageName: 'macOS-latest'
+            #   python.version: '3.12'
             linux_py312:
               imageName: 'ubuntu-latest'
               python.version: '3.12'
             windows_py312:
               imageName: 'windows-latest'
               python.version: '3.12'
-
+            # # Disable macOS tests on 3.13 since tensorflow only provides pre-built wheels
+            # # for ARM macs and the runner is x86
+            # mac_py313:
+            #   imageName: 'macOS-latest'
+            #   python.version: '3.13'
+            linux_py313:
+              imageName: 'ubuntu-latest'
+              python.version: '3.13'
+            windows_py313:
+              imageName: 'windows-latest'
+              python.version: '3.13'
         pool:
           vmImage: $(imageName)
 
@@ -75,23 +83,44 @@ stages:
 
         - script: |
             python -m pip install --upgrade pip
-            pip install -e .
-            pip install .[plot]
-            pip install .[parametric_umap]
-            pip install pytest  pytest-azurepipelines pytest-cov pytest-benchmark coveralls
-          displayName: 'Install package'
+          displayName: 'Upgrade pip'
+
+        # 1. Install the full LLVM package only if the OS is macOS
+        - script: |
+            brew install llvm@20
+            # Homebrew formula names can change, so we ensure it links correctly if necessary
+            brew link --force --overwrite llvm@20
+          displayName: 'Install LLVM via Homebrew (macOS only)'
+          condition: eq(variables['Agent.OS'], 'Darwin')
+
+        # 2. Find the Homebrew install path and set the environment variable only on macOS
+        - script: |
+            # Determine the LLVM install prefix dynamically
+            LLVM_PREFIX=$(brew --prefix llvm@20)
+
+            # Set the LLVM_CONFIG environment variable used by llvmlite's build script
+            echo "##vso[task.setvariable variable=LLVM_CONFIG]$LLVM_PREFIX/bin/llvm-config"
+            echo "LLVM_CONFIG set to: $LLVM_CONFIG"
+
+            # Also set CMAKE_PREFIX_PATH in case other dependencies need it
+            echo "##vso[task.setvariable variable=CMAKE_PREFIX_PATH]$LLVM_PREFIX/lib/cmake"
+          displayName: 'Configure LLVM Environment Variables (macOS only)'
+          condition: eq(variables['Agent.OS'], 'Darwin')
+
+        - script: |
+            python -m pip install -U uv
+            uv sync --group cicd --extra plot --extra parametric_umap
+          env:
+            # Ensure that the LLVM_CONFIG environment variable is available during installation
+            LLVM_CONFIG: $(LLVM_CONFIG)
+            CMAKE_PREFIX_PATH: $(CMAKE_PREFIX_PATH)
+          displayName: 'Install dependencies'
+          condition: ${{ eq(parameters.includeReleaseCandidates, false) }}
 
         - script: |
             # export NUMBA_DISABLE_JIT=1 # Disable numba coverage so tests run on time for now.
-            pytest umap/tests --show-capture=no -v --disable-warnings --junitxml=junit/test-results.xml --cov=umap/ --cov-report=xml --cov-report=html
+            uv run pytest umap/tests --show-capture=no -v --disable-warnings --junitxml=junit/test-results.xml --cov=umap/ --cov-report=xml --cov-report=html
           displayName: 'Run tests'
-
-        - bash: |
-            coveralls
-          displayName: 'Publish to coveralls'
-          condition: and(succeeded(), eq(variables.triggeredByPullRequest, false)) # Don't run this for PRs because they can't access pipeline secrets
-          env:
-            COVERALLS_REPO_TOKEN: $(COVERALLS_TOKEN)
 
         - task: PublishTestResults@2
           inputs:
@@ -101,7 +130,7 @@ stages:
 
   - stage: BuildPublishArtifact
     dependsOn: RunAllTests
-    condition: and(succeeded(), startsWith(variables['Build.SourceBranch'], 'refs/tags/'), eq(variables.triggeredByPullRequest, false))
+    condition: and(succeeded(), startsWith(variables['Build.SourceBranch'], 'refs/tags/release-'), eq(variables.triggeredByPullRequest, false))
     jobs:
       - job: BuildArtifacts
         displayName: Build source dists and wheels    
@@ -110,22 +139,21 @@ stages:
         steps:
         - task: UsePythonVersion@0
           inputs:
-            versionSpec: '3.10'
-          displayName: 'Use Python 3.10'
+            versionSpec: '3.13'
+          displayName: 'Use Python 3.13'
 
         - script: |
             python -m pip install --upgrade pip
-            pip install wheel
-            pip install -e .
-          displayName: 'Install package locally'
-        
-        - bash: |
-            python setup.py sdist bdist_wheel
-            ls -l dist/
+            python -m pip install -U uv
+            uv sync
+          displayName: 'Install dependencies'
+
+        - script: |
+            uv build --no-sources --sdist --wheel
           displayName: 'Build package'
 
         - bash: |
-            export PACKAGE_VERSION="$(python setup.py --version)"
+            export PACKAGE_VERSION="$(uv version --short)"
             echo "Package Version: ${PACKAGE_VERSION}"
             echo "##vso[task.setvariable variable=packageVersionFormatted;]release-${PACKAGE_VERSION}"
           displayName: 'Get package version'
@@ -143,8 +171,8 @@ stages:
             secureFile: 'pypirc'  
 
         - script: |
-            pip install twine
-            twine upload --repository pypi --config-file $(PYPIRC_CONFIG.secureFilePath) dist/*
+            uvx twine check dist/*
+            uvx twine upload --repository pypi --config-file $(PYPIRC_CONFIG.secureFilePath) dist/*
           displayName: 'Upload to PyPI'
           condition: and(succeeded(), eq(variables['Build.SourceBranchName'], variables['packageVersionFormatted']))
 

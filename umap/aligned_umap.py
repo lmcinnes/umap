@@ -30,6 +30,33 @@ def invert_dict(d):
     return {value: key for key, value in d.items()}
 
 
+def relation_lut(d, n_samples):
+    """Materialize a relation dict as a lookup array: lut[key] = value, else -1.
+
+    Keys and values are bounded by n_samples (see expand_relations), so an
+    array of length n_samples covers every entry and turns each dict.get(n, -1)
+    into a C-level gather instead of a Python-level lookup.
+    """
+    lut = np.full(n_samples, -1, dtype=np.int32)
+    if d:
+        keys = np.fromiter(d.keys(), dtype=np.int64, count=len(d))
+        vals = np.fromiter(d.values(), dtype=np.int64, count=len(d))
+        lut[keys] = vals
+    return lut
+
+
+def chain_relation_lut(lut, mapping):
+    """Apply one relation step: mapping[i] -> lut[mapping[i]], propagating -1.
+
+    Mirrors `np.array([d.get(n, -1) for n in mapping])` where negative sentinels
+    (and missing keys) map to -1, but with masked fancy indexing in C.
+    """
+    nxt = np.full(mapping.shape, -1, dtype=np.int32)
+    valid = mapping >= 0
+    nxt[valid] = lut[mapping[valid]]
+    return nxt
+
+
 @numba.njit()
 def procrustes_align(embedding_base, embedding_to_align, anchors):
     subset1 = embedding_base[anchors[0]]
@@ -53,18 +80,19 @@ def expand_relations(relation_dicts, window_size=3):
         -1,
         dtype=np.int32,
     )
-    reverse_relation_dicts = [invert_dict(d) for d in relation_dicts]
+    # Precompute each relation (and its inverse) as a lookup array once, so the
+    # windowed chaining below uses C-level gathers instead of Python dict.get.
+    luts = [relation_lut(d, max_n_samples) for d in relation_dicts]
+    reverse_luts = [relation_lut(invert_dict(d), max_n_samples) for d in relation_dicts]
     for i in range(result.shape[0]):
         for j in range(window_size):
             result_index = (window_size) + (j + 1)
             if i + j + 1 >= len(relation_dicts):
                 result[i, result_index] = np.full(max_n_samples, -1, dtype=np.int32)
             else:
-                mapping = np.arange(max_n_samples)
+                mapping = np.arange(max_n_samples, dtype=np.int32)
                 for k in range(j + 1):
-                    mapping = np.array(
-                        [relation_dicts[i + k].get(n, -1) for n in mapping]
-                    )
+                    mapping = chain_relation_lut(luts[i + k], mapping)
                 result[i, result_index] = mapping
 
         for j in range(0, -window_size, -1):
@@ -72,11 +100,9 @@ def expand_relations(relation_dicts, window_size=3):
             if i + j - 1 < 0:
                 result[i, result_index] = np.full(max_n_samples, -1, dtype=np.int32)
             else:
-                mapping = np.arange(max_n_samples)
+                mapping = np.arange(max_n_samples, dtype=np.int32)
                 for k in range(0, j - 1, -1):
-                    mapping = np.array(
-                        [reverse_relation_dicts[i + k - 1].get(n, -1) for n in mapping]
-                    )
+                    mapping = chain_relation_lut(reverse_luts[i + k - 1], mapping)
                 result[i, result_index] = mapping
 
     return result
@@ -86,6 +112,7 @@ def expand_relations(relation_dicts, window_size=3):
 def build_neighborhood_similarities(graphs_indptr, graphs_indices, relations):
     result = np.zeros(relations.shape, dtype=np.float32)
     center_index = (relations.shape[1] - 1) // 2
+    n_samples = relations.shape[2]
     for i in range(relations.shape[0]):
         base_graph_indptr = graphs_indptr[i]
         base_graph_indices = graphs_indices[i]
@@ -95,25 +122,45 @@ def build_neighborhood_similarities(graphs_indptr, graphs_indices, relations):
 
             comparison_graph_indptr = graphs_indptr[i + j - center_index]
             comparison_graph_indices = graphs_indices[i + j - center_index]
-            for k in range(relations.shape[2]):
-                comparison_index = relations[i, j, k]
+
+            # relations[i, j] is constant across k, so precompute once which
+            # comparison-model indices appear as values in it. This replaces the
+            # per-sample set(relations[i, j]) rebuild inside in1d (an
+            # O(n_samples) cost paid for every k) with an O(degree) membership
+            # lookup. A value >= n_samples can never appear in relations[i, j],
+            # so it maps to False, exactly matching in1d's set-membership result.
+            relation_row = relations[i, j]
+            present = np.zeros(n_samples, dtype=np.bool_)
+            for b in range(n_samples):
+                v = relation_row[b]
+                if v >= 0:
+                    present[v] = True
+
+            for k in range(n_samples):
+                comparison_index = relation_row[k]
                 if comparison_index < 0:
                     continue
 
                 raw_base_graph_indices = base_graph_indices[
                     base_graph_indptr[k] : base_graph_indptr[k + 1]
                 ].copy()
-                base_indices = relations[i, j][raw_base_graph_indices[
-                    raw_base_graph_indices < relations.shape[2]]]
+                base_indices = relation_row[
+                    raw_base_graph_indices[raw_base_graph_indices < n_samples]
+                ]
                 base_indices = base_indices[base_indices >= 0]
                 comparison_indices = comparison_graph_indices[
                     comparison_graph_indptr[comparison_index] : comparison_graph_indptr[
                         comparison_index + 1
                     ]
                 ]
-                comparison_indices = comparison_indices[
-                    in1d(comparison_indices, relations[i, j])
-                ]
+                comparison_mask = np.empty(comparison_indices.shape[0], dtype=np.bool_)
+                for idx in range(comparison_indices.shape[0]):
+                    c = comparison_indices[idx]
+                    if c < n_samples:
+                        comparison_mask[idx] = present[c]
+                    else:
+                        comparison_mask[idx] = False
+                comparison_indices = comparison_indices[comparison_mask]
 
                 intersection_size = intersect1d(base_indices, comparison_indices).shape[
                     0
@@ -169,11 +216,11 @@ def set_aligned_params(new_params, existing_params, n_models, param_names=PARAM_
             if isinstance(existing_params[param], list):
                 existing_params[param].append(new_params[param])
             elif isinstance(existing_params[param], tuple):
-                existing_params[param] = existing_params[param] + \
-                    (new_params[param],)
+                existing_params[param] = existing_params[param] + (new_params[param],)
             elif isinstance(existing_params[param], np.ndarray):
-                existing_params[param] = np.append(existing_params[param],
-                                                   new_params[param])
+                existing_params[param] = np.append(
+                    existing_params[param], new_params[param]
+                )
             else:
                 if new_params[param] != existing_params[param]:
                     existing_params[param] = (existing_params[param],) * n_models + (
@@ -294,7 +341,7 @@ class AlignedUMAP(BaseEstimator):
     def fit(self, X, y=None, **fit_params):
         if "relations" not in fit_params:
             raise ValueError(
-                "Aligned UMAP requires relations between data to be " "specified"
+                "Aligned UMAP requires relations between data to be specified"
             )
 
         self.dict_relations_ = fit_params["relations"]
@@ -362,12 +409,13 @@ class AlignedUMAP(BaseEstimator):
         epochs_per_samples = numba.typed.List.empty_list(numba.types.float64[::1])
 
         for mapper in self.mappers_:
+            graph_coo = mapper.graph_.tocoo()
             indptr_list.append(mapper.graph_.indptr)
             indices_list.append(mapper.graph_.indices)
-            heads.append(mapper.graph_.tocoo().row)
-            tails.append(mapper.graph_.tocoo().col)
+            heads.append(graph_coo.row)
+            tails.append(graph_coo.col)
             epochs_per_samples.append(
-                make_epochs_per_sample(mapper.graph_.tocoo().data, n_epochs)
+                make_epochs_per_sample(graph_coo.data, n_epochs)
             )
 
         rng_state_transform = np.random.RandomState(self.transform_seed)
@@ -445,7 +493,7 @@ class AlignedUMAP(BaseEstimator):
     def update(self, X, y=None, **fit_params):
         if "relations" not in fit_params:
             raise ValueError(
-                "Aligned UMAP requires relations between data to be " "specified"
+                "Aligned UMAP requires relations between data to be specified"
             )
 
         new_dict_relations = fit_params["relations"]
@@ -472,7 +520,7 @@ class AlignedUMAP(BaseEstimator):
                 self.repulsion_strength, self.n_models_
             ),
             learning_rate=get_nth_item_or_val(self.learning_rate, self.n_models_),
-	    init=self.init,
+            init=self.init,
             spread=get_nth_item_or_val(self.spread, self.n_models_),
             negative_sample_rate=get_nth_item_or_val(
                 self.negative_sample_rate, self.n_models_

@@ -127,7 +127,7 @@ def test_discrete_metric_supervised_umap_trustworthiness():
 
 def test_count_metric_supervised_umap_trustworthiness():
     data, labels = make_blobs(50, cluster_std=0.5, random_state=42)
-    labels = (labels ** 2) + 2 * labels
+    labels = (labels**2) + 2 * labels
     embedding = UMAP(
         n_neighbors=10,
         min_dist=0.01,

@@ -20,6 +20,7 @@ accuracy metric.
  used as a feature extraction technique. This small change results in a
  substantial improvement compared to the model where raw data is used.
 """
+
 from sklearn.datasets import make_classification
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.pipeline import Pipeline
@@ -45,7 +46,7 @@ X_train, X_test, y_train, y_test = train_test_split(
 
 # Classification with a linear SVM
 svc = LinearSVC(dual=False, random_state=123)
-params_grid = {"C": [10 ** k for k in range(-3, 4)]}
+params_grid = {"C": [10**k for k in range(-3, 4)]}
 clf = GridSearchCV(svc, params_grid)
 clf.fit(X_train, y_train)
 print(
@@ -58,7 +59,7 @@ pipeline = Pipeline([("umap", umap), ("svc", svc)])
 params_grid_pipeline = {
     "umap__n_neighbors": [5, 20],
     "umap__n_components": [15, 25, 50],
-    "svc__C": [10 ** k for k in range(-3, 4)],
+    "svc__C": [10**k for k in range(-3, 4)],
 }
 
 

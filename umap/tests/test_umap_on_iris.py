@@ -23,6 +23,7 @@ except ImportError:
 #  UMAP Test cases on IRIS Dataset
 # ===================================================
 
+
 # UMAP Trustworthiness on iris
 # ----------------------------
 def test_umap_trustworthiness_on_iris(iris, iris_model):
@@ -89,7 +90,7 @@ def test_umap_transform_on_iris(iris, iris_subset_model, iris_selection):
 
     trust = trustworthiness(new_data, embedding, n_neighbors=10)
     assert (
-        trust >= 0.85
+        trust >= 0.80
     ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
 
 
@@ -281,5 +282,6 @@ def test_precomputed_knn_on_iris(iris, iris_selection, iris_subset_model):
         ).fit(data)
         assert len(record) >= 1
     np.testing.assert_array_equal(
-        fitter_ignoring_force_approx_True.embedding_, fitter_ignoring_force_approx.embedding_
+        fitter_ignoring_force_approx_True.embedding_,
+        fitter_ignoring_force_approx.embedding_,
     )

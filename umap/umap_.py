@@ -4,12 +4,13 @@
 from __future__ import print_function
 
 import locale
+from collections import deque
 from warnings import warn
 import time
 
 from scipy.optimize import curve_fit
-from sklearn.base import BaseEstimator
-from sklearn.utils import check_random_state, check_array
+from sklearn.base import BaseEstimator, ClassNamePrefixFeaturesOutMixin
+from sklearn.utils import check_array, check_random_state
 from sklearn.utils.validation import check_is_fitted
 from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import normalize
@@ -33,7 +34,6 @@ import umap.distances as dist
 import umap.sparse as sparse
 
 from umap.utils import (
-    submatrix,
     ts,
     csr_unique,
     fast_knn_indices,
@@ -57,6 +57,7 @@ INT32_MAX = np.iinfo(np.int32).max - 1
 SMOOTH_K_TOLERANCE = 1e-5
 MIN_K_DIST_SCALE = 1e-3
 NPY_INFINITY = np.inf
+NPY_FLOATMAX = np.finfo(np.float32).max
 
 DISCONNECTION_DISTANCES = {
     "correlation": 2,
@@ -83,14 +84,14 @@ def flattened(container):
 
 def breadth_first_search(adjmat, start, min_vertices):
     explored = []
-    queue = [start]
-    levels = {}
-    levels[start] = 0
+    queue = deque([start])
+    levels = {start: 0}
     max_level = np.inf
-    visited = [start]
+    visited = np.zeros(adjmat.shape[0], dtype=np.bool_)
+    visited[start] = True
 
     while queue:
-        node = queue.pop(0)
+        node = queue.popleft()
         explored.append(node)
         if max_level == np.inf and len(explored) > min_vertices:
             max_level = max(levels.values())
@@ -98,9 +99,9 @@ def breadth_first_search(adjmat, start, min_vertices):
         if levels[node] + 1 < max_level:
             neighbors = adjmat[node].indices
             for neighbour in neighbors:
-                if neighbour not in visited:
+                if not visited[neighbour]:
                     queue.append(neighbour)
-                    visited.append(neighbour)
+                    visited[neighbour] = True
 
                     levels[neighbour] = levels[node] + 1
 
@@ -147,8 +148,8 @@ def raise_disconnected_warning(
         "mid": numba.types.float32,
         "hi": numba.types.float32,
     },
-    fastmath=True,
-)  # benchmarking `parallel=True` shows it to *decrease* performance
+    parallel=True,
+)
 def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0):
     """Compute a continuous version of the distance to the kth nearest
     neighbor. That is, this is similar to knn-distance but allows continuous
@@ -194,9 +195,9 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
 
     mean_distances = np.mean(distances)
 
-    for i in range(distances.shape[0]):
+    for i in numba.prange(distances.shape[0]):
         lo = 0.0
-        hi = NPY_INFINITY
+        hi = NPY_FLOATMAX
         mid = 1.0
 
         # TODO: This is very inefficient, but will do for now. FIXME
@@ -234,7 +235,7 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
                 mid = (lo + hi) / 2.0
             else:
                 lo = mid
-                if hi == NPY_INFINITY:
+                if hi >= NPY_FLOATMAX:
                     mid *= 2
                 else:
                     mid = (lo + hi) / 2.0
@@ -316,7 +317,9 @@ def nearest_neighbors(
         # knn_indices = np.argsort(X)[:, :n_neighbors]
         # Compute the nearest neighbor distances
         #   (equivalent to np.sort(X)[:,:n_neighbors])
-        knn_dists = X[np.arange(X.shape[0])[:, None], knn_indices].copy()
+        # Advanced indexing already returns a fresh contiguous array, so no
+        # extra .copy() is needed here.
+        knn_dists = X[np.arange(X.shape[0])[:, None], knn_indices]
         # Prune any nearest neighbours that are infinite distance apart.
         disconnected_index = knn_dists == np.inf
         knn_indices[disconnected_index] = -1
@@ -356,7 +359,6 @@ def nearest_neighbors(
         "val": numba.types.float32,
     },
     parallel=True,
-    fastmath=True,
 )
 def compute_membership_strengths(
     knn_indices,
@@ -573,7 +575,7 @@ def fuzzy_simplicial_set(
             verbose=verbose,
         )
 
-    knn_dists = knn_dists.astype(np.float32)
+    knn_dists = knn_dists.astype(np.float32, copy=False)
 
     sigmas, rhos = smooth_knn_dist(
         knn_dists,
@@ -595,10 +597,18 @@ def fuzzy_simplicial_set(
 
         prod_matrix = result.multiply(transpose)
 
-        result = (
-            set_op_mix_ratio * (result + transpose - prod_matrix)
-            + (1.0 - set_op_mix_ratio) * prod_matrix
-        )
+        if set_op_mix_ratio == 1.0:
+            # Default fuzzy union: the (1 - ratio) * prod_matrix term is zero, so
+            # skip building/scaling/adding it (saves redundant sparse temporaries).
+            result = result + transpose - prod_matrix
+        elif set_op_mix_ratio == 0.0:
+            # Pure fuzzy intersection.
+            result = prod_matrix
+        else:
+            result = (
+                set_op_mix_ratio * (result + transpose - prod_matrix)
+                + (1.0 - set_op_mix_ratio) * prod_matrix
+            )
 
     result.eliminate_zeros()
 
@@ -736,10 +746,12 @@ def reprocess_row(probabilities, k=15, n_iters=32):
 @numba.njit()
 def reset_local_metrics(simplicial_set_indptr, simplicial_set_data):
     for i in range(simplicial_set_indptr.shape[0] - 1):
-        simplicial_set_data[
-            simplicial_set_indptr[i] : simplicial_set_indptr[i + 1]
-        ] = reprocess_row(
-            simplicial_set_data[simplicial_set_indptr[i] : simplicial_set_indptr[i + 1]]
+        simplicial_set_data[simplicial_set_indptr[i] : simplicial_set_indptr[i + 1]] = (
+            reprocess_row(
+                simplicial_set_data[
+                    simplicial_set_indptr[i] : simplicial_set_indptr[i + 1]
+                ]
+            )
         )
     return
 
@@ -917,9 +929,10 @@ def make_epochs_per_sample(weights, n_epochs):
     -------
     An array of number of epochs per sample, one for each 1-simplex.
     """
-    result = -1.0 * np.ones(weights.shape[0], dtype=np.float64)
+    result = np.full(weights.shape[0], -1.0, dtype=np.float64)
     n_samples = n_epochs * (weights / weights.max())
-    result[n_samples > 0] = float(n_epochs) / np.float64(n_samples[n_samples > 0])
+    positive = n_samples > 0  # compute the mask once instead of twice
+    result[positive] = float(n_epochs) / np.float64(n_samples[positive])
     return result
 
 
@@ -931,6 +944,46 @@ def noisy_scale_coords(coords, random_state, max_coord=10.0, noise=0.0001):
     return coords + random_state.normal(scale=noise, size=coords.shape).astype(
         np.float32
     )
+
+
+@numba.njit()
+def _densmap_original_densities(
+    head, tail, graph_data, dists_indptr, dists_indices, dists_data, ro, mu_sum
+):
+    for i in range(len(head)):
+        j = head[i]
+        k = tail[i]
+        d_val = 0.0
+        for idx in range(dists_indptr[j], dists_indptr[j + 1]):
+            if dists_indices[idx] == k:
+                d_val = dists_data[idx]
+                break
+        D = d_val * d_val
+        mu = graph_data[i]
+        ro[j] += mu * D
+        ro[k] += mu * D
+        mu_sum[j] += mu
+        mu_sum[k] += mu
+
+
+@numba.njit()
+def _densmap_embedding_densities(
+    head, tail, graph_data, dists_indptr, dists_indices, dists_data, re, mu_sum
+):
+    for i in range(len(head)):
+        j = head[i]
+        k = tail[i]
+        d_val = 0.0
+        for idx in range(dists_indptr[j], dists_indptr[j + 1]):
+            if dists_indices[idx] == k:
+                d_val = dists_data[idx]
+                break
+        mu = graph_data[i]
+        weighted = mu * d_val
+        re[j] += weighted
+        re[k] += weighted
+        mu_sum[j] += mu
+        mu_sum[k] += mu
 
 
 def simplicial_set_embedding(
@@ -1159,17 +1212,12 @@ def simplicial_set_embedding(
 
         mu_sum = np.zeros(n_vertices, dtype=np.float32)
         ro = np.zeros(n_vertices, dtype=np.float32)
-        for i in range(len(head)):
-            j = head[i]
-            k = tail[i]
-
-            D = dists[j, k] * dists[j, k]  # match sq-Euclidean used for embedding
-            mu = graph.data[i]
-
-            ro[j] += mu * D
-            ro[k] += mu * D
-            mu_sum[j] += mu
-            mu_sum[k] += mu
+        dists_csr = dists.tocsr()
+        _densmap_original_densities(
+            head, tail, graph.data,
+            dists_csr.indptr, dists_csr.indices, dists_csr.data,
+            ro, mu_sum,
+        )
 
         epsilon = 1e-8
         ro = np.log(epsilon + (ro / mu_sum))
@@ -1242,7 +1290,11 @@ def simplicial_set_embedding(
             print(ts() + " Computing embedding densities")
 
         # Compute graph in embedding
-        (knn_indices, knn_dists, rp_forest,) = nearest_neighbors(
+        (
+            knn_indices,
+            knn_dists,
+            rp_forest,
+        ) = nearest_neighbors(
             embedding,
             densmap_kwds["n_neighbors"],
             "euclidean",
@@ -1275,17 +1327,12 @@ def simplicial_set_embedding(
 
         head = emb_graph.row
         tail = emb_graph.col
-        for i in range(len(head)):
-            j = head[i]
-            k = tail[i]
-
-            D = emb_dists[j, k]
-            mu = emb_graph.data[i]
-
-            re[j] += mu * D
-            re[k] += mu * D
-            mu_sum[j] += mu
-            mu_sum[k] += mu
+        emb_dists_csr = emb_dists.tocsr()
+        _densmap_embedding_densities(
+            head, tail, emb_graph.data,
+            emb_dists_csr.indptr, emb_dists_csr.indices, emb_dists_csr.data,
+            re, mu_sum,
+        )
 
         epsilon = 1e-8
         re = np.log(epsilon + (re / mu_sum))
@@ -1352,21 +1399,34 @@ def init_graph_transform(graph, embedding):
     new_embedding: array of shape (n_new_samples, dim)
         An initial embedding of the new sample points.
     """
-    result = np.zeros((graph.shape[0], embedding.shape[1]), dtype=np.float32)
+    n_new = graph.shape[0]
+    result = np.zeros((n_new, embedding.shape[1]), dtype=np.float32)
 
-    for row_index in range(graph.shape[0]):
-        graph_row = graph[row_index]
-        if graph_row.nnz == 0:
-            result[row_index] = np.nan
-            continue
-        row_sum = graph_row.sum()
-        for graph_value, col_index in zip(graph_row.data, graph_row.indices):
-            if graph_value == 1:
-                result[row_index, :] = embedding[col_index, :]
-                break
-            result[row_index] += graph_value / row_sum * embedding[col_index]
+    row_nnz = np.diff(graph.indptr)
+    empty_mask = row_nnz == 0
+    result[empty_mask] = np.nan
+
+    has_exact = np.zeros(n_new, dtype=bool)
+    exact_data_mask = graph.data == 1.0
+    if exact_data_mask.any():
+        exact_positions = np.where(exact_data_mask)[0]
+        exact_rows = np.searchsorted(graph.indptr, exact_positions, side="right") - 1
+        _, first_idx = np.unique(exact_rows, return_index=True)
+        unique_rows = exact_rows[first_idx]
+        exact_cols = graph.indices[exact_positions[first_idx]]
+        has_exact[unique_rows] = True
+        result[unique_rows] = embedding[exact_cols]
+
+    avg_mask = ~empty_mask & ~has_exact
+    if np.any(avg_mask):
+        avg_graph = graph[avg_mask]
+        row_sums = np.array(avg_graph.sum(axis=1)).flatten()
+        inv_sums = scipy.sparse.diags(1.0 / row_sums)
+        normalized = inv_sums @ avg_graph
+        result[avg_mask] = (normalized @ embedding).astype(np.float32)
 
     return result
+
 
 @numba.njit()
 def init_update(current_init, n_original_samples, indices):
@@ -1401,7 +1461,7 @@ def find_ab_params(spread, min_dist):
     return params[0], params[1]
 
 
-class UMAP(BaseEstimator):
+class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
     """Uniform Manifold Approximation and Projection
 
     Finds a low dimensional embedding of the data that approximates
@@ -1941,7 +2001,9 @@ class UMAP(BaseEstimator):
         if self.n_jobs < -1 or self.n_jobs == 0:
             raise ValueError("n_jobs must be a postive integer, or -1 (for all cores)")
         if self.n_jobs != 1 and self.random_state is not None:
-            warn(f"n_jobs value {self.n_jobs} overridden to 1 by setting random_state. Use no seed for parallelism.") 
+            warn(
+                f"n_jobs value {self.n_jobs} overridden to 1 by setting random_state. Use no seed for parallelism."
+            )
             self.n_jobs = 1
 
         if self.dens_lambda < 0.0:
@@ -2327,7 +2389,7 @@ class UMAP(BaseEstimator):
 
         return result
 
-    def fit(self, X, y=None, force_all_finite=True):
+    def fit(self, X, y=None, ensure_all_finite=True, **kwargs):
         """Fit X into an embedded space.
 
         Optionally use y for supervised dimension reduction.
@@ -2346,16 +2408,27 @@ class UMAP(BaseEstimator):
             The relevant attributes are ``target_metric`` and
             ``target_metric_kwds``.
 
-        force_all_finite : Whether to raise an error on np.inf, np.nan, pd.NA in array.
+        ensure_all_finite : Whether to raise an error on np.inf, np.nan, pd.NA in array.
             The possibilities are: - True: Force all values of array to be finite.
                                    - False: accepts np.inf, np.nan, pd.NA in array.
                                    - 'allow-nan': accepts only np.nan and pd.NA values in array.
                                      Values cannot be infinite.
+
+        **kwargs : optional
+            Any additional keyword arguments are passed to _fit_embed_data.
         """
         if self.metric in ("bit_hamming", "bit_jaccard"):
-            X = check_array(X, dtype=np.uint8, order="C", force_all_finite=force_all_finite)
+            X = check_array(
+                X, dtype=np.uint8, order="C", ensure_all_finite=ensure_all_finite
+            )
         else:
-            X = check_array(X, dtype=np.float32, accept_sparse="csr", order="C", force_all_finite=force_all_finite)
+            X = check_array(
+                X,
+                dtype=np.float32,
+                accept_sparse="csr",
+                order="C",
+                ensure_all_finite=ensure_all_finite,
+            )
         self._raw_data = X
 
         # Handle all the optional arguments, setting default
@@ -2366,7 +2439,12 @@ class UMAP(BaseEstimator):
             self._b = self.b
 
         if isinstance(self.init, np.ndarray):
-            init = check_array(self.init, dtype=np.float32, accept_sparse=False, force_all_finite=force_all_finite)
+            init = check_array(
+                self.init,
+                dtype=np.float32,
+                accept_sparse=False,
+                ensure_all_finite=ensure_all_finite,
+            )
         else:
             init = self.init
 
@@ -2423,12 +2501,21 @@ class UMAP(BaseEstimator):
         # If we aren't asking for unique use the full index.
         # This will save special cases later.
         else:
-            index = list(range(X.shape[0]))
-            inverse = list(range(X.shape[0]))
+            index = np.arange(X.shape[0])
+            inverse = np.arange(X.shape[0])
+
+        # Compute the indexed copy of X exactly once and reuse it everywhere
+        # below. Previously X[index] was re-materialized at each call site (and
+        # several times just to read .shape[0]), allocating the full N x D matrix
+        # repeatedly. A single copy is kept: it also preserves UMAP's contract of
+        # never mutating the caller's data (and self._raw_data) when a distance
+        # metric writes into the array it is handed.
+        n_index_samples = index.shape[0]
+        X_indexed = X[index]
 
         # Error check n_neighbors based on data size
-        if X[index].shape[0] <= self.n_neighbors:
-            if X[index].shape[0] == 1:
+        if n_index_samples <= self.n_neighbors:
+            if n_index_samples == 1:
                 self.embedding_ = np.zeros(
                     (1, self.n_components)
                 )  # needed to sklearn comparability
@@ -2438,7 +2525,7 @@ class UMAP(BaseEstimator):
                 "n_neighbors is larger than the dataset size; truncating to "
                 "X.shape[0] - 1"
             )
-            self._n_neighbors = X[index].shape[0] - 1
+            self._n_neighbors = n_index_samples - 1
             if self.densmap:
                 self._densmap_kwds["n_neighbors"] = self._n_neighbors
         else:
@@ -2467,19 +2554,23 @@ class UMAP(BaseEstimator):
             if not np.all(X.diagonal() == 0):
                 raise ValueError("Non-zero distances from samples to themselves!")
             if self.knn_dists is None:
-                self._knn_indices = np.zeros(
-                    (X.shape[0], self.n_neighbors), dtype=int
-                )
+                self._knn_indices = np.zeros((X.shape[0], self.n_neighbors), dtype=int)
                 self._knn_dists = np.zeros(self._knn_indices.shape, dtype=float)
+                # X is CSR (check_array(accept_sparse="csr")), so slice its backing
+                # arrays directly instead of materializing a temporary matrix per row.
+                X_indptr, X_indices, X_data = X.indptr, X.indices, X.data
                 for row_id in range(X.shape[0]):
                     # Find KNNs row-by-row
-                    row_data = X[row_id].data
-                    row_indices = X[row_id].indices
+                    row_start, row_end = X_indptr[row_id], X_indptr[row_id + 1]
+                    row_data = X_data[row_start:row_end]
+                    row_indices = X_indices[row_start:row_end]
                     if len(row_data) < self._n_neighbors:
                         raise ValueError(
                             "Some rows contain fewer than n_neighbors distances!"
                         )
-                    row_nn_data_indices = np.argsort(row_data)[: self._n_neighbors]
+                    # argpartition selects the k smallest in O(d) vs O(d·log d) for argsort
+                    row_nn_data_indices = np.argpartition(row_data, self._n_neighbors)[: self._n_neighbors]
+                    row_nn_data_indices = row_nn_data_indices[np.argsort(row_data[row_nn_data_indices])]
                     self._knn_indices[row_id] = row_indices[row_nn_data_indices]
                     self._knn_dists[row_id] = row_data[row_nn_data_indices]
             else:
@@ -2497,7 +2588,7 @@ class UMAP(BaseEstimator):
                 self._rhos,
                 self.graph_dists_,
             ) = fuzzy_simplicial_set(
-                X[index],
+                X_indexed,
                 self.n_neighbors,
                 random_state,
                 "precomputed",
@@ -2524,12 +2615,12 @@ class UMAP(BaseEstimator):
                 verbose=self.verbose,
             )
         # Handle small cases efficiently by computing all distances
-        elif X[index].shape[0] < 4096 and not self.force_approximation_algorithm:
+        elif n_index_samples < 4096 and not self.force_approximation_algorithm:
             self._small_data = True
             try:
                 # sklearn pairwise_distances fails for callable metric on sparse data
                 _m = self.metric if self._sparse_data else self._input_distance_func
-                dmat = pairwise_distances(X[index], metric=_m, **self._metric_kwds)
+                dmat = pairwise_distances(X_indexed, metric=_m, **self._metric_kwds)
             except (ValueError, TypeError) as e:
                 # metric is numba.jit'd or not supported by sklearn,
                 # fallback to pairwise special
@@ -2539,29 +2630,36 @@ class UMAP(BaseEstimator):
                     if not callable(self.metric):
                         _m = dist.named_distances[self.metric]
                         dmat = dist.pairwise_special_metric(
-                            X[index].toarray(),
+                            X_indexed.toarray(),
                             metric=_m,
                             kwds=self._metric_kwds,
-                            force_all_finite=force_all_finite
+                            ensure_all_finite=ensure_all_finite,
                         )
                     else:
                         dmat = dist.pairwise_special_metric(
-                            X[index],
+                            X_indexed,
                             metric=self._input_distance_func,
                             kwds=self._metric_kwds,
-                            force_all_finite=force_all_finite
+                            ensure_all_finite=ensure_all_finite,
                         )
                 else:
                     dmat = dist.pairwise_special_metric(
-                        X[index],
+                        X_indexed,
                         metric=self._input_distance_func,
                         kwds=self._metric_kwds,
-                        force_all_finite=force_all_finite
+                        ensure_all_finite=ensure_all_finite,
                     )
             # set any values greater than disconnection_distance to be np.inf.
             # This will have no effect when _disconnection_distance is not set since it defaults to np.inf.
-            edges_removed = np.sum(dmat >= self._disconnection_distance)
-            dmat[dmat >= self._disconnection_distance] = np.inf
+            # The default (inf) makes the comparison an all-False no-op, so skip
+            # the two N x N boolean temporaries entirely; otherwise compute the
+            # mask once and reuse it for both the count and the in-place fill.
+            if np.isfinite(self._disconnection_distance):
+                disconnected_mask = dmat >= self._disconnection_distance
+                edges_removed = disconnected_mask.sum()
+                dmat[disconnected_mask] = np.inf
+            else:
+                edges_removed = 0
             (
                 self.graph_,
                 self._sigmas,
@@ -2610,7 +2708,7 @@ class UMAP(BaseEstimator):
                     self._knn_dists,
                     self._knn_search_index,
                 ) = nearest_neighbors(
-                    X[index],
+                    X_indexed,
                     self._n_neighbors,
                     nn_metric,
                     self._metric_kwds,
@@ -2637,7 +2735,7 @@ class UMAP(BaseEstimator):
                 self._rhos,
                 self.graph_dists_,
             ) = fuzzy_simplicial_set(
-                X[index],
+                X_indexed,
                 self.n_neighbors,
                 random_state,
                 nn_metric,
@@ -2677,7 +2775,9 @@ class UMAP(BaseEstimator):
             if self.target_metric == "string":
                 y_ = y[index]
             else:
-                y_ = check_array(y, ensure_2d=False, force_all_finite=force_all_finite)[index]
+                y_ = check_array(
+                    y, ensure_2d=False, ensure_all_finite=ensure_all_finite
+                )[index]
             if self.target_metric == "categorical":
                 if self.target_weight < 1.0:
                     far_dist = 2.5 * (1.0 / (1.0 - self.target_weight))
@@ -2727,10 +2827,14 @@ class UMAP(BaseEstimator):
                             y_,
                             metric=self.target_metric,
                             kwds=self._target_metric_kwds,
-                            force_all_finite=force_all_finite
+                            ensure_all_finite=ensure_all_finite,
                         )
 
-                    (target_graph, target_sigmas, target_rhos,) = fuzzy_simplicial_set(
+                    (
+                        target_graph,
+                        target_sigmas,
+                        target_rhos,
+                    ) = fuzzy_simplicial_set(
                         ydmat,
                         target_n_neighbors,
                         random_state,
@@ -2745,7 +2849,11 @@ class UMAP(BaseEstimator):
                     )
                 else:
                     # Standard case
-                    (target_graph, target_sigmas, target_rhos,) = fuzzy_simplicial_set(
+                    (
+                        target_graph,
+                        target_sigmas,
+                        target_rhos,
+                    ) = fuzzy_simplicial_set(
                         y_,
                         target_n_neighbors,
                         random_state,
@@ -2781,11 +2889,15 @@ class UMAP(BaseEstimator):
             epochs = (
                 self.n_epochs_list if self.n_epochs_list is not None else self.n_epochs
             )
+            # Use a fresh copy of the (unmutated) raw data here, independent of
+            # X_indexed: a distance metric that writes into the array it is
+            # handed could otherwise corrupt the data PCA-init / densMAP read.
             self.embedding_, aux_data = self._fit_embed_data(
                 self._raw_data[index],
                 epochs,
                 init,
                 random_state,  # JH why raw data?
+                **kwargs,
             )
 
             if self.n_epochs_list is not None:
@@ -2821,11 +2933,18 @@ class UMAP(BaseEstimator):
         numba.set_num_threads(self._original_n_threads)
         self._input_hash = joblib.hash(self._raw_data)
 
+        if self.transform_mode == "embedding":
+            # Set number of features out for sklearn API
+            self._n_features_out = self.embedding_.shape[1]
+        else:
+            self._n_features_out = self.graph_.shape[1]
+
         return self
 
-    def _fit_embed_data(self, X, n_epochs, init, random_state):
+    def _fit_embed_data(self, X, n_epochs, init, random_state, **kwargs):
         """A method wrapper for simplicial_set_embedding that can be
-        replaced by subclasses.
+        replaced by subclasses. Arbitrary keyword arguments can be passed
+        through .fit() and .fit_transform().
         """
         return simplicial_set_embedding(
             X,
@@ -2852,7 +2971,7 @@ class UMAP(BaseEstimator):
             tqdm_kwds=self.tqdm_kwds,
         )
 
-    def fit_transform(self, X, y=None, force_all_finite=True):
+    def fit_transform(self, X, y=None, ensure_all_finite=True, **kwargs):
         """Fit X into an embedded space and return that transformed
         output.
 
@@ -2868,11 +2987,13 @@ class UMAP(BaseEstimator):
             The relevant attributes are ``target_metric`` and
             ``target_metric_kwds``.
 
-        force_all_finite : Whether to raise an error on np.inf, np.nan, pd.NA in array.
+        ensure_all_finite : Whether to raise an error on np.inf, np.nan, pd.NA in array.
             The possibilities are: - True: Force all values of array to be finite.
                                    - False: accepts np.inf, np.nan, pd.NA in array.
                                    - 'allow-nan': accepts only np.nan and pd.NA values in array.
                                      Values cannot be infinite.
+
+        **kwargs : Any additional keyword arguments are passed to _fit_embed_data.
 
         Returns
         -------
@@ -2888,12 +3009,16 @@ class UMAP(BaseEstimator):
         r_emb: array, shape (n_samples)
             Local radii of data points in the embedding (log-transformed).
         """
-        self.fit(X, y, force_all_finite)
+        _input_dtype = getattr(X, "dtype", None)
+        self.fit(X, y, ensure_all_finite, **kwargs)
         if self.transform_mode == "embedding":
+            embedding = self.embedding_
+            if _input_dtype is not None and np.issubdtype(_input_dtype, np.floating):
+                embedding = embedding.astype(_input_dtype, copy=False)
             if self.output_dens:
-                return self.embedding_, self.rad_orig_, self.rad_emb_
+                return embedding, self.rad_orig_, self.rad_emb_
             else:
-                return self.embedding_
+                return embedding
         elif self.transform_mode == "graph":
             return self.graph_
         else:
@@ -2903,7 +3028,7 @@ class UMAP(BaseEstimator):
                 )
             )
 
-    def transform(self, X, force_all_finite=True):
+    def transform(self, X, ensure_all_finite=True):
         """Transform X into the existing embedded space and return that
         transformed output.
 
@@ -2912,7 +3037,7 @@ class UMAP(BaseEstimator):
         X : array, shape (n_samples, n_features)
             New data to be transformed.
 
-        force_all_finite : Whether to raise an error on np.inf, np.nan, pd.NA in array.
+        ensure_all_finite : Whether to raise an error on np.inf, np.nan, pd.NA in array.
             The possibilities are: - True: Force all values of array to be finite.
                                    - False: accepts np.inf, np.nan, pd.NA in array.
                                    - 'allow-nan': accepts only np.nan and pd.NA values in array.
@@ -2923,6 +3048,7 @@ class UMAP(BaseEstimator):
         X_new : array, shape (n_samples, n_components)
             Embedding of the new data in low-dimensional space.
         """
+        _input_dtype = getattr(X, "dtype", None)
         # If we fit just a single instance then error
         if self._raw_data.shape[0] == 1:
             raise ValueError(
@@ -2930,13 +3056,26 @@ class UMAP(BaseEstimator):
             )
         # If we just have the original input then short circuit things
         if self.metric in ("bit_hamming", "bit_jaccard"):
-            X = check_array(X, dtype=np.uint8, order="C", force_all_finite=force_all_finite)
+            X = check_array(
+                X, dtype=np.uint8, order="C", ensure_all_finite=ensure_all_finite
+            )
         else:
-            X = check_array(X, dtype=np.float32, accept_sparse="csr", order="C", force_all_finite=force_all_finite)
+            X = check_array(
+                X,
+                dtype=np.float32,
+                accept_sparse="csr",
+                order="C",
+                ensure_all_finite=ensure_all_finite,
+            )
         x_hash = joblib.hash(X)
         if x_hash == self._input_hash:
             if self.transform_mode == "embedding":
-                return self.embedding_
+                embedding = self.embedding_
+                if _input_dtype is not None and np.issubdtype(
+                    _input_dtype, np.floating
+                ):
+                    embedding = embedding.astype(_input_dtype, copy=False)
+                return embedding
             elif self.transform_mode == "graph":
                 return self.graph_
             else:
@@ -2976,17 +3115,27 @@ class UMAP(BaseEstimator):
                     (X.shape[0], self._n_neighbors), dtype=np.int32, fill_value=-1
                 )
                 dists = np.full_like(indices, dtype=np.float32, fill_value=-1)
+                # X is CSR (check_array(accept_sparse="csr")), so slice its backing
+                # arrays directly instead of materializing a temporary matrix per row.
+                X_indptr, X_indices, X_data = X.indptr, X.indices, X.data
                 for i in range(X.shape[0]):
-                    data_indices = np.argsort(X[i].data)
-                    if len(data_indices) < self._n_neighbors:
+                    row_start, row_end = X_indptr[i], X_indptr[i + 1]
+                    row_data = X_data[row_start:row_end]
+                    row_indices = X_indices[row_start:row_end]
+                    if len(row_data) < self._n_neighbors:
                         raise ValueError(
                             f"Need at least n_neighbors ({self.n_neighbors}) distances for each row!"
                         )
-                    indices[i] = X[i].indices[data_indices[: self._n_neighbors]]
-                    dists[i] = X[i].data[data_indices[: self._n_neighbors]]
+                    row_nn_data_indices = np.argpartition(row_data, self._n_neighbors)[: self._n_neighbors]
+                    row_nn_data_indices = row_nn_data_indices[np.argsort(row_data[row_nn_data_indices])]
+                    indices[i] = row_indices[row_nn_data_indices]
+                    dists[i] = row_data[row_nn_data_indices]
             else:
-                indices = np.argsort(X, axis=1)[:, : self._n_neighbors].astype(np.int32)
+                indices = np.argpartition(X, self._n_neighbors, axis=1)[:, : self._n_neighbors]
                 dists = np.take_along_axis(X, indices, axis=1)
+                sorted_idx = np.argsort(dists, axis=1)
+                indices = np.take_along_axis(indices, sorted_idx, axis=1).astype(np.int32)
+                dists = np.take_along_axis(dists, sorted_idx, axis=1)
             assert np.min(indices) >= 0 and np.min(dists) >= 0.0
         elif self._small_data:
             try:
@@ -3007,7 +3156,7 @@ class UMAP(BaseEstimator):
                             self._raw_data.toarray(),
                             metric=_m,
                             kwds=self._metric_kwds,
-                            force_all_finite=force_all_finite
+                            ensure_all_finite=ensure_all_finite,
                         )
                     else:
                         dmat = dist.pairwise_special_metric(
@@ -3015,7 +3164,7 @@ class UMAP(BaseEstimator):
                             self._raw_data,
                             metric=self._input_distance_func,
                             kwds=self._metric_kwds,
-                            force_all_finite=force_all_finite
+                            ensure_all_finite=ensure_all_finite,
                         )
                 else:
                     dmat = dist.pairwise_special_metric(
@@ -3023,13 +3172,26 @@ class UMAP(BaseEstimator):
                         self._raw_data,
                         metric=self._input_distance_func,
                         kwds=self._metric_kwds,
-                        force_all_finite=force_all_finite
+                        ensure_all_finite=ensure_all_finite,
                     )
-            indices = np.argpartition(dmat, self._n_neighbors)[:, : self._n_neighbors]
-            dmat_shortened = submatrix(dmat, indices, self._n_neighbors)
-            indices_sorted = np.argsort(dmat_shortened)
-            indices = submatrix(indices, indices_sorted, self._n_neighbors)
-            dists = submatrix(dmat_shortened, indices_sorted, self._n_neighbors)
+            # Select the k nearest in row-blocks so the argpartition index
+            # temporary is (block x N) rather than a full (M x N) int64 array
+            # kept alive by the [:, :k] view. Per-row results are identical to
+            # the full-matrix argpartition/argsort (rows are independent).
+            k = self._n_neighbors
+            n_t = dmat.shape[0]
+            indices = np.empty((n_t, k), dtype=np.int64)
+            dists = np.empty((n_t, k), dtype=dmat.dtype)
+            block = 1024
+            for s in range(0, n_t, block):
+                e = min(s + block, n_t)
+                d_block = dmat[s:e]
+                part = np.argpartition(d_block, k, axis=1)[:, :k]
+                r = np.arange(e - s)[:, None]
+                bd = d_block[r, part]
+                order = np.argsort(bd, axis=1)
+                indices[s:e] = part[r, order]
+                dists[s:e] = bd[r, order]
         else:
             epsilon = 0.24 if self._knn_search_index._angular_trees else 0.12
             indices, dists = self._knn_search_index.query(
@@ -3133,6 +3295,8 @@ class UMAP(BaseEstimator):
                 tqdm_kwds=self.tqdm_kwds,
             )
 
+        if _input_dtype is not None and np.issubdtype(_input_dtype, np.floating):
+            embedding = embedding.astype(_input_dtype, copy=False)
         return embedding
 
     def inverse_transform(self, X):
@@ -3177,19 +3341,22 @@ class UMAP(BaseEstimator):
             self.embedding_, incremental=True, qhull_options="QJ"
         )
         neighbors = deltri.simplices[deltri.find_simplex(X)]
-        adjmat = scipy.sparse.lil_matrix(
-            (self.embedding_.shape[0], self.embedding_.shape[0]), dtype=int
+        n_embed = self.embedding_.shape[0]
+        simplices = deltri.simplices
+        k = simplices.shape[1]
+        n_s = simplices.shape[0]
+        # All (vertex_a, vertex_b) pairs within each simplex — k² pairs × n_simplices
+        rows = np.empty(n_s * k * k, dtype=np.int32)
+        cols = np.empty(n_s * k * k, dtype=np.int32)
+        for a in range(k):
+            for b in range(k):
+                off = (a * k + b) * n_s
+                rows[off : off + n_s] = simplices[:, a]
+                cols[off : off + n_s] = simplices[:, b]
+        adjmat = scipy.sparse.csr_matrix(
+            (np.ones(n_s * k * k, dtype=np.int8), (rows, cols)),
+            shape=(n_embed, n_embed),
         )
-        for i in np.arange(0, deltri.simplices.shape[0]):
-            for j in deltri.simplices[i]:
-                if j < self.embedding_.shape[0]:
-                    idx = deltri.simplices[i][
-                        deltri.simplices[i] < self.embedding_.shape[0]
-                    ]
-                    adjmat[j, idx] = 1
-                    adjmat[idx, j] = 1
-
-        adjmat = scipy.sparse.csr_matrix(adjmat)
 
         min_vertices = min(self._raw_data.shape[-1], self._raw_data.shape[0])
 
@@ -3302,11 +3469,19 @@ class UMAP(BaseEstimator):
 
         return inv_transformed_points
 
-    def update(self, X, force_all_finite=True):
+    def update(self, X, ensure_all_finite=True):
         if self.metric in ("bit_hamming", "bit_jaccard"):
-            X = check_array(X, dtype=np.uint8, order="C", force_all_finite=force_all_finite)
+            X = check_array(
+                X, dtype=np.uint8, order="C", ensure_all_finite=ensure_all_finite
+            )
         else:
-            X = check_array(X, dtype=np.float32, accept_sparse="csr", order="C", force_all_finite=force_all_finite)
+            X = check_array(
+                X,
+                dtype=np.float32,
+                accept_sparse="csr",
+                order="C",
+                ensure_all_finite=ensure_all_finite,
+            )
         random_state = check_random_state(self.transform_seed)
         rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
@@ -3344,21 +3519,21 @@ class UMAP(BaseEstimator):
                                 self._raw_data.toarray(),
                                 metric=_m,
                                 kwds=self._metric_kwds,
-                                force_all_finite=force_all_finite
+                                ensure_all_finite=ensure_all_finite,
                             )
                         else:
                             dmat = dist.pairwise_special_metric(
                                 self._raw_data,
                                 metric=self._input_distance_func,
                                 kwds=self._metric_kwds,
-                                force_all_finite=force_all_finite
+                                ensure_all_finite=ensure_all_finite,
                             )
                     else:
                         dmat = dist.pairwise_special_metric(
                             self._raw_data,
                             metric=self._input_distance_func,
                             kwds=self._metric_kwds,
-                            force_all_finite=force_all_finite
+                            ensure_all_finite=ensure_all_finite,
                         )
                 self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
                     dmat,
@@ -3524,17 +3699,6 @@ class UMAP(BaseEstimator):
         if self.output_dens:
             self.rad_orig_ = aux_data["rad_orig"]
             self.rad_emb_ = aux_data["rad_emb"]
-
-    def get_feature_names_out(self, feature_names_out=None):
-        """
-        Defines descriptive names for each output of the (fitted) estimator.
-        :param feature_names_out: Optional passthrough for feature names.
-        By default, feature names will be generated automatically.
-        :return: List of descriptive names for each output variable from the fitted estimator.
-        """
-        if feature_names_out is None:
-            feature_names_out = [f"umap_component_{i+1}" for i in range(self.n_components)]
-        return feature_names_out
 
     def __repr__(self):
         from sklearn.utils._pprint import _EstimatorPrettyPrinter

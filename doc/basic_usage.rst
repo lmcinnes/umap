@@ -177,8 +177,8 @@ of bill (culmen) and flippers and weights of three species of penguins,
 along with some other metadata about the penguins. In total we have 333
 different penguins measured. Visualizing this data is a little bit
 tricky since we can't plot in 4 dimensions easily. Fortunately four is
-not that large a number, so we can just to a pairwise feature
-scatterplot matrix to get an ideas of what is going on. Seaborn makes
+not that large a number, so we can just do a pairwise feature
+scatterplot matrix to get an idea of what is going on. Seaborn makes
 this easy.
 
 .. code:: python3
@@ -539,7 +539,7 @@ that are hard even for humans to classify correctly).
     </div>
     """))
     
-    plot_figure.circle(
+    plot_figure.scatter(
         'x',
         'y',
         source=datasource,
@@ -599,14 +599,14 @@ Original data access and use
 
    </h4>
 
-From Gorman et al.: “Data reported here are publicly available within
+From Gorman et al.: "Data reported here are publicly available within
 the PAL-LTER data system (datasets #219, 220, and 221):
 http://oceaninformatics.ucsd.edu/datazoo/data/pallter/datasets. These
 data are additionally archived within the United States (US) LTER
-Network’s Information System Data Portal: https://portal.lternet.edu/.
+Network's Information System Data Portal: https://portal.lternet.edu/.
 Individuals interested in using these data are therefore expected to
-follow the US LTER Network’s Data Access Policy, Requirements and Use
-Agreement: https://lternet.edu/data-access-policy/.”
+follow the US LTER Network's Data Access Policy, Requirements and Use
+Agreement: https://lternet.edu/data-access-policy/."
 
 Anyone interested in publishing the data should contact `Dr. Kristen
 Gorman <https://www.uaf.edu/cfos/people/faculty/detail/kristen-gorman.php>`__
