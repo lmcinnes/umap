@@ -51,6 +51,35 @@ def test_blobs_cluster_adam():
     assert adjusted_rand_score(labels, KMeans(5).fit_predict(embedding)) == 1.0
 
 
+def test_adam_is_default_optimizer():
+    assert UMAP().optimizer == "adam"
+
+
+def test_blobs_cluster_momentum():
+    data, labels = make_blobs(n_samples=500, n_features=10, centers=5, random_state=42)
+    embedding = UMAP(n_epochs=100, optimizer="momentum", random_state=42).fit_transform(
+        data
+    )
+    assert adjusted_rand_score(labels, KMeans(5).fit_predict(embedding)) == 1.0
+
+
+@pytest.mark.parametrize("optimizer", ["standard", "densmap_standard"])
+def test_removed_standard_optimizer_names_are_rejected(optimizer):
+    data, _ = make_blobs(n_samples=30, n_features=4, random_state=42)
+    with pytest.raises(ValueError, match="Unknown optimizer"):
+        UMAP(optimizer=optimizer).fit(data)
+
+
+def test_hard_negative_scale_adaptation_default():
+    assert UMAP().negative_sample_scale_adaptation_samples == 128
+    assert (
+        UMAP(
+            negative_sample_scale_adaptation_samples=0
+        ).negative_sample_scale_adaptation_samples
+        == 0
+    )
+
+
 # Umap Clusterability
 def test_blobs_cluster_compatibility_mode():
     data, labels = make_blobs(n_samples=500, n_features=10, centers=5)

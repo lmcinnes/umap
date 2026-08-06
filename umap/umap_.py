@@ -43,6 +43,7 @@ from umap.layouts import (
     optimize_layout_euclidean,
     optimize_layout_generic,
     optimize_layout_inverse,
+    validate_optimizer,
 )
 from umap.label_prop import label_propagation_init, recursive_init
 
@@ -1047,9 +1048,12 @@ def simplicial_set_embedding(
     parallel=False,
     verbose=False,
     compatibility_layout=False,
-    optimizer="standard",
+    optimizer="adam",
     tqdm_kwds=None,
     negative_selection_range=200_000,
+    negative_sample_scale=None,
+    exclude_graph_neighbors=False,
+    negative_sample_scale_adaptation_samples=128,
 ):
     """Perform a fuzzy simplicial set embedding, using a specified
     initialisation method and then minimizing the fuzzy set cross entropy
@@ -1149,10 +1153,11 @@ def simplicial_set_embedding(
         This is the original code used in UMAP, and is not as efficient as the
         new code, but is kept available for compatibility with older versions of UMAP.
 
-    optimizer: str (optional, default 'standard')
+    optimizer: str (optional, default 'adam')
         The optimizer to use for the embedding. Options are:
-            * 'standard': use the standard SGD optimizer.
             * 'adam': use the Adam optimizer.
+            * 'momentum': use the SGD-with-momentum optimizer.
+            * 'compatibility': use the legacy UMAP optimizer.
 
     tqdm_kwds: dict
         Key word arguments to be used by the tqdm progress bar.
@@ -1300,9 +1305,9 @@ def simplicial_set_embedding(
         np.log10(embedding.shape[0]) * 3 * (np.log2(gamma + 1))
     )  # Added log2(gamma) to scale with repulsion strength
     embedding -= np.mean(embedding, 0)
-    embedding *= (
-        scale / (np.quantile(embedding, 0.95, 0) - np.quantile(embedding, 0.05, 0))
-    ).astype(np.float32, order="C")
+    embedding_spread = np.quantile(embedding, 0.95, 0) - np.quantile(embedding, 0.05, 0)
+    embedding_spread[embedding_spread == 0.0] = 1.0
+    embedding *= (scale / embedding_spread).astype(np.float32, order="C")
 
     if euclidean_output:
         if compatibility_layout or optimizer == "compatibility":
@@ -1361,6 +1366,9 @@ def simplicial_set_embedding(
                 good_initialization=isinstance(init, str) and init in ["recursive"],
                 optimizer=optimizer,
                 negative_selection_range=negative_selection_range,
+                negative_sample_scale=negative_sample_scale,
+                exclude_graph_neighbors=exclude_graph_neighbors,
+                negative_sample_scale_adaptation_samples=negative_sample_scale_adaptation_samples,
             )
 
     else:
@@ -1845,10 +1853,11 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         This is the original code used in UMAP, and is not as efficient as the
         new code, but is kept available for compatibility with older versions of UMAP.
 
-    optimizer: str (optional, default 'standard')
+    optimizer: str (optional, default 'adam')
         The optimizer to use for the embedding. Options are:
-            * 'standard': use the standard SGD optimizer.
             * 'adam': use the Adam optimizer.
+            * 'momentum': use the SGD-with-momentum optimizer.
+            * 'compatibility': use the legacy UMAP optimizer.
 
     Attributes
     ----------
@@ -1907,8 +1916,11 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         disconnection_distance=None,
         precomputed_knn=(None, None, None),
         compatibility_layout=False,
-        optimizer="standard",
+        optimizer="adam",
         negative_selection_range=200_000,
+        negative_sample_scale=None,
+        exclude_graph_neighbors=False,
+        negative_sample_scale_adaptation_samples=128,
     ):
         self.n_neighbors = n_neighbors
         self.metric = metric
@@ -1952,6 +1964,11 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         self.compatibility_layout = compatibility_layout
 
         self.negative_selection_range = negative_selection_range
+        self.negative_sample_scale = negative_sample_scale
+        self.exclude_graph_neighbors = exclude_graph_neighbors
+        self.negative_sample_scale_adaptation_samples = (
+            negative_sample_scale_adaptation_samples
+        )
 
         # If compatibility_layout is set and init was default, change to spectral which was the old default
         if self.compatibility_layout and self.init == "recursive":
@@ -1964,10 +1981,17 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         self.b = b
 
     def _validate_parameters(self):
+        validate_optimizer(self.optimizer)
         if self.set_op_mix_ratio < 0.0 or self.set_op_mix_ratio > 1.0:
             raise ValueError("set_op_mix_ratio must be between 0.0 and 1.0")
         if self.repulsion_strength < 0.0:
             raise ValueError("repulsion_strength cannot be negative")
+        if self.negative_sample_scale is not None and self.negative_sample_scale < 0.0:
+            raise ValueError("negative_sample_scale cannot be negative")
+        if self.negative_sample_scale_adaptation_samples < 0:
+            raise ValueError(
+                "negative_sample_scale_adaptation_samples cannot be negative"
+            )
         if self.min_dist > self.spread:
             raise ValueError("min_dist must be less than or equal to spread")
         if self.min_dist < 0.0:
@@ -3155,6 +3179,9 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             optimizer=self.optimizer,
             tqdm_kwds=self.tqdm_kwds,
             negative_selection_range=self.negative_selection_range,
+            negative_sample_scale=self.negative_sample_scale,
+            exclude_graph_neighbors=self.exclude_graph_neighbors,
+            negative_sample_scale_adaptation_samples=self.negative_sample_scale_adaptation_samples,
         )
 
     def fit_transform(self, X, y=None, ensure_all_finite=True, **kwargs):

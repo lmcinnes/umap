@@ -1,7 +1,7 @@
 import numpy as np
 import numba
 
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix, issparse
 from sklearn.preprocessing import normalize
 from sklearn.utils.extmath import randomized_svd
 
@@ -176,7 +176,9 @@ def label_propagation_init(
             np.log10(result.shape[0]) * 3 * (np.log2(depth + 1))
         )  # Added log2(gamma) to scale with repulsion strength
         result -= np.mean(result, 0)
-        result *= scale / (np.quantile(result, 0.95, 0) - np.quantile(result, 0.05, 0))
+        spread = np.quantile(result, 0.95, 0) - np.quantile(result, 0.05, 0)
+        spread[spread == 0.0] = 1.0
+        result *= scale / spread
 
         return result.astype(np.float32)
 
@@ -342,6 +344,19 @@ def recursive_init(
         pca_sample_mask = np.ones(n, dtype=np.bool_)
         data_sample = data
 
+    if not issparse(data_sample) and not np.all(np.isfinite(data_sample)):
+        data_sample = np.asarray(data_sample).copy()
+        finite = np.isfinite(data_sample)
+        finite_counts = finite.sum(axis=0)
+        finite_sums = np.where(finite, data_sample, 0.0).sum(axis=0)
+        fill_values = np.divide(
+            finite_sums,
+            finite_counts,
+            out=np.zeros_like(finite_sums, dtype=np.float64),
+            where=finite_counts > 0,
+        )
+        data_sample = np.where(finite, data_sample, fill_values)
+
     X = data_sample - data_sample.mean(axis=0)
     U, S, _ = randomized_svd(
         X,
@@ -354,7 +369,9 @@ def recursive_init(
     pca = (U * S).astype(np.float32, order="C")
 
     pca -= pca.min(axis=0)
-    pca /= pca.max(axis=0) - pca.min(axis=0)
+    pca_span = pca.max(axis=0) - pca.min(axis=0)
+    pca_span[pca_span == 0.0] = 1.0
+    pca /= pca_span
     pca *= 10.0
     init = label_propagation_init(
         graph,
