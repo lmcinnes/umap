@@ -328,7 +328,7 @@ def optimize_layout_euclidean_single_epoch_fast(
 
 
 @numba.njit(
-    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], f4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], i4[::1], i4[::1])",
+    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], f4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], i4[::1], i4[::1], b1)",
     fastmath=True,
     parallel=True,
     locals={
@@ -361,55 +361,89 @@ def optimize_small_layout_euclidean_single_epoch_fast(
     updates,
     from_node_order,
     to_node_order,
+    exclude_graph_neighbors=False,
 ):
     n_from_vertices = csr_indptr.shape[0] - 1
-    attraction_rescaling = 1.0 / pow(n + 1, 0.33)
+    transform_mode = n_from_vertices != n_vertices
+    attraction_scale = 0.5
     for node_idx in numba.prange(n_from_vertices):
         from_node = from_node_order[node_idx]
         current = head_embedding[from_node]
-
         for raw_index in range(csr_indptr[from_node], csr_indptr[from_node + 1]):
-            to_node = csr_indices[raw_index]
-            other = tail_embedding[to_node]
-            weight = csr_data[raw_index]
-
-            dist_squared = rdist(current, other)
-
-            if dist_squared > 0.0:
-                grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
-                grad_coeff /= a * pow(dist_squared, b) + 1.0
-                for d in range(dim):
-                    grad_d = (
-                        weight
-                        * grad_coeff
-                        * (current[d] - other[d])
-                        * pow(dist_squared, attraction_rescaling)
-                    )
-                    updates[from_node, d] += grad_d * alpha
-
-            epoch_of_next_sample[raw_index] += epochs_per_sample[raw_index]
-
-            n_neg_samples = int(weight * 5)
-
-            for p in range(n_neg_samples):
-                to_node = to_node_order[(raw_index * (n + p + 1)) % n_vertices]
+            if epoch_of_next_sample[raw_index] <= n:
+                to_node = csr_indices[raw_index]
                 other = tail_embedding[to_node]
 
                 dist_squared = rdist(current, other)
-
                 if dist_squared > 0.0:
-                    grad_coeff = 2.0 * gamma * b
-                    grad_coeff /= (0.001 + dist_squared) * (
-                        a * pow(dist_squared, b) + 1
-                    )
+                    grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
+                    grad_coeff /= a * pow(dist_squared, b) + 1.0
+                    for d in range(dim):
+                        updates[from_node, d] += (
+                            attraction_scale
+                            * alpha
+                            * grad_coeff
+                            * (current[d] - other[d])
+                        )
 
-                    if grad_coeff > 0.0:
-                        grad_norm = np.sqrt(grad_coeff * grad_coeff * dist_squared)
-                        scale = gamma * np.tanh(grad_norm / gamma) / grad_norm
-                        for d in range(dim):
-                            updates[from_node, d] += (
-                                alpha * grad_coeff * (current[d] - other[d]) * scale
-                            )
+                epoch_of_next_sample[raw_index] += epochs_per_sample[raw_index]
+
+                n_neg_samples = int(
+                    (n - epoch_of_next_negative_sample[raw_index])
+                    / epochs_per_negative_sample[raw_index]
+                )
+
+                accepted_negatives = 0
+                candidate_attempts = 0
+                while (
+                    accepted_negatives < n_neg_samples
+                    and candidate_attempts < n_vertices
+                ):
+                    if exclude_graph_neighbors:
+                        candidate_rank = (
+                            raw_index * (n + 1) + candidate_attempts
+                        ) % n_vertices
+                    else:
+                        candidate_rank = (
+                            raw_index * (n + accepted_negatives + 1)
+                        ) % n_vertices
+                    candidate_attempts += 1
+                    to_node = to_node_order[candidate_rank]
+                    if exclude_graph_neighbors:
+                        if not transform_mode and to_node == from_node:
+                            continue
+                        edge_start = csr_indptr[from_node]
+                        edge_end = csr_indptr[from_node + 1]
+                        edge_position = np.searchsorted(
+                            csr_indices[edge_start:edge_end], to_node
+                        )
+                        if (
+                            edge_position < edge_end - edge_start
+                            and csr_indices[edge_start + edge_position] == to_node
+                        ):
+                            continue
+                    accepted_negatives += 1
+                    other = tail_embedding[to_node]
+
+                    dist_squared = rdist(current, other)
+
+                    if dist_squared > 0.0:
+                        grad_coeff = 2.0 * gamma * b
+                        grad_coeff /= (0.001 + dist_squared) * (
+                            a * pow(dist_squared, b) + 1
+                        )
+
+                        if grad_coeff > 0.0:
+                            grad_norm = np.sqrt(grad_coeff * grad_coeff * dist_squared)
+                            scale = gamma * np.tanh(grad_norm / gamma) / grad_norm
+                            for d in range(dim):
+                                updates[from_node, d] += (
+                                    alpha * grad_coeff * (current[d] - other[d]) * scale
+                                )
+
+                epoch_of_next_negative_sample[raw_index] += (
+                    n_neg_samples * epochs_per_negative_sample[raw_index]
+                )
 
     for node_idx in numba.prange(n_from_vertices):
         from_node = from_node_order[node_idx]
@@ -647,7 +681,55 @@ def optimize_layout_euclidean_single_epoch_adam(
 
 
 @numba.njit(
-    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], f4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], f4[:, ::1], f4[:, ::1], f8, f8, i4[::1], i4[::1])",
+    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], f8, f8, f4[::1], f4[::1])",
+    fastmath=True,
+    parallel=True,
+    cache=True,
+    locals={
+        "i": numba.types.intp,
+        "j": numba.types.intp,
+        "k": numba.types.intp,
+        "current": numba.types.float32[::1],
+        "other": numba.types.float32[::1],
+        "dist_squared": numba.types.float32,
+        "phi": numba.types.float32,
+    },
+)
+def _optimize_layout_euclidean_densmap_epoch_init_coo(
+    head_embedding,
+    tail_embedding,
+    head,
+    tail,
+    a,
+    b,
+    re_sum,
+    phi_sum,
+):
+    re_sum.fill(0)
+    phi_sum.fill(0)
+
+    for i in numba.prange(head.shape[0]):
+        j = head[i]
+        k = tail[i]
+
+        current = head_embedding[j]
+        other = tail_embedding[k]
+        dist_squared = rdist(current, other)
+
+        phi = 1.0 / (1.0 + a * pow(dist_squared, b))
+
+        re_sum[j] += phi * dist_squared
+        re_sum[k] += phi * dist_squared
+        phi_sum[j] += phi
+        phi_sum[k] += phi
+
+    epsilon = 1e-8
+    for i in range(re_sum.shape[0]):
+        re_sum[i] = np.log(epsilon + (re_sum[i] / phi_sum[i]))
+
+
+@numba.njit(
+    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], f4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], f4[:, ::1], f4[:, ::1], f8, f8, i4[::1], i4[::1], b1)",
     fastmath=True,
     parallel=True,
     locals={
@@ -684,10 +766,11 @@ def optimize_small_layout_euclidean_single_epoch_adam(
     beta2,
     from_node_order,
     to_node_order,
+    exclude_graph_neighbors=False,
 ):
     n_from_vertices = csr_indptr.shape[0] - 1
     transform_mode = from_node_order.shape[0] != to_node_order.shape[0]
-    attraction_rescaling = 1.0 / pow(n + 1, 0.1)
+    attraction_scale = 0.5
     for raw_idx in numba.prange(n_from_vertices):
         node_idx = from_node_order[raw_idx]
         if transform_mode:
@@ -697,58 +780,81 @@ def optimize_small_layout_euclidean_single_epoch_adam(
         current = head_embedding[from_node]
 
         for raw_index in range(csr_indptr[from_node], csr_indptr[from_node + 1]):
-            to_node = csr_indices[raw_index]
-            other = tail_embedding[to_node]
-            weight = csr_data[raw_index]
-
-            dist_squared = rdist(current, other)
-
-            if dist_squared > 0.0:
-                grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
-                grad_coeff /= a * pow(dist_squared, b) + 1.0
-                for d in range(dim):
-                    grad_d = (
-                        weight
-                        * grad_coeff
-                        * (current[d] - other[d])
-                        * pow(dist_squared, attraction_rescaling)
-                    )
-                    updates[from_node, d] += grad_d
-
-            for p in range(int(weight * 5)):
-                to_node = (raw_index * (n + p + 1)) % n_vertices
-                to_node_idx = np.where(
-                    csr_indices[csr_indptr[from_node] : csr_indptr[from_node + 1]]
-                    == to_node
-                )[0]
-                if to_node_idx.size == 0:
-                    neg_weight = 1.0
-                else:
-                    neg_weight = 1.0 - csr_data[csr_indptr[from_node] + to_node_idx[0]]
-
+            if epoch_of_next_sample[raw_index] <= n:
+                to_node = csr_indices[raw_index]
                 other = tail_embedding[to_node]
-
                 dist_squared = rdist(current, other)
 
                 if dist_squared > 0.0:
-                    grad_coeff = 2.0 * gamma * b
-                    grad_coeff /= (0.001 + dist_squared) * (
-                        a * pow(dist_squared, b) + 1
-                    )
+                    grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
+                    grad_coeff /= a * pow(dist_squared, b) + 1.0
+                    for d in range(dim):
+                        updates[from_node, d] += (
+                            attraction_scale * grad_coeff * (current[d] - other[d])
+                        )
 
-                    if grad_coeff > 0.0:
-                        grad_norm = np.sqrt(grad_coeff * grad_coeff * dist_squared)
-                        scale = gamma * np.tanh(grad_norm / gamma) / grad_norm
-                        for d in range(dim):
-                            updates[from_node, d] += (
-                                neg_weight
-                                * grad_coeff
-                                * (current[d] - other[d])
-                                * scale
-                            )
+                epoch_of_next_sample[raw_index] += epochs_per_sample[raw_index]
+                n_neg_samples = int(
+                    (n - epoch_of_next_negative_sample[raw_index])
+                    / epochs_per_negative_sample[raw_index]
+                )
 
-    for node_idx in numba.prange(n_from_vertices):
-        from_node = from_node_order[node_idx]
+                accepted_negatives = 0
+                candidate_attempts = 0
+                while (
+                    accepted_negatives < n_neg_samples
+                    and candidate_attempts < n_vertices
+                ):
+                    if exclude_graph_neighbors:
+                        candidate_rank = (
+                            raw_index * (n + 1) + candidate_attempts
+                        ) % n_vertices
+                    else:
+                        candidate_rank = (
+                            raw_index * (n + accepted_negatives + 1)
+                        ) % n_vertices
+                    candidate_attempts += 1
+                    to_node = to_node_order[candidate_rank]
+                    if exclude_graph_neighbors:
+                        if not transform_mode and to_node == from_node:
+                            continue
+                        edge_start = csr_indptr[from_node]
+                        edge_end = csr_indptr[from_node + 1]
+                        edge_position = np.searchsorted(
+                            csr_indices[edge_start:edge_end], to_node
+                        )
+                        if (
+                            edge_position < edge_end - edge_start
+                            and csr_indices[edge_start + edge_position] == to_node
+                        ):
+                            continue
+                    accepted_negatives += 1
+                    other = tail_embedding[to_node]
+                    dist_squared = rdist(current, other)
+
+                    if dist_squared > 0.0:
+                        grad_coeff = 2.0 * gamma * b
+                        grad_coeff /= (0.001 + dist_squared) * (
+                            a * pow(dist_squared, b) + 1
+                        )
+                        if grad_coeff > 0.0:
+                            grad_norm = np.sqrt(grad_coeff * grad_coeff * dist_squared)
+                            scale = gamma * np.tanh(grad_norm / gamma) / grad_norm
+                            for d in range(dim):
+                                updates[from_node, d] += (
+                                    grad_coeff * (current[d] - other[d]) * scale
+                                )
+
+                epoch_of_next_negative_sample[raw_index] += (
+                    n_neg_samples * epochs_per_negative_sample[raw_index]
+                )
+
+    for raw_idx in numba.prange(n_from_vertices):
+        node_idx = from_node_order[raw_idx]
+        if transform_mode:
+            from_node = node_idx
+        else:
+            from_node = to_node_order[node_idx]
         for d in range(dim):
             if updates[from_node, d] != 0.0:
                 adam_m[from_node, d] = (
@@ -1074,54 +1180,6 @@ def optimize_layout_euclidean_single_epoch_adam_densmap(
                     head_embedding[from_node, d] += (
                         alpha * m_est / (np.sqrt(v_est) + 1e-4)
                     )
-
-
-@numba.njit(
-    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], f8, f8, f4[::1], f4[::1])",
-    fastmath=True,
-    parallel=True,
-    cache=True,
-    locals={
-        "i": numba.types.intp,
-        "j": numba.types.intp,
-        "k": numba.types.intp,
-        "current": numba.types.float32[::1],
-        "other": numba.types.float32[::1],
-        "dist_squared": numba.types.float32,
-        "phi": numba.types.float32,
-    },
-)
-def _optimize_layout_euclidean_densmap_epoch_init_coo(
-    head_embedding,
-    tail_embedding,
-    head,
-    tail,
-    a,
-    b,
-    re_sum,
-    phi_sum,
-):
-    re_sum.fill(0)
-    phi_sum.fill(0)
-
-    for i in numba.prange(head.shape[0]):
-        j = head[i]
-        k = tail[i]
-
-        current = head_embedding[j]
-        other = tail_embedding[k]
-        dist_squared = rdist(current, other)
-
-        phi = 1.0 / (1.0 + a * pow(dist_squared, b))
-
-        re_sum[j] += phi * dist_squared
-        re_sum[k] += phi * dist_squared
-        phi_sum[j] += phi
-        phi_sum[k] += phi
-
-    epsilon = 1e-8
-    for i in range(re_sum.shape[0]):
-        re_sum[i] = np.log(epsilon + (re_sum[i] / phi_sum[i]))
 
 
 @numba.njit(
@@ -1919,6 +1977,7 @@ def optimize_layout_euclidean(
                     updates,
                     node_order,
                     to_node_order,
+                    exclude_graph_neighbors=exclude_graph_neighbors,
                 )
             else:
                 optimize_layout_euclidean_single_epoch_fast(
@@ -2023,6 +2082,7 @@ def optimize_layout_euclidean(
                     beta2_schedule[n],
                     node_order,
                     to_node_order,
+                    exclude_graph_neighbors=exclude_graph_neighbors,
                 )
             else:
                 optimize_layout_euclidean_single_epoch_adam(
