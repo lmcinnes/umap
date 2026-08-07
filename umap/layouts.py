@@ -6,6 +6,7 @@ import umap.distances as dist
 from umap.utils import adaptive_bucket_sort, tau_rand_int
 
 PUBLIC_OPTIMIZERS = ("adam", "momentum", "compatibility")
+GENERIC_NEGATIVE_SEARCH_MAX_CANDIDATES = 4
 
 # Small kernels accumulate all active incident-edge forces for a source before
 # applying one optimizer update. Empirical Iris/Digits force-balance sweeps show
@@ -1399,6 +1400,16 @@ def _projection_order_and_source_ranks(head_embedding, tail_embedding, random_st
     return to_node_order, source_ranks
 
 
+def _generic_negative_search_candidates(
+    n_vertices,
+    negative_selection_range,
+    max_candidates=GENERIC_NEGATIVE_SEARCH_MAX_CANDIDATES,
+):
+    """Map an effective search range to a bounded force-tournament size."""
+    effective_range = max(1, min(n_vertices, int(negative_selection_range)))
+    return min(max_candidates, max(1, n_vertices // effective_range))
+
+
 def _create_adam_schedules(
     optimizer,
     n_epochs,
@@ -1755,6 +1766,12 @@ def optimize_layout_euclidean(
             "When using an optimizer other than 'compatibility', csr_indptr and csr_indices must be provided."
         )
 
+    epochs_list = None
+    embedding_list = []
+    if isinstance(n_epochs, list):
+        epochs_list = n_epochs
+        n_epochs = max(epochs_list)
+
     epochs_per_negative_sample = epochs_per_sample / negative_sample_rate
     epoch_of_next_negative_sample = epochs_per_negative_sample.copy()
     epoch_of_next_sample = epochs_per_sample.copy()
@@ -1766,12 +1783,6 @@ def optimize_layout_euclidean(
         to_node_order = node_order
     source_ranks = np.arange(head_embedding.shape[0], dtype=np.int32)
     block_size = 4096
-
-    epochs_list = None
-    embedding_list = []
-    if isinstance(n_epochs, list):
-        epochs_list = n_epochs
-        n_epochs = max(epochs_list)
 
     # Create learning schedules
     alpha_schedule = _create_alpha_schedule(
@@ -2291,14 +2302,18 @@ def _optimize_layout_generic_single_epoch_fast(
     b,
     gamma,
     updates,
-    node_order,
+    from_node_order,
+    to_node_order,
+    negative_search_candidates,
     block_size=4096,
 ):
-    for block_start in range(0, n_vertices, block_size):
-        block_end = min(block_start + block_size, n_vertices)
+    n_from_vertices = csr_indptr.shape[0] - 1
+    for block_start in range(0, n_from_vertices, block_size):
+        block_end = min(block_start + block_size, n_from_vertices)
         for node_idx in numba.prange(block_start, block_end):
-            from_node = node_order[node_idx]
+            from_node = from_node_order[node_idx]
             current = head_embedding[from_node]
+            best_force = np.empty(dim, dtype=np.float32)
 
             for raw_index in range(csr_indptr[from_node], csr_indptr[from_node + 1]):
                 if epoch_of_next_sample[raw_index] <= n:
@@ -2321,7 +2336,7 @@ def _optimize_layout_generic_single_epoch_fast(
                             #     grad_d = clip(grad_coeff * rev_grad_dist_output[d])
                             #     other[d] += grad_d * alpha
 
-                        epoch_of_next_sample[raw_index] += epochs_per_sample[raw_index]
+                    epoch_of_next_sample[raw_index] += epochs_per_sample[raw_index]
 
                     n_neg_samples = int(
                         (n - epoch_of_next_negative_sample[raw_index])
@@ -2329,27 +2344,44 @@ def _optimize_layout_generic_single_epoch_fast(
                     )
 
                     for p in range(n_neg_samples):
-                        to_node = node_order[(raw_index * (n + p + 1)) % n_vertices]
-                        other = tail_embedding[to_node]
+                        best_force_squared = -1.0
+                        for candidate in range(negative_search_candidates):
+                            to_node = to_node_order[
+                                (raw_index * (n + p + 1) + candidate) % n_vertices
+                            ]
+                            other = tail_embedding[to_node]
 
-                        dist_output, grad_dist_output = output_metric(
-                            current, other, *output_metric_kwds
-                        )
+                            dist_output, grad_dist_output = output_metric(
+                                current, other, *output_metric_kwds
+                            )
 
-                        if dist_output > 0.0:
-                            w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
-                            grad_coeff = gamma * 2 * b * w_l / (dist_output + 1e-6)
+                            force_squared = 0.0
+                            if dist_output > 0.0:
+                                w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
+                                grad_coeff = gamma * 2 * b * w_l / (dist_output + 1e-6)
+                                for d in range(dim):
+                                    grad_d = clip(grad_coeff * grad_dist_output[d])
+                                    force_squared += grad_d * grad_d
 
-                            for d in range(dim):
-                                grad_d = clip(grad_coeff * grad_dist_output[d])
-                                updates[from_node, d] += grad_d * alpha
+                            if force_squared > best_force_squared:
+                                best_force_squared = force_squared
+                                for d in range(dim):
+                                    if dist_output > 0.0:
+                                        best_force[d] = clip(
+                                            grad_coeff * grad_dist_output[d]
+                                        )
+                                    else:
+                                        best_force[d] = 0.0
+
+                        for d in range(dim):
+                            updates[from_node, d] += best_force[d] * alpha
 
                     epoch_of_next_negative_sample[raw_index] += (
                         n_neg_samples * epochs_per_negative_sample[raw_index]
                     )
 
         for node_idx in numba.prange(block_start, block_end):
-            from_node = node_order[node_idx]
+            from_node = from_node_order[node_idx]
             for d in range(dim):
                 head_embedding[from_node, d] += updates[from_node, d]
 
@@ -2401,14 +2433,18 @@ def _optimize_layout_generic_single_epoch_adam(
     adam_v,
     beta1,
     beta2,
-    node_order,
+    from_node_order,
+    to_node_order,
+    negative_search_candidates,
     block_size=4096,
 ):
-    for block_start in range(0, n_vertices, block_size):
-        block_end = min(block_start + block_size, n_vertices)
+    n_from_vertices = csr_indptr.shape[0] - 1
+    for block_start in range(0, n_from_vertices, block_size):
+        block_end = min(block_start + block_size, n_from_vertices)
         for node_idx in numba.prange(block_start, block_end):
-            from_node = node_order[node_idx]
+            from_node = from_node_order[node_idx]
             current = head_embedding[from_node]
+            best_force = np.empty(dim, dtype=np.float32)
 
             for raw_index in range(csr_indptr[from_node], csr_indptr[from_node + 1]):
                 if epoch_of_next_sample[raw_index] <= n:
@@ -2431,7 +2467,7 @@ def _optimize_layout_generic_single_epoch_adam(
                             #     grad_d = clip(grad_coeff * rev_grad_dist_output[d])
                             #     other[d] += grad_d * alpha
 
-                        epoch_of_next_sample[raw_index] += epochs_per_sample[raw_index]
+                    epoch_of_next_sample[raw_index] += epochs_per_sample[raw_index]
 
                     n_neg_samples = int(
                         (n - epoch_of_next_negative_sample[raw_index])
@@ -2439,27 +2475,44 @@ def _optimize_layout_generic_single_epoch_adam(
                     )
 
                     for p in range(n_neg_samples):
-                        to_node = node_order[(raw_index * (n + p + 1)) % n_vertices]
-                        other = tail_embedding[to_node]
+                        best_force_squared = -1.0
+                        for candidate in range(negative_search_candidates):
+                            to_node = to_node_order[
+                                (raw_index * (n + p + 1) + candidate) % n_vertices
+                            ]
+                            other = tail_embedding[to_node]
 
-                        dist_output, grad_dist_output = output_metric(
-                            current, other, *output_metric_kwds
-                        )
+                            dist_output, grad_dist_output = output_metric(
+                                current, other, *output_metric_kwds
+                            )
 
-                        if dist_output > 0.0:
-                            w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
-                            grad_coeff = gamma * 2 * b * w_l / (dist_output + 1e-6)
+                            force_squared = 0.0
+                            if dist_output > 0.0:
+                                w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
+                                grad_coeff = gamma * 2 * b * w_l / (dist_output + 1e-6)
+                                for d in range(dim):
+                                    grad_d = clip(grad_coeff * grad_dist_output[d])
+                                    force_squared += grad_d * grad_d
 
-                            for d in range(dim):
-                                grad_d = clip(grad_coeff * grad_dist_output[d])
-                                updates[from_node, d] += grad_d
+                            if force_squared > best_force_squared:
+                                best_force_squared = force_squared
+                                for d in range(dim):
+                                    if dist_output > 0.0:
+                                        best_force[d] = clip(
+                                            grad_coeff * grad_dist_output[d]
+                                        )
+                                    else:
+                                        best_force[d] = 0.0
+
+                        for d in range(dim):
+                            updates[from_node, d] += best_force[d]
 
                     epoch_of_next_negative_sample[raw_index] += (
                         n_neg_samples * epochs_per_negative_sample[raw_index]
                     )
 
         for node_idx in numba.prange(block_start, block_end):
-            from_node = node_order[node_idx]
+            from_node = from_node_order[node_idx]
             for d in range(dim):
                 if updates[from_node, d] != 0.0:
                     adam_m[from_node, d] = (
@@ -2470,8 +2523,8 @@ def _optimize_layout_generic_single_epoch_adam(
                         beta2 * adam_v[from_node, d]
                         + (1.0 - beta2) * updates[from_node, d] ** 2
                     )
-                    m_est = adam_m[from_node, d] / (1.0 - pow(beta1, n))
-                    v_est = adam_v[from_node, d] / (1.0 - pow(beta2, n))
+                    m_est = adam_m[from_node, d] / (1.0 - pow(beta1, n + 1))
+                    v_est = adam_v[from_node, d] / (1.0 - pow(beta2, n + 1))
                     head_embedding[from_node, d] += (
                         alpha * m_est / (np.sqrt(v_est) + 1e-4)
                     )
@@ -2559,6 +2612,7 @@ def optimize_layout_generic(
     csr_indices=None,
     good_initialization=False,
     random_state=None,
+    negative_selection_range=200_000,
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
     fuzzy set cross entropy between the 1-skeletons of the high dimensional
@@ -2641,6 +2695,11 @@ def optimize_layout_generic(
         Random state to use for the optimization. If None, a new random state will be created
         using np.random.RandomState.
 
+    negative_selection_range: int (optional, default 200000)
+        Effective reference set size used to derive the number of force-ranked
+        candidates for each negative sample. The tournament size is
+        ``min(4, max(1, n_vertices // negative_selection_range))``.
+
     output_metric: callable (optional, default dist.euclidean)
         The metric to use for the optimization. Should be a callable that takes two
         arrays of shape (n_components,) and returns a float distance and an array of
@@ -2667,11 +2726,30 @@ def optimize_layout_generic(
             "When using an optimizer other than 'compatibility', csr_indptr and csr_indices must be provided."
         )
 
+    epochs_list = None
+    embedding_list = []
+    if isinstance(n_epochs, list):
+        epochs_list = n_epochs
+        n_epochs = max(epochs_list)
+
     epochs_per_negative_sample = epochs_per_sample / negative_sample_rate
     epoch_of_next_negative_sample = epochs_per_negative_sample.copy()
     epoch_of_next_sample = epochs_per_sample.copy()
     updates = np.zeros((head_embedding.shape[0], dim), dtype=np.float32)
-    node_order = np.arange(head_embedding.shape[0], dtype=np.int32)
+    # In transform mode CSR rows index new/source points while negative samples
+    # index the existing reference embedding, so the two permutations differ.
+    from_node_order = np.arange(head_embedding.shape[0], dtype=np.int32)
+    if head_embedding.shape[0] == n_vertices:
+        to_node_order = from_node_order
+    else:
+        to_node_order = np.arange(n_vertices, dtype=np.int32)
+    negative_search_candidates = _generic_negative_search_candidates(
+        n_vertices, negative_selection_range
+    )
+    if optimizer != "compatibility":
+        random_state.shuffle(from_node_order)
+        if to_node_order is not from_node_order:
+            random_state.shuffle(to_node_order)
     block_size = 4096
 
     # Create learning schedules using the shared helper functions
@@ -2712,12 +2790,6 @@ def optimize_layout_generic(
 
     if "disable" not in tqdm_kwds:
         tqdm_kwds["disable"] = not verbose
-
-    epochs_list = None
-    embedding_list = []
-    if isinstance(n_epochs, list):
-        epochs_list = n_epochs
-        n_epochs = max(epochs_list)
 
     for n in tqdm(range(n_epochs), **tqdm_kwds):
         if optimizer == "compatibility":
@@ -2763,11 +2835,15 @@ def optimize_layout_generic(
                 b,
                 gamma,
                 updates,
-                node_order,
+                from_node_order,
+                to_node_order,
+                negative_search_candidates,
                 block_size=block_size,
             )
             _finalize_update_buffer(updates, "momentum", momentum_schedule[n])
-            random_state.shuffle(node_order)
+            random_state.shuffle(from_node_order)
+            if to_node_order is not from_node_order:
+                random_state.shuffle(to_node_order)
         elif optimizer == "adam":
             _optimize_layout_generic_single_epoch_adam(
                 epochs_per_sample,
@@ -2792,16 +2868,23 @@ def optimize_layout_generic(
                 adam_v,
                 beta1_schedule[n],
                 beta2_schedule[n],
-                node_order,
+                from_node_order,
+                to_node_order,
+                negative_search_candidates,
                 block_size=block_size,
             )
             _finalize_update_buffer(updates, "adam")
-            random_state.shuffle(node_order)
+            random_state.shuffle(from_node_order)
+            if to_node_order is not from_node_order:
+                random_state.shuffle(to_node_order)
         else:
             validate_optimizer(optimizer)
 
         if epochs_list is not None and n in epochs_list:
             embedding_list.append(head_embedding.copy())
+
+    if epochs_list is not None:
+        embedding_list.append(head_embedding.copy())
 
     return head_embedding if epochs_list is None else embedding_list
 

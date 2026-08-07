@@ -1399,7 +1399,8 @@ def simplicial_set_embedding(
                 optimizer="compatibility",
             )
         else:
-            print(ts() + " Using new optimization code")
+            if verbose:
+                print(ts() + " Using new optimization code")
             # csr_matrix = graph.tocsr()
             embedding = optimize_layout_generic(
                 embedding,
@@ -1427,6 +1428,7 @@ def simplicial_set_embedding(
                 good_initialization=isinstance(init, str)
                 and init in ["recursive"]
                 and n_epochs_max >= 400,
+                negative_selection_range=negative_selection_range,
             )
 
     if isinstance(embedding, list):
@@ -3458,7 +3460,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     optimizer="compatibility",
                 )
             else:
-                print("Using new layout with optimizer", self.optimizer)
+                if self.verbose:
+                    print("Using new layout with optimizer", self.optimizer)
                 embedding = optimize_layout_euclidean(
                     embedding,
                     self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217,
@@ -3514,7 +3517,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     optimizer="compatibility",
                 )
             else:
-                print("Using new layout with optimizer", self.optimizer)
+                if self.verbose:
+                    print("Using new layout with optimizer", self.optimizer)
                 embedding = optimize_layout_generic(
                     embedding,
                     self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217
@@ -3538,6 +3542,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     csr_indices=csr_graph.indices,
                     good_initialization=False,
                     move_other=False,
+                    negative_selection_range=self.negative_selection_range,
                 )
 
         return embedding
