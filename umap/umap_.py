@@ -3581,6 +3581,11 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             )
 
         X = check_array(X, dtype=np.float32, order="C")
+        if X.shape[1] != self.embedding_.shape[1]:
+            raise ValueError(
+                "Inverse transform input must have the same number of dimensions "
+                "as the fitted embedding."
+            )
         random_state = check_random_state(self.transform_seed)
         rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
@@ -3588,7 +3593,27 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         deltri = scipy.spatial.Delaunay(
             self.embedding_, incremental=True, qhull_options="QJ"
         )
-        neighbors = deltri.simplices[deltri.find_simplex(X)]
+        simplex_indices = deltri.find_simplex(X)
+        outside_hull = simplex_indices < 0
+        start_vertices = np.empty(X.shape[0], dtype=np.int32)
+        start_vertices[~outside_hull] = deltri.simplices[
+            simplex_indices[~outside_hull], 0
+        ]
+        if np.any(outside_hull):
+            # ``find_simplex`` returns -1 outside the convex hull. Indexing the
+            # simplices array with that value silently selected an unrelated
+            # final simplex. Use the nearest embedded vertex as a deterministic
+            # extrapolation seed instead.
+            embedding = self.embedding_.astype(np.float32, copy=False)
+            for query_index in np.flatnonzero(outside_hull):
+                displacement = embedding - X[query_index]
+                start_vertices[query_index] = np.argmin(
+                    np.sum(displacement * displacement, axis=1)
+                )
+            warn(
+                f"{np.sum(outside_hull)} inverse-transform point(s) lie outside "
+                "the embedding convex hull; using nearest-vertex extrapolation."
+            )
         adjmat = scipy.sparse.lil_matrix(
             (self.embedding_.shape[0], self.embedding_.shape[0]), dtype=int
         )
@@ -3606,8 +3631,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         min_vertices = min(self._raw_data.shape[-1], self._raw_data.shape[0])
 
         neighborhood = [
-            breadth_first_search(adjmat, v[0], min_vertices=min_vertices)
-            for v in neighbors
+            breadth_first_search(adjmat, vertex, min_vertices=min_vertices)
+            for vertex in start_vertices
         ]
         if callable(self.output_metric):
             # need to create another numba.jit-able wrapper for callable

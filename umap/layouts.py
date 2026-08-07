@@ -2990,6 +2990,11 @@ def optimize_layout_inverse(
     sampling edges based on their membership strength (with the (1-p) terms
     coming from negative sampling similar to word2vec).
 
+    This is the dedicated inverse-transform objective: its attraction and
+    repulsion depend on the fitted input-space ``sigmas`` and ``rhos``. It is
+    intentionally kept on its compatibility-style immediate-update optimizer
+    rather than sharing the Euclidean or generic embedding optimizers.
+
     Parameters
     ----------
     head_embedding: array of shape (n_samples, n_components)
@@ -3254,6 +3259,9 @@ def _optimize_layout_aligned_euclidean_single_epoch(
                 )
 
 
+# Experimental modern aligned kernels. They have no production call sites;
+# ``optimize_layout_aligned_euclidean`` deliberately retains the established
+# immediate-update aligned objective until these variants have behavior parity.
 @numba.njit(
     fastmath=True,
     parallel=True,
@@ -3670,6 +3678,12 @@ def optimize_layout_aligned_euclidean(
     tqdm_kwds=None,
     move_other=False,
 ):
+    """Optimize aligned embeddings with the established immediate-update path.
+
+    The modern aligned momentum and Adam epoch kernels above are experimental
+    and intentionally undispatched. In particular, their accumulation and
+    regularization behavior has not established parity with this objective.
+    """
     dim = head_embeddings[0].shape[1]
     alpha = initial_alpha
 
