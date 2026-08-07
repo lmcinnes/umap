@@ -62,7 +62,11 @@ def test_densmap_trustworthiness_momentum(nn_data):
     ), "Insufficiently trustworthy embedding for nn dataset: {}".format(trust)
 
 
-def test_densmap_trustworthiness_compatibility(nn_data):
+@pytest.mark.parametrize(
+    "compatibility_option",
+    [{"compatibility_layout": True}, {"optimizer": "compatibility"}],
+)
+def test_densmap_trustworthiness_compatibility(nn_data, compatibility_option):
     data = nn_data[:50]
     embedding, rad_h, rad_l = UMAP(
         n_neighbors=10,
@@ -71,7 +75,7 @@ def test_densmap_trustworthiness_compatibility(nn_data):
         n_epochs=200,
         densmap=True,
         output_dens=True,
-        compatibility_layout=True,
+        **compatibility_option,
     ).fit_transform(data)
     trust = trustworthiness(data, embedding, n_neighbors=10)
     assert (

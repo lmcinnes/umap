@@ -7,8 +7,10 @@ What's new in 0.6
 -----------------
 
 * Adam is now the default layout optimizer. The former ``standard`` optimizer
-	has been renamed to ``momentum`` (and ``densmap_standard`` to
-	``densmap_momentum``); the old names are no longer accepted.
+  has been renamed to ``momentum``; the old name is no longer accepted.
+  DensMAP is configured independently from the optimizer, and the transitional
+  composite names such as ``densmap_adam`` and ``densmap_momentum`` are not
+  accepted.
 * New "recursive" initialization method that can be significantly faster for many cases, and produce better embeddings.
 * New optimization implementations that allow parallelism while maintaining reproducibility.
 * New ADAM optimizer for longer runs that result in better embeddings.

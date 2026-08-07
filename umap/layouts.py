@@ -6,14 +6,12 @@ import umap.distances as dist
 from umap.utils import adaptive_bucket_sort, tau_rand_int
 
 PUBLIC_OPTIMIZERS = ("adam", "momentum", "compatibility")
-INTERNAL_OPTIMIZERS = PUBLIC_OPTIMIZERS + ("densmap_adam", "densmap_momentum")
 
 
-def validate_optimizer(optimizer, allow_densmap=False):
+def validate_optimizer(optimizer):
     """Validate an optimizer name and return it unchanged."""
-    valid_optimizers = INTERNAL_OPTIMIZERS if allow_densmap else PUBLIC_OPTIMIZERS
-    if optimizer not in valid_optimizers:
-        choices = ", ".join(repr(value) for value in valid_optimizers)
+    if optimizer not in PUBLIC_OPTIMIZERS:
+        choices = ", ".join(repr(value) for value in PUBLIC_OPTIMIZERS)
         raise ValueError(f"Unknown optimizer {optimizer!r}. Must be one of {choices}.")
     return optimizer
 
@@ -199,7 +197,7 @@ def _optimize_layout_euclidean_single_epoch(
 
 
 @numba.njit(
-    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], i4[::1], i4[::1], i8)",
+    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], i4[::1], i4[::1], i4[::1], i8, i8, f8, b1)",
     fastmath=True,
     parallel=True,
     locals={
@@ -231,9 +229,19 @@ def optimize_layout_euclidean_single_epoch_fast(
     updates,
     from_node_order,
     to_node_order,
+    source_ranks,
     block_size=4096,
+    negative_selection_range=200_000,
+    negative_sample_scale=-1.0,
+    exclude_graph_neighbors=False,
 ):
     n_from_vertices = csr_indptr.shape[0] - 1
+    transform_mode = n_from_vertices != n_vertices
+    negative_selection_range = max(200, min(n_vertices, negative_selection_range))
+    if negative_sample_scale < 0.0:
+        negative_sample_scaling = negative_selection_range / n_vertices
+    else:
+        negative_sample_scaling = negative_sample_scale
     for block_start in range(0, n_from_vertices, block_size):
         block_end = min(block_start + block_size, n_from_vertices)
         for node_idx in numba.prange(block_start, block_end):
@@ -262,13 +270,36 @@ def optimize_layout_euclidean_single_epoch_fast(
                     )
 
                     for p in range(n_neg_samples):
-                        to_node = to_node_order[(raw_index * (n + p + 1)) % n_vertices]
+                        to_node_raw_selection = (
+                            raw_index * (n + p + 1)
+                        ) % negative_selection_range
+                        range_start = (
+                            source_ranks[from_node] - negative_selection_range // 2
+                        )
+                        if range_start < 0:
+                            range_start = 0
+                        elif range_start + negative_selection_range > n_vertices:
+                            range_start = n_vertices - negative_selection_range
+                        to_node = to_node_order[range_start + to_node_raw_selection]
+                        if exclude_graph_neighbors:
+                            if not transform_mode and to_node == from_node:
+                                continue
+                            edge_start = csr_indptr[from_node]
+                            edge_end = csr_indptr[from_node + 1]
+                            edge_position = np.searchsorted(
+                                csr_indices[edge_start:edge_end], to_node
+                            )
+                            if (
+                                edge_position < edge_end - edge_start
+                                and csr_indices[edge_start + edge_position] == to_node
+                            ):
+                                continue
                         other = tail_embedding[to_node]
 
                         dist_squared = rdist(current, other)
 
                         if dist_squared > 0.0:
-                            grad_coeff = 2.0 * gamma * b
+                            grad_coeff = negative_sample_scaling * 2.0 * gamma * b
                             grad_coeff /= (0.001 + dist_squared) * (
                                 a * pow(dist_squared, b) + 1
                             )
@@ -463,7 +494,7 @@ def _sample_negative_force_ratio(
 
 
 @numba.njit(
-    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], f4[:, ::1], f4[:, ::1], f8, f8, i4[::1], i4[::1], i8, i8, f8, b1)",
+    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], f4[:, ::1], f4[:, ::1], f8, f8, i4[::1], i4[::1], i4[::1], i8, i8, f8, b1)",
     fastmath=True,
     parallel=True,
     locals={
@@ -499,6 +530,7 @@ def optimize_layout_euclidean_single_epoch_adam(
     beta2,
     from_node_order,
     to_node_order,
+    source_ranks,
     block_size=256,
     negative_selection_range=200_000,
     negative_sample_scale=-1.0,
@@ -547,13 +579,15 @@ def optimize_layout_euclidean_single_epoch_adam(
                             raw_index * (n + p + 1)
                         ) % negative_selection_range
                         range_start = get_range_limits(
-                            node_idx, negative_selection_range, n_vertices
+                            source_ranks[from_node],
+                            negative_selection_range,
+                            n_vertices,
                         )
                         to_node = to_node_order[
                             (range_start + to_node_raw_selection) % n_vertices
                         ]
                         if exclude_graph_neighbors:
-                            if to_node == from_node:
+                            if not transform_mode and to_node == from_node:
                                 continue
                             edge_start = csr_indptr[from_node]
                             edge_end = csr_indptr[from_node + 1]
@@ -589,8 +623,12 @@ def optimize_layout_euclidean_single_epoch_adam(
                         n_neg_samples * epochs_per_negative_sample[raw_index]
                     )
 
-        for node_idx in numba.prange(block_start, block_end):
-            from_node = from_node_order[node_idx]
+        for raw_idx in numba.prange(block_start, block_end):
+            node_idx = from_node_order[raw_idx]
+            if transform_mode:
+                from_node = node_idx
+            else:
+                from_node = to_node_order[node_idx]
             for d in range(dim):
                 if updates[from_node, d] != 0.0:
                     adam_m[from_node, d] = (
@@ -1155,7 +1193,7 @@ def _create_alpha_schedule(optimizer, n_epochs, initial_alpha, good_initializati
     if optimizer == "compatibility":
         return np.linspace(initial_alpha, 0.0, n_epochs, endpoint=False)
 
-    elif optimizer in ["momentum", "densmap_momentum"]:
+    elif optimizer == "momentum":
         if good_initialization:
             n_warm_up_epochs = int(max(200, n_epochs / 8))
             raw_alpha_schedule = np.asarray(
@@ -1175,7 +1213,7 @@ def _create_alpha_schedule(optimizer, n_epochs, initial_alpha, good_initializati
             )
             return raw_alpha_schedule * initial_alpha
 
-    elif optimizer in ["adam", "densmap_adam"]:
+    elif optimizer == "adam":
         if good_initialization:
             n_warm_up_epochs = int(min(100, n_epochs / 8))
         else:
@@ -1231,10 +1269,10 @@ def _create_alpha_schedule(optimizer, n_epochs, initial_alpha, good_initializati
 
 def _create_momentum_schedule(optimizer, n_epochs, good_initialization):
     """Create momentum schedule based on optimizer and initialization quality."""
-    if optimizer in ["adam", "densmap_adam"]:
+    if optimizer == "adam":
         return np.zeros(n_epochs, dtype=np.float32)
 
-    elif optimizer in ["momentum", "densmap_momentum"]:
+    elif optimizer == "momentum":
         if good_initialization:
             n_warm_up_epochs = int(max(200, n_epochs / 8))
             raw_alpha_schedule = np.asarray(
@@ -1262,6 +1300,36 @@ def _create_momentum_schedule(optimizer, n_epochs, good_initialization):
     return np.zeros(n_epochs, dtype=np.float32)
 
 
+def _finalize_update_buffer(updates, optimizer, momentum=0.0):
+    """Apply the optimizer-specific update-buffer lifetime policy."""
+    if optimizer == "momentum":
+        updates *= momentum
+    else:
+        updates[:] = 0.0
+
+
+def _projection_order_and_source_ranks(head_embedding, tail_embedding, random_state):
+    """Order reference vertices by projection and rank each source in it."""
+    dim = head_embedding.shape[1]
+    projection_direction = random_state.randn(dim)
+    projection_direction /= np.linalg.norm(projection_direction)
+    tail_projection = np.dot(tail_embedding, projection_direction)
+    to_node_order = np.argsort(tail_projection).astype(np.int32)
+
+    if head_embedding.shape[0] == tail_embedding.shape[0]:
+        source_ranks = np.empty(head_embedding.shape[0], dtype=np.int32)
+        source_ranks[to_node_order] = np.arange(tail_embedding.shape[0], dtype=np.int32)
+    else:
+        sorted_projection = tail_projection[to_node_order]
+        source_ranks = np.searchsorted(
+            sorted_projection,
+            np.dot(head_embedding, projection_direction),
+        ).astype(np.int32)
+        source_ranks = np.minimum(source_ranks, tail_embedding.shape[0] - 1)
+
+    return to_node_order, source_ranks
+
+
 def _create_adam_schedules(
     optimizer,
     n_epochs,
@@ -1271,7 +1339,7 @@ def _create_adam_schedules(
     negative_selection_range,
 ):
     """Create beta1, beta2, and gamma schedules for Adam optimizer."""
-    if optimizer not in ["adam", "densmap_adam", "momentum"]:
+    if optimizer not in ["adam", "momentum"]:
         return None, None, None, None
 
     if good_initialization:
@@ -1376,6 +1444,100 @@ def _create_adam_schedules(
     )
 
 
+def _initialize_euclidean_compatibility(
+    head_embedding, rng_state, densmap, densmap_kwds, n_vertices
+):
+    rng_state_per_sample = np.full(
+        (head_embedding.shape[0], len(rng_state)), rng_state, dtype=np.int64
+    ) + head_embedding[:, 0].astype(np.float64).view(np.int64).reshape(-1, 1)
+
+    if densmap:
+        dens_init_fn = _optimize_layout_euclidean_densmap_epoch_init_coo
+        dens_mu_tot = np.sum(densmap_kwds["mu_sum"]) / 2
+        dens_lambda = densmap_kwds["lambda"]
+        dens_R = densmap_kwds["R"]
+        dens_mu = densmap_kwds["mu"]
+        dens_phi_sum = np.zeros(n_vertices, dtype=np.float32)
+        dens_re_sum = np.zeros(n_vertices, dtype=np.float32)
+        dens_var_shift = densmap_kwds["var_shift"]
+    else:
+        dens_init_fn = None
+        dens_mu_tot = 0
+        dens_lambda = 0
+        dens_R = np.zeros(1, dtype=np.float32)
+        dens_mu = np.zeros(1, dtype=np.float32)
+        dens_phi_sum = np.zeros(1, dtype=np.float32)
+        dens_re_sum = np.zeros(1, dtype=np.float32)
+        dens_var_shift = 0.0
+
+    return {
+        "optimize_fn": _get_optimize_layout_euclidean_single_epoch_fn(parallel=True),
+        "rng_state_per_sample": rng_state_per_sample,
+        "dens_init_fn": dens_init_fn,
+        "dens_mu_tot": dens_mu_tot,
+        "dens_lambda": dens_lambda,
+        "dens_R": dens_R,
+        "dens_mu": dens_mu,
+        "dens_phi_sum": dens_phi_sum,
+        "dens_re_sum": dens_re_sum,
+        "dens_var_shift": dens_var_shift,
+    }
+
+
+def _run_euclidean_compatibility_epoch(
+    state,
+    head_embedding,
+    tail_embedding,
+    head,
+    tail,
+    n_vertices,
+    epochs_per_sample,
+    a,
+    b,
+    gamma,
+    dim,
+    move_other,
+    alpha,
+    epochs_per_negative_sample,
+    epoch_of_next_negative_sample,
+    epoch_of_next_sample,
+    n,
+    densmap_flag,
+    dens_re_cov,
+    dens_re_std,
+    dens_re_mean,
+):
+    state["optimize_fn"](
+        head_embedding,
+        tail_embedding,
+        head,
+        tail,
+        n_vertices,
+        epochs_per_sample,
+        a,
+        b,
+        state["rng_state_per_sample"],
+        gamma,
+        dim,
+        move_other,
+        alpha,
+        epochs_per_negative_sample,
+        epoch_of_next_negative_sample,
+        epoch_of_next_sample,
+        n,
+        densmap_flag,
+        state["dens_phi_sum"],
+        state["dens_re_sum"],
+        dens_re_cov,
+        dens_re_std,
+        dens_re_mean,
+        state["dens_lambda"],
+        state["dens_R"],
+        state["dens_mu"],
+        state["dens_mu_tot"],
+    )
+
+
 def optimize_layout_euclidean(
     head_embedding,
     tail_embedding,
@@ -1405,6 +1567,7 @@ def optimize_layout_euclidean(
     negative_sample_scale=None,
     exclude_graph_neighbors=False,
     negative_sample_scale_adaptation_samples=128,
+    densmap=False,
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
     fuzzy set cross entropy between the 1-skeletons of the high dimensional
@@ -1469,7 +1632,7 @@ def optimize_layout_euclidean(
         CSR data array for the graph of 1-simplices.
     optimizer: str (optional, default "adam")
         The optimizer to use for the optimization. Can be one of "momentum", "adam",
-        "compatibility", "densmap_adam" or "densmap_momentum".
+        or "compatibility". DensMAP is selected independently with ``densmap``.
     good_initialization: bool (optional, default False)
         Whether the initial embedding is already a good representation of the data.
         If True, the optimization will use a different learning rate schedules etc.
@@ -1477,19 +1640,24 @@ def optimize_layout_euclidean(
     random_state: np.random.RandomState, optional (default None)
         A random number generator instance to use for reproducibility. If None, the global numpy random state is used.
     negative_sample_scale: float, optional (default None)
-        Explicit multiplier for repulsive negative-sample gradients in the Adam
-        optimizer. If None, use ``negative_selection_range / n_vertices``.
+        Explicit multiplier for repulsive negative-sample gradients in the
+        large-input Adam and momentum kernels. If None, use the configured
+        range correction.
         This is primarily useful for diagnosing the range correction separately
         from the locality of negative selection.
     exclude_graph_neighbors: bool, optional (default False)
         If True, do not apply negative updates to the source vertex itself or
-        to vertices joined to it by an attractive fuzzy-graph edge. This is a
-        diagnostic for false negatives in localized candidate windows.
+        to vertices joined to it by an attractive fuzzy-graph edge in the
+        large-input kernels. This protects against false negatives in localized
+        candidate windows.
     negative_sample_scale_adaptation_samples: int, optional (default 128)
         When hard-negative mining is active (``negative_selection_range <
         n_vertices``), adapt the negative scale every ten epochs through the
         first half of optimization using a sampled, anchored, bounded
         global/local resultant-force ratio. Set to 0 to disable adaptation.
+    densmap: bool, optional (default False)
+        Whether to include the DensMAP objective terms. This is independent of
+        the selected optimizer.
     Returns
     -------
     embedding: array of shape (n_samples, n_components)
@@ -1511,7 +1679,7 @@ def optimize_layout_euclidean(
         negative_force_ratio_anchor = -1.0
         adaptation_random_state = np.random.RandomState(42)
 
-    validate_optimizer(optimizer, allow_densmap=True)
+    validate_optimizer(optimizer)
 
     if optimizer != "compatibility" and (csr_indptr is None or csr_indices is None):
         raise ValueError(
@@ -1527,6 +1695,7 @@ def optimize_layout_euclidean(
         to_node_order = np.arange(tail_embedding.shape[0], dtype=np.int32)
     else:
         to_node_order = node_order
+    source_ranks = np.arange(head_embedding.shape[0], dtype=np.int32)
     block_size = 4096
 
     epochs_list = None
@@ -1566,35 +1735,19 @@ def optimize_layout_euclidean(
 
     # Initialize optimizer-specific variables
     if optimizer == "compatibility":
-        rng_state_per_sample = np.full(
-            (head_embedding.shape[0], len(rng_state)), rng_state, dtype=np.int64
-        ) + head_embedding[:, 0].astype(np.float64).view(np.int64).reshape(-1, 1)
+        compatibility_state = _initialize_euclidean_compatibility(
+            head_embedding, rng_state, densmap, densmap_kwds, n_vertices
+        )
+        dens_init_fn = compatibility_state["dens_init_fn"]
+        dens_mu_tot = compatibility_state["dens_mu_tot"]
+        dens_lambda = compatibility_state["dens_lambda"]
+        dens_R = compatibility_state["dens_R"]
+        dens_mu = compatibility_state["dens_mu"]
+        dens_phi_sum = compatibility_state["dens_phi_sum"]
+        dens_re_sum = compatibility_state["dens_re_sum"]
+        dens_var_shift = compatibility_state["dens_var_shift"]
 
-        # DensMAP setup for compatibility mode
-        if densmap_kwds is not None and "mu_sum" in densmap_kwds:
-            dens_init_fn = _optimize_layout_euclidean_densmap_epoch_init_coo
-            dens_mu_tot = np.sum(densmap_kwds["mu_sum"]) / 2
-            dens_lambda = densmap_kwds["lambda"]
-            dens_R = densmap_kwds["R"]
-            dens_mu = densmap_kwds["mu"]
-            dens_phi_sum = np.zeros(n_vertices, dtype=np.float32)
-            dens_re_sum = np.zeros(n_vertices, dtype=np.float32)
-            dens_var_shift = densmap_kwds["var_shift"]
-            densmap = True
-        else:
-            dens_init_fn = None
-            dens_mu_tot = 0
-            dens_lambda = 0
-            dens_R = np.zeros(1, dtype=np.float32)
-            dens_mu = np.zeros(1, dtype=np.float32)
-            dens_phi_sum = np.zeros(1, dtype=np.float32)
-            dens_re_sum = np.zeros(1, dtype=np.float32)
-            dens_var_shift = 0.0
-            densmap = False
-
-        optimize_fn = _get_optimize_layout_euclidean_single_epoch_fn(parallel=True)
-
-    elif optimizer.startswith("densmap"):
+    elif densmap:
         # DensMAP setup
         dens_init_fn = _optimize_layout_euclidean_densmap_epoch_init_csr
         dens_mu_tot = np.sum(densmap_kwds["mu_sum"]) / 2
@@ -1606,7 +1759,7 @@ def optimize_layout_euclidean(
         dens_var_shift = densmap_kwds["var_shift"]
         densmap = True
 
-        if optimizer.endswith("_adam"):
+        if optimizer == "adam":
             adam_m = np.zeros_like(updates)
             adam_v = np.zeros_like(updates)
 
@@ -1623,6 +1776,16 @@ def optimize_layout_euclidean(
 
     if "disable" not in tqdm_kwds:
         tqdm_kwds["disable"] = not verbose
+
+    if (
+        not densmap
+        and head_embedding.shape[0] > 1024
+        and optimizer in ("adam", "momentum")
+        and negative_selection_range < n_vertices
+    ):
+        to_node_order, source_ranks = _projection_order_and_source_ranks(
+            head_embedding, tail_embedding, random_state
+        )
 
     for n in tqdm(range(n_epochs), **tqdm_kwds):
         if (
@@ -1664,7 +1827,77 @@ def optimize_layout_euclidean(
             dens_re_cov = 0
             densmap_flag = False
 
-        if optimizer == "momentum":
+        if densmap and optimizer == "momentum":
+            optimize_layout_euclidean_single_epoch_fast_densmap(
+                head_embedding,
+                tail_embedding,
+                csr_indptr,
+                csr_indices,
+                n_vertices,
+                epochs_per_sample,
+                a,
+                b,
+                gamma,
+                dim,
+                alpha_schedule[n],
+                epochs_per_negative_sample,
+                epoch_of_next_negative_sample,
+                epoch_of_next_sample,
+                n,
+                dens_phi_sum,
+                dens_re_sum,
+                dens_re_cov,
+                dens_re_std,
+                dens_re_mean,
+                dens_lambda,
+                dens_R,
+                dens_mu,
+                dens_mu_tot,
+                updates,
+                node_order,
+                block_size,
+                densmap_flag=densmap_flag,
+            )
+            _finalize_update_buffer(updates, "momentum", momentum_schedule[n])
+            random_state.shuffle(node_order)
+        elif densmap and optimizer == "adam":
+            optimize_layout_euclidean_single_epoch_adam_densmap(
+                head_embedding,
+                tail_embedding,
+                csr_indptr,
+                csr_indices,
+                n_vertices,
+                epochs_per_sample,
+                a,
+                b,
+                gamma_schedule[n],
+                dim,
+                alpha_schedule[n],
+                epochs_per_negative_sample,
+                epoch_of_next_negative_sample,
+                epoch_of_next_sample,
+                n,
+                dens_phi_sum,
+                dens_re_sum,
+                dens_re_cov,
+                dens_re_std,
+                dens_re_mean,
+                dens_lambda,
+                dens_R,
+                dens_mu,
+                dens_mu_tot,
+                updates,
+                adam_m,
+                adam_v,
+                beta1_schedule[n],
+                beta2_schedule[n],
+                node_order,
+                block_size=block_size,
+                densmap_flag=densmap_flag,
+            )
+            _finalize_update_buffer(updates, "adam")
+            random_state.shuffle(node_order)
+        elif optimizer == "momentum":
             if head_embedding.shape[0] <= 1024:
                 optimize_small_layout_euclidean_single_epoch_fast(
                     head_embedding,
@@ -1707,15 +1940,29 @@ def optimize_layout_euclidean(
                     updates,
                     node_order,
                     to_node_order,
+                    source_ranks,
                     block_size=n_vertices // 2,  # block_size,
+                    negative_selection_range=negative_selection_range_schedule[n],
+                    negative_sample_scale=resolved_negative_sample_scale,
+                    exclude_graph_neighbors=exclude_graph_neighbors,
                 )
-            updates *= momentum_schedule[n]
+            _finalize_update_buffer(updates, "momentum", momentum_schedule[n])
             random_state.shuffle(node_order)
             if tail_embedding.shape[0] != head_embedding.shape[0]:
-                random_state.shuffle(to_node_order)
+                if negative_selection_range_schedule[n] < n_vertices:
+                    to_node_order, source_ranks = _projection_order_and_source_ranks(
+                        head_embedding, tail_embedding, random_state
+                    )
+                else:
+                    random_state.shuffle(to_node_order)
+            elif negative_selection_range_schedule[n] < n_vertices:
+                to_node_order, source_ranks = _projection_order_and_source_ranks(
+                    head_embedding, tail_embedding, random_state
+                )
         elif optimizer == "adam":
             if (
                 negative_sample_scale_adaptation_samples > 0
+                and head_embedding.shape[0] == tail_embedding.shape[0]
                 and negative_selection_range_schedule[n] < n_vertices
                 and 10 <= n <= n_epochs // 2
                 and n % 10 == 0
@@ -1801,92 +2048,23 @@ def optimize_layout_euclidean(
                     beta2_schedule[n],
                     node_order,
                     to_node_order,
+                    source_ranks,
                     block_size=n_vertices,
                     negative_selection_range=negative_selection_range_schedule[n],
                     negative_sample_scale=resolved_negative_sample_scale,
                     exclude_graph_neighbors=exclude_graph_neighbors,
                 )
-            updates[:] = 0.0
+            _finalize_update_buffer(updates, "adam")
             random_state.shuffle(node_order)
             if negative_selection_range_schedule[n] < n_vertices:
-                projection_direction = random_state.randn(dim)
-                projection_direction /= np.linalg.norm(projection_direction)
-                projection = np.dot(head_embedding, projection_direction)
-                to_node_order = np.argsort(projection).astype(np.int32)
+                to_node_order, source_ranks = _projection_order_and_source_ranks(
+                    head_embedding, tail_embedding, random_state
+                )
             else:
                 random_state.shuffle(to_node_order)
-        elif optimizer == "densmap_momentum":
-            optimize_layout_euclidean_single_epoch_fast_densmap(
-                head_embedding,
-                tail_embedding,
-                csr_indptr,
-                csr_indices,
-                n_vertices,
-                epochs_per_sample,
-                a,
-                b,
-                gamma,
-                dim,
-                alpha_schedule[n],
-                epochs_per_negative_sample,
-                epoch_of_next_negative_sample,
-                epoch_of_next_sample,
-                n,
-                dens_phi_sum,
-                dens_re_sum,
-                dens_re_cov,
-                dens_re_std,
-                dens_re_mean,
-                dens_lambda,
-                dens_R,
-                dens_mu,
-                dens_mu_tot,
-                updates,
-                node_order,
-                block_size,
-                densmap_flag=densmap_flag,
-            )
-            updates *= momentum_schedule[n]
-            random_state.shuffle(node_order)
-        elif optimizer == "densmap_adam":
-            optimize_layout_euclidean_single_epoch_adam_densmap(
-                head_embedding,
-                tail_embedding,
-                csr_indptr,
-                csr_indices,
-                n_vertices,
-                epochs_per_sample,
-                a,
-                b,
-                gamma_schedule[n],
-                dim,
-                alpha_schedule[n],
-                epochs_per_negative_sample,
-                epoch_of_next_negative_sample,
-                epoch_of_next_sample,
-                n,
-                dens_phi_sum,
-                dens_re_sum,
-                dens_re_cov,
-                dens_re_std,
-                dens_re_mean,
-                dens_lambda,
-                dens_R,
-                dens_mu,
-                dens_mu_tot,
-                updates,
-                adam_m,
-                adam_v,
-                beta1_schedule[n],
-                beta2_schedule[n],
-                node_order,
-                block_size=block_size,
-                densmap_flag=densmap_flag,
-            )
-            updates[:] = 0.0
-            random_state.shuffle(node_order)
         elif optimizer == "compatibility":
-            optimize_fn(
+            _run_euclidean_compatibility_epoch(
+                compatibility_state,
                 head_embedding,
                 tail_embedding,
                 head,
@@ -1895,7 +2073,6 @@ def optimize_layout_euclidean(
                 epochs_per_sample,
                 a,
                 b,
-                rng_state_per_sample,
                 gamma,
                 dim,
                 move_other,
@@ -1905,15 +2082,9 @@ def optimize_layout_euclidean(
                 epoch_of_next_sample,
                 n,
                 densmap_flag,
-                dens_phi_sum,
-                dens_re_sum,
                 dens_re_cov,
                 dens_re_std,
                 dens_re_mean,
-                dens_lambda,
-                dens_R,
-                dens_mu,
-                dens_mu_tot,
             )
 
         if epochs_list is not None and n in epochs_list:
@@ -2237,6 +2408,62 @@ def _optimize_layout_generic_single_epoch_adam(
     return epoch_of_next_sample, epoch_of_next_negative_sample
 
 
+def _initialize_generic_compatibility(head_embedding, rng_state):
+    optimize_fn = numba.njit(
+        _optimize_layout_generic_single_epoch,
+        fastmath=True,
+    )
+    rng_state_per_sample = np.full(
+        (head_embedding.shape[0], len(rng_state)), rng_state, dtype=np.int64
+    ) + head_embedding[:, 0].astype(np.float64).view(np.int64).reshape(-1, 1)
+    return optimize_fn, rng_state_per_sample
+
+
+def _run_generic_compatibility_epoch(
+    optimize_fn,
+    rng_state_per_sample,
+    epochs_per_sample,
+    epoch_of_next_sample,
+    head,
+    tail,
+    head_embedding,
+    tail_embedding,
+    output_metric,
+    output_metric_kwds,
+    dim,
+    alpha,
+    move_other,
+    n,
+    epoch_of_next_negative_sample,
+    epochs_per_negative_sample,
+    n_vertices,
+    a,
+    b,
+    gamma,
+):
+    optimize_fn(
+        epochs_per_sample,
+        epoch_of_next_sample,
+        head,
+        tail,
+        head_embedding,
+        tail_embedding,
+        output_metric,
+        output_metric_kwds,
+        dim,
+        alpha,
+        move_other,
+        n,
+        epoch_of_next_negative_sample,
+        epochs_per_negative_sample,
+        rng_state_per_sample,
+        n_vertices,
+        a,
+        b,
+        gamma,
+    )
+
+
 def optimize_layout_generic(
     head_embedding,
     tail_embedding,
@@ -2401,14 +2628,9 @@ def optimize_layout_generic(
 
     # Initialize optimizer-specific variables
     if optimizer == "compatibility":
-        optimize_fn = numba.njit(
-            _optimize_layout_generic_single_epoch,
-            fastmath=True,
+        optimize_fn, rng_state_per_sample = _initialize_generic_compatibility(
+            head_embedding, rng_state
         )
-
-        rng_state_per_sample = np.full(
-            (head_embedding.shape[0], len(rng_state)), rng_state, dtype=np.int64
-        ) + head_embedding[:, 0].astype(np.float64).view(np.int64).reshape(-1, 1)
 
     elif optimizer == "adam":
         adam_m = np.zeros_like(updates)
@@ -2428,7 +2650,9 @@ def optimize_layout_generic(
 
     for n in tqdm(range(n_epochs), **tqdm_kwds):
         if optimizer == "compatibility":
-            optimize_fn(
+            _run_generic_compatibility_epoch(
+                optimize_fn,
+                rng_state_per_sample,
                 epochs_per_sample,
                 epoch_of_next_sample,
                 head,
@@ -2443,7 +2667,6 @@ def optimize_layout_generic(
                 n,
                 epoch_of_next_negative_sample,
                 epochs_per_negative_sample,
-                rng_state_per_sample,
                 n_vertices,
                 a,
                 b,
@@ -2472,7 +2695,7 @@ def optimize_layout_generic(
                 node_order,
                 block_size=block_size,
             )
-            updates *= momentum_schedule[n]
+            _finalize_update_buffer(updates, "momentum", momentum_schedule[n])
             random_state.shuffle(node_order)
         elif optimizer == "adam":
             _optimize_layout_generic_single_epoch_adam(
@@ -2501,7 +2724,7 @@ def optimize_layout_generic(
                 node_order,
                 block_size=block_size,
             )
-            updates[:] = 0.0
+            _finalize_update_buffer(updates, "adam")
             random_state.shuffle(node_order)
         else:
             validate_optimizer(optimizer)

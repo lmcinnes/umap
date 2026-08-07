@@ -1334,11 +1334,11 @@ def simplicial_set_embedding(
                 tqdm_kwds=tqdm_kwds,
                 move_other=True,
                 optimizer="compatibility",
+                densmap=densmap,
             )
         else:
             if verbose:
                 print(ts() + " Using new optimization code")
-            optimizer = f"densmap_{optimizer}" if densmap else optimizer
             # csr_matrix = graph.tocsr()
             embedding = optimize_layout_euclidean(
                 embedding,
@@ -1369,10 +1369,11 @@ def simplicial_set_embedding(
                 negative_sample_scale=negative_sample_scale,
                 exclude_graph_neighbors=exclude_graph_neighbors,
                 negative_sample_scale_adaptation_samples=negative_sample_scale_adaptation_samples,
+                densmap=densmap,
             )
 
     else:
-        if compatibility_layout:
+        if compatibility_layout or optimizer == "compatibility":
             coo_graph = graph.tocoo()
             head = coo_graph.row
             tail = coo_graph.col
@@ -3436,7 +3437,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         # )
 
         if self.output_metric == "euclidean":
-            if self.compatibility_layout:
+            if self.compatibility_layout or self.optimizer == "compatibility":
                 embedding = optimize_layout_euclidean(
                     embedding,
                     self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217,
@@ -3457,10 +3458,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     optimizer="compatibility",
                 )
             else:
-                optimizer = (
-                    f"densmap_{self.optimizer}" if self.densmap else self.optimizer
-                )
-                print("Using new layout with optimizer", optimizer)
+                print("Using new layout with optimizer", self.optimizer)
                 embedding = optimize_layout_euclidean(
                     embedding,
                     self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217,
@@ -3478,16 +3476,23 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     parallel=self.random_state is None,
                     verbose=self.verbose,
                     tqdm_kwds=self.tqdm_kwds,
-                    optimizer=optimizer,
+                    optimizer=self.optimizer,
                     csr_indptr=csr_graph.indptr,
                     csr_indices=csr_graph.indices,
                     csr_data=csr_graph.data,
                     good_initialization=False,
                     move_other=False,
                     densmap_kwds=self._densmap_kwds if self.densmap else None,
+                    densmap=self.densmap,
+                    negative_selection_range=self.negative_selection_range,
+                    negative_sample_scale=self.negative_sample_scale,
+                    exclude_graph_neighbors=self.exclude_graph_neighbors,
+                    negative_sample_scale_adaptation_samples=(
+                        self.negative_sample_scale_adaptation_samples
+                    ),
                 )
         else:
-            if self.compatibility_layout:
+            if self.compatibility_layout or self.optimizer == "compatibility":
                 embedding = optimize_layout_generic(
                     embedding,
                     self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217
@@ -3506,12 +3511,10 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     tuple(self._output_metric_kwds.values()),
                     verbose=self.verbose,
                     tqdm_kwds=self.tqdm_kwds,
+                    optimizer="compatibility",
                 )
             else:
-                optimizer = (
-                    f"densmap_{self.optimizer}" if self.densmap else self.optimizer
-                )
-                print("Using new layout with optimizer", optimizer)
+                print("Using new layout with optimizer", self.optimizer)
                 embedding = optimize_layout_generic(
                     embedding,
                     self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217
@@ -3530,12 +3533,11 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     tuple(self._output_metric_kwds.values()),
                     verbose=self.verbose,
                     tqdm_kwds=self.tqdm_kwds,
-                    optimizer=optimizer,
+                    optimizer=self.optimizer,
                     csr_indptr=csr_graph.indptr,
                     csr_indices=csr_graph.indices,
                     good_initialization=False,
                     move_other=False,
-                    densmap_kwds=self._densmap_kwds if self.densmap else None,
                 )
 
         return embedding

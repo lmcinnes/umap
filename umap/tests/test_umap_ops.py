@@ -63,8 +63,39 @@ def test_blobs_cluster_momentum():
     assert adjusted_rand_score(labels, KMeans(5).fit_predict(embedding)) == 1.0
 
 
-@pytest.mark.parametrize("optimizer", ["standard", "densmap_standard"])
-def test_removed_standard_optimizer_names_are_rejected(optimizer):
+@pytest.mark.parametrize("optimizer", ["momentum", "adam"])
+def test_modern_hard_negatives_fit_and_transform(optimizer):
+    data, _ = make_blobs(
+        n_samples=1050,
+        n_features=6,
+        centers=5,
+        random_state=42,
+    )
+    model = UMAP(
+        n_neighbors=10,
+        n_epochs=15,
+        init="random",
+        optimizer=optimizer,
+        negative_selection_range=250,
+        negative_sample_scale=0.25,
+        negative_sample_scale_adaptation_samples=0,
+        exclude_graph_neighbors=True,
+        random_state=42,
+    ).fit(data)
+
+    transformed = model.transform(data[:31] + 0.01)
+
+    assert model.embedding_.shape == (1050, 2)
+    assert transformed.shape == (31, 2)
+    assert np.isfinite(model.embedding_).all()
+    assert np.isfinite(transformed).all()
+
+
+@pytest.mark.parametrize(
+    "optimizer",
+    ["standard", "densmap_standard", "densmap_adam", "densmap_momentum"],
+)
+def test_removed_optimizer_names_are_rejected(optimizer):
     data, _ = make_blobs(n_samples=30, n_features=4, random_state=42)
     with pytest.raises(ValueError, match="Unknown optimizer"):
         UMAP(optimizer=optimizer).fit(data)
@@ -92,6 +123,30 @@ def test_blobs_cluster_compatibility_optimizer():
     data, labels = make_blobs(n_samples=500, n_features=10, centers=5)
     embedding = UMAP(n_epochs=100, optimizer="compatibility").fit_transform(data)
     assert adjusted_rand_score(labels, KMeans(5).fit_predict(embedding)) == 1.0
+
+
+@pytest.mark.parametrize("output_metric", ["euclidean", "haversine"])
+@pytest.mark.parametrize(
+    "compatibility_option",
+    [{"compatibility_layout": True}, {"optimizer": "compatibility"}],
+)
+def test_compatibility_fit_and_transform_dispatch(
+    iris, output_metric, compatibility_option
+):
+    common_parameters = {
+        "n_neighbors": 10,
+        "n_epochs": 30,
+        "init": "spectral",
+        "output_metric": output_metric,
+        "random_state": 42,
+    }
+    model = UMAP(
+        **common_parameters,
+        **compatibility_option,
+    ).fit(iris.data)
+
+    assert np.isfinite(model.embedding_).all()
+    assert np.isfinite(model.transform(iris.data[:10])).all()
 
 
 # Multi-components Layout

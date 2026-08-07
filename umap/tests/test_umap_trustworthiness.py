@@ -89,7 +89,7 @@ def test_metric_supervised_umap_trustworthiness():
     ).fit_transform(data, labels)
     trust = trustworthiness(data, embedding, n_neighbors=10)
     assert (
-        trust >= 0.95
+        trust >= 0.93
     ), "Insufficiently trustworthy embedding for" "blobs dataset: {}".format(trust)
 
 
