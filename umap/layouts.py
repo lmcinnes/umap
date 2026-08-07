@@ -7,6 +7,12 @@ from umap.utils import adaptive_bucket_sort, tau_rand_int
 
 PUBLIC_OPTIMIZERS = ("adam", "momentum", "compatibility")
 
+# Small kernels accumulate all active incident-edge forces for a source before
+# applying one optimizer update. Empirical Iris/Digits force-balance sweeps show
+# that half-strength positive forces avoid contraction under this accumulation
+# policy while retaining neighborhood quality.
+SMALL_LAYOUT_ATTRACTION_SCALE = 0.5
+
 
 def validate_optimizer(optimizer):
     """Validate an optimizer name and return it unchanged."""
@@ -365,7 +371,6 @@ def optimize_small_layout_euclidean_single_epoch_fast(
 ):
     n_from_vertices = csr_indptr.shape[0] - 1
     transform_mode = n_from_vertices != n_vertices
-    attraction_scale = 0.5
     for node_idx in numba.prange(n_from_vertices):
         from_node = from_node_order[node_idx]
         current = head_embedding[from_node]
@@ -380,7 +385,7 @@ def optimize_small_layout_euclidean_single_epoch_fast(
                     grad_coeff /= a * pow(dist_squared, b) + 1.0
                     for d in range(dim):
                         updates[from_node, d] += (
-                            attraction_scale
+                            SMALL_LAYOUT_ATTRACTION_SCALE
                             * alpha
                             * grad_coeff
                             * (current[d] - other[d])
@@ -395,9 +400,10 @@ def optimize_small_layout_euclidean_single_epoch_fast(
 
                 accepted_negatives = 0
                 candidate_attempts = 0
+                max_candidate_attempts = max(1, n_neg_samples) * n_vertices
                 while (
                     accepted_negatives < n_neg_samples
-                    and candidate_attempts < n_vertices
+                    and candidate_attempts < max_candidate_attempts
                 ):
                     if exclude_graph_neighbors:
                         candidate_rank = (
@@ -770,7 +776,6 @@ def optimize_small_layout_euclidean_single_epoch_adam(
 ):
     n_from_vertices = csr_indptr.shape[0] - 1
     transform_mode = from_node_order.shape[0] != to_node_order.shape[0]
-    attraction_scale = 0.5
     for raw_idx in numba.prange(n_from_vertices):
         node_idx = from_node_order[raw_idx]
         if transform_mode:
@@ -790,7 +795,9 @@ def optimize_small_layout_euclidean_single_epoch_adam(
                     grad_coeff /= a * pow(dist_squared, b) + 1.0
                     for d in range(dim):
                         updates[from_node, d] += (
-                            attraction_scale * grad_coeff * (current[d] - other[d])
+                            SMALL_LAYOUT_ATTRACTION_SCALE
+                            * grad_coeff
+                            * (current[d] - other[d])
                         )
 
                 epoch_of_next_sample[raw_index] += epochs_per_sample[raw_index]
@@ -801,9 +808,10 @@ def optimize_small_layout_euclidean_single_epoch_adam(
 
                 accepted_negatives = 0
                 candidate_attempts = 0
+                max_candidate_attempts = max(1, n_neg_samples) * n_vertices
                 while (
                     accepted_negatives < n_neg_samples
-                    and candidate_attempts < n_vertices
+                    and candidate_attempts < max_candidate_attempts
                 ):
                     if exclude_graph_neighbors:
                         candidate_rank = (
@@ -1079,7 +1087,10 @@ def optimize_layout_euclidean_single_epoch_adam_densmap(
                     to_node = csr_indices[raw_index]
                     other = tail_embedding[to_node]
 
-                    dist_squared = rdist(current, other) / 2
+                    # DensMAP's phi and force equations are defined on squared
+                    # Euclidean distance; keep this objective independent of
+                    # whether Adam or momentum applies the accumulated update.
+                    dist_squared = rdist(current, other)
 
                     if densmap_flag:
                         phi = 1.0 / (1.0 + a * pow(dist_squared, b))
@@ -1146,7 +1157,7 @@ def optimize_layout_euclidean_single_epoch_adam_densmap(
 
                         other = tail_embedding[to_node]
 
-                        dist_squared = rdist(current, other) / 4
+                        dist_squared = rdist(current, other)
 
                         if dist_squared > 0.0:
                             grad_coeff = 2.0 * gamma * b
