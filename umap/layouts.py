@@ -1196,8 +1196,8 @@ def optimize_layout_euclidean_single_epoch_adam_densmap(
                         beta2 * adam_v[from_node, d]
                         + (1.0 - beta2) * updates[from_node, d] ** 2
                     )
-                    m_est = adam_m[from_node, d] / (1.0 - pow(beta1, n))
-                    v_est = adam_v[from_node, d] / (1.0 - pow(beta2, n))
+                    m_est = adam_m[from_node, d] / (1.0 - pow(beta1, n + 1))
+                    v_est = adam_v[from_node, d] / (1.0 - pow(beta2, n + 1))
                     head_embedding[from_node, d] += (
                         alpha * m_est / (np.sqrt(v_est) + 1e-4)
                     )

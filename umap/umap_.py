@@ -1293,7 +1293,12 @@ def simplicial_set_embedding(
 
         if densmap:
             R = (ro - np.mean(ro)) / np.std(ro)
-            densmap_kwds["mu"] = coo_graph.data
+            if compatibility_layout or optimizer == "compatibility":
+                densmap_kwds["mu"] = coo_graph.data
+            else:
+                # Modern kernels traverse the CSR graph directly, so the
+                # membership weights must use the identical entry ordering.
+                densmap_kwds["mu"] = graph.data
             densmap_kwds["mu_sum"] = mu_sum
             densmap_kwds["R"] = R
 
