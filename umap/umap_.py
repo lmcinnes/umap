@@ -1338,8 +1338,7 @@ def simplicial_set_embedding(
             )
         else:
             if verbose:
-                print(ts() + " Using new optimization code")
-            # csr_matrix = graph.tocsr()
+                print(ts() + f" Using {optimizer} layout optimizer")
             embedding = optimize_layout_euclidean(
                 embedding,
                 embedding,
@@ -1400,8 +1399,7 @@ def simplicial_set_embedding(
             )
         else:
             if verbose:
-                print(ts() + " Using new optimization code")
-            # csr_matrix = graph.tocsr()
+                print(ts() + f" Using {optimizer} layout optimizer")
             embedding = optimize_layout_generic(
                 embedding,
                 embedding,
@@ -3427,7 +3425,16 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
         graph.eliminate_zeros()
 
-        epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs)
+        # Modern optimizers traverse CSR entries and require one schedule value
+        # per entry. Rebuild after pruning so the CSR graph cannot retain edges
+        # that no longer exist in ``graph.data``.
+        csr_graph = graph.tocsr()
+        csr_graph.eliminate_zeros()
+        csr_graph.sort_indices()
+        if self.compatibility_layout or self.optimizer == "compatibility":
+            epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs)
+        else:
+            epochs_per_sample = make_epochs_per_sample(csr_graph.data, n_epochs)
 
         head = graph.row
         tail = graph.col
@@ -3461,7 +3468,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 )
             else:
                 if self.verbose:
-                    print("Using new layout with optimizer", self.optimizer)
+                    print("Using layout optimizer", self.optimizer)
                 embedding = optimize_layout_euclidean(
                     embedding,
                     self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217,
@@ -3518,7 +3525,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 )
             else:
                 if self.verbose:
-                    print("Using new layout with optimizer", self.optimizer)
+                    print("Using layout optimizer", self.optimizer)
                 embedding = optimize_layout_generic(
                     embedding,
                     self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217

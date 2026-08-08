@@ -14,6 +14,15 @@ GENERIC_NEGATIVE_SEARCH_MAX_CANDIDATES = 4
 # policy while retaining neighborhood quality.
 SMALL_LAYOUT_ATTRACTION_SCALE = 0.5
 
+# Modern-kernel contract:
+# * Attractive gradients point toward the reference; repulsive gradients point
+#   away from it. Both are accumulated as additions to the source embedding.
+# * Momentum kernels multiply by alpha while accumulating and retain a decayed
+#   update buffer. Adam kernels accumulate raw gradients, apply alpha after
+#   moment normalization, and use n + 1 because epochs are zero-indexed.
+# * CSR schedule arrays share the CSR data/indices ordering. Graph-neighbor
+#   exclusion additionally requires each CSR row's indices to be sorted.
+
 
 def validate_optimizer(optimizer):
     """Validate an optimizer name and return it unchanged."""
@@ -217,7 +226,7 @@ def _optimize_layout_euclidean_single_epoch(
         "grad_d": numba.types.float32,
     },
 )
-def optimize_layout_euclidean_single_epoch_fast(
+def optimize_layout_euclidean_single_epoch_momentum(
     head_embedding,
     tail_embedding,
     csr_indptr,
@@ -348,7 +357,7 @@ def optimize_layout_euclidean_single_epoch_fast(
         "grad_d": numba.types.float32,
     },
 )
-def optimize_small_layout_euclidean_single_epoch_fast(
+def optimize_small_layout_euclidean_single_epoch_momentum(
     head_embedding,
     tail_embedding,
     csr_indptr,
@@ -898,7 +907,7 @@ def optimize_small_layout_euclidean_single_epoch_adam(
         "drj": numba.types.float32,
     },
 )
-def optimize_layout_euclidean_single_epoch_fast_densmap(
+def optimize_layout_euclidean_single_epoch_momentum_densmap(
     head_embedding,
     tail_embedding,
     csr_indptr,
@@ -1371,7 +1380,12 @@ def _create_momentum_schedule(optimizer, n_epochs, good_initialization):
 
 
 def _finalize_update_buffer(updates, optimizer, momentum=0.0):
-    """Apply the optimizer-specific update-buffer lifetime policy."""
+    """Apply the optimizer-specific update-buffer lifetime policy.
+
+    Momentum retains a decayed fraction of the accumulated, alpha-scaled
+    update for the next epoch. Adam stores history in its moment arrays, so its
+    raw gradient buffer is cleared after each epoch.
+    """
     if optimizer == "momentum":
         updates *= momentum
     else:
@@ -1379,7 +1393,12 @@ def _finalize_update_buffer(updates, optimizer, momentum=0.0):
 
 
 def _projection_order_and_source_ranks(head_embedding, tail_embedding, random_state):
-    """Order reference vertices by projection and rank each source in it."""
+    """Order references by a random projection and locate every source rank.
+
+    Symmetric fits share source and reference indices. Asymmetric transforms
+    instead insert each source projection into the sorted reference projection,
+    so hard-negative windows are always indexed in the reference embedding.
+    """
     dim = head_embedding.shape[1]
     projection_direction = random_state.randn(dim)
     projection_direction /= np.linalg.norm(projection_direction)
@@ -1413,105 +1432,16 @@ def _generic_negative_search_candidates(
 def _create_adam_schedules(
     optimizer,
     n_epochs,
-    good_initialization,
     gamma,
-    n_vertices,
     negative_selection_range,
 ):
-    """Create beta1, beta2, and gamma schedules for Adam optimizer."""
+    """Create the constant modern optimizer and negative-range schedules."""
     if optimizer not in ["adam", "momentum"]:
         return None, None, None, None
 
-    if good_initialization:
-        n_warm_up_epochs = int(min(100, n_epochs / 4))
-    else:
-        n_warm_up_epochs = int(min(n_epochs // 2, 100))  # Use n_epochs/2 but cap at 100
-
-    # beta1_schedule = np.concatenate(
-    #     [
-    #         [
-    #             0.2 + (0.7 * (float(n) / float(n_warm_up_epochs)))
-    #             for n in range(n_warm_up_epochs)
-    #         ],
-    #         np.full(n_epochs - n_warm_up_epochs, 0.9),
-    #     ]
-    # )
     beta1_schedule = np.full(n_epochs, 0.9, dtype=np.float32)
-
-    # beta2_schedule = np.concatenate(
-    #     [
-    #         [
-    #             0.79 + (0.2 * ((float(n) / float(n_warm_up_epochs))))
-    #             for n in range(n_warm_up_epochs)
-    #         ],
-    #         np.full(n_epochs - n_warm_up_epochs, 0.99),
-    #     ]
-    # )
     beta2_schedule = np.full(n_epochs, 0.99, dtype=np.float32)
-
-    if good_initialization:
-        # gamma_schedule = (
-        #     np.concatenate(
-        #         [
-        #             [
-        #                 1.5 * np.sqrt(float(n) / float(n_warm_up_epochs))
-        #                 for n in range(n_warm_up_epochs)
-        #             ],
-        #             [
-        #                 0.5
-        #                 * (
-        #                     1.0
-        #                     - (
-        #                         float(n - n_warm_up_epochs)
-        #                         / float(n_epochs - n_warm_up_epochs)
-        #                     )
-        #                 )
-        #                 + 1.0
-        #                 for n in range(n_warm_up_epochs, n_epochs)
-        #             ],
-        #         ]
-        #     )
-        #     * gamma
-        #     * max(np.sqrt(n_epochs / 100.0), 1.0)
-        # )
-        # gamma_schedule = np.full(
-        #     n_epochs, gamma * max(np.sqrt(n_epochs / 100.0), 1.0), dtype=np.float32
-        # )
-        gamma_schedule = np.full(n_epochs, gamma, dtype=np.float32)
-    else:
-        # gamma_schedule = (
-        #     np.concatenate(
-        #         [
-        #             [
-        #                 3.0 * np.sqrt(float(n) / float(n_warm_up_epochs))
-        #                 for n in range(n_warm_up_epochs)
-        #             ],
-        #             [
-        #                 1.0
-        #                 * (
-        #                     1.0
-        #                     - float(n - n_warm_up_epochs)
-        #                     / float(n_epochs - n_warm_up_epochs)
-        #                 )
-        #                 + 2.0
-        #                 for n in range(n_warm_up_epochs, n_epochs)
-        #             ],
-        #         ]
-        #     )
-        #     * gamma
-        #     * max(np.sqrt(n_epochs / 100.0), 1.0)
-        # )
-        # gamma_schedule = np.full(
-        #     n_epochs, gamma * max(np.sqrt(n_epochs / 100.0), 1.0), dtype=np.float32
-        # )
-        gamma_schedule = np.full(n_epochs, gamma, dtype=np.float32)
-
-    # negative_selection_range_schedule = np.linspace(
-    #     n_vertices,
-    #     negative_selection_range,
-    #     n_epochs,
-    #     dtype=np.int32,
-    # )
+    gamma_schedule = np.full(n_epochs, gamma, dtype=np.float32)
     negative_selection_range_schedule = np.full(
         n_epochs, negative_selection_range, dtype=np.int32
     )
@@ -1704,10 +1634,11 @@ def optimize_layout_euclidean(
         Whether to adjust tail_embedding alongside head_embedding
     csr_indptr: array of int (optional, default None)
         CSR indptr array for the graph of 1-simplices.
-        If provided, the optimization will use a faster version
-        of the optimization code that does not require the head and tail arrays.
+        Modern optimizers traverse this CSR graph directly instead of using
+        separate COO head and tail arrays.
     csr_indices: array of int (optional, default None)
-        CSR indices array for the graph of 1-simplices.
+        CSR indices array for the graph of 1-simplices. Rows must be sorted when
+        ``exclude_graph_neighbors`` is enabled.
     csr_data: array of float (optional, default None)
         CSR data array for the graph of 1-simplices.
     optimizer: str (optional, default "adam")
@@ -1801,12 +1732,10 @@ def optimize_layout_euclidean(
     ) = _create_adam_schedules(
         optimizer,
         n_epochs,
-        good_initialization,
         gamma,
-        n_vertices,
         negative_selection_range,
     )
-    b_schedule = np.full(n_epochs, b)  # np.linspace(1.0, b, n_epochs)
+    b_schedule = np.full(n_epochs, b)
 
     # Adjust negative sampling rates for non-compatibility optimizers
     if optimizer != "compatibility":
@@ -1908,7 +1837,7 @@ def optimize_layout_euclidean(
             densmap_flag = False
 
         if densmap and optimizer == "momentum":
-            optimize_layout_euclidean_single_epoch_fast_densmap(
+            optimize_layout_euclidean_single_epoch_momentum_densmap(
                 head_embedding,
                 tail_embedding,
                 csr_indptr,
@@ -1979,7 +1908,7 @@ def optimize_layout_euclidean(
             random_state.shuffle(node_order)
         elif optimizer == "momentum":
             if head_embedding.shape[0] <= 1024:
-                optimize_small_layout_euclidean_single_epoch_fast(
+                optimize_small_layout_euclidean_single_epoch_momentum(
                     head_embedding,
                     tail_embedding,
                     csr_indptr,
@@ -2002,7 +1931,7 @@ def optimize_layout_euclidean(
                     exclude_graph_neighbors=exclude_graph_neighbors,
                 )
             else:
-                optimize_layout_euclidean_single_epoch_fast(
+                optimize_layout_euclidean_single_epoch_momentum(
                     head_embedding,
                     tail_embedding,
                     csr_indptr,
@@ -2022,7 +1951,7 @@ def optimize_layout_euclidean(
                     node_order,
                     to_node_order,
                     source_ranks,
-                    block_size=n_vertices // 2,  # block_size,
+                    block_size=n_vertices // 2,
                     negative_selection_range=negative_selection_range_schedule[n],
                     negative_sample_scale=resolved_negative_sample_scale,
                     exclude_graph_neighbors=exclude_graph_neighbors,
@@ -2283,7 +2212,7 @@ def _optimize_layout_generic_single_epoch(
         "updates": numba.types.float32[:, ::1],
     },
 )
-def _optimize_layout_generic_single_epoch_fast(
+def _optimize_layout_generic_single_epoch_momentum(
     epochs_per_sample,
     epoch_of_next_sample,
     csr_indptr,
@@ -2323,8 +2252,6 @@ def _optimize_layout_generic_single_epoch_fast(
                     dist_output, grad_dist_output = output_metric(
                         current, other, *output_metric_kwds
                     )
-                    # _, rev_grad_dist_output = output_metric(other, current, *output_metric_kwds)
-
                     if dist_output > 0.0:
                         w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
                         grad_coeff = 2 * b * (w_l - 1) / (dist_output + 1e-6)
@@ -2332,9 +2259,6 @@ def _optimize_layout_generic_single_epoch_fast(
                         for d in range(dim):
                             grad_d = clip(grad_coeff * grad_dist_output[d])
                             updates[from_node, d] += grad_d * alpha
-                            # if move_other:
-                            #     grad_d = clip(grad_coeff * rev_grad_dist_output[d])
-                            #     other[d] += grad_d * alpha
 
                     epoch_of_next_sample[raw_index] += epochs_per_sample[raw_index]
 
@@ -2454,8 +2378,6 @@ def _optimize_layout_generic_single_epoch_adam(
                     dist_output, grad_dist_output = output_metric(
                         current, other, *output_metric_kwds
                     )
-                    # _, rev_grad_dist_output = output_metric(other, current, *output_metric_kwds)
-
                     if dist_output > 0.0:
                         w_l = pow((1 + a * pow(dist_output, 2 * b)), -1)
                         grad_coeff = 2 * b * (w_l - 1) / (dist_output + 1e-6)
@@ -2463,9 +2385,6 @@ def _optimize_layout_generic_single_epoch_adam(
                         for d in range(dim):
                             grad_d = clip(grad_coeff * grad_dist_output[d])
                             updates[from_node, d] += grad_d
-                            # if move_other:
-                            #     grad_d = clip(grad_coeff * rev_grad_dist_output[d])
-                            #     other[d] += grad_d * alpha
 
                     epoch_of_next_sample[raw_index] += epochs_per_sample[raw_index]
 
@@ -2680,8 +2599,8 @@ def optimize_layout_generic(
 
     csr_indptr: array of int (optional, default None)
         CSR indptr array for the graph of 1-simplices.
-        If provided, the optimization will use a faster version
-        of the optimization code that does not require the head and tail arrays.
+        Modern optimizers traverse this CSR graph directly instead of using
+        separate COO head and tail arrays.
 
     csr_indices: array of int (optional, default None)
         CSR indices array for the graph of 1-simplices.
@@ -2764,9 +2683,7 @@ def optimize_layout_generic(
     beta1_schedule, beta2_schedule, gamma_schedule, _ = _create_adam_schedules(
         optimizer,
         n_epochs,
-        good_initialization,
         gamma,
-        n_vertices,
         negative_selection_range=n_vertices,
     )
 
@@ -2816,7 +2733,7 @@ def optimize_layout_generic(
                 gamma,
             )
         elif optimizer == "momentum":
-            _optimize_layout_generic_single_epoch_fast(
+            _optimize_layout_generic_single_epoch_momentum(
                 epochs_per_sample,
                 epoch_of_next_sample,
                 csr_indptr,
@@ -3284,7 +3201,7 @@ def _optimize_layout_aligned_euclidean_single_epoch(
         "embedding_idx": numba.types.intp,
     },
 )
-def optimize_layout_aligned_euclidean_single_epoch_fast(
+def _optimize_layout_aligned_euclidean_single_epoch_momentum_experimental(
     head_embeddings,
     tail_embeddings,
     csr_indptrs,
@@ -3352,7 +3269,7 @@ def optimize_layout_aligned_euclidean_single_epoch_fast(
                                     neighbor_m = m + offset
                                     if n_embeddings > neighbor_m >= 0 != offset:
                                         identified_index = relations[
-                                            m, offset + window_size, j
+                                            m, offset + window_size, from_node
                                         ]
                                         if identified_index >= 0:
                                             grad_d -= (
@@ -3361,7 +3278,9 @@ def optimize_layout_aligned_euclidean_single_epoch_fast(
                                                     * np.exp(-(np.abs(offset) - 1))
                                                 )
                                                 * regularisation_weights[
-                                                    m, offset + window_size, j
+                                                    m,
+                                                    offset + window_size,
+                                                    from_node,
                                                 ]
                                                 * (
                                                     current[d]
@@ -3408,7 +3327,7 @@ def optimize_layout_aligned_euclidean_single_epoch_fast(
                                         neighbor_m = m + offset
                                         if n_embeddings > neighbor_m >= 0 != offset:
                                             identified_index = relations[
-                                                m, offset + window_size, j
+                                                m, offset + window_size, from_node
                                             ]
                                             if identified_index >= 0:
                                                 grad_d -= (
@@ -3417,7 +3336,9 @@ def optimize_layout_aligned_euclidean_single_epoch_fast(
                                                         * np.exp(-(np.abs(offset) - 1))
                                                     )
                                                     * regularisation_weights[
-                                                        m, offset + window_size, j
+                                                        m,
+                                                        offset + window_size,
+                                                        from_node,
                                                     ]
                                                     * (
                                                         current[d]
@@ -3466,7 +3387,7 @@ def optimize_layout_aligned_euclidean_single_epoch_fast(
         "v_est": numba.types.float32,
     },
 )
-def optimize_layout_aligned_euclidean_single_epoch_adam(
+def _optimize_layout_aligned_euclidean_single_epoch_adam_experimental(
     head_embeddings,
     tail_embeddings,
     heads,
@@ -3555,30 +3476,27 @@ def optimize_layout_aligned_euclidean_single_epoch_adam(
 
                         updates[m][j, d] += grad_d
 
-                        if True:  # move_other equivalent - always true for adam version
-                            other_grad_d = grad_coeff * (other[d] - current[d])
+                        other_grad_d = grad_coeff * (other[d] - current[d])
 
-                            for offset in range(-window_size, window_size):
-                                neighbor_m = m + offset
-                                if n_embeddings > neighbor_m >= 0 != offset:
-                                    identified_index = relations[
-                                        m, offset + window_size, k
-                                    ]
-                                    if identified_index >= 0:
-                                        other_grad_d -= (
-                                            (lambda_ * np.exp(-(np.abs(offset) - 1)))
-                                            * regularisation_weights[
-                                                m, offset + window_size, k
+                        for offset in range(-window_size, window_size):
+                            neighbor_m = m + offset
+                            if n_embeddings > neighbor_m >= 0 != offset:
+                                identified_index = relations[m, offset + window_size, k]
+                                if identified_index >= 0:
+                                    other_grad_d -= (
+                                        (lambda_ * np.exp(-(np.abs(offset) - 1)))
+                                        * regularisation_weights[
+                                            m, offset + window_size, k
+                                        ]
+                                        * (
+                                            other[d]
+                                            - head_embeddings[neighbor_m][
+                                                identified_index, d
                                             ]
-                                            * (
-                                                other[d]
-                                                - head_embeddings[neighbor_m][
-                                                    identified_index, d
-                                                ]
-                                            )
                                         )
+                                    )
 
-                            updates[m][k, d] += other_grad_d
+                        updates[m][k, d] += other_grad_d
 
                     epoch_of_next_sample[m][i] += epochs_per_sample[m][i]
 
