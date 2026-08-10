@@ -97,6 +97,22 @@ def test_umap_bad_init(nn_data):
         u.fit(nn_data)
 
 
+@pytest.mark.parametrize("ratio", [1, 5, 3.0, "3", True])
+def test_umap_bad_recursive_coarsening_ratio(nn_data, ratio):
+    u = UMAP(recursive_coarsening_ratio=ratio)
+    with pytest.raises(
+        ValueError, match="recursive_coarsening_ratio must be one of 2, 3, or 4"
+    ):
+        u.fit(nn_data)
+
+
+@pytest.mark.parametrize("ratio", [2, 3, 4, np.int64(3)])
+def test_umap_accepts_recursive_coarsening_ratio(ratio):
+    u = UMAP(recursive_coarsening_ratio=ratio)
+
+    assert u.get_params()["recursive_coarsening_ratio"] == ratio
+
+
 def test_umap_bad_numeric_init(nn_data):
     u = UMAP(init=42)
     with pytest.raises(ValueError):

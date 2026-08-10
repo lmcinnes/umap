@@ -1,16 +1,220 @@
 import numpy as np
 import numba
-
 from scipy.sparse import csr_matrix, issparse
 from sklearn.preprocessing import normalize
 from sklearn.utils.extmath import randomized_svd
 
 from umap.layouts import optimize_layout_euclidean
 from umap.utils import tau_rand, tau_rand_int, ts
-from umap.spectral import spectral_layout
 
 INT32_MIN = np.iinfo(np.int32).min + 1
 INT32_MAX = np.iinfo(np.int32).max - 1
+
+
+def _coarsen_graph(graph, labels, remove_diagonal=False):
+    """Construct the partition map and fuzzy-union coarse graph."""
+    reduction_map = csr_matrix(
+        (np.ones(labels.shape[0]), labels, np.arange(labels.shape[0] + 1)),
+        shape=(labels.shape[0], labels.max() + 1),
+    )
+    complement_graph = graph.astype(np.float64)
+    complement_graph.data = np.log1p(-np.clip(complement_graph.data, 0.0, 1.0 - 1e-16))
+    reduced_graph = reduction_map.T * complement_graph * reduction_map
+    reduced_graph.data = 1.0 - np.exp(reduced_graph.data)
+    reduced_graph.eliminate_zeros()
+    if remove_diagonal:
+        reduced_graph.setdiag(0.0)
+        reduced_graph.eliminate_zeros()
+    return reduction_map, reduced_graph.astype(np.float32)
+
+
+def _initial_curve_parameters(a, b, curve_schedule):
+    """Select the curve parameters used by the first coarse layout."""
+    spec = _curve_schedule_spec(curve_schedule)
+    return (
+        np.power(a, spec["initial_a_exponent"]),
+        np.power(b, spec["initial_b_exponent"]),
+    )
+
+
+def _next_curve_parameters(a, b, curve_schedule):
+    """Select curve parameters for the next recursive coarse layout."""
+    spec = _curve_schedule_spec(curve_schedule)
+    return (
+        np.power(a, spec["recursive_a_exponent"]),
+        np.power(b, spec["recursive_b_exponent"]),
+    )
+
+
+def _curve_schedule_spec(curve_schedule):
+    """Normalize legacy and experiment curve schedules into exponent specs."""
+    if isinstance(curve_schedule, dict):
+        return {
+            "initial_a_exponent": float(curve_schedule.get("initial_a_exponent", 1.0)),
+            "initial_b_exponent": float(curve_schedule.get("initial_b_exponent", 1.0)),
+            "recursive_a_exponent": float(
+                curve_schedule.get("recursive_a_exponent", 1.0)
+            ),
+            "recursive_b_exponent": float(
+                curve_schedule.get("recursive_b_exponent", 1.0)
+            ),
+        }
+
+    if curve_schedule == "original":
+        return {
+            "initial_a_exponent": 1.0,
+            "initial_b_exponent": 1.0,
+            "recursive_a_exponent": 1.0,
+            "recursive_b_exponent": 1.0,
+        }
+    if curve_schedule == "strong_to_one":
+        return {
+            "initial_a_exponent": 1.0 / 4.0,
+            "initial_b_exponent": 1.0 / 4.0,
+            "recursive_a_exponent": 1.0 / 4.0,
+            "recursive_b_exponent": 1.0 / 4.0,
+        }
+    raise ValueError(
+        "curve_schedule must be 'strong_to_one', 'original', or an exponent spec dict"
+    )
+
+
+def _good_initialization(
+    reduced_init, approx_n_parts, threshold, policy, coarsening_ratio=4
+):
+    """Resolve whether the conservative optimizer schedule should be used.
+
+    Policies
+    --------
+    heuristic : activate when the coarse graph has enough parts to recurse further.
+    available : activate whenever the recursive coordinates are finite with nonzero spread.
+    always    : unconditionally activate; ignores coordinate quality entirely.
+    """
+    if policy == "heuristic":
+        return approx_n_parts // coarsening_ratio > threshold
+    if policy == "available":
+        if reduced_init is None or not np.all(np.isfinite(reduced_init)):
+            return False
+        spread = np.quantile(reduced_init, 0.95, axis=0) - np.quantile(
+            reduced_init, 0.05, axis=0
+        )
+        return bool(np.all(spread > 0.0))
+    if policy == "always":
+        return True
+    if policy == "never":
+        return False
+    raise ValueError(
+        "good_initialization_policy must be 'heuristic', 'available', 'always', or 'never'"
+    )
+
+
+def _scale_anchor(anchor):
+    """Scale an anchor independently by axis into the historical [0, 10] range."""
+    anchor = np.asarray(anchor, dtype=np.float32, order="C").copy()
+    anchor -= anchor.min(axis=0)
+    span = anchor.max(axis=0) - anchor.min(axis=0)
+    span[span == 0.0] = 1.0
+    anchor /= span
+    anchor *= 10.0
+    return anchor
+
+
+def _resolve_negative_selection_range(n_vertices, mode, scale=1.0):
+    """Resolve the recursive negative-selection range for coarse optimizations."""
+    if mode == "coarse_n":
+        return int(n_vertices)
+    if mode == "fixed_200k":
+        return int(200_000)
+    if mode == "scaled_coarse":
+        value = int(np.round(scale * n_vertices))
+        value = max(1, value)
+        return int(min(value, n_vertices))
+    raise ValueError(
+        "recursive_negative_selection_range_mode must be 'coarse_n', 'fixed_200k', or 'scaled_coarse'"
+    )
+
+
+def _resolve_depth_schedule(value, depth):
+    """Resolve a scalar or per-depth mapping for recursive experiment controls."""
+    if isinstance(value, dict):
+        if depth in value:
+            return value[depth]
+        depth_key = str(depth)
+        if depth_key in value:
+            return value[depth_key]
+        if "default" in value:
+            return value["default"]
+        raise ValueError(
+            "depth schedule dict must contain the requested depth or 'default'"
+        )
+    return value
+
+
+def _anchor_reference(
+    graph,
+    data,
+    n_components,
+    method,
+    sample_size,
+    random_state,
+    verbose=False,
+):
+    """Build coordinates and a mask used to orient recursive layouts."""
+    n_samples = data.shape[0]
+    if method not in ("sampled_pca", "projected_pca", "full_pca"):
+        raise ValueError(
+            "anchor_method must be 'sampled_pca', 'projected_pca', or 'full_pca'"
+        )
+
+    sample_size = min(sample_size, n_samples)
+    if sample_size < n_samples:
+        sample = np.sort(
+            random_state.choice(n_samples, size=sample_size, replace=False)
+        )
+        sample_mask = np.zeros(n_samples, dtype=np.bool_)
+        sample_mask[sample] = True
+        data_sample = data[sample]
+    else:
+        sample_mask = np.ones(n_samples, dtype=np.bool_)
+        data_sample = data
+
+    if issparse(data_sample):
+        feature_mean = np.asarray(data_sample.mean(axis=0)).ravel()
+        centered_sample = data_sample.toarray() - feature_mean
+    else:
+        data_sample = np.asarray(data_sample)
+        finite = np.isfinite(data_sample)
+        finite_counts = finite.sum(axis=0)
+        finite_sums = np.where(finite, data_sample, 0.0).sum(axis=0)
+        feature_mean = np.divide(
+            finite_sums,
+            finite_counts,
+            out=np.zeros_like(finite_sums, dtype=np.float64),
+            where=finite_counts > 0,
+        )
+        centered_sample = np.where(finite, data_sample, feature_mean) - feature_mean
+
+    u, singular_values, components = randomized_svd(
+        centered_sample,
+        n_components=n_components,
+        n_iter=1,
+        n_oversamples=8,
+        random_state=random_state,
+    )
+    if method == "sampled_pca":
+        return _scale_anchor(u * singular_values), sample_mask
+
+    if issparse(data):
+        anchor = np.asarray(data @ components.T)
+    else:
+        projection_data = np.asarray(data)
+        if not np.all(np.isfinite(projection_data)):
+            projection_data = np.where(
+                np.isfinite(projection_data), projection_data, feature_mean
+            )
+        anchor = projection_data @ components.T
+    anchor -= feature_mean @ components.T
+    return _scale_anchor(anchor), np.ones(n_samples, dtype=np.bool_)
 
 
 def make_epochs_per_sample(weights, n_epochs):
@@ -151,6 +355,36 @@ def initialize_labels_from_hubs(labels, n_parts, degrees):
     return labels
 
 
+@numba.njit(cache=True)
+def initialize_labels_from_diverse_hubs(labels, n_parts, degrees, indptr, indices):
+    """Choose high-degree hubs while avoiding adjacent hubs when possible."""
+    candidates = np.argsort(degrees)
+    blocked = np.zeros(labels.shape[0], dtype=np.bool_)
+    selected = np.zeros(labels.shape[0], dtype=np.bool_)
+    next_label = 0
+
+    for candidate_index in range(candidates.shape[0] - 1, -1, -1):
+        candidate = candidates[candidate_index]
+        if not blocked[candidate]:
+            labels[candidate] = next_label
+            selected[candidate] = True
+            blocked[candidate] = True
+            for edge in range(indptr[candidate], indptr[candidate + 1]):
+                blocked[indices[edge]] = True
+            next_label += 1
+            if next_label == n_parts:
+                return labels
+
+    for candidate_index in range(candidates.shape[0] - 1, -1, -1):
+        candidate = candidates[candidate_index]
+        if not selected[candidate]:
+            labels[candidate] = next_label
+            next_label += 1
+            if next_label == n_parts:
+                break
+    return labels
+
+
 def label_propagation_init(
     graph,
     data,
@@ -162,28 +396,42 @@ def label_propagation_init(
     approx_n_parts=None,
     n_components=2,
     scaling=1.0,
-    random_scale=1.0,
     random_state=None,
     recursive_init=True,
     base_init_threshold=1024,
     depth=1,
     verbose=False,
+    root_membership=None,
+    recursive_parallel=True,
+    curve_schedule="strong_to_one",
+    good_initialization_policy="heuristic",
+    coarsening_ratio=4,
+    hub_selection="degree",
+    remove_coarse_diagonal=False,
+    recursive_repulsion_strength=4.0,
+    recursive_negative_sample_rate=1,
+    recursive_negative_selection_range_mode="scaled_coarse",
+    recursive_negative_selection_range_scale=0.5,
 ):
+    if root_membership is None:
+        root_membership = np.arange(graph.shape[0], dtype=np.int64)
+
     if graph.shape[0] <= base_init_threshold:
         result = data
         # Recenter
-        scale = (
-            np.log10(result.shape[0]) * 3 * (np.log2(depth + 1))
-        )  # Added log2(gamma) to scale with repulsion strength
+        scale = np.log10(result.shape[0]) * 3 * (np.log2(depth + 1))
         result -= np.mean(result, 0)
         spread = np.quantile(result, 0.95, 0) - np.quantile(result, 0.05, 0)
         spread[spread == 0.0] = 1.0
         result *= scale / spread
 
-        return result.astype(np.float32)
+        result = result.astype(np.float32)
+        return result
 
     if approx_n_parts is None:
-        approx_n_parts = max(base_init_threshold, int(graph.shape[0] // 4))
+        approx_n_parts = max(
+            base_init_threshold, int(graph.shape[0] // coarsening_ratio)
+        )
 
     # Ensure we have fewer parts than samples
     approx_n_parts = min(approx_n_parts, graph.shape[0] // 2)
@@ -200,9 +448,15 @@ def label_propagation_init(
     # Initialize the label propagation process
     rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
     labels = np.full(graph.shape[0], -1, dtype=np.int32)
-    labels = initialize_labels_from_hubs(
-        labels, approx_n_parts, np.squeeze(np.asarray(graph.sum(axis=1)))
-    )
+    degrees = np.squeeze(np.asarray(graph.sum(axis=1)))
+    if hub_selection == "degree":
+        labels = initialize_labels_from_hubs(labels, approx_n_parts, degrees)
+    elif hub_selection == "diverse":
+        labels = initialize_labels_from_diverse_hubs(
+            labels, approx_n_parts, degrees, graph.indptr, graph.indices
+        )
+    else:
+        raise ValueError("hub_selection must be 'degree' or 'diverse'")
 
     prev_unlabeled = np.sum(labels < 0)
     for i in range(n_iter):
@@ -229,16 +483,10 @@ def label_propagation_init(
     # Remap labels to a contiguous range
     labels = remap_labels(labels)
 
-    base_reduction_map = csr_matrix(
-        (np.ones(labels.shape[0]), labels, np.arange(labels.shape[0] + 1)),
-        shape=(labels.shape[0], labels.max() + 1),
+    base_reduction_map, reduced_graph = _coarsen_graph(
+        graph, labels, remove_diagonal=remove_coarse_diagonal
     )
-    complement_graph = graph.astype(np.float64)
-    complement_graph.data = np.log1p(-np.clip(complement_graph.data, 0.0, 1.0 - 1e-16))
-    reduced_graph = base_reduction_map.T * complement_graph * base_reduction_map
-    reduced_graph.data = 1.0 - np.exp(reduced_graph.data)
-    reduced_graph.eliminate_zeros()
-    reduced_graph = reduced_graph.astype(np.float32)
+    reduced_root_membership = labels[root_membership]
 
     if not np.all(subset_mask):
         subset_reduction_map = normalize(
@@ -250,30 +498,64 @@ def label_propagation_init(
         reduced_data = (l1_normalized_reduction_map.T * data).astype(np.float32)
 
     if recursive_init:
+        next_a, next_b = _next_curve_parameters(a, b, curve_schedule)
         reduced_init = label_propagation_init(
             reduced_graph,
             reduced_data,
             np.ones(reduced_graph.shape[0], dtype=np.bool_),
-            np.cbrt(a),
-            np.cbrt(b),
+            next_a,
+            next_b,
             n_iter=n_iter,
-            approx_n_parts=approx_n_parts // 4,
+            approx_n_parts=approx_n_parts // coarsening_ratio,
             n_embedding_epochs=int(n_embedding_epochs * np.pow(2, 0.25)),
             n_components=n_components,
             scaling=scaling,
-            random_scale=random_scale,
             random_state=random_state,
             recursive_init=True,
             base_init_threshold=base_init_threshold,
             depth=depth + 1,
             verbose=verbose,
+            root_membership=reduced_root_membership,
+            recursive_parallel=recursive_parallel,
+            curve_schedule=curve_schedule,
+            good_initialization_policy=good_initialization_policy,
+            coarsening_ratio=coarsening_ratio,
+            hub_selection=hub_selection,
+            remove_coarse_diagonal=remove_coarse_diagonal,
+            recursive_repulsion_strength=recursive_repulsion_strength,
+            recursive_negative_sample_rate=recursive_negative_sample_rate,
+            recursive_negative_selection_range_mode=recursive_negative_selection_range_mode,
+            recursive_negative_selection_range_scale=recursive_negative_selection_range_scale,
         ).astype(np.float32)
-        good_initialization = approx_n_parts // 4 > base_init_threshold
+        good_initialization = _good_initialization(
+            reduced_init,
+            approx_n_parts,
+            base_init_threshold,
+            good_initialization_policy,
+            coarsening_ratio,
+        )
     else:
         reduced_init = None
         good_initialization = False
 
     epochs_per_sample = make_epochs_per_sample(reduced_graph.data, n_embedding_epochs)
+    resolved_repulsion_strength = float(
+        _resolve_depth_schedule(recursive_repulsion_strength, depth)
+    )
+    resolved_negative_sample_rate = int(
+        _resolve_depth_schedule(recursive_negative_sample_rate, depth)
+    )
+    resolved_negative_selection_range_mode = _resolve_depth_schedule(
+        recursive_negative_selection_range_mode, depth
+    )
+    resolved_negative_selection_range_scale = float(
+        _resolve_depth_schedule(recursive_negative_selection_range_scale, depth)
+    )
+    negative_selection_range = _resolve_negative_selection_range(
+        reduced_init.shape[0],
+        resolved_negative_selection_range_mode,
+        resolved_negative_selection_range_scale,
+    )
     reduced_layout = optimize_layout_euclidean(
         reduced_init,
         reduced_init,
@@ -285,10 +567,10 @@ def label_propagation_init(
         a,
         b,
         rng_state,
-        2.0,  # 1.5,
+        resolved_repulsion_strength,
         0.5,
-        1,
-        parallel=True,
+        resolved_negative_sample_rate,
+        parallel=recursive_parallel,
         verbose=verbose,
         densmap_kwds={},
         tqdm_kwds={"desc": f"Init recursion depth {depth}", "position": 1},
@@ -299,7 +581,7 @@ def label_propagation_init(
         random_state=random_state,
         optimizer="adam",
         good_initialization=good_initialization,
-        negative_selection_range=reduced_init.shape[0],
+        negative_selection_range=negative_selection_range,
     )
 
     data_expander = normalize(graph @ base_reduction_map, norm="l1")
@@ -328,62 +610,57 @@ def recursive_init(
     approx_n_parts=None,
     random_state=None,
     verbose=False,
+    recursive_parallel=True,
+    pca_random_state=None,
+    curve_schedule="strong_to_one",
+    good_initialization_policy="heuristic",
+    coarsening_ratio=4,
+    hub_selection="degree",
+    remove_coarse_diagonal=False,
+    anchor_method="sampled_pca",
+    anchor_sample_size=16384,
+    recursive_repulsion_strength=4.0,
+    recursive_negative_sample_rate=1,
+    recursive_negative_selection_range_mode="scaled_coarse",
+    recursive_negative_selection_range_scale=0.5,
 ):
     if random_state is None:
         random_state = np.random.RandomState()
+    if pca_random_state is None:
+        pca_random_state = random_state
 
-    n = data.shape[0]
-    sample_size = min(16384, n)
-
-    if sample_size < n:
-        sample = np.sort(random_state.choice(n, size=sample_size, replace=False))
-        pca_sample_mask = np.zeros(n, dtype=np.bool_)
-        pca_sample_mask[sample] = True
-        data_sample = data[sample]
-    else:
-        pca_sample_mask = np.ones(n, dtype=np.bool_)
-        data_sample = data
-
-    if not issparse(data_sample) and not np.all(np.isfinite(data_sample)):
-        data_sample = np.asarray(data_sample).copy()
-        finite = np.isfinite(data_sample)
-        finite_counts = finite.sum(axis=0)
-        finite_sums = np.where(finite, data_sample, 0.0).sum(axis=0)
-        fill_values = np.divide(
-            finite_sums,
-            finite_counts,
-            out=np.zeros_like(finite_sums, dtype=np.float64),
-            where=finite_counts > 0,
-        )
-        data_sample = np.where(finite, data_sample, fill_values)
-
-    X = data_sample - data_sample.mean(axis=0)
-    U, S, _ = randomized_svd(
-        X,
-        n_components=n_components,
-        n_iter=1,
-        n_oversamples=8,
-        random_state=random_state,
+    anchor, anchor_mask = _anchor_reference(
+        graph,
+        data,
+        n_components,
+        anchor_method,
+        anchor_sample_size,
+        pca_random_state,
+        verbose,
     )
-
-    pca = (U * S).astype(np.float32, order="C")
-
-    pca -= pca.min(axis=0)
-    pca_span = pca.max(axis=0) - pca.min(axis=0)
-    pca_span[pca_span == 0.0] = 1.0
-    pca /= pca_span
-    pca *= 10.0
+    initial_a, initial_b = _initial_curve_parameters(a, b, curve_schedule)
     init = label_propagation_init(
         graph,
-        pca,
-        pca_sample_mask,
-        a=np.cbrt(a),
-        b=np.cbrt(b),
+        anchor,
+        anchor_mask,
+        a=initial_a,
+        b=initial_b,
         n_components=n_components,
         base_init_threshold=base_init_threshold,
         n_embedding_epochs=n_embedding_epochs,
         approx_n_parts=approx_n_parts,
         random_state=random_state,
         verbose=verbose,
+        root_membership=np.arange(graph.shape[0], dtype=np.int64),
+        recursive_parallel=recursive_parallel,
+        curve_schedule=curve_schedule,
+        good_initialization_policy=good_initialization_policy,
+        coarsening_ratio=coarsening_ratio,
+        hub_selection=hub_selection,
+        remove_coarse_diagonal=remove_coarse_diagonal,
+        recursive_repulsion_strength=recursive_repulsion_strength,
+        recursive_negative_sample_rate=recursive_negative_sample_rate,
+        recursive_negative_selection_range_mode=recursive_negative_selection_range_mode,
+        recursive_negative_selection_range_scale=recursive_negative_selection_range_scale,
     )
     return init.astype(np.float32)

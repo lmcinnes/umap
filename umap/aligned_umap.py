@@ -255,6 +255,7 @@ class AlignedUMAP(BaseEstimator):
         target_weight=0.5,
         transform_seed=42,
         force_approximation_algorithm=False,
+        recursive_coarsening_ratio=4,
         verbose=False,
         unique=False,
     ):
@@ -286,6 +287,7 @@ class AlignedUMAP(BaseEstimator):
         self.target_weight = target_weight
         self.transform_seed = transform_seed
         self.force_approximation_algorithm = force_approximation_algorithm
+        self.recursive_coarsening_ratio = recursive_coarsening_ratio
         self.verbose = verbose
         self.unique = unique
 
@@ -346,6 +348,7 @@ class AlignedUMAP(BaseEstimator):
                 target_weight=self.target_weight,
                 transform_seed=self.transform_seed,
                 force_approximation_algorithm=self.force_approximation_algorithm,
+                recursive_coarsening_ratio=self.recursive_coarsening_ratio,
                 verbose=self.verbose,
                 a=self.a,
                 b=self.b,
@@ -496,6 +499,7 @@ class AlignedUMAP(BaseEstimator):
             target_weight=self.target_weight,
             transform_seed=self.transform_seed,
             force_approximation_algorithm=self.force_approximation_algorithm,
+            recursive_coarsening_ratio=self.recursive_coarsening_ratio,
             verbose=self.verbose,
             a=self.a,
             b=self.b,

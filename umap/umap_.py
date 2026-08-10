@@ -1054,6 +1054,8 @@ def simplicial_set_embedding(
     negative_sample_scale=None,
     exclude_graph_neighbors=False,
     negative_sample_scale_adaptation_samples=128,
+    good_initialization=None,
+    recursive_coarsening_ratio=4,
 ):
     """Perform a fuzzy simplicial set embedding, using a specified
     initialisation method and then minimizing the fuzzy set cross entropy
@@ -1144,6 +1146,15 @@ def simplicial_set_embedding(
         Whether to run the computation using numba parallel.
         Running in parallel is non-deterministic, and is not used
         if a random seed has been set, to ensure reproducibility.
+
+    good_initialization: bool or None (optional, default None)
+        Internal override for optimizer schedule selection. If None, infer
+        initialization quality from the public ``init`` option as before.
+
+    recursive_coarsening_ratio: int (optional, default 4)
+        Target reduction ratio at each recursive initialization level. Supported
+        values are 2, 3, and 4. Smaller values use more coarsening levels and
+        trade initialization runtime for potentially stronger initialization.
 
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
@@ -1252,6 +1263,7 @@ def simplicial_set_embedding(
             n_components=n_components,
             random_state=random_state,
             verbose=verbose,
+            coarsening_ratio=recursive_coarsening_ratio,
         )
     else:
         init_data = np.array(init)
@@ -1367,7 +1379,11 @@ def simplicial_set_embedding(
                 csr_indices=graph.indices,
                 csr_data=graph.data,
                 random_state=random_state,
-                good_initialization=isinstance(init, str) and init in ["recursive"],
+                good_initialization=(
+                    isinstance(init, str) and init in ["recursive"]
+                    if good_initialization is None
+                    else good_initialization
+                ),
                 optimizer=optimizer,
                 negative_selection_range=negative_selection_range,
                 negative_sample_scale=negative_sample_scale,
@@ -1428,9 +1444,13 @@ def simplicial_set_embedding(
                 csr_indices=graph.indices,
                 random_state=random_state,
                 optimizer=optimizer,
-                good_initialization=isinstance(init, str)
-                and init in ["recursive"]
-                and n_epochs_max >= 400,
+                good_initialization=(
+                    isinstance(init, str)
+                    and init in ["recursive"]
+                    and n_epochs_max >= 400
+                    if good_initialization is None
+                    else good_initialization
+                ),
                 negative_selection_range=negative_selection_range,
             )
 
@@ -1681,6 +1701,12 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             * 'recursive': use label propagation for hierarchical initialization.
             * A numpy array of initial embedding positions.
 
+    recursive_coarsening_ratio: int (optional, default 4)
+        Target graph reduction ratio at each level when ``init='recursive'``.
+        Supported values are 2, 3, and 4. Ratio 4 is fastest; ratio 3 generally
+        provides stronger initialization and cross-seed consistency for a modest
+        runtime cost; ratio 2 favors initialization quality at a larger cost.
+
     min_dist: float (optional, default 0.1)
         The effective minimum distance between embedded points. Smaller values
         will result in a more clustered/clumped embedding where nearby points
@@ -1927,6 +1953,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         negative_sample_scale=None,
         exclude_graph_neighbors=False,
         negative_sample_scale_adaptation_samples=128,
+        recursive_coarsening_ratio=4,
     ):
         self.n_neighbors = n_neighbors
         self.metric = metric
@@ -1975,6 +2002,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         self.negative_sample_scale_adaptation_samples = (
             negative_sample_scale_adaptation_samples
         )
+        self.recursive_coarsening_ratio = recursive_coarsening_ratio
 
         # If compatibility_layout is set and init was default, change to spectral which was the old default
         if self.compatibility_layout and self.init == "recursive":
@@ -1988,6 +2016,12 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
 
     def _validate_parameters(self):
         validate_optimizer(self.optimizer)
+        if (
+            isinstance(self.recursive_coarsening_ratio, (bool, np.bool_))
+            or not isinstance(self.recursive_coarsening_ratio, (int, np.integer))
+            or self.recursive_coarsening_ratio not in (2, 3, 4)
+        ):
+            raise ValueError("recursive_coarsening_ratio must be one of 2, 3, or 4")
         if self.set_op_mix_ratio < 0.0 or self.set_op_mix_ratio > 1.0:
             raise ValueError("set_op_mix_ratio must be between 0.0 and 1.0")
         if self.repulsion_strength < 0.0:
@@ -3188,6 +3222,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             negative_sample_scale=self.negative_sample_scale,
             exclude_graph_neighbors=self.exclude_graph_neighbors,
             negative_sample_scale_adaptation_samples=self.negative_sample_scale_adaptation_samples,
+            recursive_coarsening_ratio=self.recursive_coarsening_ratio,
         )
 
     def fit_transform(self, X, y=None, ensure_all_finite=True, **kwargs):
