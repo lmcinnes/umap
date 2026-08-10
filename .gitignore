@@ -31,6 +31,13 @@ doc/_build
 build
 dist
 
+# local experiment data and generated artifacts
+/data/openml/
+/results/mnist_recursive*/
+/results/fashion_mnist_recursive*/
+/results/covtype_recursive*/
+experiments/
+
 # coverage reports
 .coverage
 .coverage.*
