@@ -477,3 +477,25 @@ the HSL metric fattens out the circle according to the saturation and
 lightness. This provides a reasonable demonstration of the power and
 flexibility of UMAP in understanding the underlying topology of data,
 and finding a suitable low dimensional representation of that topology.
+
+Initialization and optimization
+-------------------------------
+
+So far we have concentrated on parameters that determine the fuzzy graph
+UMAP constructs. There is also the question of how that graph is turned into
+an embedding. The ``init`` parameter controls the initial coordinates, while
+``optimizer`` controls how those coordinates are improved.
+
+The new ``init="recursive"`` option works by repeatedly coarsening the fuzzy
+graph, laying out the smaller graph, and then expanding the result back to the
+original data. ``recursive_coarsening_ratio`` controls the amount of reduction
+at each stage and can be set to ``2``, ``3``, or ``4``. The default value of
+``4`` is fastest; smaller values spend more time constructing the initial
+layout.
+
+UMAP also provides new Adam and momentum layout optimizers. Unlike the
+original compatibility optimizer, both can retain parallel layout
+optimization when ``random_state`` is fixed. There are a number of more
+specialized options for controlling their negative sample selection as well.
+Since these choices concern a different stage of the algorithm, they are
+covered in the separate :doc:`optimizers` tutorial.

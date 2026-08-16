@@ -6,17 +6,48 @@ Some notes on new features in various releases
 What's new in 0.6
 -----------------
 
-* Adam is now the default layout optimizer. The former ``standard`` optimizer
-  has been renamed to ``momentum``; the old name is no longer accepted.
-  DensMAP is configured independently from the optimizer, and the transitional
-  composite names such as ``densmap_adam`` and ``densmap_momentum`` are not
-  accepted.
-* New "recursive" initialization method that can be significantly faster for many cases, and produce better embeddings.
-* New optimization implementations that allow parallelism while maintaining reproducibility.
-* New ADAM optimizer for longer runs that result in better embeddings.
-* New spectral initialization method that can be significantly faster in some cases.
-* Support for compatility_layout option to mimic the original UMAP layout optimization algorithm.
-* Improved usage of PyNNDescent for better performance in some cases.
+0.6 introduces a new initialization and layout-optimization stack. This is a
+transition release: it preserves the established layout behavior by default
+while making the new behavior available for evaluation. A future release will
+make recursive initialization and the Adam optimizer the defaults.
+
+* ``compatibility_layout=True`` is the default in this release. It selects the
+  legacy nearest-neighbor and layout behavior, and emits a deprecation warning
+  that its default will change in a future release. Set
+  ``compatibility_layout=False`` to use the new layout path now.
+* The new layout optimizers are ``optimizer="adam"`` and
+  ``optimizer="momentum"``. The legacy immediate-update optimizer remains
+  available as ``optimizer="compatibility"``. In the next release the default
+  configuration will be recursive initialization with the Adam optimizer;
+  compatibility mode will remain available but will no longer be enabled by
+  default.
+* Optimizer selection is now independent of DensMAP: use ``densmap=True`` with
+  ``optimizer="adam"`` or ``optimizer="momentum"`` as appropriate. The old
+  composite optimizer names ``densmap_adam`` and ``densmap_momentum`` are no
+  longer accepted. Likewise, the historical ``standard`` optimizer name has
+  been replaced by ``momentum``.
+* ``init="recursive"`` adds a hierarchical label-propagation initialization.
+  It recursively coarsens the fuzzy graph, lays out the smaller graph, and
+  expands the result back to the full graph. The
+  ``recursive_coarsening_ratio`` option controls how gradually the graph is
+  coarsened and expanded (2, 3, or 4; 4 is the fastest).
+* Adam and momentum support reproducible parallel optimization, including when
+  ``random_state`` is fixed. Compatibility optimization must use a single
+  thread with a fixed seed, because its immediate updates would otherwise race
+  and make the result non-reproducible.
+* Modern layout kernels also support controls for hard-negative sampling,
+  including ``negative_selection_range`` and, for Euclidean layouts where
+  applicable, ``negative_sample_scale``,
+  ``negative_sample_scale_adaptation_samples``, and
+  ``exclude_graph_neighbors``. These options do not apply to compatibility
+  layout; see :doc:`optimizers` for the boundaries of each option.
+* Inverse transforms now validate the embedding dimension. For queries outside
+  the fitted embedding's convex hull, inverse transform now warns and uses the
+  nearest embedded vertex as an extrapolation seed instead of silently using
+  an unrelated simplex.
+* Fitting with the default ``unique=False`` no longer performs unnecessary
+  data uniquing, improving fit performance and avoiding needless index
+  remapping.
 
 What's new in 0.5
 -----------------

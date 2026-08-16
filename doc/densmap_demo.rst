@@ -1,8 +1,8 @@
 Better Preserving Local Density with DensMAP
 ============================================
 
-A notable assumption in UMAP is that the data is uniformly distributepriority over the standard UMAP objective, while smaller values lean
-more towards classical UMAP. The default value is 2.0. Let's play withon some manifold and that it is ultimately this manifold that we would
+A notable assumption in UMAP is that the data is uniformly distributed
+on some manifold and that it is ultimately this manifold that we would
 like to present. This is highly effective for many use cases, but it can
 be the case that one would like to preserve more information about the
 relative local density of data. A recent paper presented a technique
@@ -99,6 +99,25 @@ narrower, taller, shorter, sloping one way or another); this results in
 less local density in high dimensional space, and this lack of local
 density has been preserved by DensMAP.
 
+It is worth being clear that DensMAP is an objective rather than a layout
+optimizer. We have left the optimizer at its default above, but DensMAP can
+also be used with either of the new optimizers. For example, to use Adam we
+can write:
+
+.. code:: python3
+
+    adam_dens_mapper = umap.UMAP(
+        densmap=True,
+        compatibility_layout=False,
+        optimizer="adam",
+        random_state=42,
+    ).fit(mnist.data)
+
+Thus there is no need for a special optimizer name for DensMAP. The old
+development names ``"densmap_adam"`` and ``"densmap_momentum"`` are no
+longer accepted; ``densmap=True`` should be set independently instead. See
+:doc:`optimizers` for more detail on choosing a layout optimizer.
+
 Let’s now look at the Fashion-MNIST dataset; as before we’ll start by
 reminding ourselves what the default UMAP results look like:
 
@@ -119,7 +138,6 @@ reminding ourselves what the default UMAP results look like:
     umap.plot.points(mapper, labels=fmnist.target, width=500, height=500)
 
 .. image:: images/densmap_demo_13_1.png
-
 
 Now let’s try running DensMAP. As before that is as simple as setting
 the ``densmap=True`` flag.

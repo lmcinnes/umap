@@ -10,20 +10,20 @@ should ideally be relatively small -- but different runs may have
 variations none the less. To ensure that results can be reproduced
 exactly UMAP allows the user to set a random seed state.
 
-Since version 0.4 UMAP also support multi-threading for faster
-performance; when performing optimization this exploits the fact that
-race conditions between the threads are acceptable within certain
-optimization phases. Unfortunately this means that the randomness in
-UMAP outputs for the multi-threaded case depends not only on the random
-seed input, but also on race conditions between threads during
-optimization, over which no control can be had. This means that
-multi-threaded UMAP results cannot be explicitly reproduced.
+Since version 0.4 UMAP has also supported multi-threading for faster
+performance. The original layout optimizer applies updates immediately,
+and in multi-threaded mode the order of those updates depends on race
+conditions between threads. Those races are acceptable for finding a good
+embedding, but cannot be controlled by a random seed. Thus the compatibility
+layout has traditionally had to trade some performance for exact
+reproducibility.
 
-In this tutorial we'll look at how UMAP can be used in multi-threaded
-mode for performance purposes, and alternatively how we can fix random
-states to ensure exact reproducibility at the cost of some performance.
-First let's load the relevant libraries and get some data; in this case
-the MNIST digits dataset.
+The new Adam and momentum optimizers do not have this restriction. They can
+use parallel layout optimization and still produce exactly reproducible
+results with a fixed ``random_state``. In this tutorial we'll first look at
+the behavior of the original compatibility layout, and then see how the new
+optimizers change the performance trade-off. First let's load the relevant
+libraries and get some data; in this case the MNIST digits dataset.
 
 .. code:: python3
 
@@ -44,7 +44,7 @@ run:
 .. code:: python3
 
     %%time
-    mapper1 = umap.UMAP().fit(data)
+    mapper1 = umap.UMAP(compatibility_layout=True).fit(data)
 
 
 .. parsed-literal::
@@ -82,7 +82,7 @@ run.
 .. code:: python3
 
     %%time
-    mapper2 = umap.UMAP().fit(data)
+    mapper2 = umap.UMAP(compatibility_layout=True).fit(data)
 
 
 .. parsed-literal::
@@ -95,7 +95,7 @@ You will note that this time we ran *even faster*. This is because
 during the first run numba was still JIT compiling some of the code in
 the background. In contrast, this time that work has already been done,
 so it no longer takes up any of our run-time. We see that we are still
-making use of mutliple cores well.
+making use of multiple cores well.
 
 Now let's plot the results of this second run and compare to the first:
 
@@ -128,7 +128,10 @@ With that in mind, let's see what happens if we set an explicit
 .. code:: python3
 
     %%time
-    mapper3 = umap.UMAP(random_state=42).fit(data)
+    mapper3 = umap.UMAP(
+        compatibility_layout=True,
+        random_state=42,
+    ).fit(data)
 
 
 .. parsed-literal::
@@ -137,13 +140,13 @@ With that in mind, let's see what happens if we set an explicit
     Wall time: 1min 56s
 
 
-The first thing to note that that this run took significantly longer
-(despite having all the functions JIT compiled by numba already). Then
-note that the Wall time and CPU times are now much closer to each other
--- we are no longer exploiting multiple cores to anywhere near the same
-degree. This is because by setting a ``random_state`` we are effectively
-turning off any of the multi-threading that does not support explicit
-reproducibility. Let's plot the results:
+The first thing to note is that this run can take significantly longer
+(despite having all the functions JIT compiled by numba already). For
+the compatibility layout, the Wall time and CPU times are now much
+closer to each other: a fixed ``random_state`` makes layout optimization
+single threaded so that its immediate updates remain reproducible. The
+compatibility path also sets ``n_jobs`` to one in this case, preserving the
+behavior of earlier UMAP releases. Let's plot the results:
 
 .. code:: python3
 
@@ -161,7 +164,10 @@ UMAP again, with the same ``random_state`` set ...
 .. code:: python3
 
     %%time
-    mapper4 = umap.UMAP(random_state=42).fit(data)
+    mapper4 = umap.UMAP(
+        compatibility_layout=True,
+        random_state=42,
+    ).fit(data)
 
 
 .. parsed-literal::
@@ -195,3 +201,29 @@ each and every coordinate of the resulting embeddings match perfectly:
     True
 
 So we have, in fact, reproduced the embedding exactly.
+
+Reproducibility with the new optimizers
+---------------------------------------
+
+The new Adam and momentum optimizers change the trade-off we have just seen.
+They accumulate updates in a way that allows parallel layout optimization to
+remain deterministic, so setting ``random_state`` no longer forces that part
+of fitting to use a single thread. Adam is generally the recommended choice,
+and we can select it explicitly as follows:
+
+.. code:: python3
+
+    mapper5 = umap.UMAP(
+        random_state=42,
+        compatibility_layout=False,
+        optimizer="adam",
+    ).fit(data)
+
+Running this configuration again with the same data and ``random_state``
+produces the same embedding while allowing the Adam layout optimizer to use
+all configured Numba threads. The momentum optimizer has the same
+reproducibility property. Of course changing optimizers can change the
+embedding, so we should not expect these coordinates to match those produced
+by the compatibility layout. The important question is whether the result is
+stable in the ways that matter for the analysis. See :doc:`optimizers` for a
+more complete discussion of the available choices.

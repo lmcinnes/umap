@@ -58,6 +58,7 @@ PyPI install, presuming you have numba and sklearn and all its requirements
    parameters
    plotting
    reproducibility
+   optimizers
    transform
    inverse_transform
    parametric_umap

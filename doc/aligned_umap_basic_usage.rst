@@ -107,6 +107,12 @@ method requires a *list* of datasets, and a keyword argument
 consecutive pairs of datasets. Other than that things are essentially
 push-button.
 
+One thing worth noting is that AlignedUMAP has its own final layout
+optimization, since it has to optimize the alignment constraints as well as
+the usual UMAP objective. It does not currently expose the ``optimizer`` or
+``compatibility_layout`` parameters described in :doc:`optimizers`; those
+choices apply to the standard :class:`~umap.umap_.UMAP` model.
+
 .. code:: python3
 
     %%time

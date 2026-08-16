@@ -401,31 +401,20 @@ approach we used for Penguins.
     reducer = umap.UMAP(random_state=42)
     reducer.fit(digits.data)
 
-
-.. parsed-literal::
-
-    UMAP(a=None, angular_rp_forest=False, b=None,
-         force_approximation_algorithm=False, init='spectral', learning_rate=1.0,
-         local_connectivity=1.0, low_memory=False, metric='euclidean',
-         metric_kwds=None, min_dist=0.1, n_components=2, n_epochs=None,
-         n_neighbors=15, negative_sample_rate=5, output_metric='euclidean',
-         output_metric_kwds=None, random_state=42, repulsion_strength=1.0,
-         set_op_mix_ratio=1.0, spread=1.0, target_metric='categorical',
-         target_metric_kwds=None, target_n_neighbors=-1, target_weight=0.5,
-         transform_queue_size=4.0, transform_seed=42, unique=False, verbose=False)
-
-
-
 Now, instead of returning an embedding we simply get back the reducer
 object, now having trained on the dataset we passed it. To access the
 resulting transform we can either look at the ``embedding_`` attribute
 of the reducer object, or call transform on the original data.
 
+Here we have left the choice of layout optimizer at its default. If you
+want to select the new Adam or momentum optimizers explicitly, see the
+:doc:`optimizers` tutorial for more details.
+
 .. code:: python3
 
     embedding = reducer.transform(digits.data)
     # Verify that the result of calling transform is 
-    # idenitical to accessing the embedding_ attribute
+    # identical to accessing the embedding_ attribute
     assert(np.all(embedding == reducer.embedding_))
     embedding.shape
 
