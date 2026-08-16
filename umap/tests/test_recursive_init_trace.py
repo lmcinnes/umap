@@ -12,6 +12,18 @@ from experiments.recursive_init.run_coarsening import (
 from umap import UMAP
 
 
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_procrustes_align_preserves_input_precision(dtype):
+    left = np.eye(3, 2, dtype=dtype)
+    right = np.array([[0, 1], [-1, 0], [1, 1]], dtype=dtype)
+
+    rotation = label_prop.procrustes_align(left, right)
+
+    assert rotation.dtype == dtype
+    assert rotation.flags.c_contiguous
+    np.testing.assert_allclose(rotation.T @ rotation, np.eye(2), atol=1e-5)
+
+
 def test_coarsen_graph_can_remove_partition_self_edges():
     graph = csr_matrix(np.ones((6, 6), dtype=np.float32))
     graph.setdiag(0.0)

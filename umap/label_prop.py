@@ -224,7 +224,13 @@ def make_epochs_per_sample(weights, n_epochs):
     return result
 
 
-@numba.njit("f8[:, ::1](f4[:, ::1], f4[:, ::1])", cache=True)
+@numba.njit(
+    [
+        "f4[:, ::1](f4[:, ::1], f4[:, ::1])",
+        "f8[:, ::1](f8[:, ::1], f8[:, ::1])",
+    ],
+    cache=True,
+)
 def procrustes_align(e1: np.ndarray, e2: np.ndarray) -> np.ndarray:
     e1_shift = e1 - np.sum(e1, axis=0) / e1.shape[0]
     e2_shift = e2 - np.sum(e2, axis=0) / e2.shape[0]
@@ -237,7 +243,7 @@ def procrustes_align(e1: np.ndarray, e2: np.ndarray) -> np.ndarray:
     if np.linalg.det(u @ vh) < 0:
         u[:, -1] *= -1
     rotation = u @ vh
-    return rotation
+    return rotation.astype(e1.dtype)
 
 
 @numba.njit(fastmath=True, parallel=True, cache=True)

@@ -14,6 +14,10 @@ scipy_full_version = tuple(
     int(n)
     for n in re.findall(r"[0-9]+\.[0-9]+\.?[0-9]*", scipy_full_version_)[0].split(".")
 )
+sokalmichener_reference = pytest.mark.skipif(
+    scipy_full_version >= (1, 17),
+    reason="sokalmichener was deprecated in SciPy 1.15 and removed in 1.17",
+)
 
 
 # ===================================================
@@ -237,6 +241,7 @@ def test_russellrao(binary_data, binary_distances):
     binary_check("russellrao", binary_data, binary_distances)
 
 
+@sokalmichener_reference
 def test_sokalmichener(binary_data, binary_distances):
     binary_check("sokalmichener", binary_data, binary_distances)
 
@@ -322,6 +327,7 @@ def test_sparse_russellrao(sparse_binary_data):
     sparse_binary_check("russellrao", sparse_binary_data)
 
 
+@sokalmichener_reference
 def test_sparse_sokalmichener(sparse_binary_data):
     sparse_binary_check("sokalmichener", sparse_binary_data)
 

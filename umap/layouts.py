@@ -2859,6 +2859,9 @@ def _optimize_layout_inverse_single_epoch(
             for p in range(n_neg_samples):
                 k = tau_rand_int(rng_state) % n_vertices
 
+                if not np.isfinite(sigmas[k]):
+                    continue
+
                 other = tail_embedding[k]
 
                 dist_output, grad_dist_output = output_metric(
@@ -2986,10 +2989,7 @@ def optimize_layout_inverse(
     epoch_of_next_negative_sample = epochs_per_negative_sample.copy()
     epoch_of_next_sample = epochs_per_sample.copy()
 
-    optimize_fn = numba.njit(
-        _optimize_layout_inverse_single_epoch,
-        fastmath=True,
-    )
+    optimize_fn = numba.njit(_optimize_layout_inverse_single_epoch)
 
     if tqdm_kwds is None:
         tqdm_kwds = {}
