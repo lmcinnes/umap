@@ -3062,6 +3062,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         X_new : array, shape (n_samples, n_components)
             Embedding of the new data in low-dimensional space.
         """
+        check_is_fitted(self, attributes=["graph_"])
         _input_dtype = getattr(X, "dtype", None)
         # If we fit just a single instance then error
         if self._raw_data.shape[0] == 1:
@@ -3334,6 +3335,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         X_new : array, shape (n_samples, n_features)
             Generated data points new data in data space.
         """
+        check_is_fitted(self, attributes=["graph_"])
 
         if self._sparse_data:
             raise ValueError("Inverse transform not available for sparse input.")

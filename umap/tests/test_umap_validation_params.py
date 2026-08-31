@@ -320,3 +320,15 @@ def test_umap_inverse_transform_fails_expectedly(sparse_spatial_data, nn_data):
     u.fit(nn_data[:100])
     with pytest.raises(ValueError):
         u.inverse_transform(u.embedding_[:10])
+
+
+def test_umap_transform_before_fit_raises_not_fitted():
+    # transform/inverse_transform before fit must raise sklearn's NotFittedError,
+    # not a raw AttributeError about a private attribute.
+    from sklearn.exceptions import NotFittedError
+
+    data = np.random.RandomState(42).rand(10, 5)
+    with pytest.raises(NotFittedError):
+        UMAP().transform(data)
+    with pytest.raises(NotFittedError):
+        UMAP().inverse_transform(data[:, :2])
