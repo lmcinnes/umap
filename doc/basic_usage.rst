@@ -425,7 +425,7 @@ of the reducer object, or call transform on the original data.
 
     embedding = reducer.transform(digits.data)
     # Verify that the result of calling transform is 
-    # idenitical to accessing the embedding_ attribute
+    # identical to accessing the embedding_ attribute
     assert(np.all(embedding == reducer.embedding_))
     embedding.shape
 
