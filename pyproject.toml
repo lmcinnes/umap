@@ -65,7 +65,7 @@ test = ["pytest"]
 cicd = ["pytest", "pytest-azurepipelines", "pytest-cov", "pytest-benchmark"]
 
 [tool.setuptools]
-packages = ["umap"]
+packages = ["umap", "umap.tests"]
 zip-safe = false
 
 [tool.setuptools.package-data]
