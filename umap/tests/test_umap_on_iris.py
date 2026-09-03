@@ -171,6 +171,35 @@ def test_precomputed_transform_on_iris(iris, iris_selection):
     ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
 
 
+# UMAP precomputed metric transform on iris via the NN-descent code path
+# (#1194: with >= 4096 training rows, or force_approximation_algorithm=True,
+# fit() stores _knn_search_index = None for a precomputed metric and transform()
+# used to refuse to run even though the precomputed branch needs no index)
+# ----------------------
+def test_precomputed_transform_on_iris_force_approx(iris, iris_selection):
+    data = iris.data[iris_selection]
+    distance_matrix = squareform(pdist(data))
+
+    fitter = UMAP(
+        n_neighbors=10,
+        min_dist=0.01,
+        random_state=42,
+        n_epochs=100,
+        metric="precomputed",
+        force_approximation_algorithm=True,
+    ).fit(distance_matrix)
+    assert fitter._knn_search_index is None
+
+    new_data = iris.data[~iris_selection]
+    new_distance_matrix = cdist(new_data, data)
+    embedding = fitter.transform(new_distance_matrix)
+
+    trust = trustworthiness(new_data, embedding, n_neighbors=10)
+    assert (
+        trust >= 0.85
+    ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
+
+
 # UMAP precomputed metric transform on iris with sparse distances
 # ----------------------
 def test_precomputed_sparse_transform_on_iris(iris, iris_selection):
