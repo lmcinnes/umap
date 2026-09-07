@@ -2517,11 +2517,13 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     " with a count of ",
                     counts[most_common],
                 )
-            # We'll expose an inverse map when unique=True for users to map from our internal structures to their data
+            # We'll expose the unique indices and an inverse map to original data, along with _raw_data
             self._unique_inverse_ = inverse
-        # If we aren't asking for unique use the full index.
-        # This will save special cases later.
+            self._unique_indices_ = index
+
         else:
+            # If we aren't asking for unique use the full index.
+            # This will save special cases later.
             index = np.arange(X.shape[0])
             inverse = np.arange(X.shape[0])
 
@@ -3245,13 +3247,21 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             indices, dists, sigmas, rhos, bipartite=True
         )
 
+
+        n_fitted = self._raw_data.shape[0] if not self.unique else self._unique_indices_.shape[0]
         graph = scipy.sparse.coo_matrix(
-            (vals, (rows, cols)), shape=(X.shape[0], self._raw_data.shape[0])
+            (vals, (rows, cols)), shape=(X.shape[0], n_fitted)
         )
 
         if self.transform_mode == "graph":
             return graph
 
+        # knn indices are based on deduped data
+        if self.unique :
+            reference_embedding = self.embedding_[self._unique_indices_]
+        else : reference_embedding = self.embedding_
+        # with this choice UMAP(unique=True).fit(X).transform(X_new) is same as UMAP().fit(np.unique(X)).transform(X_new)
+        
         # This was a very specially constructed graph with constant degree.
         # That lets us do fancy unpacking by reshaping the csr matrix indices
         # and data. Doing so relies on the constant degree assumption!
@@ -3263,7 +3273,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         # It handles the fact that our nearest neighbour graph can now contain variable numbers of vertices.
         csr_graph = graph.tocsr()
         csr_graph.eliminate_zeros()
-        embedding = init_graph_transform(csr_graph, self.embedding_)
+        embedding = init_graph_transform(csr_graph, reference_embedding)
 
         if self.n_epochs is None:
             # For smaller datasets we can use more epochs
@@ -3291,7 +3301,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         if self.output_metric == "euclidean":
             embedding = optimize_layout_euclidean(
                 embedding,
-                self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217,
+                reference_embedding.astype(np.float32, copy=True),  # Fixes #179 & #217,
                 head,
                 tail,
                 n_epochs,
@@ -3310,7 +3320,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         else:
             embedding = optimize_layout_generic(
                 embedding,
-                self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217
+                reference_embedding.astype(np.float32, copy=True),  # Fixes #179 & #217
                 head,
                 tail,
                 n_epochs,
