@@ -1,6 +1,7 @@
 from umap.spectral import spectral_layout, tswspectral_layout
 
 import numpy as np
+import scipy.sparse
 import pytest
 import re
 from scipy.version import full_version as scipy_full_version_
@@ -49,3 +50,16 @@ def test_ensure_fallback_to_random_on_spectral_failure():
     graph = y + y.T + u @ u.T
     with pytest.warns(UserWarning, match="Spectral initialisation failed!"):
         tswspectral_layout(u, graph, k, random_state=42, maxiter=2, method="lobpcg")
+
+
+def test_spectral_layout_regular_graph_is_deterministic():
+    # lmcinnes/umap#1277: on a regular graph (here twelve exact duplicates of
+    # one point, whose fuzzy graph is complete with every weight 1) the
+    # all-ones start vector is an exact eigenvector of the normalised
+    # Laplacian, and ARPACK restarts from its own internal random generator,
+    # which random_state does not control.
+    n = 12
+    graph = scipy.sparse.csr_matrix(np.ones((n, n)) - np.eye(n))
+    layouts = [spectral_layout(None, graph, 5, random_state=42) for _ in range(3)]
+    assert np.array_equal(layouts[0], layouts[1])
+    assert np.array_equal(layouts[1], layouts[2])

@@ -92,3 +92,17 @@ def test_repeated_points_small_dense_binary(binary_repeats):
 def test_repeated_points_large_n(repetition_dense):
     model = UMAP(n_neighbors=5, unique=True, n_epochs=20).fit(repetition_dense)
     assert model._n_neighbors == 3
+
+
+# ----------------------------------------------------
+# lmcinnes/umap#1277: with random_state set, a fit must
+# be reproducible when the data contains duplicate rows.
+# Sixteen copies of one far-away point form their own
+# connected component in which every edge has weight 1.
+# ----------------------------------------------------
+def test_repeated_points_reproducible_with_random_state():
+    rng = np.random.RandomState(0)
+    data = np.vstack([rng.normal(size=(200, 5)), np.full((16, 5), 25.0)])
+    first = UMAP(n_neighbors=16, n_epochs=50, random_state=42).fit_transform(data)
+    second = UMAP(n_neighbors=16, n_epochs=50, random_state=42).fit_transform(data)
+    assert np.array_equal(first, second)
