@@ -43,7 +43,7 @@ if "torus" in target_spaces:
         """Standard euclidean distance.
 
         ..math::
-            D(x, y) = \sqrt{\sum_i (x_i - y_i)^2}
+            D(x, y) = \\sqrt{\\sum_i (x_i - y_i)^2}
         """
         distance_sqr = 0.0
         g = np.zeros_like(x)
