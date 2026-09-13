@@ -3115,8 +3115,15 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             )
 
         # #848: knn_search_index is allowed to be None if not transforming new data,
-        # so now we must validate that if it exists it is not None
-        if hasattr(self, "_knn_search_index") and self._knn_search_index is None:
+        # so now we must validate that if it exists it is not None.
+        # #1194: a precomputed metric never has a search index (nearest_neighbors
+        # returns None for it), and the precomputed branch below does not need
+        # one, so only enforce this for the metrics that query the index.
+        if (
+            self.metric != "precomputed"
+            and hasattr(self, "_knn_search_index")
+            and self._knn_search_index is None
+        ):
             raise NotImplementedError(
                 "No search index available: transforming data"
                 " into an existing embedding is not supported"
