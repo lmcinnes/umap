@@ -59,6 +59,7 @@ plot = [
 ]
 parametric_umap = ["tensorflow >= 2.1"]
 tbb = ["tbb >= 2019.0"]
+rinnd = ["rinnd >= 0.1.2"]
 test = ["pytest"]
 
 [tool.setuptools]

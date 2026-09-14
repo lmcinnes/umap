@@ -236,6 +236,12 @@ def test_umap_bad_n_jobs(nn_data):
     u = UMAP(n_jobs=-2)
     with pytest.raises(ValueError):
         u.fit(nn_data)
+
+
+def test_umap_bad_nearest_neighbor_backend(nn_data):
+    u = UMAP(nearest_neighbor_backend="unknown")
+    with pytest.raises(ValueError, match="nearest_neighbor_backend"):
+        u.fit(nn_data)
     u = UMAP(n_jobs=0)
     with pytest.raises(ValueError):
         u.fit(nn_data)

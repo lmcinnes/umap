@@ -134,7 +134,7 @@ def get_nth_item_or_val(iterable_or_val, n):
         return None
     if type(iterable_or_val) in (list, tuple, np.ndarray):
         return iterable_or_val[n]
-    elif type(iterable_or_val) in (int, float, bool, None):
+    elif type(iterable_or_val) in (int, float, bool, str):
         return iterable_or_val
     else:
         raise ValueError("Unrecognized parameter type")
@@ -161,6 +161,7 @@ PARAM_NAMES = (
     "target_metric_kwds",
     "target_weight",
     "unique",
+    "nearest_neighbor_backend",
 )
 
 
@@ -258,6 +259,7 @@ class AlignedUMAP(BaseEstimator):
         recursive_coarsening_ratio=4,
         verbose=False,
         unique=False,
+        nearest_neighbor_backend="auto",
     ):
 
         self.n_neighbors = n_neighbors
@@ -288,6 +290,7 @@ class AlignedUMAP(BaseEstimator):
         self.transform_seed = transform_seed
         self.force_approximation_algorithm = force_approximation_algorithm
         self.recursive_coarsening_ratio = recursive_coarsening_ratio
+        self.nearest_neighbor_backend = nearest_neighbor_backend
         self.verbose = verbose
         self.unique = unique
 
@@ -349,6 +352,9 @@ class AlignedUMAP(BaseEstimator):
                 transform_seed=self.transform_seed,
                 force_approximation_algorithm=self.force_approximation_algorithm,
                 recursive_coarsening_ratio=self.recursive_coarsening_ratio,
+                nearest_neighbor_backend=get_nth_item_or_val(
+                    self.nearest_neighbor_backend, n
+                ),
                 verbose=self.verbose,
                 a=self.a,
                 b=self.b,
@@ -500,6 +506,9 @@ class AlignedUMAP(BaseEstimator):
             transform_seed=self.transform_seed,
             force_approximation_algorithm=self.force_approximation_algorithm,
             recursive_coarsening_ratio=self.recursive_coarsening_ratio,
+            nearest_neighbor_backend=get_nth_item_or_val(
+                self.nearest_neighbor_backend, self.n_models_
+            ),
             verbose=self.verbose,
             a=self.a,
             b=self.b,

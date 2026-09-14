@@ -155,6 +155,18 @@ provide additional CPU optimizations:
 
     pip install umap-learn[tbb]
 
+RINND can optionally accelerate nearest-neighbor graph construction for supported
+dense metrics and parameter combinations:
+
+.. code:: bash
+
+    pip install umap-learn[rinnd]
+
+UMAP uses RINND automatically when it is available and compatible with the input.
+Set ``nearest_neighbor_backend="pynndescent"`` to retain the PyNNDescent backend,
+or ``nearest_neighbor_backend="rinnd"`` to require RINND and report unsupported
+parameters instead of falling back.
+
 If pip is having difficulties pulling the dependencies then we'd suggest installing
 the dependencies manually using anaconda followed by pulling umap from pip:
 
