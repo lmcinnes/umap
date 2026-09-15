@@ -57,9 +57,7 @@ def test_make_epochs_per_sample_matches_numpy(dtype):
     n_epochs = 17
     expected = np.full(weights.shape[0], -1.0, dtype=np.float64)
     n_samples = n_epochs * (weights / weights.max())
-    expected[n_samples > 0.0] = float(n_epochs) / np.float64(
-        n_samples[n_samples > 0.0]
-    )
+    expected[n_samples > 0.0] = float(n_epochs) / np.float64(n_samples[n_samples > 0.0])
 
     result = umap_module.make_epochs_per_sample(weights, n_epochs)
 
@@ -91,10 +89,7 @@ def test_fuzzy_set_operation_matches_sparse_expression(mix_ratio):
     )
     transpose = graph.transpose()
     product = graph.multiply(transpose)
-    expected = (
-        mix_ratio * (graph + transpose - product)
-        + (1.0 - mix_ratio) * product
-    )
+    expected = mix_ratio * (graph + transpose - product) + (1.0 - mix_ratio) * product
     expected.eliminate_zeros()
 
     result = umap_module._fuzzy_set_operation(graph, mix_ratio)
@@ -131,21 +126,16 @@ def test_fuzzy_simplicial_set_matches_sparse_expression(mix_ratio):
     rows, cols, vals, dists = umap_module.compute_membership_strengths(
         knn_indices, knn_dists, sigmas, rhos, return_dists=True
     )
-    directed_graph = scipy.sparse.coo_matrix(
-        (vals, (rows, cols)), shape=(4, 4)
-    )
+    directed_graph = scipy.sparse.coo_matrix((vals, (rows, cols)), shape=(4, 4))
     directed_graph.eliminate_zeros()
     transpose = directed_graph.transpose()
     product = directed_graph.multiply(transpose)
     expected = (
-        mix_ratio * (directed_graph + transpose - product)
-        + (1.0 - mix_ratio) * product
+        mix_ratio * (directed_graph + transpose - product) + (1.0 - mix_ratio) * product
     )
     expected.eliminate_zeros()
 
-    expected_dists = scipy.sparse.coo_matrix(
-        (dists, (rows, cols)), shape=(4, 4)
-    )
+    expected_dists = scipy.sparse.coo_matrix((dists, (rows, cols)), shape=(4, 4))
     expected_dists = expected_dists.maximum(expected_dists.transpose()).todok()
 
     result, _, _, result_dists = umap_module.fuzzy_simplicial_set(
@@ -191,6 +181,7 @@ def test_transform_supports_legacy_joblib_input_hash():
     model._input_hash = umap_module.joblib.hash(model._raw_data)
 
     assert model.transform(model._raw_data.copy()) is model.embedding_
+
 
 # Transform isn't stable under batching; hard to opt out of this.
 # @SkipTest

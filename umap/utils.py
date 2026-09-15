@@ -206,7 +206,7 @@ def average_nn_distance(dist_matrix):
     An array with the average distance to each points nearest neighbors
 
     """
-    (row_idx, col_idx, val) = scipy.sparse.find(dist_matrix)
+    row_idx, col_idx, val = scipy.sparse.find(dist_matrix)
 
     # Count/sum is done per row
     count_non_zero_elems = np.bincount(row_idx)
