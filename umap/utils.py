@@ -222,6 +222,20 @@ def average_nn_distance(dist_matrix):
     return averages
 
 
+@numba.njit(parallel=True, cache=True)
+def make_epochs_per_sample(weights, n_epochs):
+    result = np.full(weights.shape[0], -1.0, dtype=np.float64)
+    if weights.shape[0] == 0:
+        return result
+    max_weight = weights.max()
+    typed_n_epochs = weights.dtype.type(n_epochs)
+    for edge in numba.prange(weights.shape[0]):
+        n_samples = typed_n_epochs * (weights[edge] / max_weight)
+        if n_samples > 0.0:
+            result[edge] = float(n_epochs) / np.float64(n_samples)
+    return result
+
+
 @numba.njit(fastmath=True, parallel=True, cache=True)
 def adaptive_bucket_sort(values, target_bucket_size=1000, sample_fraction=0.01):
 

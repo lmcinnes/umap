@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 from scipy.sparse import csr_matrix
+from sklearn.preprocessing import normalize
 
 import umap.label_prop as label_prop
 import umap.umap_ as umap_module
@@ -33,6 +34,118 @@ def test_coarsen_graph_can_remove_partition_self_edges():
 
     assert np.count_nonzero(reduced_graph.diagonal()) == 0
     assert reduced_graph.nnz == 2
+
+
+def test_coarsen_graph_preserves_noncanonical_sparse_product_behavior():
+    graph = csr_matrix(
+        (
+            np.array([0.25, 0.5, 0.125], dtype=np.float32),
+            np.array([1, 1, 2], dtype=np.int32),
+            np.array([0, 3, 3, 3], dtype=np.int32),
+        ),
+        shape=(3, 3),
+    )
+    labels = np.array([0, 1, 1], dtype=np.int32)
+    reduction_map = csr_matrix(
+        (np.ones(labels.shape[0]), labels, np.arange(labels.shape[0] + 1)),
+        shape=(labels.shape[0], labels.max() + 1),
+    )
+    complement_graph = graph.astype(np.float64)
+    complement_graph.data = np.log1p(-np.clip(complement_graph.data, 0.0, 1.0 - 1e-16))
+    expected = reduction_map.T * complement_graph * reduction_map
+    expected.data = 1.0 - np.exp(expected.data)
+    expected.eliminate_zeros()
+
+    _, result = label_prop._coarsen_graph(graph, labels)
+
+    assert not graph.has_canonical_format
+    np.testing.assert_array_equal(
+        result.toarray(), expected.astype(np.float32).toarray()
+    )
+
+
+def test_direct_coarsening_and_expansion_handle_empty_graph():
+    graph = csr_matrix((4, 4), dtype=np.float32)
+    labels = np.array([0, 0, 1, 1], dtype=np.int32)
+    coarse_layout = np.arange(6, dtype=np.float32).reshape(2, 3)
+
+    _, reduced_graph = label_prop._coarsen_graph(graph, labels)
+    expanded = label_prop._expand_layout(
+        graph.indptr, graph.indices, graph.data, labels, coarse_layout
+    )
+
+    assert reduced_graph.shape == (2, 2)
+    assert reduced_graph.nnz == 0
+    np.testing.assert_array_equal(expanded, 0.5 * coarse_layout[labels])
+
+
+@pytest.mark.parametrize("remove_diagonal", [False, True])
+def test_coarse_graph_from_labels_matches_sparse_products(remove_diagonal):
+    graph = csr_matrix(
+        np.array(
+            [
+                [0.25, 0.0, 0.5, 0.0, 0.125],
+                [0.75, 0.0, 0.0, 0.25, 0.0],
+                [0.0, 0.5, 1.0, 0.0, 0.0],
+                [0.125, 0.0, 0.25, 0.0, 0.5],
+                [0.0, 0.75, 0.0, 0.25, 0.0],
+            ],
+            dtype=np.float32,
+        )
+    )
+    labels = np.array([0, 0, 1, 2, 2], dtype=np.int32)
+    reduction_map = csr_matrix(
+        (np.ones(labels.shape[0]), labels, np.arange(labels.shape[0] + 1)),
+        shape=(labels.shape[0], labels.max() + 1),
+    )
+    complement_graph = graph.astype(np.float64)
+    complement_graph.data = np.log1p(-np.clip(complement_graph.data, 0.0, 1.0 - 1e-16))
+    expected = reduction_map.T * complement_graph * reduction_map
+    expected.data = 1.0 - np.exp(expected.data)
+    expected.eliminate_zeros()
+    if remove_diagonal:
+        expected.setdiag(0.0)
+        expected.eliminate_zeros()
+    expected = expected.astype(np.float32)
+
+    result = label_prop._coarse_graph_from_labels(
+        graph, labels, remove_diagonal=remove_diagonal
+    )
+
+    assert result.dtype == np.float32
+    assert result.has_sorted_indices
+    np.testing.assert_allclose(result.toarray(), expected.toarray(), rtol=1e-6)
+
+
+def test_expand_layout_matches_sparse_expansion():
+    graph = csr_matrix(
+        np.array(
+            [
+                [0.0, 1.0, 2.0, 0.0],
+                [3.0, 0.0, 4.0, 5.0],
+                [0.0, 0.0, 0.0, 0.0],
+                [6.0, 7.0, 0.0, 0.0],
+            ],
+            dtype=np.float32,
+        )
+    )
+    labels = np.array([0, 0, 1, 1], dtype=np.int32)
+    coarse_layout = np.arange(6, dtype=np.float32).reshape(2, 3)
+    reduction_map = csr_matrix(
+        (np.ones(labels.shape[0]), labels, np.arange(labels.shape[0] + 1)),
+        shape=(labels.shape[0], labels.max() + 1),
+    )
+    expected = (
+        normalize(graph @ reduction_map, norm="l1") @ coarse_layout
+        + normalize(reduction_map, norm="l1") @ coarse_layout
+    ) / 2.0
+
+    result = label_prop._expand_layout(
+        graph.indptr, graph.indices, graph.data, labels, coarse_layout
+    )
+
+    assert result.dtype == np.float64
+    np.testing.assert_allclose(result, expected, rtol=1e-7, atol=1e-7)
 
 
 def test_diverse_hubs_avoid_adjacent_candidates_when_possible():

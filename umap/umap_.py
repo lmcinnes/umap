@@ -3,7 +3,10 @@
 # License: BSD 3 clause
 from __future__ import print_function
 
+from concurrent.futures import ThreadPoolExecutor
+import hashlib
 import locale
+import struct
 from warnings import warn
 import time
 
@@ -37,6 +40,7 @@ from umap.utils import (
     ts,
     csr_unique,
     fast_knn_indices,
+    make_epochs_per_sample,
 )
 from umap.spectral import spectral_layout, tswspectral_layout
 from umap.layouts import (
@@ -60,6 +64,9 @@ SMOOTH_K_TOLERANCE = 1e-5
 MIN_K_DIST_SCALE = 1e-3
 NPY_INFINITY = np.inf
 
+_INPUT_HASH_ALGORITHM = "blake2b-tree-v1"
+_INPUT_HASH_CHUNK_SIZE = 16 * 1024 * 1024
+
 DISCONNECTION_DISTANCES = {
     "correlation": 2,
     "cosine": 2,
@@ -68,6 +75,62 @@ DISCONNECTION_DISTANCES = {
     "bit_jaccard": 1,
     "dice": 1,
 }
+
+
+def _input_hash_chunk(chunk):
+    return hashlib.blake2b(chunk, digest_size=32, person=b"umap-chunk-v1").digest()
+
+
+def _update_input_hash(hasher, tag, array, n_jobs, chunk_size):
+    array = np.asarray(array)
+    if not array.flags.c_contiguous:
+        raise ValueError("Input hash arrays must be C-contiguous")
+
+    encoded_tag = tag.encode("ascii")
+    encoded_dtype = array.dtype.str.encode("ascii")
+    hasher.update(struct.pack("<Q", len(encoded_tag)))
+    hasher.update(encoded_tag)
+    hasher.update(struct.pack("<Q", array.ndim))
+    for dimension in array.shape:
+        hasher.update(struct.pack("<Q", dimension))
+    hasher.update(struct.pack("<Q", len(encoded_dtype)))
+    hasher.update(encoded_dtype)
+    for stride in array.strides:
+        hasher.update(struct.pack("<Q", stride))
+    hasher.update(struct.pack("<Q", array.nbytes))
+    byte_view = memoryview(array).cast("B")
+    chunk_starts = range(0, byte_view.nbytes, chunk_size)
+    hasher.update(len(chunk_starts).to_bytes(8, "little"))
+
+    chunks = (
+        byte_view[start : min(start + chunk_size, byte_view.nbytes)]
+        for start in chunk_starts
+    )
+    if n_jobs == 1:
+        digests = map(_input_hash_chunk, chunks)
+        for digest in digests:
+            hasher.update(digest)
+    else:
+        with ThreadPoolExecutor(max_workers=n_jobs) as executor:
+            for digest in executor.map(_input_hash_chunk, chunks):
+                hasher.update(digest)
+
+
+def _input_data_hash(data, n_jobs=-1, chunk_size=_INPUT_HASH_CHUNK_SIZE):
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be positive")
+
+    n_jobs = joblib.effective_n_jobs(n_jobs)
+    hasher = hashlib.blake2b(digest_size=32, person=b"umap-input-v1")
+    if scipy.sparse.isspmatrix_csr(data):
+        hasher.update(b"csr")
+        hasher.update(struct.pack("<QQ", *data.shape))
+        _update_input_hash(hasher, "data", data.data, n_jobs, chunk_size)
+        _update_input_hash(hasher, "indices", data.indices, n_jobs, chunk_size)
+        _update_input_hash(hasher, "indptr", data.indptr, n_jobs, chunk_size)
+    else:
+        _update_input_hash(hasher, "dense", data, n_jobs, chunk_size)
+    return hasher.hexdigest()
 
 
 def flatten_iter(container):
@@ -475,6 +538,133 @@ def compute_membership_strengths(
     return rows, cols, vals, dists
 
 
+@numba.njit(parallel=True, cache=True)
+def _fuzzy_set_operation_counts(
+    indptr, indices, transpose_indptr, transpose_indices, mix_ratio
+):
+    n_rows = indptr.shape[0] - 1
+    counts = np.zeros(n_rows, dtype=np.int64)
+    for row in numba.prange(n_rows):
+        left = indptr[row]
+        left_end = indptr[row + 1]
+        right = transpose_indptr[row]
+        right_end = transpose_indptr[row + 1]
+        count = 0
+        while left < left_end and right < right_end:
+            left_column = indices[left]
+            right_column = transpose_indices[right]
+            if left_column == right_column:
+                count += 1
+                left += 1
+                right += 1
+            elif left_column < right_column:
+                if mix_ratio > 0.0:
+                    count += 1
+                left += 1
+            else:
+                if mix_ratio > 0.0:
+                    count += 1
+                right += 1
+        if mix_ratio > 0.0:
+            count += left_end - left
+            count += right_end - right
+        counts[row] = count
+    return counts
+
+
+@numba.njit(parallel=True, cache=True)
+def _fuzzy_set_operation_fill(
+    indptr,
+    indices,
+    data,
+    transpose_indptr,
+    transpose_indices,
+    transpose_data,
+    result_indptr,
+    mix_ratio,
+):
+    result_indices = np.empty(result_indptr[-1], dtype=np.int32)
+    result_data = np.empty(result_indptr[-1], dtype=np.float32)
+    for row in numba.prange(indptr.shape[0] - 1):
+        left = indptr[row]
+        left_end = indptr[row + 1]
+        right = transpose_indptr[row]
+        right_end = transpose_indptr[row + 1]
+        output = result_indptr[row]
+        while left < left_end and right < right_end:
+            left_column = indices[left]
+            right_column = transpose_indices[right]
+            if left_column == right_column:
+                left_value = data[left]
+                right_value = transpose_data[right]
+                product = left_value * right_value
+                result_indices[output] = left_column
+                result_data[output] = (
+                    mix_ratio * (left_value + right_value - product)
+                    + (1.0 - mix_ratio) * product
+                )
+                output += 1
+                left += 1
+                right += 1
+            elif left_column < right_column:
+                if mix_ratio > 0.0:
+                    result_indices[output] = left_column
+                    result_data[output] = mix_ratio * data[left]
+                    output += 1
+                left += 1
+            else:
+                if mix_ratio > 0.0:
+                    result_indices[output] = right_column
+                    result_data[output] = mix_ratio * transpose_data[right]
+                    output += 1
+                right += 1
+        if mix_ratio > 0.0:
+            while left < left_end:
+                result_indices[output] = indices[left]
+                result_data[output] = mix_ratio * data[left]
+                output += 1
+                left += 1
+            while right < right_end:
+                result_indices[output] = transpose_indices[right]
+                result_data[output] = mix_ratio * transpose_data[right]
+                output += 1
+                right += 1
+    return result_indices, result_data
+
+
+def _fuzzy_set_operation(graph, set_op_mix_ratio):
+    graph = graph.tocsr()
+    graph.sum_duplicates()
+    graph.eliminate_zeros()
+    graph.sort_indices()
+    transpose = graph.transpose().tocsr()
+    row_counts = _fuzzy_set_operation_counts(
+        graph.indptr,
+        graph.indices,
+        transpose.indptr,
+        transpose.indices,
+        set_op_mix_ratio,
+    )
+    result_indptr = np.empty(graph.shape[0] + 1, dtype=np.int64)
+    result_indptr[0] = 0
+    np.cumsum(row_counts, out=result_indptr[1:])
+    result_indices, result_data = _fuzzy_set_operation_fill(
+        graph.indptr,
+        graph.indices,
+        graph.data,
+        transpose.indptr,
+        transpose.indices,
+        transpose.data,
+        result_indptr,
+        set_op_mix_ratio,
+    )
+    result = scipy.sparse.csr_matrix(
+        (result_data, result_indices, result_indptr), shape=graph.shape
+    )
+    result.eliminate_zeros()
+    return result
+
+
 def fuzzy_simplicial_set(
     X,
     n_neighbors,
@@ -626,38 +816,46 @@ def fuzzy_simplicial_set(
         knn_indices, knn_dists, sigmas, rhos, return_dists
     )
 
-    result = scipy.sparse.coo_matrix(
-        (vals, (rows, cols)), shape=(X.shape[0], X.shape[0])
-    )
-    result.eliminate_zeros()
+    if return_dists:
+        distance_graph = scipy.sparse.coo_matrix(
+            (dists, (rows, cols)), shape=(X.shape[0], X.shape[0])
+        )
+        result_dists = distance_graph.maximum(distance_graph.transpose()).todok()
+    else:
+        result_dists = None
 
-    if apply_set_operations:
-        transpose = result.transpose()
-        prod_matrix = result.multiply(transpose)
-
-        if set_op_mix_ratio == 1.0:
-            result += transpose - prod_matrix
-        else:
-            result = (
-                set_op_mix_ratio * (result + transpose - prod_matrix)
-                + (1.0 - set_op_mix_ratio) * prod_matrix
-            )
-
-    result.eliminate_zeros()
+    if apply_set_operations and not compatibility_layout:
+        membership_indptr = np.arange(
+            0,
+            vals.shape[0] + 1,
+            knn_indices.shape[1],
+            dtype=np.int64,
+        )
+        directed_graph = scipy.sparse.csr_matrix(
+            (vals, cols, membership_indptr), shape=(X.shape[0], X.shape[0])
+        )
+        result = _fuzzy_set_operation(directed_graph, set_op_mix_ratio)
+    else:
+        result = scipy.sparse.coo_matrix(
+            (vals, (rows, cols)), shape=(X.shape[0], X.shape[0])
+        )
+        result.eliminate_zeros()
+        if apply_set_operations:
+            transpose = result.transpose()
+            product = result.multiply(transpose)
+            if set_op_mix_ratio == 1.0:
+                result += transpose - product
+            else:
+                result = (
+                    set_op_mix_ratio * (result + transpose - product)
+                    + (1.0 - set_op_mix_ratio) * product
+                )
+            result.eliminate_zeros()
 
     if return_dists is None:
         return result, sigmas, rhos
     else:
-        if return_dists:
-            dmat = scipy.sparse.coo_matrix(
-                (dists, (rows, cols)), shape=(X.shape[0], X.shape[0])
-            )
-
-            dists = dmat.maximum(dmat.transpose()).todok()
-        else:
-            dists = None
-
-        return result, sigmas, rhos, dists
+        return result, sigmas, rhos, result_dists
 
 
 @numba.njit()
@@ -943,28 +1141,6 @@ def general_simplicial_set_union(simplicial_set1, simplicial_set2):
         result.data,
     )
 
-    return result
-
-
-def make_epochs_per_sample(weights, n_epochs):
-    """Given a set of weights and number of epochs generate the number of
-    epochs per sample for each weight.
-
-    Parameters
-    ----------
-    weights: array of shape (n_1_simplices)
-        The weights of how much we wish to sample each 1-simplex.
-
-    n_epochs: int
-        The total number of epochs we want to train for.
-
-    Returns
-    -------
-    An array of number of epochs per sample, one for each 1-simplex.
-    """
-    result = -1.0 * np.ones(weights.shape[0], dtype=np.float64)
-    n_samples = n_epochs * (weights / weights.max())
-    result[n_samples > 0] = float(n_epochs) / np.float64(n_samples[n_samples > 0])
     return result
 
 
@@ -2845,6 +3021,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 True,
                 self.verbose,
                 self.densmap or self.output_dens,
+                compatibility_layout=self.compatibility_layout,
             )
             # Report the number of vertices with degree 0 in our our umap.graph_
             # This ensures that they were properly disconnected.
@@ -2916,6 +3093,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 True,
                 self.verbose,
                 self.densmap or self.output_dens,
+                compatibility_layout=self.compatibility_layout,
             )
             # Report the number of vertices with degree 0 in our umap.graph_
             # This ensures that they were properly disconnected.
@@ -2986,6 +3164,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 True,
                 self.verbose,
                 self.densmap or self.output_dens,
+                compatibility_layout=self.compatibility_layout,
             )
             # Report the number of vertices with degree 0 in our umap.graph_
             # This ensures that they were properly disconnected.
@@ -3178,7 +3357,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             print(ts() + " Finished embedding")
 
         numba.set_num_threads(self._original_n_threads)
-        self._input_hash = joblib.hash(self._raw_data)
+        self._input_hash = _input_data_hash(self._raw_data, self.n_jobs)
+        self._input_hash_algorithm = _INPUT_HASH_ALGORITHM
 
         if self.transform_mode == "embedding":
             # Set number of features out for sklearn API
@@ -3316,7 +3496,10 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 order="C",
                 ensure_all_finite=ensure_all_finite,
             )
-        x_hash = joblib.hash(X)
+        if getattr(self, "_input_hash_algorithm", None) == _INPUT_HASH_ALGORITHM:
+            x_hash = _input_data_hash(X, self.n_jobs)
+        else:
+            x_hash = joblib.hash(X)
         if x_hash == self._input_hash:
             if self.transform_mode == "embedding":
                 return self.embedding_
@@ -4021,6 +4204,9 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         if self.output_dens:
             self.rad_orig_ = aux_data["rad_orig"]
             self.rad_emb_ = aux_data["rad_emb"]
+
+        self._input_hash = _input_data_hash(self._raw_data, self.n_jobs)
+        self._input_hash_algorithm = _INPUT_HASH_ALGORITHM
 
     def __repr__(self):
         from sklearn.utils._pprint import _EstimatorPrettyPrinter

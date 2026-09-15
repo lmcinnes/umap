@@ -5,7 +5,7 @@ from sklearn.preprocessing import normalize
 from sklearn.utils.extmath import randomized_svd
 
 from umap.layouts import optimize_layout_euclidean
-from umap.utils import tau_rand, tau_rand_int, ts
+from umap.utils import make_epochs_per_sample, tau_rand, tau_rand_int, ts
 
 INT32_MIN = np.iinfo(np.int32).min + 1
 INT32_MAX = np.iinfo(np.int32).max - 1
@@ -17,15 +17,120 @@ def _coarsen_graph(graph, labels, remove_diagonal=False):
         (np.ones(labels.shape[0]), labels, np.arange(labels.shape[0] + 1)),
         shape=(labels.shape[0], labels.max() + 1),
     )
-    complement_graph = graph.astype(np.float64)
-    complement_graph.data = np.log1p(-np.clip(complement_graph.data, 0.0, 1.0 - 1e-16))
-    reduced_graph = reduction_map.T * complement_graph * reduction_map
-    reduced_graph.data = 1.0 - np.exp(reduced_graph.data)
+    if not graph.has_canonical_format:
+        complement_graph = graph.astype(np.float64)
+        complement_graph.data = np.log1p(
+            -np.clip(complement_graph.data, 0.0, 1.0 - 1e-16)
+        )
+        reduced_graph = reduction_map.T * complement_graph * reduction_map
+        reduced_graph.data = 1.0 - np.exp(reduced_graph.data)
+        reduced_graph.eliminate_zeros()
+        if remove_diagonal:
+            reduced_graph.setdiag(0.0)
+            reduced_graph.eliminate_zeros()
+        reduced_graph = reduced_graph.astype(np.float32)
+    else:
+        reduced_graph = _coarse_graph_from_labels(
+            graph, labels, remove_diagonal=remove_diagonal
+        )
+    return reduction_map, reduced_graph
+
+
+@numba.njit(cache=True)
+def _group_rows_by_label(labels, n_labels):
+    label_indptr = np.zeros(n_labels + 1, dtype=np.int64)
+    for row in range(labels.shape[0]):
+        label_indptr[labels[row] + 1] += 1
+    for label in range(n_labels):
+        label_indptr[label + 1] += label_indptr[label]
+
+    next_position = label_indptr[:-1].copy()
+    rows = np.empty(labels.shape[0], dtype=np.int64)
+    for row in range(labels.shape[0]):
+        label = labels[row]
+        rows[next_position[label]] = row
+        next_position[label] += 1
+    return label_indptr, rows
+
+
+@numba.njit(parallel=True, cache=True)
+def _coarse_graph_row_counts(indptr, indices, labels, label_indptr, rows):
+    n_labels = label_indptr.shape[0] - 1
+    counts = np.zeros(n_labels, dtype=np.int64)
+    for label in numba.prange(n_labels):
+        targets = {}
+        for member_index in range(label_indptr[label], label_indptr[label + 1]):
+            row = rows[member_index]
+            for edge in range(indptr[row], indptr[row + 1]):
+                targets[labels[indices[edge]]] = True
+        counts[label] = len(targets)
+    return counts
+
+
+@numba.njit(parallel=True, cache=True)
+def _coarse_graph_fill(
+    indptr, indices, weights, labels, label_indptr, rows, coarse_indptr
+):
+    coarse_indices = np.empty(coarse_indptr[-1], dtype=np.int32)
+    coarse_data = np.empty(coarse_indptr[-1], dtype=np.float64)
+
+    for label in numba.prange(label_indptr.shape[0] - 1):
+        target_sums = {}
+        for member_index in range(label_indptr[label], label_indptr[label + 1]):
+            row = rows[member_index]
+            for edge in range(indptr[row], indptr[row + 1]):
+                target = labels[indices[edge]]
+                weight = np.float64(weights[edge])
+                weight = min(max(weight, 0.0), 1.0 - 1e-16)
+                complement = np.log1p(-weight)
+                if target in target_sums:
+                    target_sums[target] += complement
+                else:
+                    target_sums[target] = complement
+
+        targets = np.empty(len(target_sums), dtype=np.int32)
+        target_index = 0
+        for target in target_sums:
+            targets[target_index] = target
+            target_index += 1
+        targets.sort()
+
+        output_index = coarse_indptr[label]
+        for target in targets:
+            coarse_indices[output_index] = target
+            coarse_data[output_index] = 1.0 - np.exp(target_sums[target])
+            output_index += 1
+
+    return coarse_indices, coarse_data
+
+
+def _coarse_graph_from_labels(graph, labels, remove_diagonal=False):
+    n_labels = labels.max() + 1
+    label_indptr, rows = _group_rows_by_label(labels, n_labels)
+    row_counts = _coarse_graph_row_counts(
+        graph.indptr, graph.indices, labels, label_indptr, rows
+    )
+    coarse_indptr = np.empty(n_labels + 1, dtype=np.int64)
+    coarse_indptr[0] = 0
+    np.cumsum(row_counts, out=coarse_indptr[1:])
+    coarse_indices, coarse_data = _coarse_graph_fill(
+        graph.indptr,
+        graph.indices,
+        graph.data,
+        labels,
+        label_indptr,
+        rows,
+        coarse_indptr,
+    )
+    reduced_graph = csr_matrix(
+        (coarse_data, coarse_indices, coarse_indptr),
+        shape=(n_labels, n_labels),
+    )
     reduced_graph.eliminate_zeros()
     if remove_diagonal:
         reduced_graph.setdiag(0.0)
         reduced_graph.eliminate_zeros()
-    return reduction_map, reduced_graph.astype(np.float32)
+    return reduced_graph.astype(np.float32)
 
 
 def _initial_curve_parameters(a, b, curve_schedule):
@@ -217,10 +322,31 @@ def _anchor_reference(
     return _scale_anchor(anchor), np.ones(n_samples, dtype=np.bool_)
 
 
-def make_epochs_per_sample(weights, n_epochs):
-    result = -1.0 * np.ones(weights.shape[0], dtype=np.float64)
-    n_samples = n_epochs * (weights / weights.max())
-    result[n_samples > 0] = float(n_epochs) / np.float64(n_samples[n_samples > 0])
+@numba.njit(parallel=True, cache=True)
+def _expand_layout(indptr, indices, weights, labels, coarse_layout):
+    n_rows = indptr.shape[0] - 1
+    n_components = coarse_layout.shape[1]
+    result = np.zeros((n_rows, n_components), dtype=np.float64)
+
+    for row in numba.prange(n_rows):
+        total_weight = 0.0
+        for edge in range(indptr[row], indptr[row + 1]):
+            weight = weights[edge]
+            total_weight += weight
+            neighbor_label = labels[indices[edge]]
+            for component in range(n_components):
+                result[row, component] += (
+                    weight * coarse_layout[neighbor_label, component]
+                )
+
+        own_label = labels[row]
+        for component in range(n_components):
+            if total_weight > 0.0:
+                result[row, component] /= total_weight
+            result[row, component] = 0.5 * (
+                result[row, component] + coarse_layout[own_label, component]
+            )
+
     return result
 
 
@@ -590,11 +716,13 @@ def label_propagation_init(
         negative_selection_range=negative_selection_range,
     )
 
-    data_expander = normalize(graph @ base_reduction_map, norm="l1")
-    result = (
-        data_expander @ reduced_layout
-        + normalize(base_reduction_map, norm="l1") @ reduced_layout
-    ) / 2.0
+    result = _expand_layout(
+        graph.indptr,
+        graph.indices,
+        graph.data,
+        labels,
+        reduced_layout,
+    )
 
     result = (scaling * (result - result.mean(axis=0))).astype(np.float32)
 
