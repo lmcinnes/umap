@@ -1544,7 +1544,10 @@ def numba_aware_pairwise_distances(X, metric, **kwds):
     row_type = numba.typeof(X[0])
     metric.compile((row_type, row_type))
     return_type = metric.overloads[(row_type, row_type)].signature.return_type
-    result = np.empty((X.shape[0], X.shape[0]), dtype=X.dtype)
+    # The output dtype depends on the sklearn version (float64 before 1.8, the
+    # input dtype after), so take it from sklearn itself on a single row.
+    result_dtype = pairwise_distances(X[:1], metric=metric).dtype
+    result = np.empty((X.shape[0], X.shape[0]), dtype=result_dtype)
     signature = numba.types.void(
         numba.typeof(X),
         numba.types.FunctionType(return_type(row_type, row_type)),
