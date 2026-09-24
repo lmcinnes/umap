@@ -1513,7 +1513,6 @@ def pairwise_special_metric(
     return parallel_special_metric(X, Y, metric=special_metric_func)
 
 
-@numba.njit(nogil=True)
 def _symmetric_pairwise_distances(X, metric, result):
     n = X.shape[0]
     for i in range(n):
@@ -1524,6 +1523,9 @@ def _symmetric_pairwise_distances(X, metric, result):
         result[i, i] = metric(X[i], X[i])
 
 
+_symmetric_pairwise_kernels = {}
+
+
 def numba_aware_pairwise_distances(X, metric, **kwds):
     """Same output as sklearn's ``pairwise_distances``; numba metrics loop in numba."""
     if (
@@ -1531,10 +1533,26 @@ def numba_aware_pairwise_distances(X, metric, **kwds):
         or not isinstance(metric, numba.core.registry.CPUDispatcher)
         or not isinstance(X, np.ndarray)
         or X.ndim != 2
+        or X.shape[0] == 0
         or X.dtype not in (np.float32, np.float64)
         or not np.all(np.isfinite(X))
     ):
         return pairwise_distances(X, metric=metric, **kwds)
+    # The metric is passed as a function pointer so LLVM cannot inline it: an
+    # inlined fastmath metric can vectorize (and round) differently from the
+    # standalone call sklearn makes, which changes the last bit on x86.
+    row_type = numba.typeof(X[0])
+    metric.compile((row_type, row_type))
+    return_type = metric.overloads[(row_type, row_type)].signature.return_type
     result = np.empty((X.shape[0], X.shape[0]), dtype=X.dtype)
-    _symmetric_pairwise_distances(X, metric, result)
+    signature = numba.types.void(
+        numba.typeof(X),
+        numba.types.FunctionType(return_type(row_type, row_type)),
+        numba.typeof(result),
+    )
+    kernel = _symmetric_pairwise_kernels.get(signature)
+    if kernel is None:
+        kernel = numba.njit(signature, nogil=True)(_symmetric_pairwise_distances)
+        _symmetric_pairwise_kernels[signature] = kernel
+    kernel(X, metric, result)
     return result
