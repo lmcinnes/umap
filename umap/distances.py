@@ -1511,3 +1511,51 @@ def pairwise_special_metric(
     else:
         special_metric_func = named_distances[metric]
     return parallel_special_metric(X, Y, metric=special_metric_func)
+
+
+def _symmetric_pairwise_distances(X, metric, result):
+    n = X.shape[0]
+    for i in range(n):
+        for j in range(i + 1, n):
+            d = metric(X[i], X[j])
+            result[i, j] = d
+            result[j, i] = d
+        result[i, i] = metric(X[i], X[i])
+
+
+_symmetric_pairwise_kernels = {}
+
+
+def numba_aware_pairwise_distances(X, metric, **kwds):
+    """Same output as sklearn's ``pairwise_distances``; numba metrics loop in numba."""
+    if (
+        kwds
+        or not isinstance(metric, numba.core.registry.CPUDispatcher)
+        or not isinstance(X, np.ndarray)
+        or X.ndim != 2
+        or X.shape[0] == 0
+        or X.dtype not in (np.float32, np.float64)
+        or not np.all(np.isfinite(X))
+    ):
+        return pairwise_distances(X, metric=metric, **kwds)
+    # The metric is passed as a function pointer so LLVM cannot inline it: an
+    # inlined fastmath metric can vectorize (and round) differently from the
+    # standalone call sklearn makes, which changes the last bit on x86.
+    row_type = numba.typeof(X[0])
+    metric.compile((row_type, row_type))
+    return_type = metric.overloads[(row_type, row_type)].signature.return_type
+    # The output dtype depends on the sklearn version (float64 before 1.8, the
+    # input dtype after), so take it from sklearn itself on a single row.
+    result_dtype = pairwise_distances(X[:1], metric=metric).dtype
+    result = np.empty((X.shape[0], X.shape[0]), dtype=result_dtype)
+    signature = numba.types.void(
+        numba.typeof(X),
+        numba.types.FunctionType(return_type(row_type, row_type)),
+        numba.typeof(result),
+    )
+    kernel = _symmetric_pairwise_kernels.get(signature)
+    if kernel is None:
+        kernel = numba.njit(signature, nogil=True)(_symmetric_pairwise_distances)
+        _symmetric_pairwise_kernels[signature] = kernel
+    kernel(X, metric, result)
+    return result
