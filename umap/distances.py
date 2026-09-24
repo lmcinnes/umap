@@ -1511,3 +1511,30 @@ def pairwise_special_metric(
     else:
         special_metric_func = named_distances[metric]
     return parallel_special_metric(X, Y, metric=special_metric_func)
+
+
+@numba.njit(nogil=True)
+def _symmetric_pairwise_distances(X, metric, result):
+    n = X.shape[0]
+    for i in range(n):
+        for j in range(i + 1, n):
+            d = metric(X[i], X[j])
+            result[i, j] = d
+            result[j, i] = d
+        result[i, i] = metric(X[i], X[i])
+
+
+def numba_aware_pairwise_distances(X, metric, **kwds):
+    """Same output as sklearn's ``pairwise_distances``; numba metrics loop in numba."""
+    if (
+        kwds
+        or not isinstance(metric, numba.core.registry.CPUDispatcher)
+        or not isinstance(X, np.ndarray)
+        or X.ndim != 2
+        or X.dtype not in (np.float32, np.float64)
+        or not np.all(np.isfinite(X))
+    ):
+        return pairwise_distances(X, metric=metric, **kwds)
+    result = np.empty((X.shape[0], X.shape[0]), dtype=X.dtype)
+    _symmetric_pairwise_distances(X, metric, result)
+    return result
