@@ -517,6 +517,26 @@ def initialize_labels_from_diverse_hubs(labels, n_parts, degrees, indptr, indice
     return labels
 
 
+def _fill_unsampled(graph, data, subset_mask):
+    """Base-case coordinates when some nodes have no anchor data.
+
+    Each unsampled node takes the edge-weighted mean of its sampled
+    neighbours, falling back to the mean of all sampled nodes.
+    """
+    result = np.empty((graph.shape[0], data.shape[1]), dtype=np.float32)
+    result[subset_mask] = data
+    fallback = data.mean(axis=0)
+    for i in np.flatnonzero(~subset_mask):
+        row = slice(graph.indptr[i], graph.indptr[i + 1])
+        neighbors, weights = graph.indices[row], graph.data[row]
+        keep = subset_mask[neighbors]
+        if keep.any():
+            result[i] = (weights[keep] @ result[neighbors[keep]]) / weights[keep].sum()
+        else:
+            result[i] = fallback
+    return result
+
+
 def label_propagation_init(
     graph,
     data,
@@ -549,7 +569,10 @@ def label_propagation_init(
         root_membership = np.arange(graph.shape[0], dtype=np.int64)
 
     if graph.shape[0] <= base_init_threshold:
-        result = data
+        if np.all(subset_mask):
+            result = data
+        else:
+            result = _fill_unsampled(graph, data, subset_mask)
         # Recenter
         scale = np.log10(result.shape[0]) * 3 * (np.log2(depth + 1))
         result -= np.mean(result, 0)
@@ -621,20 +644,25 @@ def label_propagation_init(
     reduced_root_membership = labels[root_membership]
 
     if not np.all(subset_mask):
-        subset_reduction_map = normalize(
-            base_reduction_map[subset_mask], axis=0, norm="l1"
-        )
+        sampled_map = base_reduction_map[subset_mask]
+        # Parts with no sampled member have no anchor position. Carry them
+        # forward as unsampled instead of letting them default to the origin,
+        # which would drag every coarser average toward (0, 0).
+        reduced_subset_mask = np.asarray(sampled_map.sum(axis=0)).ravel() > 0
+        subset_reduction_map = normalize(sampled_map, axis=0, norm="l1")
         reduced_data = (subset_reduction_map.T * data).astype(np.float32)
+        reduced_data = reduced_data[reduced_subset_mask]
     else:
         l1_normalized_reduction_map = normalize(base_reduction_map, axis=0, norm="l1")
         reduced_data = (l1_normalized_reduction_map.T * data).astype(np.float32)
+        reduced_subset_mask = np.ones(reduced_graph.shape[0], dtype=np.bool_)
 
     if recursive_init:
         next_a, next_b = _next_curve_parameters(a, b, curve_schedule)
         reduced_init = label_propagation_init(
             reduced_graph,
             reduced_data,
-            np.ones(reduced_graph.shape[0], dtype=np.bool_),
+            reduced_subset_mask,
             next_a,
             next_b,
             n_iter=n_iter,
