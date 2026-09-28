@@ -214,7 +214,7 @@ def set_aligned_params(new_params, existing_params, n_models, param_names=PARAM_
     for param in param_names:
         if param in new_params:
             if isinstance(existing_params[param], list):
-                existing_params[param].append(new_params[param])
+                existing_params[param] = existing_params[param] + [new_params[param]]
             elif isinstance(existing_params[param], tuple):
                 existing_params[param] = existing_params[param] + (new_params[param],)
             elif isinstance(existing_params[param], np.ndarray):
@@ -344,8 +344,9 @@ class AlignedUMAP(BaseEstimator):
                 "Aligned UMAP requires relations between data to be specified"
             )
 
-        self.dict_relations_ = fit_params["relations"]
-        assert type(self.dict_relations_) in (list, tuple)
+        assert type(fit_params["relations"]) in (list, tuple)
+        # Copy so that update() does not append to the caller's list
+        self.dict_relations_ = list(fit_params["relations"])
         assert type(X) in (list, tuple, np.ndarray)
         assert (len(X) - 1) == (len(self.dict_relations_))
 

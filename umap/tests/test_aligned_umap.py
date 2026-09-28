@@ -71,6 +71,21 @@ def test_aligned_update_params(aligned_iris, aligned_iris_relations):
         assert nn_accuracy(true_nn, embd_nn) >= 0.45
 
 
+def test_aligned_update_does_not_mutate_inputs(aligned_iris, aligned_iris_relations):
+    data, target = aligned_iris
+    relations = aligned_iris_relations[:2]
+    n_neighbors = [10, 10, 10]
+    model = AlignedUMAP(n_neighbors=n_neighbors, n_epochs=20)
+    model.fit(data[:3], relations=relations)
+    other_model = AlignedUMAP(n_epochs=20).fit(data[:3], relations=relations)
+    model.update(data[3], relations=aligned_iris_relations[2], n_neighbors=10)
+    assert len(relations) == 2
+    assert n_neighbors == [10, 10, 10]
+    # A second model fitted with the same relations list can still be updated
+    other_model.update(data[3], relations=aligned_iris_relations[2])
+    assert len(other_model.embeddings_) == 4
+
+
 @pytest.mark.skip(reason="Temporarily disable")
 def test_aligned_update_array_error(aligned_iris, aligned_iris_relations):
     data, target = aligned_iris
