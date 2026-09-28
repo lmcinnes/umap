@@ -39,9 +39,6 @@ from scipy.sparse import csr_matrix
 
 # Umap Clusterability
 def test_fast_knn_indices_matches_argsort():
-    # fast_knn_indices uses argpartition + partial sort for O(n) selection.
-    # On distinct (no-tie) distances it must reproduce the stable argsort result
-    # exactly, including ordering.
     rng = np.random.RandomState(0)
     D = rng.rand(200, 200).astype(np.float32)
     D = (D + D.T) / 2
@@ -52,10 +49,10 @@ def test_fast_knn_indices_matches_argsort():
     np.testing.assert_array_equal(result, expected)
 
 
-def test_fast_knn_indices_preserves_distances_with_ties():
-    # With heavy distance ties the chosen index among equidistant points may
-    # differ from argsort, but the selected neighbor *distances* must be
-    # identical (the k smallest distances are still returned).
+def test_fast_knn_indices_matches_argsort_with_ties():
+    # Duplicate points produce equal distances at the k-th neighbor; which of the
+    # tied points is selected changes the kNN graph and therefore the embedding,
+    # so ties must be broken by ascending index exactly like a stable argsort.
     rng = np.random.RandomState(1)
     D = rng.randint(0, 5, size=(150, 150)).astype(np.float32)
     D = np.minimum(D, D.T)
@@ -63,9 +60,7 @@ def test_fast_knn_indices_preserves_distances_with_ties():
     k = 15
     expected = np.argsort(D, axis=1, kind="mergesort")[:, :k]
     result = fast_knn_indices(D, k)
-    expected_dists = np.take_along_axis(D, expected, axis=1)
-    result_dists = np.take_along_axis(D, result, axis=1)
-    np.testing.assert_array_equal(result_dists, expected_dists)
+    np.testing.assert_array_equal(result, expected)
 
 
 def test_blobs_cluster():
