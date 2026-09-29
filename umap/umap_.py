@@ -2181,7 +2181,11 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         self.recursive_coarsening_ratio = recursive_coarsening_ratio
 
         # If compatibility_layout is set and init was default, change to spectral which was the old default
-        if self.compatibility_layout and self.init == "recursive":
+        if (
+            self.compatibility_layout
+            and type(self.init) is str
+            and self.init == "recursive"
+        ):
             self.init = "spectral"
         self.optimizer = optimizer
 
