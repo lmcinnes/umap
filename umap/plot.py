@@ -39,6 +39,7 @@ import sklearn.neighbors
 
 from matplotlib.patches import Patch
 
+import umap.distances as dist
 from umap.utils import submatrix, average_nn_distance
 
 from bokeh.plotting import show as show_interactive
@@ -181,9 +182,37 @@ def _embed_datashader_in_an_axis(datashader_image, ax):
     return ax
 
 
+def _input_distance_matrix(umap_object):
+    """All pairwise distances between the training points in the model's
+    input metric, computed the same way UMAP.fit does for small data."""
+    raw_data = umap_object._raw_data
+    metric_kwds = _get_metric_kwds(umap_object)
+    try:
+        # sklearn pairwise_distances fails for callable metric on sparse data
+        if umap_object._sparse_data:
+            metric = umap_object.metric
+        else:
+            metric = umap_object._input_distance_func
+        return dist.numba_aware_pairwise_distances(
+            raw_data, metric=metric, **metric_kwds
+        )
+    except (ValueError, TypeError):
+        # metric is numba.jit'd or not supported by sklearn,
+        # fallback to pairwise special
+        if umap_object._sparse_data and not callable(umap_object.metric):
+            return dist.pairwise_special_metric(
+                raw_data.toarray(),
+                metric=dist.named_distances[umap_object.metric],
+                kwds=metric_kwds,
+            )
+        return dist.pairwise_special_metric(
+            raw_data, metric=umap_object._input_distance_func, kwds=metric_kwds
+        )
+
+
 def _nhood_search(umap_object, nhood_size):
     if hasattr(umap_object, "_small_data") and umap_object._small_data:
-        dmat = sklearn.metrics.pairwise_distances(umap_object._raw_data)
+        dmat = _input_distance_matrix(umap_object)
         indices = np.argpartition(dmat, nhood_size)[:, :nhood_size]
         dmat_shortened = submatrix(dmat, indices, nhood_size)
         indices_sorted = np.argsort(dmat_shortened)
