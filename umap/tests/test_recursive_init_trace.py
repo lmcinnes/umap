@@ -261,11 +261,14 @@ def test_paired_difference_matches_runs_by_seed():
 
 
 @pytest.mark.parametrize("ratio", [2, 3, 4])
-def test_umap_routes_recursive_coarsening_ratio(monkeypatch, ratio):
+@pytest.mark.parametrize("weights", ["transition", "fuzzy_union"])
+def test_umap_routes_recursive_options(monkeypatch, ratio, weights):
     captured = {}
 
     def fake_recursive_init(graph, data, a, b, **kwargs):
         captured["ratio"] = kwargs["coarsening_ratio"]
+        captured["weights"] = kwargs["coarse_layout_weights"]
+        captured["coarsen_on_layout_weights"] = kwargs["coarsen_on_layout_weights"]
         return (
             np.random.RandomState(42)
             .normal(size=(graph.shape[0], 2))
@@ -278,12 +281,41 @@ def test_umap_routes_recursive_coarsening_ratio(monkeypatch, ratio):
     UMAP(
         init="recursive",
         recursive_coarsening_ratio=ratio,
+        coarse_layout_weights=weights,
+        coarsen_on_layout_weights=False,
         n_neighbors=5,
         n_epochs=5,
         random_state=42,
     ).fit(data)
 
     assert captured["ratio"] == ratio
+    assert captured["weights"] == weights
+    assert captured["coarsen_on_layout_weights"] is False
+
+
+def test_umap_routes_initialization_rescaling(monkeypatch):
+    captured = {}
+    original = umap_module._rescale_embedding
+
+    def capture_rescaling(*args, **kwargs):
+        captured.update(kwargs)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(umap_module, "_rescale_embedding", capture_rescaling)
+    data = np.random.RandomState(42).normal(size=(40, 4)).astype(np.float32)
+
+    UMAP(
+        init="recursive",
+        init_rescale="graph_edge",
+        init_scale_factor=1.25,
+        n_neighbors=5,
+        n_epochs=5,
+        random_state=42,
+    ).fit(data)
+
+    assert captured["method"] == "graph_edge"
+    assert captured["scale_factor"] == 1.25
+    assert captured["graph"].shape == (40, 40)
 
 
 def test_pca_anchor_methods_have_expected_membership():

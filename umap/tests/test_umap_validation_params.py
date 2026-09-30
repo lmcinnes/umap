@@ -4,10 +4,12 @@
 
 import warnings
 import numpy as np
+import scipy.sparse
 from sklearn.metrics import pairwise_distances
 import pytest
 import numba
 from umap import UMAP
+import umap.umap_ as umap_module
 
 # verify that we can import this; potentially for later use
 import umap.validation
@@ -111,6 +113,84 @@ def test_umap_accepts_recursive_coarsening_ratio(ratio):
     u = UMAP(recursive_coarsening_ratio=ratio)
 
     assert u.get_params()["recursive_coarsening_ratio"] == ratio
+
+
+def test_umap_rejects_unknown_coarse_layout_weights(nn_data):
+    u = UMAP(coarse_layout_weights="unknown")
+    with pytest.raises(ValueError, match="coarse_layout_weights"):
+        u.fit(nn_data)
+
+
+def test_umap_rejects_non_boolean_coarsen_on_layout_weights(nn_data):
+    u = UMAP(coarsen_on_layout_weights="yes")
+    with pytest.raises(ValueError, match="coarsen_on_layout_weights"):
+        u.fit(nn_data)
+
+
+def test_rescale_embedding_per_axis_matches_existing_rule():
+    embedding = np.random.RandomState(42).normal(size=(100, 2)).astype(np.float32)
+    result = umap_module._rescale_embedding(embedding, 100, 8.0)
+    expected = embedding - embedding.mean(axis=0)
+    spread = np.quantile(expected, 0.95, axis=0) - np.quantile(expected, 0.05, axis=0)
+    target = np.log10(100) * 3.0 * np.log2(9.0)
+    expected *= (target / spread).astype(np.float32)
+
+    assert np.allclose(result, expected)
+
+
+def test_rescale_embedding_isotropic_preserves_aspect_ratio():
+    embedding = np.random.RandomState(42).normal(size=(100, 2)).astype(np.float32)
+    embedding[:, 1] *= 4.0
+    result = umap_module._rescale_embedding(embedding, 100, 8.0, method="isotropic")
+    before = np.quantile(embedding, 0.95, axis=0) - np.quantile(embedding, 0.05, axis=0)
+    after = np.quantile(result, 0.95, axis=0) - np.quantile(result, 0.05, axis=0)
+
+    assert after[1] / after[0] == pytest.approx(before[1] / before[0])
+
+
+def test_rescale_embedding_graph_edge_sets_weighted_median_distance():
+    embedding = np.array([[0.0, 0.0], [2.0, 0.0], [8.0, 0.0]], dtype=np.float32)
+    graph = scipy.sparse.csr_matrix(
+        np.array(
+            [[0.0, 3.0, 0.0], [3.0, 0.0, 1.0], [0.0, 1.0, 0.0]],
+            dtype=np.float32,
+        )
+    )
+    result = umap_module._rescale_embedding(
+        embedding, 3, 8.0, method="graph_edge", scale_factor=1.25, graph=graph
+    )
+
+    assert np.linalg.norm(result[0] - result[1]) == pytest.approx(1.25)
+
+
+def test_rescale_embedding_graph_edge_handles_empty_graph():
+    embedding = np.array([[0.0, 0.0], [2.0, 0.0]], dtype=np.float32)
+    graph = scipy.sparse.csr_matrix((2, 2), dtype=np.float32)
+    result = umap_module._rescale_embedding(
+        embedding, 2, 8.0, method="graph_edge", graph=graph
+    )
+
+    assert np.allclose(result, embedding - embedding.mean(axis=0))
+
+
+@pytest.mark.parametrize("method", ["per_axis", "isotropic", "graph_edge"])
+def test_umap_accepts_initialization_rescaling(method):
+    u = UMAP(init_rescale=method, init_scale_factor=1.25)
+
+    assert u.get_params()["init_rescale"] == method
+    assert u.get_params()["init_scale_factor"] == 1.25
+
+
+@pytest.mark.parametrize("method", ["unknown", None, 1])
+def test_umap_rejects_unknown_initialization_rescaling(nn_data, method):
+    with pytest.raises(ValueError, match="init_rescale"):
+        UMAP(init_rescale=method).fit(nn_data)
+
+
+@pytest.mark.parametrize("factor", [0.0, -1.0, np.inf, np.nan, "1", True])
+def test_umap_rejects_bad_initialization_scale_factor(nn_data, factor):
+    with pytest.raises(ValueError, match="init_scale_factor"):
+        UMAP(init_scale_factor=factor).fit(nn_data)
 
 
 def test_umap_bad_numeric_init(nn_data):

@@ -1154,6 +1154,54 @@ def noisy_scale_coords(coords, random_state, max_coord=10.0, noise=0.0001):
     )
 
 
+def _rescale_embedding(
+    embedding,
+    n_vertices,
+    gamma,
+    method="per_axis",
+    scale_factor=1.0,
+    graph=None,
+):
+    """Center and robustly scale an initialization before optimization."""
+    if method not in ("per_axis", "isotropic", "graph_edge"):
+        raise ValueError(
+            "init_rescale must be 'per_axis', 'isotropic', or 'graph_edge'"
+        )
+    if not np.isfinite(scale_factor) or scale_factor <= 0.0:
+        raise ValueError("init_scale_factor must be finite and greater than zero")
+
+    result = np.asarray(embedding, dtype=np.float32).copy(order="C")
+    result -= np.mean(result, axis=0)
+    if method == "graph_edge":
+        if graph is None:
+            raise ValueError("graph is required when init_rescale='graph_edge'")
+        rows = np.repeat(np.arange(graph.shape[0]), np.diff(graph.indptr))
+        edge_distances = np.linalg.norm(result[rows] - result[graph.indices], axis=1)
+        if edge_distances.size == 0 or np.sum(graph.data, dtype=np.float64) <= 0.0:
+            return result
+        order = np.argsort(edge_distances)
+        cumulative_weight = np.cumsum(graph.data[order], dtype=np.float64)
+        median_index = np.searchsorted(cumulative_weight, cumulative_weight[-1] / 2.0)
+        characteristic_spread = edge_distances[order[median_index]]
+        if characteristic_spread == 0.0:
+            characteristic_spread = 1.0
+        result *= np.float32(scale_factor / characteristic_spread)
+        return result
+
+    target_spread = np.log10(n_vertices) * 3.0 * np.log2(gamma + 1.0) * scale_factor
+    robust_spread = np.quantile(result, 0.95, axis=0) - np.quantile(
+        result, 0.05, axis=0
+    )
+    robust_spread[robust_spread == 0.0] = 1.0
+    if method == "per_axis":
+        multiplier = target_spread / robust_spread
+    else:
+        characteristic_spread = np.exp(np.mean(np.log(robust_spread)))
+        multiplier = target_spread / characteristic_spread
+    result *= np.asarray(multiplier, dtype=np.float32)
+    return result
+
+
 @numba.njit(
     fastmath=True,
     locals={
@@ -1232,6 +1280,10 @@ def simplicial_set_embedding(
     negative_sample_scale_adaptation_samples=128,
     good_initialization=None,
     recursive_coarsening_ratio=4,
+    coarse_layout_weights="transition",
+    coarsen_on_layout_weights=True,
+    init_rescale="isotropic",
+    init_scale_factor=1.0,
 ):
     """Perform a fuzzy simplicial set embedding, using a specified
     initialisation method and then minimizing the fuzzy set cross entropy
@@ -1331,6 +1383,23 @@ def simplicial_set_embedding(
         Target reduction ratio at each recursive initialization level. Supported
         values are 2, 3, and 4. Smaller values use more coarsening levels and
         trade initialization runtime for potentially stronger initialization.
+
+    coarse_layout_weights: str (optional, default 'fuzzy_union')
+        Edge weights used to optimize recursive coarse layouts. ``'transition'``
+        normalizes outgoing inter-part weight before symmetrization;
+        ``'fuzzy_union'`` aggregates fine-graph fuzzy memberships directly.
+
+    coarsen_on_layout_weights: bool (optional, default True)
+        Whether deeper recursive levels are coarsened from the selected layout
+        weights instead of the fuzzy-union coarsening graph.
+
+    init_rescale: str (optional, default 'per_axis')
+        Robust rescaling applied to the initialization. ``'per_axis'`` gives
+        every coordinate the same 5th-to-95th percentile span; ``'isotropic'``
+        applies one multiplier and preserves the initialization's aspect ratio.
+
+    init_scale_factor: float (optional, default 1.0)
+        Multiplier for the target robust span used by ``init_rescale``.
 
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
@@ -1440,6 +1509,8 @@ def simplicial_set_embedding(
             random_state=random_state,
             verbose=verbose,
             coarsening_ratio=recursive_coarsening_ratio,
+            coarse_layout_weights=coarse_layout_weights,
+            coarsen_on_layout_weights=coarsen_on_layout_weights,
         )
     else:
         init_data = np.array(init)
@@ -1493,14 +1564,14 @@ def simplicial_set_embedding(
         if output_dens:
             aux_data["rad_orig"] = ro
 
-    # Recenter
-    scale = (
-        np.log10(embedding.shape[0]) * 3 * (np.log2(gamma + 1))
-    )  # Added log2(gamma) to scale with repulsion strength
-    embedding -= np.mean(embedding, 0)
-    embedding_spread = np.quantile(embedding, 0.95, 0) - np.quantile(embedding, 0.05, 0)
-    embedding_spread[embedding_spread == 0.0] = 1.0
-    embedding *= (scale / embedding_spread).astype(np.float32, order="C")
+    embedding = _rescale_embedding(
+        embedding,
+        embedding.shape[0],
+        gamma,
+        method=init_rescale,
+        scale_factor=init_scale_factor,
+        graph=graph,
+    )
 
     if euclidean_output:
         if compatibility_layout or optimizer == "compatibility":
@@ -1883,6 +1954,25 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         provides stronger initialization and cross-seed consistency for a modest
         runtime cost; ratio 2 favors initialization quality at a larger cost.
 
+    coarse_layout_weights: str (optional, default 'fuzzy_union')
+        Edge weights used for recursive coarse layouts. ``'transition'`` uses
+        normalized inter-part transition strengths; ``'fuzzy_union'`` directly
+        aggregates fuzzy memberships between parts.
+
+    coarsen_on_layout_weights: bool (optional, default True)
+        Whether subsequent recursive levels are built from the selected coarse
+        layout weights instead of the fuzzy-union coarsening graph.
+
+    init_rescale: str (optional, default 'per_axis')
+        Rescaling applied after initialization and before layout optimization.
+        ``'per_axis'`` gives each coordinate the same robust span;
+        ``'isotropic'`` preserves aspect ratio; ``'graph_edge'`` preserves
+        aspect ratio and scales by weighted-median attractive-edge length.
+
+    init_scale_factor: float (optional, default 1.0)
+        Global target-span multiplier for ``'per_axis'`` and ``'isotropic'``.
+        For ``'graph_edge'``, the target weighted-median edge length.
+
     min_dist: float (optional, default 0.1)
         The effective minimum distance between embedded points. Smaller values
         will result in a more clustered/clumped embedding where nearby points
@@ -2130,6 +2220,10 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         exclude_graph_neighbors=False,
         negative_sample_scale_adaptation_samples=128,
         recursive_coarsening_ratio=4,
+        coarse_layout_weights="transition",
+        coarsen_on_layout_weights=True,
+        init_rescale="isotropic",
+        init_scale_factor=1.0,
     ):
         self.n_neighbors = n_neighbors
         self.metric = metric
@@ -2179,6 +2273,10 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             negative_sample_scale_adaptation_samples
         )
         self.recursive_coarsening_ratio = recursive_coarsening_ratio
+        self.coarse_layout_weights = coarse_layout_weights
+        self.coarsen_on_layout_weights = coarsen_on_layout_weights
+        self.init_rescale = init_rescale
+        self.init_scale_factor = init_scale_factor
 
         # If compatibility_layout is set and init was default, change to spectral which was the old default
         if (
@@ -2196,6 +2294,25 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
 
     def _validate_parameters(self):
         validate_optimizer(self.optimizer)
+        if self.coarse_layout_weights not in ("transition", "fuzzy_union"):
+            raise ValueError(
+                "coarse_layout_weights must be 'transition' or 'fuzzy_union'"
+            )
+        if not isinstance(self.coarsen_on_layout_weights, (bool, np.bool_)):
+            raise ValueError("coarsen_on_layout_weights must be a boolean")
+        if self.init_rescale not in ("per_axis", "isotropic", "graph_edge"):
+            raise ValueError(
+                "init_rescale must be 'per_axis', 'isotropic', or 'graph_edge'"
+            )
+        if (
+            isinstance(self.init_scale_factor, (bool, np.bool_))
+            or not isinstance(
+                self.init_scale_factor, (int, float, np.integer, np.floating)
+            )
+            or not np.isfinite(self.init_scale_factor)
+            or self.init_scale_factor <= 0.0
+        ):
+            raise ValueError("init_scale_factor must be finite and greater than zero")
         if (
             isinstance(self.recursive_coarsening_ratio, (bool, np.bool_))
             or not isinstance(self.recursive_coarsening_ratio, (int, np.integer))
@@ -3407,6 +3524,10 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             exclude_graph_neighbors=self.exclude_graph_neighbors,
             negative_sample_scale_adaptation_samples=self.negative_sample_scale_adaptation_samples,
             recursive_coarsening_ratio=self.recursive_coarsening_ratio,
+            coarse_layout_weights=self.coarse_layout_weights,
+            coarsen_on_layout_weights=self.coarsen_on_layout_weights,
+            init_rescale=self.init_rescale,
+            init_scale_factor=self.init_scale_factor,
         )
 
     def fit_transform(self, X, y=None, ensure_all_finite=True, **kwargs):
