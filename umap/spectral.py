@@ -535,13 +535,25 @@ def _spectral_layout(
         X[:, 0] = sqrt_deg / np.linalg.norm(sqrt_deg)
 
         if method == "eigsh":
+            # The all-ones vector is a deterministic start for ARPACK, but on
+            # a regular graph (every vertex has the same degree, e.g. a
+            # connected component made of exact duplicates of one point,
+            # whose edges all have weight 1) it is an exact eigenvector of
+            # the normalised Laplacian: the Lanczos iteration breaks down at
+            # the first step and ARPACK restarts from its own internal random
+            # generator, which random_state does not control (#1277). Start
+            # from a seeded random vector in that case.
+            if np.allclose(sqrt_deg, sqrt_deg[0], rtol=1e-8, atol=0.0):
+                v0 = gen.uniform(low=-1.0, high=1.0, size=L.shape[0])
+            else:
+                v0 = np.ones(L.shape[0])
             eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
                 L,
                 k,
                 which="SM",
                 ncv=num_lanczos_vectors,
                 tol=tol or 1e-4,
-                v0=np.ones(L.shape[0]),
+                v0=v0,
                 maxiter=maxiter or graph.shape[0] * 5,
             )
         elif method == "lobpcg":
