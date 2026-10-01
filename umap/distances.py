@@ -864,18 +864,14 @@ def symmetric_kl(x, y, z=1e-11):  # pragma: no cover
     kl2 = 0.0
 
     for i in range(n):
-        x[i] += z
-        x_sum += x[i]
-        y[i] += z
-        y_sum += y[i]
+        x_sum += x[i] + z
+        y_sum += y[i] + z
 
     for i in range(n):
-        x[i] /= x_sum
-        y[i] /= y_sum
-
-    for i in range(n):
-        kl1 += x[i] * np.log(x[i] / y[i])
-        kl2 += y[i] * np.log(y[i] / x[i])
+        p = (x[i] + z) / x_sum
+        q = (y[i] + z) / y_sum
+        kl1 += p * np.log(p / q)
+        kl2 += q * np.log(q / p)
 
     return (kl1 + kl2) / 2
 
@@ -893,21 +889,21 @@ def symmetric_kl_grad(x, y, z=1e-11):  # pragma: no cover
     kl2 = 0.0
 
     for i in range(n):
-        x[i] += z
-        x_sum += x[i]
-        y[i] += z
-        y_sum += y[i]
+        x_sum += x[i] + z
+        y_sum += y[i] + z
+
+    p = (x + z) / x_sum
+    q = (y + z) / y_sum
 
     for i in range(n):
-        x[i] /= x_sum
-        y[i] /= y_sum
-
-    for i in range(n):
-        kl1 += x[i] * np.log(x[i] / y[i])
-        kl2 += y[i] * np.log(y[i] / x[i])
+        kl1 += p[i] * np.log(p[i] / q[i])
+        kl2 += q[i] * np.log(q[i] / p[i])
 
     dist = (kl1 + kl2) / 2
-    grad = (np.log(y / x) - (x / y) + 1) / 2
+    # Gradient with respect to the normalized x, then chained through the
+    # normalization p = (x + z) / sum(x + z); sum(p * grad_p) is kl1 / 2.
+    grad_p = (np.log(p / q) - (q / p) + 1) / 2
+    grad = (grad_p - kl1 / 2) / x_sum
 
     return dist, grad
 

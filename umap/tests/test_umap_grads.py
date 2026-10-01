@@ -278,9 +278,28 @@ def test_softmax_hellinger_gradient(
     )
 
 
+@pytest.mark.parametrize("dim", [4, 16, 64])
+def test_symmetric_kl_gradient(dim):
+    assert_gradient_matches_finite_diff(
+        dist.symmetric_kl,
+        dist.symmetric_kl_grad,
+        sampler=sample_abundance_pairs,
+        dim=dim,
+    )
+
+
+@pytest.mark.parametrize("func", [dist.symmetric_kl, dist.symmetric_kl_grad])
+def test_symmetric_kl_does_not_modify_inputs(func):
+    x, y = sample_abundance_pairs(1, 8, rng=np.random.default_rng(0))
+    x, y = x[0], y[0]
+    x_orig, y_orig = x.copy(), y.copy()
+    func(x, y)
+    np.testing.assert_array_equal(x, x_orig)
+    np.testing.assert_array_equal(y, y_orig)
+
+
 # TODO
 # canberra
-# symmetric_kl
 # haversine
 # hyperboloid
 # gaussian_energy
