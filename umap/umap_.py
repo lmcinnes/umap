@@ -3281,7 +3281,9 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             else:
                 n_epochs = 30
         else:
-            n_epochs = int(self.n_epochs // 3.0)
+            # n_epochs may be a list of epochs at which to save intermediate
+            # embeddings; only the largest value matters here.
+            n_epochs = int(np.max(self.n_epochs) // 3.0)
 
         graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
         graph.eliminate_zeros()
@@ -3475,7 +3477,9 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             else:
                 n_epochs = 30
         else:
-            n_epochs = int(self.n_epochs // 3.0)
+            # n_epochs may be a list of epochs at which to save intermediate
+            # embeddings; only the largest value matters here.
+            n_epochs = int(np.max(self.n_epochs) // 3.0)
 
         # graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
         # graph.eliminate_zeros()
