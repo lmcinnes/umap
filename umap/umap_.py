@@ -1451,15 +1451,26 @@ def init_graph_transform(graph, embedding):
 
 @numba.njit()
 def init_update(current_init, n_original_samples, indices):
+    # Points without any original neighbours start at the centre of the
+    # original embedding
+    centre = np.zeros(current_init.shape[1], dtype=np.float64)
+    for k in range(n_original_samples):
+        for d in range(current_init.shape[1]):
+            centre[d] += current_init[k, d]
+    centre /= n_original_samples
+
     for i in range(n_original_samples, indices.shape[0]):
         n = 0
         for j in range(indices.shape[1]):
-            for d in range(current_init.shape[1]):
-                if indices[i, j] < n_original_samples:
-                    n += 1
+            if indices[i, j] < n_original_samples:
+                n += 1
+                for d in range(current_init.shape[1]):
                     current_init[i, d] += current_init[indices[i, j], d]
         for d in range(current_init.shape[1]):
-            current_init[i, d] /= n
+            if n > 0:
+                current_init[i, d] /= n
+            else:
+                current_init[i, d] = centre[d]
 
     return
 
