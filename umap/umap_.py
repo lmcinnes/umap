@@ -3094,6 +3094,13 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 order="C",
                 ensure_all_finite=ensure_all_finite,
             )
+        # Match the sparsity of the data the model was fit on; the distance
+        # computations below assume both have the same format
+        if self.metric != "precomputed":
+            if self._sparse_data and not scipy.sparse.issparse(X):
+                X = scipy.sparse.csr_matrix(X)
+            elif not self._sparse_data and scipy.sparse.issparse(X):
+                X = X.toarray()
         x_hash = joblib.hash(X)
         if x_hash == self._input_hash:
             if self.transform_mode == "embedding":
