@@ -1,4 +1,5 @@
 from umap import UMAP
+from umap.validation import trustworthiness_vector
 from sklearn.datasets import make_blobs
 from sklearn.metrics import pairwise_distances
 import numpy as np
@@ -156,3 +157,16 @@ def test_sparse_precomputed_metric_umap_trustworthiness():
     assert (
         trust >= 0.75
     ), "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust)
+
+
+def test_trustworthiness_vector_matches_sklearn():
+    # https://github.com/lmcinnes/umap/issues/963
+    rng = np.random.RandomState(42)
+    data = rng.rand(60, 5)
+    embedding = rng.rand(60, 2)
+    max_k = 10
+    trust = trustworthiness_vector(data, embedding, max_k)
+    assert trust.shape == (max_k + 1,)
+    for k in range(1, max_k + 1):
+        expected = trustworthiness(data, embedding, n_neighbors=k)
+        np.testing.assert_allclose(trust[k], expected, rtol=1e-10)
