@@ -4,6 +4,7 @@ from warnings import warn
 
 import numpy as np
 
+import scipy.linalg
 import scipy.sparse
 import scipy.sparse.csgraph
 from sklearn.decomposition import TruncatedSVD
@@ -512,6 +513,12 @@ def _spectral_layout(
         if isinstance(random_state, (np.random.Generator, np.random.RandomState))
         else np.random.default_rng(seed=random_state)
     )
+    if n_samples < k:
+        warn(
+            "Spectral initialisation needs more samples than n_components.\n"
+            "Falling back to random initialisation!"
+        )
+        return gen.uniform(low=-10.0, high=10.0, size=(n_samples, dim))
     if not method:
         method = "eigsh" if L.shape[0] < 2000000 else "lobpcg"
 
@@ -534,7 +541,11 @@ def _spectral_layout(
         # with the exact value.
         X[:, 0] = sqrt_deg / np.linalg.norm(sqrt_deg)
 
-        if method == "eigsh":
+        if method == "eigsh" and n_samples == k:
+            # eigsh needs k < n_samples, so solve such small graphs densely
+            L_dense = L.toarray() if scipy.sparse.issparse(L) else L
+            eigenvalues, eigenvectors = scipy.linalg.eigh(L_dense)
+        elif method == "eigsh":
             eigenvalues, eigenvectors = scipy.sparse.linalg.eigsh(
                 L,
                 k,
