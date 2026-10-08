@@ -249,6 +249,25 @@ def test_umap_inverse_transform_on_iris(iris, iris_model):
         assert np.intersect1d(near_points, highd_near_points[0]).shape[0] >= 3
 
 
+# UMAP transform and inverse transform with a list of n_epochs
+# ------------------------------------------------------------
+def test_umap_transforms_with_n_epochs_list_on_iris(iris, iris_selection):
+    data = iris.data[iris_selection]
+    new_data = iris.data[~iris_selection]
+    list_fitter = UMAP(n_neighbors=10, n_epochs=[20, 100], random_state=42).fit(data)
+    int_fitter = UMAP(n_neighbors=10, n_epochs=100, random_state=42).fit(data)
+
+    # Only the largest value in the list should matter, so both models
+    # should transform (and inverse transform) identically.
+    np.testing.assert_array_equal(
+        list_fitter.transform(new_data), int_fitter.transform(new_data)
+    )
+    np.testing.assert_array_equal(
+        list_fitter.inverse_transform(int_fitter.embedding_[:5]),
+        int_fitter.inverse_transform(int_fitter.embedding_[:5]),
+    )
+
+
 def test_precomputed_knn_on_iris(iris, iris_selection, iris_subset_model):
     # this to compare two similarity graphs which should be nearly the same
     def rms(a, b):
