@@ -9,6 +9,7 @@ from sklearn.metrics import adjusted_rand_score, pairwise_distances
 from sklearn.preprocessing import normalize
 from numpy.testing import assert_array_equal
 from umap import UMAP
+from umap.umap_ import init_update
 from umap.spectral import component_layout
 import numpy as np
 import scipy.sparse
@@ -312,6 +313,27 @@ def test_umap_update_large(
     error = np.sum(np.abs((new_model.graph_ - comparison_graph).data))
 
     assert error < 3.0  # Higher error tolerance based on approx nearest neighbors
+
+
+def test_init_update_averages_original_neighbors():
+    init = np.zeros((4, 2), dtype=np.float32)
+    init[0] = [0.0, 0.0]
+    init[1] = [2.0, 4.0]
+    # point 2 has two original neighbours, point 3 has none
+    indices = np.array([[0, 1], [1, 0], [0, 1], [2, 3]])
+    init_update(init, 2, indices)
+    np.testing.assert_allclose(init[2], [1.0, 2.0])
+    # no original neighbours: fall back to the centre of the original embedding
+    np.testing.assert_allclose(init[3], [1.0, 2.0])
+
+
+def test_umap_update_new_points_without_original_neighbors(iris):
+    # https://github.com/lmcinnes/umap/issues/1075
+    # some of the new (virginica) points only have new points as neighbours
+    model = UMAP(n_epochs=20, random_state=0).fit(iris.data[:100])
+    model.update(iris.data[100:])
+    assert model.embedding_.shape == (150, 2)
+    assert np.all(np.isfinite(model.embedding_))
 
 
 # -----------------
