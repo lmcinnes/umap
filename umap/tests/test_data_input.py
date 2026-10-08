@@ -1,5 +1,6 @@
 import numpy as np
 import pytest as pytest
+import scipy.sparse
 from numba import njit
 from umap import UMAP
 
@@ -83,3 +84,24 @@ def test_check_input_data(all_finite_data, inverse_data):
 
         call_umap_functions(inf_data, "allow-nan")
         call_umap_functions(inf_nan_data, "allow-nan")
+
+
+def test_transform_dense_model_with_sparse_input():
+    data = np.random.RandomState(42).rand(50, 8)
+    model = UMAP(n_neighbors=5, n_epochs=10, random_state=42).fit(data)
+    new_data = data[:3] + 0.01
+    expected = model.transform(new_data)
+    result = model.transform(scipy.sparse.csr_matrix(new_data))
+    np.testing.assert_allclose(result, expected)
+
+
+@pytest.mark.parametrize("metric", ["jaccard", "hamming"])
+def test_transform_sparse_model_with_dense_input(metric):
+    rng = np.random.RandomState(42)
+    data = scipy.sparse.random(50, 30, density=0.2, format="csr", random_state=rng)
+    model = UMAP(metric=metric, n_neighbors=5, n_epochs=10, random_state=42)
+    model.fit(data)
+    new_data = scipy.sparse.random(3, 30, density=0.2, format="csr", random_state=rng)
+    expected = model.transform(new_data)
+    result = model.transform(new_data.toarray())
+    np.testing.assert_allclose(result, expected)
