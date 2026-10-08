@@ -1,6 +1,7 @@
 from umap.spectral import spectral_layout, tswspectral_layout
 
 import numpy as np
+import scipy.sparse
 import pytest
 import re
 from scipy.version import full_version as scipy_full_version_
@@ -49,3 +50,14 @@ def test_ensure_fallback_to_random_on_spectral_failure():
     graph = y + y.T + u @ u.T
     with pytest.warns(UserWarning, match="Spectral initialisation failed!"):
         tswspectral_layout(u, graph, k, random_state=42, maxiter=2, method="lobpcg")
+
+
+@pytest.mark.parametrize("dim", [1, 2, 3])
+def test_spectral_layout_small_graph(dim):
+    # eigsh cannot compute dim + 1 eigenvectors of a graph with that many nodes
+    graph = scipy.sparse.csr_matrix(np.ones((3, 3)) - np.eye(3))
+    data = np.random.RandomState(0).rand(3, 4)
+    with catch_warnings(record=True):
+        layout = spectral_layout(data, graph, dim, random_state=42)
+    assert layout.shape == (3, dim)
+    assert np.all(np.isfinite(layout))
