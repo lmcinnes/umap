@@ -73,7 +73,8 @@ def trustworthiness_vector(
     source, embedding, max_k, metric="euclidean"
 ):  # pragma: no cover
     tree = KDTree(embedding, metric=metric)
-    indices_embedded = tree.query(embedding, k=max_k, return_distance=False)
+    # Query one extra neighbour, since the closest one is the point itself
+    indices_embedded = tree.query(embedding, k=max_k + 1, return_distance=False)
     # Drop the actual point itself
     indices_embedded = indices_embedded[:, 1:]
 
