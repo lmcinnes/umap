@@ -188,3 +188,25 @@ def test_umap_loss_grads_finite_under_xla():
     for g in grads():
         assert g is not None
         assert not np.any(np.isnan(np.asarray(g))), "NaN gradient under XLA"
+
+
+@tf_only
+def test_torch_export_matches_encoder(moon_dataset):
+    """The torch network used by to_ONNX must reproduce the encoder output."""
+    from umap import parametric_umap
+
+    if not parametric_umap.torch_imported:
+        pytest.skip("torch and torchvision are required for the torch export")
+    import torch
+
+    embedder = ParametricUMAP(n_epochs=5)
+    embedding = embedder.fit_transform(moon_dataset)
+    # the encoder's output layer is linear, so the embedding has negative values
+    assert np.any(embedding < 0)
+
+    pm = parametric_umap.weight_copier(
+        embedder.encoder, parametric_umap.PumapNet(2, embedder.n_components)
+    )
+    with torch.no_grad():
+        torch_embedding = pm(torch.from_numpy(moon_dataset.astype(np.float32)))
+    assert_array_almost_equal(embedding, torch_embedding.numpy(), decimal=4)
