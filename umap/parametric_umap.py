@@ -1358,8 +1358,9 @@ if torch_imported:
             x = F.relu(x)
             x = self.dense3(x)
             x = F.relu(x)
+            # The default encoder's output layer is linear, so no activation
+            # here; a ReLU would clip every negative coordinate to zero.
             x = self.dense4(x)
-            x = F.relu(x)
             return x
 
     ######################
