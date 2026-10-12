@@ -352,6 +352,44 @@ def test_sparse_correlation(sparse_spatial_data):
     sparse_spatial_check("correlation", sparse_spatial_data)
 
 
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+@pytest.mark.parametrize("explicit_zeros", [False, True])
+@pytest.mark.parametrize(
+    "x,y,expected",
+    [
+        pytest.param([1, 2, 0], [1, 3, 2], 0.5, id="shared-mean"),
+        pytest.param([1, 2, 0], [2, 1, 0], 0.5, id="both-shared-means"),
+        pytest.param(
+            [1, 2, 0, 0, 2], [3, 0, 1, 0, 1], 1.0, id="implicit-zero-contribution"
+        ),
+        pytest.param([1, 2, 3], [3, 5, 1], 1.5, id="full-support"),
+        pytest.param([1, 1, 1], [1, 2, 0], 1.0, id="constant-row"),
+        pytest.param([2, 0, 0], [0, 3, 0], 1.5, id="disjoint-support"),
+        pytest.param([0, 0, 0], [1, 2, 0], 1.0, id="empty-row"),
+        pytest.param([0, 0, 0], [0, 0, 0], 0.0, id="both-empty"),
+        pytest.param([1, 1, 1], [2, 2, 2], 0.0, id="both-constant"),
+    ],
+)
+def test_sparse_correlation_with_centered_zeros(x, y, expected, explicit_zeros, dtype):
+    x = np.array(x, dtype=dtype)
+    y = np.array(y, dtype=dtype)
+    ind1 = np.arange(x.size, dtype=np.int32)
+    ind2 = np.arange(y.size, dtype=np.int32)
+    if not explicit_zeros:
+        ind1 = ind1[x != 0]
+        ind2 = ind2[y != 0]
+    data1, data2 = x[ind1], y[ind2]
+
+    assert dist.correlation(x, y) == pytest.approx(expected, abs=1e-6)
+    for args in (
+        (ind1, data1, ind2, data2),
+        (ind2, data2, ind1, data1),
+    ):
+        assert spdist.sparse_named_distances["correlation"](
+            *args, x.size
+        ) == pytest.approx(expected, abs=1e-6)
+
+
 def test_sparse_braycurtis(sparse_spatial_data):
     sparse_spatial_check("braycurtis", sparse_spatial_data)
 
