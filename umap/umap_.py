@@ -3050,17 +3050,17 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             self._unique_inverse_ = inverse
             self._data_was_uniqued = True
             # Use the unique subset for processing
-            X_processed = X[index]
+            X_indexed = X[index]
         else:
             # No uniquing needed - use original data directly
             index = None
             inverse = None
-            X_processed = X
+            X_indexed = X
             self._data_was_uniqued = False
 
         # Error check n_neighbors based on data size
-        if X_processed.shape[0] <= self.n_neighbors:
-            if X_processed.shape[0] == 1:
+        if X_indexed.shape[0] <= self.n_neighbors:
+            if X_indexed.shape[0] == 1:
                 self.embedding_ = np.zeros(
                     (1, self.n_components)
                 )  # needed to sklearn comparability
@@ -3070,7 +3070,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 "n_neighbors is larger than the dataset size; truncating to "
                 "X.shape[0] - 1"
             )
-            self._n_neighbors = X_processed.shape[0] - 1
+            self._n_neighbors = X_indexed.shape[0] - 1
             if self.densmap:
                 self._densmap_kwds["n_neighbors"] = self._n_neighbors
         else:
@@ -3092,21 +3092,21 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             # symmetrical (so we can find neighbors by looking at rows in isolation,
             # rather than also having to consider that sample's column too).
             # print("Computing KNNs for sparse precomputed distances...")
-            if sparse_tril(X_processed).getnnz() != sparse_triu(X_processed).getnnz():
+            if sparse_tril(X_indexed).getnnz() != sparse_triu(X_indexed).getnnz():
                 raise ValueError(
                     "Sparse precomputed distance matrices should be symmetrical!"
                 )
-            if not np.all(X_processed.diagonal() == 0):
+            if not np.all(X_indexed.diagonal() == 0):
                 raise ValueError("Non-zero distances from samples to themselves!")
             if self.knn_dists is None:
                 self._knn_indices = np.zeros(
-                    (X_processed.shape[0], self.n_neighbors), dtype=int
+                    (X_indexed.shape[0], self.n_neighbors), dtype=int
                 )
                 self._knn_dists = np.zeros(self._knn_indices.shape, dtype=float)
-                for row_id in range(X_processed.shape[0]):
+                for row_id in range(X_indexed.shape[0]):
                     # Find KNNs row-by-row
-                    row_data = X_processed[row_id].data
-                    row_indices = X_processed[row_id].indices
+                    row_data = X_indexed[row_id].data
+                    row_indices = X_indexed[row_id].indices
                     if len(row_data) < self._n_neighbors:
                         raise ValueError(
                             "Some rows contain fewer than n_neighbors distances!"
@@ -3129,7 +3129,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self._rhos,
                 self.graph_dists_,
             ) = fuzzy_simplicial_set(
-                X_processed,
+                X_indexed,
                 self.n_neighbors,
                 random_state,
                 "precomputed",
@@ -3157,12 +3157,12 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 verbose=self.verbose,
             )
         # Handle small cases efficiently by computing all distances
-        elif X_processed.shape[0] < 4096 and not self.force_approximation_algorithm:
+        elif X_indexed.shape[0] < 4096 and not self.force_approximation_algorithm:
             self._small_data = True
             try:
                 # sklearn pairwise_distances fails for callable metric on sparse data
                 _m = self.metric if self._sparse_data else self._input_distance_func
-                dmat = pairwise_distances(X_processed, metric=_m, **self._metric_kwds)
+                dmat = pairwise_distances(X_indexed, metric=_m, **self._metric_kwds)
             except (ValueError, TypeError) as e:
                 # metric is numba.jit'd or not supported by sklearn,
                 # fallback to pairwise special
@@ -3172,21 +3172,21 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     if not callable(self.metric):
                         _m = dist.named_distances[self.metric]
                         dmat = dist.pairwise_special_metric(
-                            X_processed.toarray(),
+                            X_indexed.toarray(),
                             metric=_m,
                             kwds=self._metric_kwds,
                             ensure_all_finite=ensure_all_finite,
                         )
                     else:
                         dmat = dist.pairwise_special_metric(
-                            X_processed,
+                            X_indexed,
                             metric=self._input_distance_func,
                             kwds=self._metric_kwds,
                             ensure_all_finite=ensure_all_finite,
                         )
                 else:
                     dmat = dist.pairwise_special_metric(
-                        X_processed,
+                        X_indexed,
                         metric=self._input_distance_func,
                         kwds=self._metric_kwds,
                         ensure_all_finite=ensure_all_finite,
@@ -3244,7 +3244,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     self._knn_dists,
                     self._knn_search_index,
                 ) = nearest_neighbors(
-                    X_processed,
+                    X_indexed,
                     self._n_neighbors,
                     nn_metric,
                     self._metric_kwds,
@@ -3272,7 +3272,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self._rhos,
                 self.graph_dists_,
             ) = fuzzy_simplicial_set(
-                X_processed,
+                X_indexed,
                 self.n_neighbors,
                 random_state,
                 nn_metric,
@@ -3429,7 +3429,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self.n_epochs_list if self.n_epochs_list is not None else self.n_epochs
             )
             embedding_unique, aux_data = self._fit_embed_data(
-                X_processed,  # Use processed data directly
+                X_indexed,  # Use processed data directly
                 epochs,
                 init,
                 random_state,
