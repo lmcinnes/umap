@@ -7,6 +7,7 @@ from sklearn.neighbors import KDTree
 from sklearn.preprocessing import normalize
 
 from umap import distances as dist
+from umap import UMAP
 from umap import umap_ as umap_module
 from umap.umap_ import (
     _rinnd_eligibility,
@@ -44,6 +45,7 @@ class FakeRINND:
     def __init__(self, data, n_neighbors, **kwargs):
         self.data = np.array(data, copy=True)
         self.kwargs = kwargs
+        self.is_prepared = False
         n_samples = data.shape[0]
         offsets = np.arange(1, n_neighbors + 1)
         # Like RINND, the graph never lists a point as its own neighbor.
@@ -52,6 +54,9 @@ class FakeRINND:
             np.tile(offsets.astype(np.float32), (n_samples, 1)),
         )
         FakeRINND.instances.append(self)
+
+    def prepare(self):
+        self.is_prepared = True
 
     def query(self, data, k=10, epsilon=0.1):
         return (
@@ -209,18 +214,36 @@ def test_rinnd_index_pickles_without_rebuilding_until_queried(fake_rinnd):
     assert indices.shape == (3, 2)
 
 
+def test_rinnd_index_prepare_delegates_and_rebuilds_after_unpickle(fake_rinnd):
+    data = np.arange(128, dtype=np.float32).reshape(32, 4) + 1.0
+    _, _, index = nearest_neighbors(
+        data, 5, "euclidean", {}, False, 42, nearest_neighbor_backend="rinnd"
+    )
+
+    assert not index._index.is_prepared
+    index.prepare()
+    assert index._index.is_prepared
+
+    restored = pickle.loads(pickle.dumps(index))
+    n_builds = len(fake_rinnd.instances)
+    restored.prepare()
+
+    assert len(fake_rinnd.instances) == n_builds + 1
+    assert restored._index.is_prepared
+
+
 def test_rinnd_index_update_rebuilds_with_appended_data(fake_rinnd):
     data = normalize(np.random.RandomState(0).normal(size=(32, 4))).astype(np.float32)
     _, _, index = nearest_neighbors(
         data, 5, "cosine", {}, True, 42, nearest_neighbor_backend="rinnd"
     )
 
-    index.prepare()
     index.update(4.0 * data[:4])
 
     assert index._raw_data.shape == (36, 4)
     assert index.neighbor_graph[0].shape == (36, 5)
     assert not fake_rinnd.instances[-1].kwargs["input_normalized"]
+    assert not index._index.is_prepared
 
 
 def test_nearest_neighbors_auto_selects_rinnd_by_size(fake_rinnd):
@@ -297,6 +320,31 @@ def test_real_rinnd_graph_matches_pynndescent_layout(metric):
     assert graph_indices.shape == indices.shape
     query_indices, _ = index.query(data[:5], 3)
     np.testing.assert_array_equal(query_indices[:, 0], np.arange(5))
+
+
+@pytest.mark.skipif(not umap_module._HAVE_RINND, reason="requires RINND >= 0.3.1")
+def test_real_rinnd_prepares_lazily_and_update_skips_prepare(monkeypatch):
+    data = np.random.RandomState(0).normal(size=(300, 8)).astype(np.float32)
+    model = UMAP(
+        n_neighbors=10,
+        n_epochs=10,
+        force_approximation_algorithm=True,
+        nearest_neighbor_backend="rinnd",
+    ).fit(data[:250])
+    index = model._knn_search_index
+
+    assert not index._index.is_prepared
+    index.prepare()
+    assert index._index.is_prepared
+
+    def fail_prepare(self):
+        raise AssertionError("RINND indexes are rebuilt, so update must not prepare")
+
+    monkeypatch.setattr(umap_module._RINNDIndex, "prepare", fail_prepare)
+    model.update(data[250:])
+
+    assert model.embedding_.shape == (300, 2)
+    assert not model._knn_search_index._index.is_prepared
 
 
 # -------------------------------------------------

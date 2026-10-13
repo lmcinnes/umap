@@ -430,15 +430,18 @@ class _RINNDIndex:
     def _raw_data(self):
         return self._data
 
-    def query(self, X, k=10, epsilon=0.1):
+    def _native_index(self):
         if self._index is None:
             if not _HAVE_RINND:
                 raise ImportError("RINND >= 0.3.1 is required to query this index")
             self._index = _build_rinnd(self._data, self._n_neighbors, **self._kwargs)
-        return self._index.query(X, k=k, epsilon=epsilon)
+        return self._index
+
+    def query(self, X, k=10, epsilon=0.1):
+        return self._native_index().query(X, k=k, epsilon=epsilon)
 
     def prepare(self):
-        pass
+        self._native_index().prepare()
 
     def update(self, X):
         self._data = np.vstack((self._data, X))
@@ -4448,7 +4451,9 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             )
 
         else:
-            self._knn_search_index.prepare()
+            if isinstance(self._knn_search_index, NNDescent):
+                # PyNNDescent's update relies on state that prepare() builds.
+                self._knn_search_index.prepare()
             self._knn_search_index.update(X)
             self._raw_data = self._knn_search_index._raw_data
             (
