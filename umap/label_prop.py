@@ -5,7 +5,7 @@ from sklearn.preprocessing import normalize
 from sklearn.utils.extmath import randomized_svd
 
 from umap.layouts import optimize_layout_euclidean
-from umap.utils import tau_rand, tau_rand_int, ts
+from umap.utils import make_epochs_per_sample, tau_rand, tau_rand_int, ts
 
 INT32_MIN = np.iinfo(np.int32).min + 1
 INT32_MAX = np.iinfo(np.int32).max - 1
@@ -17,15 +17,120 @@ def _coarsen_graph(graph, labels, remove_diagonal=False):
         (np.ones(labels.shape[0]), labels, np.arange(labels.shape[0] + 1)),
         shape=(labels.shape[0], labels.max() + 1),
     )
-    complement_graph = graph.astype(np.float64)
-    complement_graph.data = np.log1p(-np.clip(complement_graph.data, 0.0, 1.0 - 1e-16))
-    reduced_graph = reduction_map.T * complement_graph * reduction_map
-    reduced_graph.data = 1.0 - np.exp(reduced_graph.data)
+    if not graph.has_canonical_format:
+        complement_graph = graph.astype(np.float64)
+        complement_graph.data = np.log1p(
+            -np.clip(complement_graph.data, 0.0, 1.0 - 1e-16)
+        )
+        reduced_graph = reduction_map.T * complement_graph * reduction_map
+        reduced_graph.data = 1.0 - np.exp(reduced_graph.data)
+        reduced_graph.eliminate_zeros()
+        if remove_diagonal:
+            reduced_graph.setdiag(0.0)
+            reduced_graph.eliminate_zeros()
+        reduced_graph = reduced_graph.astype(np.float32)
+    else:
+        reduced_graph = _coarse_graph_from_labels(
+            graph, labels, remove_diagonal=remove_diagonal
+        )
+    return reduction_map, reduced_graph
+
+
+@numba.njit(cache=True)
+def _group_rows_by_label(labels, n_labels):
+    label_indptr = np.zeros(n_labels + 1, dtype=np.int64)
+    for row in range(labels.shape[0]):
+        label_indptr[labels[row] + 1] += 1
+    for label in range(n_labels):
+        label_indptr[label + 1] += label_indptr[label]
+
+    next_position = label_indptr[:-1].copy()
+    rows = np.empty(labels.shape[0], dtype=np.int64)
+    for row in range(labels.shape[0]):
+        label = labels[row]
+        rows[next_position[label]] = row
+        next_position[label] += 1
+    return label_indptr, rows
+
+
+@numba.njit(parallel=True, cache=True)
+def _coarse_graph_row_counts(indptr, indices, labels, label_indptr, rows):
+    n_labels = label_indptr.shape[0] - 1
+    counts = np.zeros(n_labels, dtype=np.int64)
+    for label in numba.prange(n_labels):
+        targets = {}
+        for member_index in range(label_indptr[label], label_indptr[label + 1]):
+            row = rows[member_index]
+            for edge in range(indptr[row], indptr[row + 1]):
+                targets[labels[indices[edge]]] = True
+        counts[label] = len(targets)
+    return counts
+
+
+@numba.njit(parallel=True, cache=True)
+def _coarse_graph_fill(
+    indptr, indices, weights, labels, label_indptr, rows, coarse_indptr
+):
+    coarse_indices = np.empty(coarse_indptr[-1], dtype=np.int32)
+    coarse_data = np.empty(coarse_indptr[-1], dtype=np.float64)
+
+    for label in numba.prange(label_indptr.shape[0] - 1):
+        target_sums = {}
+        for member_index in range(label_indptr[label], label_indptr[label + 1]):
+            row = rows[member_index]
+            for edge in range(indptr[row], indptr[row + 1]):
+                target = labels[indices[edge]]
+                weight = np.float64(weights[edge])
+                weight = min(max(weight, 0.0), 1.0 - 1e-16)
+                complement = np.log1p(-weight)
+                if target in target_sums:
+                    target_sums[target] += complement
+                else:
+                    target_sums[target] = complement
+
+        targets = np.empty(len(target_sums), dtype=np.int32)
+        target_index = 0
+        for target in target_sums:
+            targets[target_index] = target
+            target_index += 1
+        targets.sort()
+
+        output_index = coarse_indptr[label]
+        for target in targets:
+            coarse_indices[output_index] = target
+            coarse_data[output_index] = 1.0 - np.exp(target_sums[target])
+            output_index += 1
+
+    return coarse_indices, coarse_data
+
+
+def _coarse_graph_from_labels(graph, labels, remove_diagonal=False):
+    n_labels = labels.max() + 1
+    label_indptr, rows = _group_rows_by_label(labels, n_labels)
+    row_counts = _coarse_graph_row_counts(
+        graph.indptr, graph.indices, labels, label_indptr, rows
+    )
+    coarse_indptr = np.empty(n_labels + 1, dtype=np.int64)
+    coarse_indptr[0] = 0
+    np.cumsum(row_counts, out=coarse_indptr[1:])
+    coarse_indices, coarse_data = _coarse_graph_fill(
+        graph.indptr,
+        graph.indices,
+        graph.data,
+        labels,
+        label_indptr,
+        rows,
+        coarse_indptr,
+    )
+    reduced_graph = csr_matrix(
+        (coarse_data, coarse_indices, coarse_indptr),
+        shape=(n_labels, n_labels),
+    )
     reduced_graph.eliminate_zeros()
     if remove_diagonal:
         reduced_graph.setdiag(0.0)
         reduced_graph.eliminate_zeros()
-    return reduction_map, reduced_graph.astype(np.float32)
+    return reduced_graph.astype(np.float32)
 
 
 def _initial_curve_parameters(a, b, curve_schedule):
@@ -217,10 +322,31 @@ def _anchor_reference(
     return _scale_anchor(anchor), np.ones(n_samples, dtype=np.bool_)
 
 
-def make_epochs_per_sample(weights, n_epochs):
-    result = -1.0 * np.ones(weights.shape[0], dtype=np.float64)
-    n_samples = n_epochs * (weights / weights.max())
-    result[n_samples > 0] = float(n_epochs) / np.float64(n_samples[n_samples > 0])
+@numba.njit(parallel=True, cache=True)
+def _expand_layout(indptr, indices, weights, labels, coarse_layout):
+    n_rows = indptr.shape[0] - 1
+    n_components = coarse_layout.shape[1]
+    result = np.zeros((n_rows, n_components), dtype=np.float64)
+
+    for row in numba.prange(n_rows):
+        total_weight = 0.0
+        for edge in range(indptr[row], indptr[row + 1]):
+            weight = weights[edge]
+            total_weight += weight
+            neighbor_label = labels[indices[edge]]
+            for component in range(n_components):
+                result[row, component] += (
+                    weight * coarse_layout[neighbor_label, component]
+                )
+
+        own_label = labels[row]
+        for component in range(n_components):
+            if total_weight > 0.0:
+                result[row, component] /= total_weight
+            result[row, component] = 0.5 * (
+                result[row, component] + coarse_layout[own_label, component]
+            )
+
     return result
 
 
@@ -244,6 +370,51 @@ def procrustes_align(e1: np.ndarray, e2: np.ndarray) -> np.ndarray:
         u[:, -1] *= -1
     rotation = u @ vh
     return rotation.astype(e1.dtype)
+
+
+@numba.njit(fastmath=True, parallel=True, cache=True)
+def label_prop_iteration_share(indptr, indices, data, labels, rng_state, share):
+    """label_prop_iteration with a scale-free join rule, for coarse levels.
+
+    A node joins the label whose neighbours hold the largest weight, provided
+    that is more than ``share`` of the node's total edge weight. The fixed
+    threshold of 1 in label_prop_iteration suits UMAP's fuzzy graph (and the
+    saturated fuzzy-union coarse graphs, where any one link meets it);
+    transition weights are normalised per part, so it would never be met.
+    """
+    n_rows = indptr.shape[0] - 1
+    result = labels.copy()
+    for i in numba.prange(n_rows):
+        current_l = labels[i]
+        if current_l >= 0:
+            continue
+        local_rng_state = rng_state + i
+        votes = {}
+        total = 0.0
+        for k in range(indptr[i], indptr[i + 1]):
+            j = indices[k]
+            l = labels[j]
+            total += data[k]
+            if l in votes:
+                votes[l] += data[k]
+            else:
+                votes[l] = data[k]
+        max_vote = share * total
+        tie_count = 1
+        for l in votes:
+            if l == -1:
+                continue
+            elif votes[l] > max_vote:
+                max_vote = votes[l]
+                result[i] = l
+                tie_count = 1
+            elif votes[l] == max_vote:
+                tie_count += 1
+                if current_l == -1:
+                    result[i] = l
+                elif tau_rand(local_rng_state) < 1.0 / tie_count:
+                    result[i] = l
+    return result
 
 
 @numba.njit(fastmath=True, parallel=True, cache=True)
@@ -391,6 +562,81 @@ def initialize_labels_from_diverse_hubs(labels, n_parts, degrees, indptr, indice
     return labels
 
 
+def _fill_unsampled(graph, data, subset_mask):
+    """Base-case coordinates when some nodes have no anchor data.
+
+    Each unsampled node takes the edge-weighted mean of its sampled
+    neighbours, falling back to the mean of all sampled nodes.
+    """
+    result = np.empty((graph.shape[0], data.shape[1]), dtype=np.float32)
+    result[subset_mask] = data
+    fallback = data.mean(axis=0)
+    for i in np.flatnonzero(~subset_mask):
+        row = slice(graph.indptr[i], graph.indptr[i + 1])
+        neighbors, weights = graph.indices[row], graph.data[row]
+        keep = subset_mask[neighbors]
+        if keep.any():
+            result[i] = (weights[keep] @ result[neighbors[keep]]) / weights[keep].sum()
+        else:
+            result[i] = fallback
+    return result
+
+
+_COARSE_LAYOUT_WEIGHTS = ("transition", "fuzzy_union")
+
+
+def _coarse_layout_graph(layout_graph, reduction_map, weights):
+    """Total edge weight between parts, W = R^T W_fine R (internal weight on
+    the diagonal), or None for ``"fuzzy_union"``.
+
+    Summed level by level from the finest graph, so it stays exact down the
+    recursion; each level's layout weights are derived from it by
+    _normalised_layout_edges.
+    """
+    if weights not in _COARSE_LAYOUT_WEIGHTS:
+        raise ValueError(
+            f"coarse_layout_weights must be one of {_COARSE_LAYOUT_WEIGHTS}"
+        )
+    return (reduction_map.T @ layout_graph @ reduction_map).tocsr().astype(np.float64)
+
+
+def _normalised_layout_edges(reduced_graph, summed, weights="transition"):
+    """The graph to lay out at this level, with weights in (0, 1].
+
+    ``"transition"`` (default): built the way UMAP builds its own graph. Each
+        part's directed membership to another is the share of its external
+        connection weight that goes there, f_PQ = W_PQ / sum_Q' W_PQ' (the
+        fine graph's random-walk transition probability between parts), and
+        the two directions are combined by the fuzzy union
+        f_PQ + f_QP - f_PQ f_QP. Each part is normalised by its own
+        connections, so part sizes cancel, no single large part sets the
+        scale, and a weight nears 1 only when most of a part's connections
+        go to one other part.
+    ``"fuzzy_union"``: the coarsening graph, 1 - prod(1 - w_ij). It saturates
+        near 1 once parts hold more than a few points (on MNIST, 40% of
+        coarsest-level edges exceed 0.99, each part linking to a third of all
+        parts), so it no longer says how strongly parts are connected.
+
+    Only relative weights matter to the layout (make_epochs_per_sample divides
+    by the maximum).
+    """
+    from scipy.sparse import diags
+
+    if summed is None or weights == "fuzzy_union":
+        return reduced_graph
+    print("Using transition weights for normalised layout edges")
+    external = summed - diags(summed.diagonal())
+    external.eliminate_zeros()
+    external = external.tocsr()
+    external.sort_indices()
+    out_weight = np.asarray(external.sum(axis=1)).ravel()
+    directed = diags(1.0 / np.where(out_weight > 0, out_weight, 1.0)) @ external
+    edges = (directed + directed.T - directed.multiply(directed.T)).tocsr()
+    edges.sort_indices()
+    edges.data = np.clip(edges.data, 0.0, 1.0).astype(np.float32)
+    return edges
+
+
 def label_propagation_init(
     graph,
     data,
@@ -418,12 +664,19 @@ def label_propagation_init(
     recursive_negative_sample_rate=1,
     recursive_negative_selection_range_mode="scaled_coarse",
     recursive_negative_selection_range_scale=0.5,
+    coarse_layout_weights="transition",
+    coarsen_on_layout_weights=True,
+    label_propagation_share=0.1,
+    layout_graph=None,
 ):
     if root_membership is None:
         root_membership = np.arange(graph.shape[0], dtype=np.int64)
 
     if graph.shape[0] <= base_init_threshold:
-        result = data
+        if np.all(subset_mask):
+            result = data
+        else:
+            result = _fill_unsampled(graph, data, subset_mask)
         # Recenter
         scale = np.log10(result.shape[0]) * 3 * (np.log2(depth + 1))
         result -= np.mean(result, 0)
@@ -466,13 +719,28 @@ def label_propagation_init(
 
     prev_unlabeled = np.sum(labels < 0)
     for i in range(n_iter):
-        labels = label_prop_iteration(
-            graph.indptr,
-            graph.indices,
-            graph.data,
-            labels,
-            rng_state,
-        )
+        if (
+            coarsen_on_layout_weights
+            and layout_graph is not None
+            and coarse_layout_weights != "fuzzy_union"
+        ):
+            # Below the top level the graph carries transition weights.
+            labels = label_prop_iteration_share(
+                graph.indptr,
+                graph.indices,
+                graph.data,
+                labels,
+                rng_state,
+                label_propagation_share,
+            )
+        else:
+            labels = label_prop_iteration(
+                graph.indptr,
+                graph.indices,
+                graph.data,
+                labels,
+                rng_state,
+            )
         if i % 5 == 0:
             unlabeled = np.sum(labels < 0)
             if unlabeled == 0 or unlabeled == prev_unlabeled:
@@ -492,23 +760,39 @@ def label_propagation_init(
     base_reduction_map, reduced_graph = _coarsen_graph(
         graph, labels, remove_diagonal=remove_coarse_diagonal
     )
+    reduced_layout_graph = _coarse_layout_graph(
+        graph if layout_graph is None else layout_graph,
+        base_reduction_map,
+        coarse_layout_weights,
+    )
+    layout_edges = _normalised_layout_edges(
+        reduced_graph, reduced_layout_graph, coarse_layout_weights
+    )
+    # Optionally coarsen, label-propagate and expand the next level on the
+    # layout weights instead of the fuzzy-union graph.
+    next_graph = layout_edges if coarsen_on_layout_weights else reduced_graph
     reduced_root_membership = labels[root_membership]
 
     if not np.all(subset_mask):
-        subset_reduction_map = normalize(
-            base_reduction_map[subset_mask], axis=0, norm="l1"
-        )
+        sampled_map = base_reduction_map[subset_mask]
+        # Parts with no sampled member have no anchor position. Carry them
+        # forward as unsampled instead of letting them default to the origin,
+        # which would drag every coarser average toward (0, 0).
+        reduced_subset_mask = np.asarray(sampled_map.sum(axis=0)).ravel() > 0
+        subset_reduction_map = normalize(sampled_map, axis=0, norm="l1")
         reduced_data = (subset_reduction_map.T * data).astype(np.float32)
+        reduced_data = reduced_data[reduced_subset_mask]
     else:
         l1_normalized_reduction_map = normalize(base_reduction_map, axis=0, norm="l1")
         reduced_data = (l1_normalized_reduction_map.T * data).astype(np.float32)
+        reduced_subset_mask = np.ones(reduced_graph.shape[0], dtype=np.bool_)
 
     if recursive_init:
         next_a, next_b = _next_curve_parameters(a, b, curve_schedule)
         reduced_init = label_propagation_init(
-            reduced_graph,
+            next_graph,
             reduced_data,
-            np.ones(reduced_graph.shape[0], dtype=np.bool_),
+            reduced_subset_mask,
             next_a,
             next_b,
             n_iter=n_iter,
@@ -532,6 +816,10 @@ def label_propagation_init(
             recursive_negative_sample_rate=recursive_negative_sample_rate,
             recursive_negative_selection_range_mode=recursive_negative_selection_range_mode,
             recursive_negative_selection_range_scale=recursive_negative_selection_range_scale,
+            coarse_layout_weights=coarse_layout_weights,
+            coarsen_on_layout_weights=coarsen_on_layout_weights,
+            label_propagation_share=label_propagation_share,
+            layout_graph=reduced_layout_graph,
         ).astype(np.float32)
         good_initialization = _good_initialization(
             reduced_init,
@@ -544,7 +832,7 @@ def label_propagation_init(
         reduced_init = None
         good_initialization = False
 
-    epochs_per_sample = make_epochs_per_sample(reduced_graph.data, n_embedding_epochs)
+    epochs_per_sample = make_epochs_per_sample(layout_edges.data, n_embedding_epochs)
     resolved_repulsion_strength = float(
         _resolve_depth_schedule(recursive_repulsion_strength, depth)
     )
@@ -581,20 +869,22 @@ def label_propagation_init(
         densmap_kwds={},
         tqdm_kwds={"desc": f"Init recursion depth {depth}", "position": 1},
         move_other=False,
-        csr_indptr=reduced_graph.indptr,
-        csr_indices=reduced_graph.indices,
-        csr_data=reduced_graph.data,
+        csr_indptr=layout_edges.indptr,
+        csr_indices=layout_edges.indices,
+        csr_data=layout_edges.data,
         random_state=random_state,
         optimizer="adam",
         good_initialization=good_initialization,
         negative_selection_range=negative_selection_range,
     )
 
-    data_expander = normalize(graph @ base_reduction_map, norm="l1")
-    result = (
-        data_expander @ reduced_layout
-        + normalize(base_reduction_map, norm="l1") @ reduced_layout
-    ) / 2.0
+    result = _expand_layout(
+        graph.indptr,
+        graph.indices,
+        graph.data,
+        labels,
+        reduced_layout,
+    )
 
     result = (scaling * (result - result.mean(axis=0))).astype(np.float32)
 
@@ -629,6 +919,9 @@ def recursive_init(
     recursive_negative_sample_rate=1,
     recursive_negative_selection_range_mode="scaled_coarse",
     recursive_negative_selection_range_scale=0.5,
+    coarse_layout_weights="transition",
+    coarsen_on_layout_weights=True,
+    label_propagation_share=0.1,
 ):
     if random_state is None:
         random_state = np.random.RandomState()
@@ -668,5 +961,8 @@ def recursive_init(
         recursive_negative_sample_rate=recursive_negative_sample_rate,
         recursive_negative_selection_range_mode=recursive_negative_selection_range_mode,
         recursive_negative_selection_range_scale=recursive_negative_selection_range_scale,
+        coarse_layout_weights=coarse_layout_weights,
+        coarsen_on_layout_weights=coarsen_on_layout_weights,
+        label_propagation_share=label_propagation_share,
     )
     return init.astype(np.float32)

@@ -3,7 +3,10 @@
 # License: BSD 3 clause
 from __future__ import print_function
 
+from concurrent.futures import ThreadPoolExecutor
+import hashlib
 import locale
+import struct
 from warnings import warn
 import time
 
@@ -37,6 +40,7 @@ from umap.utils import (
     ts,
     csr_unique,
     fast_knn_indices,
+    make_epochs_per_sample,
 )
 from umap.spectral import spectral_layout, tswspectral_layout
 from umap.layouts import (
@@ -69,6 +73,9 @@ MIN_K_DIST_SCALE = 1e-3
 NPY_INFINITY = np.inf
 RINND_MIN_SAMPLES = 4096
 
+_INPUT_HASH_ALGORITHM = "blake2b-tree-v1"
+_INPUT_HASH_CHUNK_SIZE = 16 * 1024 * 1024
+
 DISCONNECTION_DISTANCES = {
     "correlation": 2,
     "cosine": 2,
@@ -77,6 +84,62 @@ DISCONNECTION_DISTANCES = {
     "bit_jaccard": 1,
     "dice": 1,
 }
+
+
+def _input_hash_chunk(chunk):
+    return hashlib.blake2b(chunk, digest_size=32, person=b"umap-chunk-v1").digest()
+
+
+def _update_input_hash(hasher, tag, array, n_jobs, chunk_size):
+    array = np.asarray(array)
+    if not array.flags.c_contiguous:
+        raise ValueError("Input hash arrays must be C-contiguous")
+
+    encoded_tag = tag.encode("ascii")
+    encoded_dtype = array.dtype.str.encode("ascii")
+    hasher.update(struct.pack("<Q", len(encoded_tag)))
+    hasher.update(encoded_tag)
+    hasher.update(struct.pack("<Q", array.ndim))
+    for dimension in array.shape:
+        hasher.update(struct.pack("<Q", dimension))
+    hasher.update(struct.pack("<Q", len(encoded_dtype)))
+    hasher.update(encoded_dtype)
+    for stride in array.strides:
+        hasher.update(struct.pack("<Q", stride))
+    hasher.update(struct.pack("<Q", array.nbytes))
+    byte_view = memoryview(array).cast("B")
+    chunk_starts = range(0, byte_view.nbytes, chunk_size)
+    hasher.update(len(chunk_starts).to_bytes(8, "little"))
+
+    chunks = (
+        byte_view[start : min(start + chunk_size, byte_view.nbytes)]
+        for start in chunk_starts
+    )
+    if n_jobs == 1:
+        digests = map(_input_hash_chunk, chunks)
+        for digest in digests:
+            hasher.update(digest)
+    else:
+        with ThreadPoolExecutor(max_workers=n_jobs) as executor:
+            for digest in executor.map(_input_hash_chunk, chunks):
+                hasher.update(digest)
+
+
+def _input_data_hash(data, n_jobs=-1, chunk_size=_INPUT_HASH_CHUNK_SIZE):
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be positive")
+
+    n_jobs = joblib.effective_n_jobs(n_jobs)
+    hasher = hashlib.blake2b(digest_size=32, person=b"umap-input-v1")
+    if scipy.sparse.isspmatrix_csr(data):
+        hasher.update(b"csr")
+        hasher.update(struct.pack("<QQ", *data.shape))
+        _update_input_hash(hasher, "data", data.data, n_jobs, chunk_size)
+        _update_input_hash(hasher, "indices", data.indices, n_jobs, chunk_size)
+        _update_input_hash(hasher, "indptr", data.indptr, n_jobs, chunk_size)
+    else:
+        _update_input_hash(hasher, "dense", data, n_jobs, chunk_size)
+    return hasher.hexdigest()
 
 
 def flatten_iter(container):
@@ -604,6 +667,133 @@ def compute_membership_strengths(
     return rows, cols, vals, dists
 
 
+@numba.njit(parallel=True, cache=True)
+def _fuzzy_set_operation_counts(
+    indptr, indices, transpose_indptr, transpose_indices, mix_ratio
+):
+    n_rows = indptr.shape[0] - 1
+    counts = np.zeros(n_rows, dtype=np.int64)
+    for row in numba.prange(n_rows):
+        left = indptr[row]
+        left_end = indptr[row + 1]
+        right = transpose_indptr[row]
+        right_end = transpose_indptr[row + 1]
+        count = 0
+        while left < left_end and right < right_end:
+            left_column = indices[left]
+            right_column = transpose_indices[right]
+            if left_column == right_column:
+                count += 1
+                left += 1
+                right += 1
+            elif left_column < right_column:
+                if mix_ratio > 0.0:
+                    count += 1
+                left += 1
+            else:
+                if mix_ratio > 0.0:
+                    count += 1
+                right += 1
+        if mix_ratio > 0.0:
+            count += left_end - left
+            count += right_end - right
+        counts[row] = count
+    return counts
+
+
+@numba.njit(parallel=True, cache=True)
+def _fuzzy_set_operation_fill(
+    indptr,
+    indices,
+    data,
+    transpose_indptr,
+    transpose_indices,
+    transpose_data,
+    result_indptr,
+    mix_ratio,
+):
+    result_indices = np.empty(result_indptr[-1], dtype=np.int32)
+    result_data = np.empty(result_indptr[-1], dtype=np.float32)
+    for row in numba.prange(indptr.shape[0] - 1):
+        left = indptr[row]
+        left_end = indptr[row + 1]
+        right = transpose_indptr[row]
+        right_end = transpose_indptr[row + 1]
+        output = result_indptr[row]
+        while left < left_end and right < right_end:
+            left_column = indices[left]
+            right_column = transpose_indices[right]
+            if left_column == right_column:
+                left_value = data[left]
+                right_value = transpose_data[right]
+                product = left_value * right_value
+                result_indices[output] = left_column
+                result_data[output] = (
+                    mix_ratio * (left_value + right_value - product)
+                    + (1.0 - mix_ratio) * product
+                )
+                output += 1
+                left += 1
+                right += 1
+            elif left_column < right_column:
+                if mix_ratio > 0.0:
+                    result_indices[output] = left_column
+                    result_data[output] = mix_ratio * data[left]
+                    output += 1
+                left += 1
+            else:
+                if mix_ratio > 0.0:
+                    result_indices[output] = right_column
+                    result_data[output] = mix_ratio * transpose_data[right]
+                    output += 1
+                right += 1
+        if mix_ratio > 0.0:
+            while left < left_end:
+                result_indices[output] = indices[left]
+                result_data[output] = mix_ratio * data[left]
+                output += 1
+                left += 1
+            while right < right_end:
+                result_indices[output] = transpose_indices[right]
+                result_data[output] = mix_ratio * transpose_data[right]
+                output += 1
+                right += 1
+    return result_indices, result_data
+
+
+def _fuzzy_set_operation(graph, set_op_mix_ratio):
+    graph = graph.tocsr()
+    graph.sum_duplicates()
+    graph.eliminate_zeros()
+    graph.sort_indices()
+    transpose = graph.transpose().tocsr()
+    row_counts = _fuzzy_set_operation_counts(
+        graph.indptr,
+        graph.indices,
+        transpose.indptr,
+        transpose.indices,
+        set_op_mix_ratio,
+    )
+    result_indptr = np.empty(graph.shape[0] + 1, dtype=np.int64)
+    result_indptr[0] = 0
+    np.cumsum(row_counts, out=result_indptr[1:])
+    result_indices, result_data = _fuzzy_set_operation_fill(
+        graph.indptr,
+        graph.indices,
+        graph.data,
+        transpose.indptr,
+        transpose.indices,
+        transpose.data,
+        result_indptr,
+        set_op_mix_ratio,
+    )
+    result = scipy.sparse.csr_matrix(
+        (result_data, result_indices, result_indptr), shape=graph.shape
+    )
+    result.eliminate_zeros()
+    return result
+
+
 def fuzzy_simplicial_set(
     X,
     n_neighbors,
@@ -755,38 +945,46 @@ def fuzzy_simplicial_set(
         knn_indices, knn_dists, sigmas, rhos, return_dists
     )
 
-    result = scipy.sparse.coo_matrix(
-        (vals, (rows, cols)), shape=(X.shape[0], X.shape[0])
-    )
-    result.eliminate_zeros()
+    if return_dists:
+        distance_graph = scipy.sparse.coo_matrix(
+            (dists, (rows, cols)), shape=(X.shape[0], X.shape[0])
+        )
+        result_dists = distance_graph.maximum(distance_graph.transpose()).todok()
+    else:
+        result_dists = None
 
-    if apply_set_operations:
-        transpose = result.transpose()
-        prod_matrix = result.multiply(transpose)
-
-        if set_op_mix_ratio == 1.0:
-            result += transpose - prod_matrix
-        else:
-            result = (
-                set_op_mix_ratio * (result + transpose - prod_matrix)
-                + (1.0 - set_op_mix_ratio) * prod_matrix
-            )
-
-    result.eliminate_zeros()
+    if apply_set_operations and not compatibility_layout:
+        membership_indptr = np.arange(
+            0,
+            vals.shape[0] + 1,
+            knn_indices.shape[1],
+            dtype=np.int64,
+        )
+        directed_graph = scipy.sparse.csr_matrix(
+            (vals, cols, membership_indptr), shape=(X.shape[0], X.shape[0])
+        )
+        result = _fuzzy_set_operation(directed_graph, set_op_mix_ratio)
+    else:
+        result = scipy.sparse.coo_matrix(
+            (vals, (rows, cols)), shape=(X.shape[0], X.shape[0])
+        )
+        result.eliminate_zeros()
+        if apply_set_operations:
+            transpose = result.transpose()
+            product = result.multiply(transpose)
+            if set_op_mix_ratio == 1.0:
+                result += transpose - product
+            else:
+                result = (
+                    set_op_mix_ratio * (result + transpose - product)
+                    + (1.0 - set_op_mix_ratio) * product
+                )
+            result.eliminate_zeros()
 
     if return_dists is None:
         return result, sigmas, rhos
     else:
-        if return_dists:
-            dmat = scipy.sparse.coo_matrix(
-                (dists, (rows, cols)), shape=(X.shape[0], X.shape[0])
-            )
-
-            dists = dmat.maximum(dmat.transpose()).todok()
-        else:
-            dists = None
-
-        return result, sigmas, rhos, dists
+        return result, sigmas, rhos, result_dists
 
 
 @numba.njit()
@@ -1075,28 +1273,6 @@ def general_simplicial_set_union(simplicial_set1, simplicial_set2):
     return result
 
 
-def make_epochs_per_sample(weights, n_epochs):
-    """Given a set of weights and number of epochs generate the number of
-    epochs per sample for each weight.
-
-    Parameters
-    ----------
-    weights: array of shape (n_1_simplices)
-        The weights of how much we wish to sample each 1-simplex.
-
-    n_epochs: int
-        The total number of epochs we want to train for.
-
-    Returns
-    -------
-    An array of number of epochs per sample, one for each 1-simplex.
-    """
-    result = -1.0 * np.ones(weights.shape[0], dtype=np.float64)
-    n_samples = n_epochs * (weights / weights.max())
-    result[n_samples > 0] = float(n_epochs) / np.float64(n_samples[n_samples > 0])
-    return result
-
-
 # scale coords so that the largest coordinate is max_coords, then add normal-distributed
 # noise with standard deviation noise
 def noisy_scale_coords(coords, random_state, max_coord=10.0, noise=0.0001):
@@ -1105,6 +1281,54 @@ def noisy_scale_coords(coords, random_state, max_coord=10.0, noise=0.0001):
     return coords + random_state.normal(scale=noise, size=coords.shape).astype(
         np.float32
     )
+
+
+def _rescale_embedding(
+    embedding,
+    n_vertices,
+    gamma,
+    method="per_axis",
+    scale_factor=1.0,
+    graph=None,
+):
+    """Center and robustly scale an initialization before optimization."""
+    if method not in ("per_axis", "isotropic", "graph_edge"):
+        raise ValueError(
+            "init_rescale must be 'per_axis', 'isotropic', or 'graph_edge'"
+        )
+    if not np.isfinite(scale_factor) or scale_factor <= 0.0:
+        raise ValueError("init_scale_factor must be finite and greater than zero")
+
+    result = np.asarray(embedding, dtype=np.float32).copy(order="C")
+    result -= np.mean(result, axis=0)
+    if method == "graph_edge":
+        if graph is None:
+            raise ValueError("graph is required when init_rescale='graph_edge'")
+        rows = np.repeat(np.arange(graph.shape[0]), np.diff(graph.indptr))
+        edge_distances = np.linalg.norm(result[rows] - result[graph.indices], axis=1)
+        if edge_distances.size == 0 or np.sum(graph.data, dtype=np.float64) <= 0.0:
+            return result
+        order = np.argsort(edge_distances)
+        cumulative_weight = np.cumsum(graph.data[order], dtype=np.float64)
+        median_index = np.searchsorted(cumulative_weight, cumulative_weight[-1] / 2.0)
+        characteristic_spread = edge_distances[order[median_index]]
+        if characteristic_spread == 0.0:
+            characteristic_spread = 1.0
+        result *= np.float32(scale_factor / characteristic_spread)
+        return result
+
+    target_spread = np.log10(n_vertices) * 3.0 * np.log2(gamma + 1.0) * scale_factor
+    robust_spread = np.quantile(result, 0.95, axis=0) - np.quantile(
+        result, 0.05, axis=0
+    )
+    robust_spread[robust_spread == 0.0] = 1.0
+    if method == "per_axis":
+        multiplier = target_spread / robust_spread
+    else:
+        characteristic_spread = np.exp(np.mean(np.log(robust_spread)))
+        multiplier = target_spread / characteristic_spread
+    result *= np.asarray(multiplier, dtype=np.float32)
+    return result
 
 
 @numba.njit(
@@ -1185,6 +1409,10 @@ def simplicial_set_embedding(
     negative_sample_scale_adaptation_samples=128,
     good_initialization=None,
     recursive_coarsening_ratio=4,
+    coarse_layout_weights="transition",
+    coarsen_on_layout_weights=True,
+    init_rescale="isotropic",
+    init_scale_factor=1.0,
 ):
     """Perform a fuzzy simplicial set embedding, using a specified
     initialisation method and then minimizing the fuzzy set cross entropy
@@ -1284,6 +1512,23 @@ def simplicial_set_embedding(
         Target reduction ratio at each recursive initialization level. Supported
         values are 2, 3, and 4. Smaller values use more coarsening levels and
         trade initialization runtime for potentially stronger initialization.
+
+    coarse_layout_weights: str (optional, default 'fuzzy_union')
+        Edge weights used to optimize recursive coarse layouts. ``'transition'``
+        normalizes outgoing inter-part weight before symmetrization;
+        ``'fuzzy_union'`` aggregates fine-graph fuzzy memberships directly.
+
+    coarsen_on_layout_weights: bool (optional, default True)
+        Whether deeper recursive levels are coarsened from the selected layout
+        weights instead of the fuzzy-union coarsening graph.
+
+    init_rescale: str (optional, default 'per_axis')
+        Robust rescaling applied to the initialization. ``'per_axis'`` gives
+        every coordinate the same 5th-to-95th percentile span; ``'isotropic'``
+        applies one multiplier and preserves the initialization's aspect ratio.
+
+    init_scale_factor: float (optional, default 1.0)
+        Multiplier for the target robust span used by ``init_rescale``.
 
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
@@ -1393,6 +1638,8 @@ def simplicial_set_embedding(
             random_state=random_state,
             verbose=verbose,
             coarsening_ratio=recursive_coarsening_ratio,
+            coarse_layout_weights=coarse_layout_weights,
+            coarsen_on_layout_weights=coarsen_on_layout_weights,
         )
     else:
         init_data = np.array(init)
@@ -1446,14 +1693,14 @@ def simplicial_set_embedding(
         if output_dens:
             aux_data["rad_orig"] = ro
 
-    # Recenter
-    scale = (
-        np.log10(embedding.shape[0]) * 3 * (np.log2(gamma + 1))
-    )  # Added log2(gamma) to scale with repulsion strength
-    embedding -= np.mean(embedding, 0)
-    embedding_spread = np.quantile(embedding, 0.95, 0) - np.quantile(embedding, 0.05, 0)
-    embedding_spread[embedding_spread == 0.0] = 1.0
-    embedding *= (scale / embedding_spread).astype(np.float32, order="C")
+    embedding = _rescale_embedding(
+        embedding,
+        embedding.shape[0],
+        gamma,
+        method=init_rescale,
+        scale_factor=init_scale_factor,
+        graph=graph,
+    )
 
     if euclidean_output:
         if compatibility_layout or optimizer == "compatibility":
@@ -1836,6 +2083,25 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         provides stronger initialization and cross-seed consistency for a modest
         runtime cost; ratio 2 favors initialization quality at a larger cost.
 
+    coarse_layout_weights: str (optional, default 'fuzzy_union')
+        Edge weights used for recursive coarse layouts. ``'transition'`` uses
+        normalized inter-part transition strengths; ``'fuzzy_union'`` directly
+        aggregates fuzzy memberships between parts.
+
+    coarsen_on_layout_weights: bool (optional, default True)
+        Whether subsequent recursive levels are built from the selected coarse
+        layout weights instead of the fuzzy-union coarsening graph.
+
+    init_rescale: str (optional, default 'per_axis')
+        Rescaling applied after initialization and before layout optimization.
+        ``'per_axis'`` gives each coordinate the same robust span;
+        ``'isotropic'`` preserves aspect ratio; ``'graph_edge'`` preserves
+        aspect ratio and scales by weighted-median attractive-edge length.
+
+    init_scale_factor: float (optional, default 1.0)
+        Global target-span multiplier for ``'per_axis'`` and ``'isotropic'``.
+        For ``'graph_edge'``, the target weighted-median edge length.
+
     min_dist: float (optional, default 0.1)
         The effective minimum distance between embedded points. Smaller values
         will result in a more clustered/clumped embedding where nearby points
@@ -2095,6 +2361,10 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         negative_sample_scale_adaptation_samples=128,
         recursive_coarsening_ratio=4,
         nearest_neighbor_backend="auto",
+        coarse_layout_weights="transition",
+        coarsen_on_layout_weights=True,
+        init_rescale="isotropic",
+        init_scale_factor=1.0,
     ):
         self.n_neighbors = n_neighbors
         self.metric = metric
@@ -2145,9 +2415,17 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         )
         self.recursive_coarsening_ratio = recursive_coarsening_ratio
         self.nearest_neighbor_backend = nearest_neighbor_backend
+        self.coarse_layout_weights = coarse_layout_weights
+        self.coarsen_on_layout_weights = coarsen_on_layout_weights
+        self.init_rescale = init_rescale
+        self.init_scale_factor = init_scale_factor
 
         # If compatibility_layout is set and init was default, change to spectral which was the old default
-        if self.compatibility_layout and self.init == "recursive":
+        if (
+            self.compatibility_layout
+            and type(self.init) is str
+            and self.init == "recursive"
+        ):
             self.init = "spectral"
         self.optimizer = optimizer
 
@@ -2158,6 +2436,25 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
 
     def _validate_parameters(self):
         validate_optimizer(self.optimizer)
+        if self.coarse_layout_weights not in ("transition", "fuzzy_union"):
+            raise ValueError(
+                "coarse_layout_weights must be 'transition' or 'fuzzy_union'"
+            )
+        if not isinstance(self.coarsen_on_layout_weights, (bool, np.bool_)):
+            raise ValueError("coarsen_on_layout_weights must be a boolean")
+        if self.init_rescale not in ("per_axis", "isotropic", "graph_edge"):
+            raise ValueError(
+                "init_rescale must be 'per_axis', 'isotropic', or 'graph_edge'"
+            )
+        if (
+            isinstance(self.init_scale_factor, (bool, np.bool_))
+            or not isinstance(
+                self.init_scale_factor, (int, float, np.integer, np.floating)
+            )
+            or not np.isfinite(self.init_scale_factor)
+            or self.init_scale_factor <= 0.0
+        ):
+            raise ValueError("init_scale_factor must be finite and greater than zero")
         if (
             isinstance(self.recursive_coarsening_ratio, (bool, np.bool_))
             or not isinstance(self.recursive_coarsening_ratio, (int, np.integer))
@@ -2992,6 +3289,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 True,
                 self.verbose,
                 self.densmap or self.output_dens,
+                compatibility_layout=self.compatibility_layout,
             )
             # Report the number of vertices with degree 0 in our our umap.graph_
             # This ensures that they were properly disconnected.
@@ -3063,6 +3361,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 True,
                 self.verbose,
                 self.densmap or self.output_dens,
+                compatibility_layout=self.compatibility_layout,
             )
             # Report the number of vertices with degree 0 in our umap.graph_
             # This ensures that they were properly disconnected.
@@ -3134,6 +3433,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 True,
                 self.verbose,
                 self.densmap or self.output_dens,
+                compatibility_layout=self.compatibility_layout,
             )
             # Report the number of vertices with degree 0 in our umap.graph_
             # This ensures that they were properly disconnected.
@@ -3326,7 +3626,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             print(ts() + " Finished embedding")
 
         numba.set_num_threads(self._original_n_threads)
-        self._input_hash = joblib.hash(self._raw_data)
+        self._input_hash = _input_data_hash(self._raw_data, self.n_jobs)
+        self._input_hash_algorithm = _INPUT_HASH_ALGORITHM
 
         if self.transform_mode == "embedding":
             # Set number of features out for sklearn API
@@ -3371,6 +3672,10 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             exclude_graph_neighbors=self.exclude_graph_neighbors,
             negative_sample_scale_adaptation_samples=self.negative_sample_scale_adaptation_samples,
             recursive_coarsening_ratio=self.recursive_coarsening_ratio,
+            coarse_layout_weights=self.coarse_layout_weights,
+            coarsen_on_layout_weights=self.coarsen_on_layout_weights,
+            init_rescale=self.init_rescale,
+            init_scale_factor=self.init_scale_factor,
         )
 
     def fit_transform(self, X, y=None, ensure_all_finite=True, **kwargs):
@@ -3464,7 +3769,10 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 order="C",
                 ensure_all_finite=ensure_all_finite,
             )
-        x_hash = joblib.hash(X)
+        if getattr(self, "_input_hash_algorithm", None) == _INPUT_HASH_ALGORITHM:
+            x_hash = _input_data_hash(X, self.n_jobs)
+        else:
+            x_hash = joblib.hash(X)
         if x_hash == self._input_hash:
             if self.transform_mode == "embedding":
                 return self.embedding_
@@ -4170,6 +4478,9 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         if self.output_dens:
             self.rad_orig_ = aux_data["rad_orig"]
             self.rad_emb_ = aux_data["rad_emb"]
+
+        self._input_hash = _input_data_hash(self._raw_data, self.n_jobs)
+        self._input_hash_algorithm = _INPUT_HASH_ALGORITHM
 
     def __repr__(self):
         from sklearn.utils._pprint import _EstimatorPrettyPrinter
