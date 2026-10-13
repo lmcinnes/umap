@@ -434,9 +434,7 @@ class _RINNDIndex:
         if self._index is None:
             if not _HAVE_RINND:
                 raise ImportError("RINND >= 0.3.1 is required to query this index")
-            self._index = _build_rinnd(
-                self._data, self._n_neighbors, **self._kwargs
-            )
+            self._index = _build_rinnd(self._data, self._n_neighbors, **self._kwargs)
         return self._index.query(X, k=k, epsilon=epsilon)
 
     def prepare(self):
@@ -2828,7 +2826,9 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self.knn_dists = self.knn_dists[:, : self.n_neighbors]
 
     def _nn_metric(self):
-        named = pynn_sparse_named_distances if self._sparse_data else pynn_named_distances
+        named = (
+            pynn_sparse_named_distances if self._sparse_data else pynn_named_distances
+        )
         return self.metric if self.metric in named else self._input_distance_func
 
     def _check_custom_metric(self, metric, kwds, data=None):

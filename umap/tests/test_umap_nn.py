@@ -168,9 +168,7 @@ def test_nearest_neighbors_rinnd_honors_n_jobs_and_includes_self(fake_rinnd):
 def test_nearest_neighbors_rinnd_skips_normalizing_normalized_cosine_data(fake_rinnd):
     data = normalize(np.random.RandomState(0).normal(size=(32, 4))).astype(np.float32)
 
-    nearest_neighbors(
-        data, 5, "cosine", {}, True, 42, nearest_neighbor_backend="rinnd"
-    )
+    nearest_neighbors(data, 5, "cosine", {}, True, 42, nearest_neighbor_backend="rinnd")
 
     assert fake_rinnd.instances[-1].kwargs["input_normalized"]
 
