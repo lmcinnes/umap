@@ -6,6 +6,8 @@ import numpy as np
 import scipy.stats
 from sklearn.metrics import pairwise_distances
 
+from umap.utils import FASTMATH_FLAGS
+
 _mock_identity = np.eye(2, dtype=np.float64)
 _mock_cost = 1.0 - _mock_identity
 _mock_ones = np.ones(2, dtype=np.float64)
@@ -19,7 +21,7 @@ def sign(a):
         return 1
 
 
-@numba.njit(fastmath=True)
+@numba.njit(fastmath=FASTMATH_FLAGS)
 def euclidean(x, y):
     r"""Standard euclidean distance.
 
@@ -32,7 +34,7 @@ def euclidean(x, y):
     return np.sqrt(result)
 
 
-@numba.njit(fastmath=True)
+@numba.njit(fastmath=FASTMATH_FLAGS)
 def euclidean_grad(x, y):
     r"""Standard euclidean distance and its gradient.
 
@@ -63,7 +65,7 @@ def standardised_euclidean(x, y, sigma=_mock_ones):
     return np.sqrt(result)
 
 
-@numba.njit(fastmath=True)
+@numba.njit(fastmath=FASTMATH_FLAGS)
 def standardised_euclidean_grad(x, y, sigma=_mock_ones):
     r"""Euclidean distance standardised against a vector of standard
     deviations per coordinate with gradient.
@@ -571,7 +573,7 @@ def cosine(x, y):
         return 1.0 - (result / np.sqrt(norm_x * norm_y))
 
 
-@numba.njit(fastmath=True)
+@numba.njit(fastmath=FASTMATH_FLAGS)
 def cosine_grad(x, y):
     result = 0.0
     norm_x = 0.0
@@ -747,7 +749,7 @@ def ll_dirichlet(data1, data2):
     )
 
 
-@numba.njit(fastmath=True)
+@numba.njit(fastmath=FASTMATH_FLAGS)
 def symmetric_kl(x, y, z=1e-11):  # pragma: no cover
     r"""
     symmetrized KL divergence between two probability distributions
@@ -778,7 +780,7 @@ def symmetric_kl(x, y, z=1e-11):  # pragma: no cover
     return (kl1 + kl2) / 2
 
 
-@numba.njit(fastmath=True)
+@numba.njit(fastmath=FASTMATH_FLAGS)
 def symmetric_kl_grad(x, y, z=1e-11):  # pragma: no cover
     """
     symmetrized KL divergence and its gradient
@@ -845,7 +847,7 @@ def correlation_grad(x, y):
     return dist, grad
 
 
-@numba.njit(fastmath=True)
+@numba.njit(fastmath=FASTMATH_FLAGS)
 def sinkhorn_distance(
     x, y, M=_mock_identity, cost=_mock_cost, maxiter=64
 ):  # pragma: no cover
@@ -871,7 +873,7 @@ def sinkhorn_distance(
     return result
 
 
-@numba.njit(fastmath=True)
+@numba.njit(fastmath=FASTMATH_FLAGS)
 def spherical_gaussian_energy_grad(x, y):  # pragma: no cover
     mu_1 = x[0] - y[0]
     mu_2 = x[1] - y[1]
@@ -889,7 +891,7 @@ def spherical_gaussian_energy_grad(x, y):  # pragma: no cover
     return dist, grad
 
 
-@numba.njit(fastmath=True)
+@numba.njit(fastmath=FASTMATH_FLAGS)
 def diagonal_gaussian_energy_grad(x, y):  # pragma: no cover
     mu_1 = x[0] - y[0]
     mu_2 = x[1] - y[1]
@@ -924,7 +926,7 @@ def diagonal_gaussian_energy_grad(x, y):  # pragma: no cover
     return dist, grad
 
 
-@numba.njit(fastmath=True)
+@numba.njit(fastmath=FASTMATH_FLAGS)
 def gaussian_energy_grad(x, y):  # pragma: no cover
     mu_1 = x[0] - y[0]
     mu_2 = x[1] - y[1]
@@ -997,7 +999,7 @@ def gaussian_energy_grad(x, y):  # pragma: no cover
     return dist, grad
 
 
-@numba.njit(fastmath=True)
+@numba.njit(fastmath=FASTMATH_FLAGS)
 def spherical_gaussian_grad(x, y):  # pragma: no cover
     mu_1 = x[0] - y[0]
     mu_2 = x[1] - y[1]
@@ -1280,7 +1282,7 @@ def pairwise_special_metric(
         else:
             kwd_vals = ()
 
-        @numba.njit(fastmath=True)
+        @numba.njit(fastmath=FASTMATH_FLAGS)
         def _partial_metric(_X, _Y=None):
             return metric(_X, _Y, *kwd_vals)
 

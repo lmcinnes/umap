@@ -3,7 +3,7 @@ import numpy as np
 from tqdm.auto import tqdm
 
 import umap.distances as dist
-from umap.utils import adaptive_bucket_sort, tau_rand_int
+from umap.utils import FASTMATH_FLAGS, adaptive_bucket_sort, tau_rand_int
 
 PUBLIC_OPTIMIZERS = ("adam", "momentum", "compatibility")
 GENERIC_NEGATIVE_SEARCH_MAX_CANDIDATES = 4
@@ -56,7 +56,7 @@ def clip(val):
 
 @numba.njit(
     "f4(f4[::1],f4[::1])",
-    fastmath=True,
+    fastmath=FASTMATH_FLAGS,
     cache=True,
     locals={
         "result": numba.types.float32,
@@ -214,7 +214,7 @@ def _optimize_layout_euclidean_single_epoch(
 
 @numba.njit(
     "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], i4[::1], i4[::1], i4[::1], i8, i8, f8, b1)",
-    fastmath=True,
+    fastmath=FASTMATH_FLAGS,
     parallel=True,
     locals={
         "updates": numba.types.float32[:, ::1],
@@ -345,7 +345,7 @@ def optimize_layout_euclidean_single_epoch_momentum(
 
 @numba.njit(
     "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], f4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], i4[::1], i4[::1], b1)",
-    fastmath=True,
+    fastmath=FASTMATH_FLAGS,
     parallel=True,
     locals={
         "updates": numba.types.float32[:, ::1],
@@ -545,7 +545,7 @@ def _sample_negative_force_ratio(
 
 @numba.njit(
     "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], f4[:, ::1], f4[:, ::1], f8, f8, i4[::1], i4[::1], i4[::1], i8, i8, f8, b1)",
-    fastmath=True,
+    fastmath=FASTMATH_FLAGS,
     parallel=True,
     locals={
         "updates": numba.types.float32[:, ::1],
@@ -698,7 +698,7 @@ def optimize_layout_euclidean_single_epoch_adam(
 
 @numba.njit(
     "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], f8, f8, f4[::1], f4[::1])",
-    fastmath=True,
+    fastmath=FASTMATH_FLAGS,
     parallel=True,
     cache=True,
     locals={
@@ -746,7 +746,7 @@ def _optimize_layout_euclidean_densmap_epoch_init_coo(
 
 @numba.njit(
     "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], f4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], f4[:, ::1], f4[:, ::1], f8, f8, i4[::1], i4[::1], b1)",
-    fastmath=True,
+    fastmath=FASTMATH_FLAGS,
     parallel=True,
     locals={
         "updates": numba.types.float32[:, ::1],
@@ -888,7 +888,7 @@ def optimize_small_layout_euclidean_single_epoch_adam(
 
 
 @numba.njit(
-    fastmath=True,
+    fastmath=FASTMATH_FLAGS,
     parallel=True,
     locals={
         "updates": numba.types.float32[:, ::1],
@@ -1040,7 +1040,7 @@ def optimize_layout_euclidean_single_epoch_momentum_densmap(
 
 
 @numba.njit(
-    fastmath=True,
+    fastmath=FASTMATH_FLAGS,
     parallel=True,
     locals={
         "updates": numba.types.float32[:, ::1],
@@ -1205,7 +1205,7 @@ def optimize_layout_euclidean_single_epoch_adam_densmap(
 
 @numba.njit(
     "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], f8, f8, f4[::1], f4[::1])",
-    fastmath=True,
+    fastmath=FASTMATH_FLAGS,
     parallel=True,
     cache=True,
     locals={
@@ -1252,11 +1252,11 @@ def _optimize_layout_euclidean_densmap_epoch_init_csr(
 
 
 _nb_optimize_layout_euclidean_single_epoch = numba.njit(
-    _optimize_layout_euclidean_single_epoch, fastmath=True, parallel=False
+    _optimize_layout_euclidean_single_epoch, fastmath=FASTMATH_FLAGS, parallel=False
 )
 
 _nb_optimize_layout_euclidean_single_epoch_parallel = numba.njit(
-    _optimize_layout_euclidean_single_epoch, fastmath=True, parallel=True
+    _optimize_layout_euclidean_single_epoch, fastmath=FASTMATH_FLAGS, parallel=True
 )
 
 
@@ -2191,7 +2191,7 @@ def _optimize_layout_generic_single_epoch(
 
 
 @numba.njit(
-    fastmath=True,
+    fastmath=FASTMATH_FLAGS,
     parallel=True,
     locals={
         "grad_d": numba.types.float32,
@@ -2313,7 +2313,7 @@ def _optimize_layout_generic_single_epoch_momentum(
 
 
 @numba.njit(
-    fastmath=True,
+    fastmath=FASTMATH_FLAGS,
     parallel=True,
     locals={
         "grad_d": numba.types.float32,
@@ -2454,7 +2454,7 @@ def _optimize_layout_generic_single_epoch_adam(
 def _initialize_generic_compatibility(head_embedding, rng_state):
     optimize_fn = numba.njit(
         _optimize_layout_generic_single_epoch,
-        fastmath=True,
+        fastmath=FASTMATH_FLAGS,
     )
     rng_state_per_sample = np.full(
         (head_embedding.shape[0], len(rng_state)), rng_state, dtype=np.int64
@@ -3180,7 +3180,7 @@ def _optimize_layout_aligned_euclidean_single_epoch(
 # ``optimize_layout_aligned_euclidean`` deliberately retains the established
 # immediate-update aligned objective until these variants have behavior parity.
 @numba.njit(
-    fastmath=True,
+    fastmath=FASTMATH_FLAGS,
     parallel=True,
     locals={
         "from_node": numba.types.intp,
@@ -3364,7 +3364,7 @@ def _optimize_layout_aligned_euclidean_single_epoch_momentum_experimental(
 
 
 @numba.njit(
-    fastmath=True,
+    fastmath=FASTMATH_FLAGS,
     parallel=True,
     locals={
         "from_node": numba.types.intp,
@@ -3622,7 +3622,7 @@ def optimize_layout_aligned_euclidean(
 
     optimize_fn = numba.njit(
         _optimize_layout_aligned_euclidean_single_epoch,
-        fastmath=True,
+        fastmath=FASTMATH_FLAGS,
         parallel=parallel,
     )
 

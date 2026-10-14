@@ -5,7 +5,13 @@ from sklearn.preprocessing import normalize
 from sklearn.utils.extmath import randomized_svd
 
 from umap.layouts import optimize_layout_euclidean
-from umap.utils import make_epochs_per_sample, tau_rand, tau_rand_int, ts
+from umap.utils import (
+    FASTMATH_FLAGS,
+    make_epochs_per_sample,
+    tau_rand,
+    tau_rand_int,
+    ts,
+)
 
 INT32_MIN = np.iinfo(np.int32).min + 1
 INT32_MAX = np.iinfo(np.int32).max - 1
@@ -372,7 +378,7 @@ def procrustes_align(e1: np.ndarray, e2: np.ndarray) -> np.ndarray:
     return rotation.astype(e1.dtype)
 
 
-@numba.njit(fastmath=True, parallel=True, cache=True)
+@numba.njit(fastmath=FASTMATH_FLAGS, parallel=True, cache=True)
 def label_prop_iteration_share(indptr, indices, data, labels, rng_state, share):
     """label_prop_iteration with a scale-free join rule, for coarse levels.
 
@@ -417,7 +423,7 @@ def label_prop_iteration_share(indptr, indices, data, labels, rng_state, share):
     return result
 
 
-@numba.njit(fastmath=True, parallel=True, cache=True)
+@numba.njit(fastmath=FASTMATH_FLAGS, parallel=True, cache=True)
 def label_prop_iteration(
     indptr,
     indices,

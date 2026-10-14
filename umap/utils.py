@@ -10,6 +10,9 @@ import numba
 from sklearn.utils.validation import check_is_fitted
 import scipy.sparse
 
+# All fastmath flags except nnan/ninf: LLVM 20+ (numba>=0.62) folds away inf/nan checks under those.
+FASTMATH_FLAGS = {"nsz", "arcp", "contract", "afn", "reassoc"}
+
 
 @numba.njit(parallel=True)
 def fast_knn_indices(X, n_neighbors):
@@ -236,7 +239,7 @@ def make_epochs_per_sample(weights, n_epochs):
     return result
 
 
-@numba.njit(fastmath=True, parallel=True, cache=True)
+@numba.njit(fastmath=FASTMATH_FLAGS, parallel=True, cache=True)
 def adaptive_bucket_sort(values, target_bucket_size=1000, sample_fraction=0.01):
 
     n_values = values.shape[0]

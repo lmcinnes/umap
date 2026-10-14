@@ -36,6 +36,7 @@ import umap.distances as dist
 import umap.sparse as sparse
 
 from umap.utils import (
+    FASTMATH_FLAGS,
     submatrix,
     ts,
     csr_unique,
@@ -212,7 +213,7 @@ def raise_disconnected_warning(
         "mid": numba.types.float32,
         "hi": numba.types.float32,
     },
-    fastmath=True,
+    fastmath=FASTMATH_FLAGS,
     parallel=True,
 )  # benchmarking `parallel=True` shows it to *decrease* performance
 def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0):
@@ -455,7 +456,7 @@ def nearest_neighbors(
         "val": numba.types.float32,
     },
     parallel=True,
-    fastmath=True,
+    fastmath=FASTMATH_FLAGS,
 )
 def compute_membership_strengths(
     knn_indices,
@@ -1203,7 +1204,7 @@ def _rescale_embedding(
 
 
 @numba.njit(
-    fastmath=True,
+    fastmath=FASTMATH_FLAGS,
     locals={
         "mu_sum": numba.types.float32[:],
         "ro": numba.types.float32[:],
@@ -2421,7 +2422,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             if in_returns_grad:
                 _m = self.metric
 
-                @numba.njit(fastmath=True)
+                @numba.njit(fastmath=FASTMATH_FLAGS)
                 def _dist_only(x, y, *kwds):
                     return _m(x, y, *kwds)[0]
 
@@ -3995,7 +3996,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             # during param validation in `fit` method)
             _out_m = self.output_metric
 
-            @numba.njit(fastmath=True)
+            @numba.njit(fastmath=FASTMATH_FLAGS)
             def _output_dist_only(x, y, *kwds):
                 return _out_m(x, y, *kwds)[0]
 
