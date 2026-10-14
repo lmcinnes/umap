@@ -248,7 +248,7 @@ random seed.
 
 As we can see, by fixing the *random_seed* and the *n_neighbors* for the
 knn, we have been able to obtain identical results from both UMAP runs.
-In contrast, if these differ, we can’t gaurantee the same result.
+In contrast, if these differ, we can’t guarantee the same result.
 
 .. code:: python3
 

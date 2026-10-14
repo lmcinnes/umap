@@ -166,3 +166,33 @@ def test_smooth_knn_dist_l1norms_w_connectivity(nn_data):
         err_msg="Smooth knn-dists does not give expected"
         "norms for local_connectivity=1.75",
     )
+
+
+def test_smooth_knn_dist_disconnected_neighbors():
+    """Neighbours pruned by disconnection_distance carry an inf distance. They
+    must not enter the MIN_K_DIST_SCALE floor (np.mean of a row with inf is
+    inf), which previously made sigma inf and every remaining edge of such a
+    point a membership strength of exactly 1.0."""
+    rng = np.random.RandomState(0)
+    k = 10
+    dists = np.sort(rng.uniform(0.5, 2.0, size=(20, k)), axis=1).astype(np.float32)
+    dists[:, 0] = 0.0  # self
+    dists[:10, 7:] = np.inf  # three pruned neighbours in the first ten rows
+    sigmas, rhos = smooth_knn_dist(dists, float(k))
+    assert np.all(np.isfinite(sigmas)), "sigma is inf for rows with pruned neighbours"
+    # rho is still the distance to the nearest (finite) neighbour
+    assert_array_almost_equal(rhos, dists[:, 1])
+    # the kernel over the finite non-self neighbours still sums to log2(k)
+    shifted = dists[:, 1:] - rhos[:, np.newaxis]
+    shifted[shifted < 0.0] = 0.0
+    vals = np.exp(-(shifted / sigmas[:, np.newaxis]))
+    vals[~np.isfinite(dists[:, 1:])] = 0.0
+    assert_array_almost_equal(
+        np.sum(vals, axis=1),
+        np.log2(k) * np.ones(dists.shape[0]),
+        decimal=3,
+        err_msg="Smooth knn-dists does not give expected norms with pruned neighbours",
+    )
+    # and the finite rows are untouched by the change
+    sigmas_finite, rhos_finite = smooth_knn_dist(dists[10:], float(k))
+    assert_array_almost_equal(sigmas[10:], sigmas_finite, decimal=5)

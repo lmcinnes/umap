@@ -26,9 +26,9 @@ def arr_unique(arr):
 @numba.njit()
 def arr_union(ar1, ar2):
     if ar1.shape[0] == 0:
-        return ar2
+        return ar2.copy()
     elif ar2.shape[0] == 0:
-        return ar1
+        return ar1.copy()
     else:
         return arr_unique(np.concatenate((ar1, ar2)))
 

@@ -300,17 +300,6 @@ supports all the same aesthetic parameters as ``umap.plot.points`` so
 you can theme your plot, color by label or value, and other similar
 operations explained above for ``umap.plot.points``.
 
-Interactive plotting with Nomic Atlas
-----------------------------------------
-
-For interactive exploration, especially with large datasets, you can use `Nomic Atlas <https://atlas.nomic.ai/>`_. Nomic Atlas is a platform for embedding generation, visualization, analysis, retrieval, and everything you need to operationalize your embeddings and make them useful for your applications. It directly integrates UMAP as one of its projection models, allowing you to leverage UMAP within a powerful visualization environment.
-
-Nomic Atlas handles the embedding and UMAP dimensionality reduction process and provides an interactive interface with features like searching, filtering, coloring by metadata, and displaying rich information on hover. Atlas can help when you want to share your understanding of your UMAP visualizations or collaborate with others, as the map is accessible via a URL.
-
-.. raw:: html
-
-   <img src="https://assets.nomicatlas.com/mnist-training-embeddings-umap-short.gif" width="600" alt="MNIST UMAP visualization in Nomic Atlas">
-
 Plotting connectivity
 ---------------------
 

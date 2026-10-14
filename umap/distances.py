@@ -21,6 +21,32 @@ def sign(a):
         return 1
 
 
+@numba.njit()
+def softmax(z):
+    n = z.shape[0]
+    out = np.empty(n)
+
+    zmax = z[0]
+    for i in range(1, n):
+        if z[i] > zmax:
+            zmax = z[i]
+
+    s = 0.0
+    for i in range(n):
+        out[i] = np.exp(z[i] - zmax)
+        s += out[i]
+
+    if s == 0.0:
+        for i in range(n):
+            out[i] = 1.0 / n
+    else:
+        invs = 1.0 / s
+        for i in range(n):
+            out[i] *= invs
+
+    return out
+
+
 @numba.njit(fastmath=FASTMATH_FLAGS)
 def euclidean(x, y):
     r"""Standard euclidean distance.
@@ -164,8 +190,8 @@ def minkowski(x, y, p=2):
 
 
 @numba.njit()
-def minkowski_grad(x, y, p=2):
-    r"""Minkowski distance with gradient.
+def minkowski_grad(x, y, p=2.0):
+    r"""Minkowski distance.
 
     ..math::
         D(x, y) = \left(\sum_i |x_i - y_i|^p\right)^{\frac{1}{p}}
@@ -175,19 +201,21 @@ def minkowski_grad(x, y, p=2):
     for p=infinity it is Chebyshev distance. In general it is better
     to use the more specialised functions for those distances.
     """
-    result = 0.0
+    S = 0.0
     for i in range(x.shape[0]):
-        result += (np.abs(x[i] - y[i])) ** p
+        S += np.abs(x[i] - y[i]) ** p
 
-    grad = np.empty(x.shape[0], dtype=np.float32)
+    dist = S ** (1.0 / p)
+    grad = np.zeros(x.shape[0], dtype=np.float32)
+
+    if S == 0.0:
+        return dist, grad
+
+    inv_denom = pow(S, (1.0 - p) / p)
     for i in range(x.shape[0]):
-        grad[i] = (
-            pow(np.abs(x[i] - y[i]), (p - 1.0))
-            * sign(x[i] - y[i])
-            * pow(result, (1.0 / (p - 1)))
-        )
+        grad[i] = pow(np.abs(x[i] - y[i]), p - 1.0) * sign(x[i] - y[i]) * inv_denom
 
-    return result ** (1.0 / p), grad
+    return dist, grad
 
 
 @numba.njit()
@@ -246,30 +274,33 @@ def weighted_minkowski(x, y, w=_mock_ones, p=2):
 
 
 @numba.njit()
-def weighted_minkowski_grad(x, y, w=_mock_ones, p=2):
+def weighted_minkowski_grad(x, y, w=_mock_ones, p=2.0):
     r"""A weighted version of Minkowski distance with gradient.
 
     ..math::
         D(x, y) = \left(\sum_i w_i |x_i - y_i|^p\right)^{\frac{1}{p}}
 
     If weights w_i are inverse standard deviations of data in each dimension
-    then this represented a standardised Minkowski distance (and is
+    then this represents a standardised Minkowski distance (and is
     equivalent to standardised Euclidean distance for p=1).
     """
-    result = 0.0
+    S = 0.0
     for i in range(x.shape[0]):
-        result += w[i] * (np.abs(x[i] - y[i])) ** p
+        S += w[i] * (np.abs(x[i] - y[i])) ** p
 
-    grad = np.empty(x.shape[0], dtype=np.float32)
+    dist = S ** (1.0 / p)
+    grad = np.zeros(x.shape[0], dtype=np.float32)
+
+    if S == 0.0:
+        return dist, grad
+
+    inv_denom = pow(S, (1.0 - p) / p)
     for i in range(x.shape[0]):
         grad[i] = (
-            w[i]
-            * pow(np.abs(x[i] - y[i]), (p - 1.0))
-            * sign(x[i] - y[i])
-            * pow(result, (1.0 / (p - 1)))
+            w[i] * pow(np.abs(x[i] - y[i]), p - 1.0) * sign(x[i] - y[i]) * inv_denom
         )
 
-    return result ** (1.0 / p), grad
+    return dist, grad
 
 
 @numba.njit()
@@ -277,6 +308,25 @@ def mahalanobis(x, y, vinv=_mock_identity):
     result = 0.0
 
     diff = np.empty(x.shape[0], dtype=np.float32)
+
+    for i in range(x.shape[0]):
+        diff[i] = x[i] - y[i]
+
+    for i in range(x.shape[0]):
+        tmp = 0.0
+        for j in range(x.shape[0]):
+            tmp += vinv[i, j] * diff[j]
+        result += tmp * diff[i]
+
+    return np.sqrt(result)
+
+
+@numba.njit()
+def mahalanobis_f64(x, y, vinv=_mock_identity):
+    "float64 version of mahalanobis. Used for testing (need accuracy in finite differences)"
+    result = 0.0
+
+    diff = np.empty(x.shape[0], dtype=np.float64)
 
     for i in range(x.shape[0]):
         diff[i] = x[i] - y[i]
@@ -578,20 +628,29 @@ def cosine_grad(x, y):
     result = 0.0
     norm_x = 0.0
     norm_y = 0.0
+
     for i in range(x.shape[0]):
         result += x[i] * y[i]
-        norm_x += x[i] ** 2
-        norm_y += y[i] ** 2
+        norm_x += x[i] * x[i]
+        norm_y += y[i] * y[i]
 
     if norm_x == 0.0 and norm_y == 0.0:
-        dist = 0.0
-        grad = np.zeros(x.shape)
-    elif norm_x == 0.0 or norm_y == 0.0:
-        dist = 1.0
-        grad = np.zeros(x.shape)
-    else:
-        grad = -(x * result - y * norm_x) / np.sqrt(norm_x**3 * norm_y)
-        dist = 1.0 - (result / np.sqrt(norm_x * norm_y))
+        return 0.0, np.zeros(x.shape, dtype=np.float32)
+
+    if norm_x == 0.0 or norm_y == 0.0:
+        return 1.0, np.zeros(x.shape, dtype=np.float32)
+
+    nx = np.sqrt(norm_x)
+    ny = np.sqrt(norm_y)
+
+    dist = 1.0 - result / (nx * ny)
+    grad = np.empty(x.shape[0], dtype=np.float32)
+
+    inv_nx_ny = 1.0 / (nx * ny)
+    inv_nx3_ny = 1.0 / (norm_x * nx * ny)
+
+    for i in range(x.shape[0]):
+        grad[i] = x[i] * result * inv_nx3_ny - y[i] * inv_nx_ny
 
     return dist, grad
 
@@ -659,21 +718,64 @@ def hellinger_grad(x, y):
         l1_norm_x += x[i]
         l1_norm_y += y[i]
 
-    if l1_norm_x == 0 and l1_norm_y == 0:
-        dist = 0.0
-        grad = np.zeros(x.shape)
-    elif l1_norm_x == 0 or l1_norm_y == 0:
-        dist = 1.0
-        grad = np.zeros(x.shape)
-    else:
-        dist_denom = np.sqrt(l1_norm_x * l1_norm_y)
-        dist = np.sqrt(1 - result / dist_denom)
-        grad_denom = 2 * dist
-        grad_numer_const = (l1_norm_y * result) / (2 * dist_denom**3)
+    if l1_norm_x == 0.0 and l1_norm_y == 0.0:
+        return 0.0, np.zeros(x.shape, dtype=np.float32)
 
-        grad = (grad_numer_const - (y / grad_term * dist_denom)) / grad_denom
+    if l1_norm_x == 0.0 or l1_norm_y == 0.0:
+        return 1.0, np.zeros(x.shape, dtype=np.float32)
+
+    dist_denom = np.sqrt(l1_norm_x * l1_norm_y)
+    inner = max(0.0, 1.0 - result / dist_denom)
+    dist = np.sqrt(inner)
+
+    if dist == 0.0:
+        return dist, np.zeros(x.shape[0], dtype=np.float32)
+
+    grad = np.empty(x.shape[0], dtype=np.float32)
+    grad_denom = 2.0 * dist
+    grad_numer_const = (l1_norm_y * result) / (2.0 * dist_denom**3)
+
+    for i in range(x.shape[0]):
+        if x[i] > 0.0 and grad_term[i] > 0:
+            term = y[i] / (2.0 * grad_term[i] * dist_denom)
+        else:
+            term = 0.0
+
+        grad[i] = (grad_numer_const - term) / grad_denom
 
     return dist, grad
+
+
+@numba.njit()
+def softmax_hellinger(x, y):
+    """
+    Hellinger distance between softmax(x) and softmax(y).
+    """
+    p = softmax(x)
+    q = softmax(y)
+
+    return hellinger(p, q)
+
+
+@numba.njit()
+def softmax_hellinger_grad(x, y):
+    """
+    Hellinger distance and grad between softmax(x) and softmax(y).
+    """
+    p = softmax(x)
+    q = softmax(y)
+
+    dist, g_p = hellinger_grad(p, q)
+
+    dot_gp_p = 0.0
+    for i in range(p.shape[0]):
+        dot_gp_p += g_p[i] * p[i]
+
+    grad_x = np.empty(x.shape[0])
+    for i in range(x.shape[0]):
+        grad_x[i] = p[i] * (g_p[i] - dot_gp_p)
+
+    return dist, grad_x
 
 
 @numba.njit()
@@ -764,18 +866,14 @@ def symmetric_kl(x, y, z=1e-11):  # pragma: no cover
     kl2 = 0.0
 
     for i in range(n):
-        x[i] += z
-        x_sum += x[i]
-        y[i] += z
-        y_sum += y[i]
+        x_sum += x[i] + z
+        y_sum += y[i] + z
 
     for i in range(n):
-        x[i] /= x_sum
-        y[i] /= y_sum
-
-    for i in range(n):
-        kl1 += x[i] * np.log(x[i] / y[i])
-        kl2 += y[i] * np.log(y[i] / x[i])
+        p = (x[i] + z) / x_sum
+        q = (y[i] + z) / y_sum
+        kl1 += p * np.log(p / q)
+        kl2 += q * np.log(q / p)
 
     return (kl1 + kl2) / 2
 
@@ -793,56 +891,72 @@ def symmetric_kl_grad(x, y, z=1e-11):  # pragma: no cover
     kl2 = 0.0
 
     for i in range(n):
-        x[i] += z
-        x_sum += x[i]
-        y[i] += z
-        y_sum += y[i]
+        x_sum += x[i] + z
+        y_sum += y[i] + z
+
+    p = (x + z) / x_sum
+    q = (y + z) / y_sum
 
     for i in range(n):
-        x[i] /= x_sum
-        y[i] /= y_sum
-
-    for i in range(n):
-        kl1 += x[i] * np.log(x[i] / y[i])
-        kl2 += y[i] * np.log(y[i] / x[i])
+        kl1 += p[i] * np.log(p[i] / q[i])
+        kl2 += q[i] * np.log(q[i] / p[i])
 
     dist = (kl1 + kl2) / 2
-    grad = (np.log(y / x) - (x / y) + 1) / 2
+    # Gradient with respect to the normalized x, then chained through the
+    # normalization p = (x + z) / sum(x + z); sum(p * grad_p) is kl1 / 2.
+    grad_p = (np.log(p / q) - (q / p) + 1) / 2
+    grad = (grad_p - kl1 / 2) / x_sum
 
     return dist, grad
 
 
-@numba.njit()
+@numba.njit(fastmath=True)
 def correlation_grad(x, y):
+    n = x.shape[0]
+
     mu_x = 0.0
     mu_y = 0.0
-    norm_x = 0.0
-    norm_y = 0.0
-    dot_product = 0.0
-
-    for i in range(x.shape[0]):
+    for i in range(n):
         mu_x += x[i]
         mu_y += y[i]
+    mu_x /= n
+    mu_y /= n
 
-    mu_x /= x.shape[0]
-    mu_y /= x.shape[0]
+    dot = 0.0
+    norm_x = 0.0
+    norm_y = 0.0
 
-    for i in range(x.shape[0]):
-        shifted_x = x[i] - mu_x
-        shifted_y = y[i] - mu_y
-        norm_x += shifted_x**2
-        norm_y += shifted_y**2
-        dot_product += shifted_x * shifted_y
+    for i in range(n):
+        cx = x[i] - mu_x
+        cy = y[i] - mu_y
+        dot += cx * cy
+        norm_x += cx * cx
+        norm_y += cy * cy
 
     if norm_x == 0.0 and norm_y == 0.0:
-        dist = 0.0
-        grad = np.zeros(x.shape)
-    elif dot_product == 0.0:
-        dist = 1.0
-        grad = np.zeros(x.shape)
-    else:
-        dist = 1.0 - (dot_product / np.sqrt(norm_x * norm_y))
-        grad = ((x - mu_x) / norm_x - (y - mu_y) / dot_product) * dist
+        return 0.0, np.zeros(n, dtype=np.float32)
+
+    if norm_x == 0.0 or norm_y == 0.0:
+        return 1.0, np.zeros(n, dtype=np.float32)
+
+    nx = np.sqrt(norm_x)
+    ny = np.sqrt(norm_y)
+
+    dist = 1.0 - dot / (nx * ny)
+    grad = np.empty(n, dtype=np.float32)
+
+    inv_nx_ny = 1.0 / (nx * ny)
+    inv_nx3_ny = 1.0 / (norm_x * nx * ny)
+
+    mean_grad = 0.0
+    for i in range(n):
+        cx = x[i] - mu_x
+        grad[i] = cx * dot * inv_nx3_ny - (y[i] - mu_y) * inv_nx_ny
+        mean_grad += grad[i]
+
+    mean_grad /= n
+    for i in range(n):
+        grad[i] -= mean_grad
 
     return dist, grad
 
@@ -1100,33 +1214,132 @@ def count_distance(x, y, poisson_lambda=1.0, normalisation=1.0):
 
 @numba.njit()
 def levenshtein(x, y, normalisation=1.0, max_distance=20):
+    """
+    Compute the Levenshtein (edit) distance between two strings
+    using dynamic programming.
+
+    Parameters
+    ----------
+    x, y : str
+        Input strings.
+    normalisation : float, default=1.0
+        Value by which the final distance is divided.
+    max_distance : int, default=20
+        Maximum distance threshold.
+
+    Returns
+    -------
+    float
+        Normalised edit distance.
+    """
     x_len, y_len = len(x), len(y)
 
-    # Opt out of some comparisons
     if abs(x_len - y_len) > max_distance:
-        return abs(x_len - y_len) / normalisation
+        return float(max_distance) / normalisation
 
-    v0 = np.arange(y_len + 1).astype(np.float64)
-    v1 = np.zeros(y_len + 1)
+    if x_len == 0:
+        return float(y_len) / normalisation
+    if y_len == 0:
+        return float(x_len) / normalisation
+
+    v0 = np.arange(y_len + 1, dtype=np.float64)
+    v1 = np.empty(y_len + 1, dtype=np.float64)
 
     for i in range(x_len):
-
-        v1[i] = i + 1
+        # First column: cost of deleting all chars up to i
+        v1[0] = i + 1
 
         for j in range(y_len):
             deletion_cost = v0[j + 1] + 1
             insertion_cost = v1[j] + 1
-            substitution_cost = int(x[i] == y[j])
+            substitution_cost = v0[j] + (x[i] != y[j])
 
             v1[j + 1] = min(deletion_cost, insertion_cost, substitution_cost)
 
-        v0 = v1
+        v0, v1 = v1, v0
 
-        # Abort early if we've already exceeded max_dist
         if np.min(v0) > max_distance:
-            return max_distance / normalisation
+            return float(max_distance) / normalisation
 
-    return v0[y_len] / normalisation
+    return float(v0[y_len]) / normalisation
+
+
+@numba.njit()
+def levenshtein_myers_ascii(x, y, normalisation=1.0, max_distance=20):
+    """
+    Compute the Levenshtein (edit) distance between two ASCII strings
+    using Myers' bit-parallel algorithm.
+
+    Parameters
+    ----------
+    x, y : str
+        Input strings (ASCII only).
+    normalisation : float, default=1.0
+        Value by which the final distance is divided.
+    max_distance : int, default=20
+        Maximum distance threshold.
+
+    Returns
+    -------
+    float
+        Normalised edit distance.
+    """
+    x_len, y_len = len(x), len(y)
+
+    if abs(x_len - y_len) > max_distance:
+        return float(max_distance) / normalisation
+
+    # Myers' bit-parallel algorithm is limited to word size
+    # fall back to levenshtein if words are large
+    if x_len > 63 or y_len > 63:
+        return levenshtein(x, y, normalisation, max_distance)
+
+    # Peq[c]: bitmask with bit i set where x[i] == character c
+    Peq = np.zeros(128, dtype=np.int64)
+    for i in range(x_len):
+        c = ord(x[i])
+        if c < 128:
+            Peq[c] |= 1 << i
+
+    # Pv: positive vertical differences (initially all 1s)
+    Pv = (1 << x_len) - 1
+
+    # Mv: negative vertical differences (initially all 0s)
+    Mv = 0
+
+    # Initial edit distance: deleting all characters from x
+    score = x_len
+
+    # Mask for the highest bit (row x_len - 1)
+    top_bit = 1 << (x_len - 1)
+
+    for j in range(y_len):
+        c = ord(y[j])
+        Eq = Peq[c] if c < 128 else 0
+
+        Xv = Eq | Mv
+        Xh = (((Xv & Pv) + Pv) ^ Pv) | Xv
+
+        Ph = Mv | ~(Xh | Pv)
+        Mh = Pv & Xh
+
+        # Update score using the highest bit
+        if Ph & top_bit:
+            score += 1
+        elif Mh & top_bit:
+            score -= 1
+
+        # Prepare for next column
+        Ph = (Ph << 1) | 1
+        Mh <<= 1
+
+        Pv = Mh | ~(Xh | Ph)
+        Mv = Ph & Xh
+
+    if score > max_distance:
+        return float(max_distance) / normalisation
+
+    return float(score) / normalisation
 
 
 named_distances = {
@@ -1153,6 +1366,7 @@ named_distances = {
     "cosine": cosine,
     "correlation": correlation,
     "hellinger": hellinger,
+    "softmax_hellinger": softmax_hellinger,
     "haversine": haversine,
     "braycurtis": bray_curtis,
     "ll_dirichlet": ll_dirichlet,
@@ -1174,6 +1388,7 @@ named_distances = {
     "hierarchical_categorical": hierarchical_categorical_distance,
     "count": count_distance,
     "string": levenshtein,
+    "myers": levenshtein_myers_ascii,
 }
 
 named_distances_with_gradients = {
@@ -1199,6 +1414,7 @@ named_distances_with_gradients = {
     "cosine": cosine_grad,
     "correlation": correlation_grad,
     "hellinger": hellinger_grad,
+    "softmax_hellinger": softmax_hellinger_grad,
     "haversine": haversine_grad,
     "braycurtis": bray_curtis_grad,
     "symmetric_kl": symmetric_kl_grad,
@@ -1215,6 +1431,7 @@ DISCRETE_METRICS = (
     "ordinal",
     "count",
     "string",
+    "myers",
 )
 
 SPECIAL_METRICS = (
@@ -1292,3 +1509,51 @@ def pairwise_special_metric(
     else:
         special_metric_func = named_distances[metric]
     return parallel_special_metric(X, Y, metric=special_metric_func)
+
+
+def _symmetric_pairwise_distances(X, metric, result):
+    n = X.shape[0]
+    for i in range(n):
+        for j in range(i + 1, n):
+            d = metric(X[i], X[j])
+            result[i, j] = d
+            result[j, i] = d
+        result[i, i] = metric(X[i], X[i])
+
+
+_symmetric_pairwise_kernels = {}
+
+
+def numba_aware_pairwise_distances(X, metric, **kwds):
+    """Same output as sklearn's ``pairwise_distances``; numba metrics loop in numba."""
+    if (
+        kwds
+        or not isinstance(metric, numba.core.registry.CPUDispatcher)
+        or not isinstance(X, np.ndarray)
+        or X.ndim != 2
+        or X.shape[0] == 0
+        or X.dtype not in (np.float32, np.float64)
+        or not np.all(np.isfinite(X))
+    ):
+        return pairwise_distances(X, metric=metric, **kwds)
+    # The metric is passed as a function pointer so LLVM cannot inline it: an
+    # inlined fastmath metric can vectorize (and round) differently from the
+    # standalone call sklearn makes, which changes the last bit on x86.
+    row_type = numba.typeof(X[0])
+    metric.compile((row_type, row_type))
+    return_type = metric.overloads[(row_type, row_type)].signature.return_type
+    # The output dtype depends on the sklearn version (float64 before 1.8, the
+    # input dtype after), so take it from sklearn itself on a single row.
+    result_dtype = pairwise_distances(X[:1], metric=metric).dtype
+    result = np.empty((X.shape[0], X.shape[0]), dtype=result_dtype)
+    signature = numba.types.void(
+        numba.typeof(X),
+        numba.types.FunctionType(return_type(row_type, row_type)),
+        numba.typeof(result),
+    )
+    kernel = _symmetric_pairwise_kernels.get(signature)
+    if kernel is None:
+        kernel = numba.njit(signature, nogil=True)(_symmetric_pairwise_distances)
+        _symmetric_pairwise_kernels[signature] = kernel
+    kernel(X, metric, result)
+    return result

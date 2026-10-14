@@ -30,7 +30,7 @@ The details for the underlying mathematics can be found in
 McInnes, L, Healy, J, *UMAP: Uniform Manifold Approximation and Projection
 for Dimension Reduction*, ArXiv e-prints 1802.03426, 2018
 
-You can find the software `on github <https://github.com/lmcinnes/>`_.
+You can find the software `on github <https://github.com/lmcinnes/umap>`_.
 
 **Installation**
 
@@ -93,8 +93,6 @@ PyPI install, presuming you have numba and sklearn and all its requirements
    interactive_viz
    exploratory_analysis
    scientific_papers
-   nomic_atlas_umap_of_text_embeddings
-   nomic_atlas_visualizing_mnist_training
 
 .. toctree::
    :caption: API Reference:

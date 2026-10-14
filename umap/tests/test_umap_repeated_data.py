@@ -1,5 +1,7 @@
 import numpy as np
+from scipy import sparse
 from umap import UMAP
+from umap.utils import csr_unique
 
 
 # ===================================================
@@ -62,6 +64,20 @@ def test_repeated_points_small_sparse_binary(sparse_binary_data_repeats):
         sparse_binary_data_repeats
     )
     assert np.unique(model.embedding_[0:2], axis=0).shape[0] == 1
+
+
+# Every row has the same number of non-zeros, so csr_unique must
+# still compare whole rows rather than individual values.
+def test_repeated_points_sparse_equal_nnz_rows():
+    data = np.eye(12)[np.random.RandomState(0).randint(0, 12, 60)]
+    index, inverse, counts = csr_unique(sparse.csr_matrix(data))
+    assert index.shape[0] == np.unique(data, axis=0).shape[0]
+    assert np.array_equal(data[index][inverse], data)
+    assert counts.sum() == data.shape[0]
+
+    model = UMAP(n_neighbors=3, unique=True, n_epochs=20).fit(sparse.csr_matrix(data))
+    assert model.embedding_.shape == (60, 2)
+    assert np.array_equal(model.embedding_[index][inverse], model.embedding_)
 
 
 # Use force_approximation_algorithm in order to test

@@ -52,7 +52,6 @@ def test_get_feature_names_out_multicomponent():
     np.testing.assert_array_equal(result_umap, expected_umap_result)
 
 
-
 def test_get_feature_names_out_featureunion():
     X, _ = make_classification(n_samples=30, n_features=10, random_state=42)
     pipeline = Pipeline(

@@ -4,6 +4,7 @@ from warnings import warn
 
 import numpy as np
 
+import scipy.linalg
 import scipy.sparse
 import scipy.sparse.csgraph
 from sklearn.decomposition import TruncatedSVD
@@ -84,22 +85,40 @@ def component_layout(
         distance_matrix = np.zeros((n_components, n_components), dtype=np.float64)
         linkage = metric_kwds.get("linkage", "average")
         if linkage == "average":
-            linkage = np.mean
-        elif linkage == "complete":
-            linkage = np.max
-        elif linkage == "single":
-            linkage = np.min
-        else:
-            raise ValueError(
-                "Unrecognized linkage '%s'. Please choose from "
-                "'average', 'complete', or 'single'" % linkage
+            # Mean linkage is linear, so every pairwise block mean can be
+            # computed with one grouped matrix product instead of an
+            # O(n_components^2) Python loop. `membership` is a sparse
+            # (n_samples, n_components) indicator; grouping rows first
+            # (membership.T @ data) keeps the intermediate at (n_components,
+            # n_samples) so no (n_samples, n_samples) temporary is built.
+            n_samples = data.shape[0]
+            membership = scipy.sparse.csr_matrix(
+                (
+                    np.ones(n_samples),
+                    (np.arange(n_samples), component_labels),
+                ),
+                shape=(n_samples, n_components),
             )
-        for c_i in range(n_components):
-            dm_i = data[component_labels == c_i]
-            for c_j in range(c_i + 1, n_components):
-                dist = linkage(dm_i[:, component_labels == c_j])
-                distance_matrix[c_i, c_j] = dist
-                distance_matrix[c_j, c_i] = dist
+            counts = np.asarray(membership.sum(axis=0)).ravel()
+            block_sums = np.asarray((membership.T @ data) @ membership)
+            distance_matrix = block_sums / np.outer(counts, counts)
+            np.fill_diagonal(distance_matrix, 0.0)
+        else:
+            if linkage == "complete":
+                reducer = np.max
+            elif linkage == "single":
+                reducer = np.min
+            else:
+                raise ValueError(
+                    "Unrecognized linkage '%s'. Please choose from "
+                    "'average', 'complete', or 'single'" % linkage
+                )
+            for c_i in range(n_components):
+                dm_i = data[component_labels == c_i]
+                for c_j in range(c_i + 1, n_components):
+                    dist = reducer(dm_i[:, component_labels == c_j])
+                    distance_matrix[c_i, c_j] = dist
+                    distance_matrix[c_j, c_i] = dist
     else:
         for label in range(n_components):
             component_centroids[label] = data[component_labels == label].mean(axis=0)
@@ -251,8 +270,9 @@ def multi_component_layout(
             base = np.hstack([np.eye(k), np.zeros((k, dim - k))])
             meta_embedding = np.vstack([base, -base])[:n_components]
 
+        graph_csr = graph.tocsr()  # hoisted: was rebuilt from scratch every iteration
         for label in range(n_components):
-            component_graph = graph.tocsr()[component_labels == label, :].tocsc()
+            component_graph = graph_csr[component_labels == label, :].tocsc()
             component_graph = component_graph[:, component_labels == label].tocoo()
 
             distances = pairwise_distances([meta_embedding[label]], meta_embedding)
@@ -584,13 +604,23 @@ def _spectral_layout(
         if isinstance(random_state, (np.random.Generator, np.random.RandomState))
         else np.random.default_rng(seed=random_state)
     )
+    if n_samples < k:
+        warn(
+            "Spectral initialisation needs more samples than n_components.\n"
+            "Falling back to random initialisation!"
+        )
+        return gen.uniform(low=-10.0, high=10.0, size=(n_samples, dim))
     if not method:
         method = "lobpcg" if compatibility_layout and L.shape[0] >= 2000000 else "eigsh"
 
     if verbose:
         print(ts(), "Computing Eigenvectors...")
     try:
-        if method == "eigsh":
+        if method == "eigsh" and n_samples == k:
+            # eigsh needs k < n_samples, so solve such small graphs densely
+            L_dense = L.toarray() if scipy.sparse.issparse(L) else L
+            eigenvalues, eigenvectors = scipy.linalg.eigh(L_dense)
+        elif method == "eigsh":
             if compatibility_layout:
                 # Compatibility mode uses the original eigsh method
                 # which is not as fast for large graphs.

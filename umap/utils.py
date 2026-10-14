@@ -34,7 +34,7 @@ def fast_knn_indices(X, n_neighbors):
     knn_indices = np.empty((X.shape[0], n_neighbors), dtype=np.int32)
     for row in numba.prange(X.shape[0]):
         # v = np.argsort(X[row])  # Need to call argsort this way for numba
-        v = X[row].argsort(kind="quicksort")
+        v = X[row].argsort(kind="mergesort")
         v = v[:n_neighbors]
         knn_indices[row] = v
     return knn_indices
@@ -159,9 +159,12 @@ def csr_unique(matrix, return_index=True, return_inverse=True, return_counts=Tru
     unique_matrix[inverse]
     """
     lil_matrix = matrix.tolil()
-    rows = np.asarray(
-        [tuple(x + y) for x, y in zip(lil_matrix.rows, lil_matrix.data)], dtype=object
-    )
+    # Fill a 1D object array element by element: np.asarray would build a 2D
+    # array when every row has the same number of non-zeros, and np.unique
+    # would then compare individual values instead of whole rows.
+    rows = np.empty(lil_matrix.shape[0], dtype=object)
+    for i, (x, y) in enumerate(zip(lil_matrix.rows, lil_matrix.data)):
+        rows[i] = tuple(x + y)
     return_values = return_counts + return_inverse + return_index
     return np.unique(
         rows,

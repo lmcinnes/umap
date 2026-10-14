@@ -136,31 +136,3 @@ Thanks to the authors of "Evolutionary-scale prediction of atomic level protein 
 with a language model".
 
 `ESM Metagenomic Atlas <https://esmatlas.com/explore>`__
-
-Interactive UMAP with Nomic Atlas
----------------------------------
-
-`Nomic Atlas <https://atlas.nomic.ai/>`_ is a platform for interactively visualizing and exploring massive datasets. It automates the creation of embeddings and 2D coordinate projections using UMAP.
-
-.. image:: https://assets.nomicatlas.com/mnist-training-embeddings-umap-short.gif
-   :alt: UMAP interactive visualization with Nomic Atlas
-   :align: center
-   :width: 600
-
-Atlas provides:
-
-* In-browser analysis of your UMAP data with the `Atlas Analyst <https://docs.nomic.ai/atlas/data-maps/atlas-analyst>`_
-* Vector search over your UMAP data using the `Nomic API <https://docs.nomic.ai/atlas/data-maps/guides/vector-search-over-your-data>`_
-* Interactive features like zooming, recoloring, searching, and filtering in the `Nomic Atlas data map <https://docs.nomic.ai/atlas/data-maps/controls>`_
-* Scalability for millions of data points
-* Rich information display on hover
-* Shareable UMAPs via URL links to your embeddings and data maps in Atlas
-
------------
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Nomic Atlas Examples
-
-   nomic_atlas_umap_of_text_embeddings
-   nomic_atlas_visualizing_mnist_training_dynamics
