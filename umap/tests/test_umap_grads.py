@@ -305,3 +305,13 @@ def test_symmetric_kl_does_not_modify_inputs(func):
 # gaussian_energy
 # spherical_gaussian_energy
 # diagonal_gaussian_energy
+
+
+@pytest.mark.parametrize("dim", [4, 16, 64])
+def test_braycurtis_gradient_signed_coordinates(dim):
+    assert_gradient_matches_finite_diff(
+        dist.bray_curtis,
+        dist.bray_curtis_grad,
+        sampler=sample_normal_pairs,
+        dim=dim,
+    )

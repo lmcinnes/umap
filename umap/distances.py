@@ -420,7 +420,7 @@ def bray_curtis_grad(x, y):
 
     if denominator > 0.0:
         dist = float(numerator) / denominator
-        grad = (np.sign(x - y) - dist) / denominator
+        grad = (np.sign(x - y) - dist * np.sign(x + y)) / denominator
     else:
         dist = 0.0
         grad = np.zeros(x.shape)
