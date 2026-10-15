@@ -5,6 +5,7 @@ from __future__ import print_function
 
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
+import inspect
 import locale
 import struct
 from collections import deque
@@ -57,6 +58,16 @@ from pynndescent import NNDescent
 from pynndescent.distances import named_distances as pynn_named_distances
 from pynndescent.sparse import sparse_named_distances as pynn_sparse_named_distances
 
+try:
+    from rinnd import RINND
+    from rinnd import named_distances as rinnd_named_distances
+except ImportError:
+    RINND = None
+    rinnd_named_distances = {}
+
+# rinnd.version() is not a reliable feature check; n_jobs arrived in RINND 0.3.
+_HAVE_RINND = RINND is not None and "n_jobs" in inspect.signature(RINND).parameters
+
 locale.setlocale(locale.LC_NUMERIC, "C")
 
 INT32_MIN = np.iinfo(np.int32).min + 1
@@ -66,6 +77,40 @@ SMOOTH_K_TOLERANCE = 1e-5
 MIN_K_DIST_SCALE = 1e-3
 NPY_INFINITY = np.inf
 NPY_FLOATMAX = np.finfo(np.float32).max
+RINND_MIN_SAMPLES = 4096
+
+# Metrics whose RINND distances were verified against PyNNDescent. Excludes "dot"
+# (PyNNDescent normalizes the data first) and "russellrao" (differs on zero rows).
+RINND_METRICS = frozenset(
+    (
+        "euclidean",
+        "l2",
+        "sqeuclidean",
+        "manhattan",
+        "taxicab",
+        "l1",
+        "chebyshev",
+        "linfinity",
+        "linfty",
+        "linf",
+        "canberra",
+        "braycurtis",
+        "cosine",
+        "correlation",
+        "hamming",
+        "jaccard",
+        "dice",
+        "matching",
+        "kulsinski",
+        "rogerstanimoto",
+        "sokalsneath",
+        "sokalmichener",
+        "yule",
+        "hellinger",
+        "jensen_shannon",
+        "symmetric_kl",
+    )
+)
 
 _INPUT_HASH_ALGORITHM = "blake2b-tree-v1"
 _INPUT_HASH_CHUNK_SIZE = 16 * 1024 * 1024
@@ -333,6 +378,96 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
     return result, rho
 
 
+def _rinnd_eligibility(X, n_neighbors, metric, metric_kwds, compatibility_layout):
+    if not _HAVE_RINND:
+        return False, "RINND >= 0.3.1 is not installed"
+    if compatibility_layout:
+        return False, "compatibility_layout requires PyNNDescent"
+    if scipy.sparse.issparse(X):
+        return False, "RINND does not support sparse input"
+    if not isinstance(X, np.ndarray) or X.ndim != 2:
+        return False, "RINND requires a two-dimensional NumPy array"
+    if X.dtype != np.float32:
+        return False, "RINND requires float32 input"
+    if not isinstance(metric, str) or metric not in RINND_METRICS:
+        return False, "metric is not enabled for the RINND backend"
+    if metric not in rinnd_named_distances:
+        return False, "metric is not supported by the installed RINND"
+    if metric_kwds:
+        return False, "RINND does not support metric_kwds"
+    if n_neighbors < 2:
+        return False, "RINND requires n_neighbors of at least 2"
+    return True, None
+
+
+def _rows_are_normalized(X):
+    squared_norms = np.einsum("ij,ij->i", X, X, dtype=np.float64)
+    return bool(np.all(np.abs(squared_norms - 1.0) <= 1e-5))
+
+
+def _build_rinnd(data, n_neighbors, graph_only=False, **kwargs):
+    if kwargs["metric"] == "cosine":
+        kwargs = dict(
+            kwargs, normalize=True, input_normalized=_rows_are_normalized(data)
+        )
+    # RINND omits each point from its own neighbor list; it is added back below.
+    return RINND(data, n_neighbors=n_neighbors, graph_only=graph_only, **kwargs)
+
+
+def _rinnd_neighbor_graph(index):
+    # Requesting n_neighbors and dropping the farthest gives better recall than k - 1.
+    indices, dists = index.neighbor_graph
+    n_samples = indices.shape[0]
+    self_indices = np.arange(n_samples, dtype=indices.dtype)[:, None]
+    self_dists = np.zeros((n_samples, 1), dtype=dists.dtype)
+    return (
+        np.hstack((self_indices, indices[:, :-1])),
+        np.hstack((self_dists, dists[:, :-1])),
+    )
+
+
+class _RINNDIndex:
+    """Queryable RINND index exposing the parts of the NNDescent API UMAP uses."""
+
+    def __init__(self, data, n_neighbors, angular, **kwargs):
+        self._data = data
+        self._n_neighbors = n_neighbors
+        self._angular_trees = angular
+        self._kwargs = kwargs
+        self._build()
+
+    def _build(self):
+        self._index = _build_rinnd(self._data, self._n_neighbors, **self._kwargs)
+        self.neighbor_graph = _rinnd_neighbor_graph(self._index)
+
+    @property
+    def _raw_data(self):
+        return self._data
+
+    def _native_index(self):
+        if self._index is None:
+            if not _HAVE_RINND:
+                raise ImportError("RINND >= 0.3.1 is required to query this index")
+            self._index = _build_rinnd(self._data, self._n_neighbors, **self._kwargs)
+        return self._index
+
+    def query(self, X, k=10, epsilon=0.1):
+        return self._native_index().query(X, k=k, epsilon=epsilon)
+
+    def prepare(self):
+        self._native_index().prepare()
+
+    def update(self, X):
+        self._data = np.vstack((self._data, X))
+        self._build()
+
+    # Native RINND indexes cannot be pickled; the search index is rebuilt lazily.
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state["_index"] = None
+        return state
+
+
 def nearest_neighbors(
     X,
     n_neighbors,
@@ -345,6 +480,8 @@ def nearest_neighbors(
     n_jobs=-1,
     compatibility_layout=False,
     verbose=False,
+    nearest_neighbor_backend="auto",
+    graph_only=False,
 ):
     """Compute the ``n_neighbors`` nearest points for each data point in ``X``
     under ``metric``. This may be exact, but more likely is approximated via
@@ -373,11 +510,24 @@ def nearest_neighbors(
     low_memory: bool (optional, default True)
         Whether to pursue lower memory NNdescent.
 
+    n_jobs: int (optional, default -1)
+        The number of threads to use for nearest-neighbor construction. A value
+        of -1 uses all available cores.
+
     compatibility_layout: bool (optional, default False)
         Whether using compatibility layout which alters NNdescent algorithm hyperparameter choices.
 
     verbose: bool (optional, default False)
         Whether to print status data during the computation.
+
+    nearest_neighbor_backend: string (optional, default "auto")
+        Backend used for approximate nearest-neighbor construction. Valid values
+        are "auto", "pynndescent", and "rinnd". The "auto" setting uses RINND
+        when it is installed and all supplied parameters are supported.
+
+    graph_only: bool (optional, default False)
+        Whether only the k-nearest-neighbor graph is needed. If True no search
+        index is returned, which allows RINND to skip building query structures.
 
     Returns
     -------
@@ -387,11 +537,18 @@ def nearest_neighbors(
     knn_dists: array of shape (n_samples, n_neighbors)
         The distances to the ``n_neighbors`` closest points in the dataset.
 
-    rp_forest: list of trees
-        The random projection forest used for searching (if used, None otherwise).
+    knn_search_index: search index or None
+        The index used for searching, or None if ``graph_only`` is True or the
+        metric is precomputed.
     """
     if verbose:
         print(ts(), "Finding Nearest Neighbors")
+
+    if nearest_neighbor_backend not in ("auto", "pynndescent", "rinnd"):
+        raise ValueError(
+            "nearest_neighbor_backend must be one of "
+            "{'auto', 'pynndescent', 'rinnd'}"
+        )
 
     if metric == "precomputed":
         # Note that this does not support sparse distance matrices yet ...
@@ -409,38 +566,58 @@ def nearest_neighbors(
 
         knn_search_index = None
     else:
-        # # TODO: Hacked values for now
+        rinnd_eligible, rinnd_reason = _rinnd_eligibility(
+            X, n_neighbors, metric, metric_kwds, compatibility_layout
+        )
+        if nearest_neighbor_backend == "rinnd" and not rinnd_eligible:
+            raise ValueError(f"RINND backend cannot be used: {rinnd_reason}")
+        if nearest_neighbor_backend == "auto":
+            use_rinnd = rinnd_eligible and X.shape[0] >= RINND_MIN_SAMPLES
+        else:
+            use_rinnd = nearest_neighbor_backend == "rinnd"
+
+        n_iters = max(5, int(round(np.log2(X.shape[0]))))
         if compatibility_layout:
             n_trees = min(64, 5 + int(round((X.shape[0]) ** 0.5 / 20.0)))
-            n_iters = max(5, int(round(np.log2(X.shape[0]))))
-            knn_search_index = NNDescent(
-                X,
-                n_neighbors=n_neighbors,
-                metric=metric,
-                metric_kwds=metric_kwds,
-                random_state=random_state,
-                n_trees=n_trees,
-                n_iters=n_iters,
-                max_candidates=60,
-                low_memory=low_memory,
-                n_jobs=n_jobs,
-                verbose=verbose,
-                compressed=False,
-            )
-            knn_indices, knn_dists = knn_search_index.neighbor_graph
+            max_candidates = 60
         else:
             if verbose:
                 print(
                     ts(), "Using alternative param NNDescent to find Nearest Neighbors"
                 )
             n_trees = max(4, min(8, 5 + int(round((X.shape[0]) ** 0.5 / 20.0))))
-            n_iters = max(5, int(round(np.log2(X.shape[0]))))
-            effective_n_neighbors = int(1.5 * n_neighbors)
-            effective_max_candidates = max(20, min(60, effective_n_neighbors))
-            print(
-                ts(),
-                f"Using {n_trees} trees, {n_iters} iterations, {effective_n_neighbors} neighbors, and {effective_max_candidates} max candidates.",
+            max_candidates = max(20, min(60, int(1.5 * n_neighbors)))
+
+        knn_search_index = None
+        if use_rinnd:
+            rinnd_kwargs = dict(
+                metric=metric,
+                random_state=check_random_state(random_state).randint(INT32_MAX),
+                n_trees=n_trees,
+                n_iters=n_iters,
+                max_candidates=max_candidates,
+                n_jobs=n_jobs,
+                verbose=verbose,
             )
+            try:
+                if graph_only:
+                    knn_indices, knn_dists = _rinnd_neighbor_graph(
+                        _build_rinnd(X, n_neighbors, graph_only=True, **rinnd_kwargs)
+                    )
+                else:
+                    knn_search_index = _RINNDIndex(
+                        X, n_neighbors, angular, **rinnd_kwargs
+                    )
+                    knn_indices, knn_dists = knn_search_index.neighbor_graph
+            except (TypeError, ValueError) as error:
+                if nearest_neighbor_backend == "rinnd":
+                    raise ValueError(
+                        f"RINND backend rejected the supplied parameters: {error}"
+                    ) from error
+                use_rinnd = False
+                if verbose:
+                    print(ts(), f"RINND unavailable for this input: {error}")
+        if not use_rinnd:
             knn_search_index = NNDescent(
                 X,
                 n_neighbors=n_neighbors,
@@ -449,14 +626,16 @@ def nearest_neighbors(
                 random_state=random_state,
                 n_trees=n_trees,
                 n_iters=n_iters,
-                max_candidates=effective_max_candidates,
+                max_candidates=max_candidates,
+                # Only the compatibility parameters have ever honored low_memory.
+                low_memory=low_memory if compatibility_layout else True,
                 n_jobs=n_jobs,
                 verbose=verbose,
                 compressed=False,
             )
             knn_indices, knn_dists = knn_search_index.neighbor_graph
-            # knn_indices = knn_indices[:, :n_neighbors]
-            # knn_dists = knn_dists[:, :n_neighbors]
+        if graph_only:
+            knn_search_index = None
 
     if verbose:
         print(ts(), "Finished Nearest Neighbor Search")
@@ -818,6 +997,7 @@ def fuzzy_simplicial_set(
             random_state,
             verbose=verbose,
             compatibility_layout=compatibility_layout,
+            graph_only=True,
         )
 
     knn_dists = knn_dists.astype(np.float32, copy=False)
@@ -1766,11 +1946,7 @@ def simplicial_set_embedding(
             print(ts() + " Computing embedding densities")
 
         # Compute graph in embedding
-        (
-            knn_indices,
-            knn_dists,
-            rp_forest,
-        ) = nearest_neighbors(
+        knn_indices, knn_dists, _ = nearest_neighbors(
             embedding,
             densmap_kwds["n_neighbors"],
             "euclidean",
@@ -1779,6 +1955,7 @@ def simplicial_set_embedding(
             random_state,
             verbose=verbose,
             compatibility_layout=compatibility_layout,
+            graph_only=True,
         )
 
         emb_graph, emb_sigmas, emb_rhos, emb_dists = fuzzy_simplicial_set(
@@ -2070,6 +2247,17 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         consider setting this option to True. This approach is more
         computationally expensive, but avoids excessive memory use.
 
+    n_jobs: int (optional, default -1)
+        The number of parallel jobs to run when performing nearest-neighbor
+        search. A value of -1 uses all available cores.
+
+    nearest_neighbor_backend: string (optional, default "auto")
+        Backend used for approximate nearest-neighbor construction. Valid values
+        are "auto", "pynndescent", and "rinnd". The "auto" setting uses RINND
+        when installed and compatible with the input parameters, and otherwise
+        falls back to PyNNDescent. RINND requires dense float32 input, a
+        supported named metric, and empty metric_kwds; it honors n_jobs.
+
     set_op_mix_ratio: float (optional, default 1.0)
         Interpolate between (fuzzy) union and intersection as the set operation
         used to combine local fuzzy simplicial sets to obtain a global fuzzy
@@ -2299,6 +2487,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         exclude_graph_neighbors=False,
         negative_sample_scale_adaptation_samples=128,
         recursive_coarsening_ratio=4,
+        nearest_neighbor_backend="auto",
         coarse_layout_weights="transition",
         coarsen_on_layout_weights=True,
         init_rescale="isotropic",
@@ -2352,6 +2541,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             negative_sample_scale_adaptation_samples
         )
         self.recursive_coarsening_ratio = recursive_coarsening_ratio
+        self.nearest_neighbor_backend = nearest_neighbor_backend
         self.coarse_layout_weights = coarse_layout_weights
         self.coarsen_on_layout_weights = coarsen_on_layout_weights
         self.init_rescale = init_rescale
@@ -2602,6 +2792,11 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
 
         if self.n_jobs < -1 or self.n_jobs == 0:
             raise ValueError("n_jobs must be a postive integer, or -1 (for all cores)")
+        if self.nearest_neighbor_backend not in ("auto", "pynndescent", "rinnd"):
+            raise ValueError(
+                "nearest_neighbor_backend must be one of "
+                "{'auto', 'pynndescent', 'rinnd'}"
+            )
         if (
             self.n_jobs != 1
             and self.random_state is not None
@@ -2676,7 +2871,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     " must be numpy arrays of the same size."
                 )
             # #848: warn but proceed if no search index is present
-            if not isinstance(self.knn_search_index, NNDescent):
+            if not isinstance(self.knn_search_index, (NNDescent, _RINNDIndex)):
                 warn(
                     "precomputed_knn[2] (knn_search_index) "
                     "is not an NNDescent object: transforming new data with transform "
@@ -2711,6 +2906,12 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 # if k for precomputed_knn larger than n_neighbors we simply prune it
                 self.knn_indices = self.knn_indices[:, : self.n_neighbors]
                 self.knn_dists = self.knn_dists[:, : self.n_neighbors]
+
+    def _nn_metric(self):
+        named = (
+            pynn_sparse_named_distances if self._sparse_data else pynn_named_distances
+        )
+        return self.metric if self.metric in named else self._input_distance_func
 
     def _check_custom_metric(self, metric, kwds, data=None):
         # quickly check to determine whether user-defined
@@ -3325,13 +3526,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         else:
             # Standard case
             self._small_data = False
-            # Standard case
-            if self._sparse_data and self.metric in pynn_sparse_named_distances:
-                nn_metric = self.metric
-            elif not self._sparse_data and self.metric in pynn_named_distances:
-                nn_metric = self.metric
-            else:
-                nn_metric = self._input_distance_func
+            nn_metric = self._nn_metric()
             if self.knn_dists is None:
                 (
                     self._knn_indices,
@@ -3349,6 +3544,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     n_jobs=self.n_jobs,
                     verbose=self.verbose,
                     compatibility_layout=self.compatibility_layout,
+                    nearest_neighbor_backend=self.nearest_neighbor_backend,
                 )
             else:
                 self._knn_indices = self.knn_indices
@@ -4336,12 +4532,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             else:
                 # now large data
                 self._small_data = False
-                if self._sparse_data and self.metric in pynn_sparse_named_distances:
-                    nn_metric = self.metric
-                elif not self._sparse_data and self.metric in pynn_named_distances:
-                    nn_metric = self.metric
-                else:
-                    nn_metric = self._input_distance_func
+                nn_metric = self._nn_metric()
 
                 (
                     self._knn_indices,
@@ -4359,6 +4550,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     n_jobs=self.n_jobs,
                     verbose=self.verbose,
                     compatibility_layout=self.compatibility_layout,
+                    nearest_neighbor_backend=self.nearest_neighbor_backend,
                 )
 
                 self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
@@ -4417,7 +4609,9 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             )
 
         else:
-            self._knn_search_index.prepare()
+            if isinstance(self._knn_search_index, NNDescent):
+                # PyNNDescent's update relies on state that prepare() builds.
+                self._knn_search_index.prepare()
             self._knn_search_index.update(X)
             self._raw_data = self._knn_search_index._raw_data
             (
@@ -4425,12 +4619,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self._knn_dists,
             ) = self._knn_search_index.neighbor_graph
 
-            if self._sparse_data and self.metric in pynn_sparse_named_distances:
-                nn_metric = self.metric
-            elif not self._sparse_data and self.metric in pynn_named_distances:
-                nn_metric = self.metric
-            else:
-                nn_metric = self._input_distance_func
+            nn_metric = self._nn_metric()
 
             self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
                 self._raw_data,
