@@ -508,6 +508,23 @@ def test_hellinger(spatial_data):
     ), "Pairwise Special Metric with LL Dirichlet metric failed"
 
 
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_hellinger_proportional_inputs(dtype):
+    x = np.array([1.0, 2.0], dtype=dtype)
+    y = 2.0 * x
+    distance = dist.hellinger(x, y)
+    tolerance = np.sqrt(np.finfo(dtype).eps)
+
+    assert np.isfinite(distance)
+    assert distance == pytest.approx(0.0, abs=tolerance)
+    assert distance == pytest.approx(dist.hellinger_grad(x, y)[0], abs=1e-6)
+    np.testing.assert_allclose(
+        dist.pairwise_special_metric(np.stack((x, y)), metric="hellinger"),
+        np.zeros((2, 2)),
+        atol=tolerance,
+    )
+
+
 def test_sparse_hellinger(sparse_spatial_data):
     dist_matrix = dist.pairwise_special_metric(
         np.abs(sparse_spatial_data[:-2].toarray())
