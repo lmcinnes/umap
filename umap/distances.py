@@ -699,7 +699,10 @@ def hellinger(x, y):
     elif l1_norm_x == 0 or l1_norm_y == 0:
         return 1.0
     else:
-        return np.sqrt(1 - result / np.sqrt(l1_norm_x * l1_norm_y))
+        denominator = np.sqrt(l1_norm_x * l1_norm_y)
+        if result > denominator:
+            return 0.0
+        return np.sqrt(1 - result / denominator)
 
 
 @numba.njit()
