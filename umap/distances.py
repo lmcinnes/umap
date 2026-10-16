@@ -1090,14 +1090,24 @@ def gaussian_energy_grad(x, y):  # pragma: no cover
     grad[2] -= x_inv_sigma_y_numerator * np.sin(x[4]) ** 2 * sigma_11
     grad[2] += x_inv_sigma_y_numerator * 2 * sigma_12 * np.sin(x[4]) * np.cos(x[4])
     grad[2] /= det_sigma**2 + 1e-8
+    grad[2] += (
+        np.cos(x[4]) ** 2 * sigma_22
+        + np.sin(x[4]) ** 2 * sigma_11
+        - 2 * sigma_12 * np.sin(x[4]) * np.cos(x[4])
+    ) / det_sigma
 
-    grad[3] = mu_1 * (mu_1 * np.cos(x[4]) ** 2 - mu_2 * np.cos(x[4]) * np.sin(x[4]))
-    grad[3] += mu_2 * (mu_2 * np.sin(x[4]) ** 2 - mu_1 * np.cos(x[4]) * np.sin(x[4]))
+    grad[3] = mu_1 * (mu_1 * np.cos(x[4]) ** 2 + mu_2 * np.cos(x[4]) * np.sin(x[4]))
+    grad[3] += mu_2 * (mu_2 * np.sin(x[4]) ** 2 + mu_1 * np.cos(x[4]) * np.sin(x[4]))
     grad[3] *= det_sigma
     grad[3] -= x_inv_sigma_y_numerator * np.sin(x[4]) ** 2 * sigma_22
     grad[3] -= x_inv_sigma_y_numerator * np.cos(x[4]) ** 2 * sigma_11
     grad[3] -= x_inv_sigma_y_numerator * 2 * sigma_12 * np.sin(x[4]) * np.cos(x[4])
     grad[3] /= det_sigma**2 + 1e-8
+    grad[3] += (
+        np.sin(x[4]) ** 2 * sigma_22
+        + np.cos(x[4]) ** 2 * sigma_11
+        + 2 * sigma_12 * np.sin(x[4]) * np.cos(x[4])
+    ) / det_sigma
 
     grad[4] = (x[3] - x[2]) * (
         2 * mu_1 * mu_2 * np.cos(2 * x[4]) - (mu_1**2 - mu_2**2) * np.sin(2 * x[4])
@@ -1105,8 +1115,13 @@ def gaussian_energy_grad(x, y):  # pragma: no cover
     grad[4] *= det_sigma
     grad[4] -= x_inv_sigma_y_numerator * (x[3] - x[2]) * np.sin(2 * x[4]) * sigma_22
     grad[4] -= x_inv_sigma_y_numerator * (x[2] - x[3]) * np.sin(2 * x[4]) * sigma_11
-    grad[4] -= x_inv_sigma_y_numerator * 2 * sigma_12 * (x[2] - x[3]) * np.cos(2 * x[4])
+    grad[4] += x_inv_sigma_y_numerator * 2 * sigma_12 * (x[2] - x[3]) * np.cos(2 * x[4])
     grad[4] /= det_sigma**2 + 1e-8
+    grad[4] += (
+        (x[3] - x[2]) * np.sin(2 * x[4]) * sigma_22
+        + (x[2] - x[3]) * np.sin(2 * x[4]) * sigma_11
+        - 2 * sigma_12 * (x[2] - x[3]) * np.cos(2 * x[4])
+    ) / det_sigma
 
     return dist, grad
 
