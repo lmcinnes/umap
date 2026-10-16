@@ -402,7 +402,7 @@ def _rinnd_eligibility(X, n_neighbors, metric, metric_kwds, compatibility_layout
 
 def _rows_are_normalized(X):
     squared_norms = np.einsum("ij,ij->i", X, X, dtype=np.float64)
-    return bool(np.all(np.abs(squared_norms - 1.0) <= 1e-5))
+    return bool(np.all(np.abs(squared_norms - 1.0) <= 1e-3))
 
 
 def _build_rinnd(data, n_neighbors, graph_only=False, **kwargs):
@@ -2423,6 +2423,44 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             * 'adam': use the Adam optimizer.
             * 'momentum': use the SGD-with-momentum optimizer.
             * 'compatibility': use the legacy UMAP optimizer.
+
+    negative_selection_range: int (optional, default 200_000)
+        The range from which to select negative samples during optimization.
+
+    negative_sample_scale: float (optional, default None)
+        The scale factor for negative samples. If None, no scaling is applied.
+
+    exclude_graph_neighbors: bool (optional, default False)
+        Whether to exclude graph neighbors from negative sampling.
+
+    negative_sample_scale_adaptation_samples: int (optional, default 128)
+        The number of samples used to adapt the negative sample scale.
+        These parameters control the behavior of negative sampling during the optimization process.
+        They allow fine-tuning of how negative samples are selected and scaled, which can impact the quality and efficiency of the embedding.
+
+    recursive_coarsening_ratio: int (optional, default 4)
+        The ratio used for recursive coarsening during the layout optimization.
+
+    nearest_neighbor_backend: str (optional, default "auto")
+        The backend to use for nearest neighbor search. Options are "auto", "rinnd", or "pynndescent".
+
+    coarse_layout_weights: str (optional, default "transition")
+        The weighting scheme to use for the coarse layout. Options are "transition" or "fuzzy_union".
+        "fuzzy_union" uses a fuzzy union approach for weighting the coarse layout.
+        This parameter allows for different strategies in weighting the coarse layout, which can affect the overall structure and quality of the final embedding.
+
+    coarsen_on_layout_weights: bool (optional, default True)
+        Whether to apply coarsening based on the layout weights during the optimization process.
+
+    init_rescale: str (optional, default "isotropic")
+        The rescaling method to apply to the initial embedding. Options are "per_axis","isotropic", and "graph_edge".
+        "per_axis" rescales each axis of the initial embedding independently.
+        "isotropic" rescales the initial embedding to have isotropic variance.
+        "graph_edge" rescales the initial embedding based on the graph edge lengths.
+
+    init_scale_factor: float (optional, default 1.0)
+        The scale factor to apply to the initial embedding after rescaling. This allows for additional control over the overall scale of the initial embedding.
+
 
     Attributes
     ----------
