@@ -3599,7 +3599,12 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                             kwds=self._metric_kwds,
                             ensure_all_finite=ensure_all_finite,
                         )
-                self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
+                (
+                    self.graph_,
+                    self._sigmas,
+                    self._rhos,
+                    self.graph_dists_,
+                ) = fuzzy_simplicial_set(
                     dmat,
                     self._n_neighbors,
                     random_state,
@@ -3612,6 +3617,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     self.local_connectivity,
                     True,
                     self.verbose,
+                    self.densmap or self.output_dens,
                 )
                 knn_indices = np.argsort(dmat)[:, : self.n_neighbors]
             else:
@@ -3641,7 +3647,12 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     verbose=self.verbose,
                 )
 
-                self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
+                (
+                    self.graph_,
+                    self._sigmas,
+                    self._rhos,
+                    self.graph_dists_,
+                ) = fuzzy_simplicial_set(
                     self._raw_data,
                     self.n_neighbors,
                     random_state,
@@ -3654,8 +3665,12 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     self.local_connectivity,
                     True,
                     self.verbose,
+                    self.densmap or self.output_dens,
                 )
                 knn_indices = self._knn_indices
+
+            if self.densmap or self.output_dens:
+                self._densmap_kwds["graph_dists"] = self.graph_dists_
 
             init = np.zeros(
                 (self._raw_data.shape[0], self.n_components), dtype=np.float32
@@ -3709,7 +3724,12 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             else:
                 nn_metric = self._input_distance_func
 
-            self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
+            (
+                self.graph_,
+                self._sigmas,
+                self._rhos,
+                self.graph_dists_,
+            ) = fuzzy_simplicial_set(
                 self._raw_data,
                 self.n_neighbors,
                 random_state,
@@ -3722,7 +3742,11 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self.local_connectivity,
                 True,
                 self.verbose,
+                self.densmap or self.output_dens,
             )
+
+            if self.densmap or self.output_dens:
+                self._densmap_kwds["graph_dists"] = self.graph_dists_
 
             init = np.zeros(
                 (self._raw_data.shape[0], self.n_components), dtype=np.float32

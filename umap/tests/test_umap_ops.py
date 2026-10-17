@@ -336,6 +336,27 @@ def test_umap_update_new_points_without_original_neighbors(iris):
     assert np.all(np.isfinite(model.embedding_))
 
 
+@pytest.mark.parametrize("force_approximation_algorithm", [False, True])
+def test_umap_update_densmap(iris, force_approximation_algorithm):
+    # update() must recompute the graph distances used by densMAP and
+    # output_dens for the enlarged dataset instead of reusing the ones from fit
+    model = UMAP(
+        n_epochs=20,
+        densmap=True,
+        output_dens=True,
+        random_state=42,
+        force_approximation_algorithm=force_approximation_algorithm,
+    ).fit(iris.data[:100])
+    model.update(iris.data[100:])
+    assert model.embedding_.shape == (150, 2)
+    assert model.graph_dists_.shape == (150, 150)
+    assert model.rad_orig_.shape == (150,)
+    assert model.rad_emb_.shape == (150,)
+    assert np.all(np.isfinite(model.embedding_))
+    assert np.all(np.isfinite(model.rad_orig_))
+    assert np.all(np.isfinite(model.rad_emb_))
+
+
 # -----------------
 # UMAP Graph output
 # -----------------
