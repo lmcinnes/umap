@@ -1,6 +1,11 @@
 import numpy as np
 import numba
-from numpy.testing import assert_array_almost_equal, assert_array_equal
+import scipy.stats
+from numpy.testing import (
+    assert_allclose,
+    assert_array_almost_equal,
+    assert_array_equal,
+)
 import umap.distances as dist
 import umap.sparse as spdist
 
@@ -757,3 +762,33 @@ def test_fallback_path(levenshtein_fn):
     d = levenshtein_fn(x, y)
     assert isinstance(d, float)
     assert d == 0.0
+
+
+# --------------------
+# Count metric Tests (Poisson model)
+# --------------------
+
+
+@pytest.mark.parametrize(
+    "x,y",
+    [(0, 1), (0, 2), (0, 5), (1, 4), (2, 3), (3, 7), (9, 12), (10, 11), (11, 15)],
+)
+def test_count_distance_sums_poisson_log_pmf(x, y):
+    # The count distance from x to y is the sum of the Poisson log
+    # probabilities of the counts x, ..., y - 1.
+    poisson_lambda = 3.5
+    expected = scipy.stats.poisson.logpmf(np.arange(x, y), poisson_lambda).sum()
+    for a, b in ((x, y), (y, x)):
+        assert_allclose(
+            dist.count_distance(a, b, poisson_lambda=poisson_lambda),
+            expected,
+            rtol=1e-6,
+            atol=1e-5,
+        )
+
+
+def test_count_params_finite_with_zero_counts():
+    counts = np.array([0.0, 1.0, 2.0, 4.0, 7.0])
+    params = dist.get_discrete_params(counts, "count")
+    assert np.isfinite(params["normalisation"])
+    assert params["normalisation"] != 0.0

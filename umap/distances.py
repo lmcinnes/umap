@@ -1210,11 +1210,12 @@ def count_distance(x, y, poisson_lambda=1.0, normalisation=1.0):
 
     log_lambda = np.log(poisson_lambda)
 
+    # log_k_factorial holds log(k!) for the current k
     if lo < 2:
         log_k_factorial = 0.0
     elif lo < 10:
         log_k_factorial = 0.0
-        for k in range(2, lo):
+        for k in range(2, lo + 1):
             log_k_factorial += np.log(k)
     else:
         log_k_factorial = approx_log_Gamma(lo + 1)
@@ -1223,7 +1224,7 @@ def count_distance(x, y, poisson_lambda=1.0, normalisation=1.0):
 
     for k in range(lo, hi):
         result += k * log_lambda - poisson_lambda - log_k_factorial
-        log_k_factorial += np.log(k)
+        log_k_factorial += np.log(k + 1)
 
     return result / normalisation
 
