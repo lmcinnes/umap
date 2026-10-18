@@ -143,6 +143,21 @@ def test_count_metric_supervised_umap_trustworthiness():
     ), "Insufficiently trustworthy embedding for" "blobs dataset: {}".format(trust)
 
 
+def test_count_metric_supervised_umap_with_zero_counts():
+    data, _ = make_blobs(60, cluster_std=3.0, random_state=42)
+    counts = np.random.RandomState(42).poisson(2.0, size=data.shape[0])
+    assert counts.min() == 0
+    model = UMAP(
+        n_neighbors=10,
+        target_metric="count",
+        target_weight=0.8,
+        n_epochs=50,
+        random_state=42,
+    ).fit(data, counts)
+    assert np.all(np.isfinite(model.graph_.data))
+    assert np.all(np.isfinite(model.embedding_))
+
+
 def test_sparse_precomputed_metric_umap_trustworthiness():
     data, labels = make_blobs(50, cluster_std=0.5, random_state=42)
     dmat = scipy.sparse.csr_matrix(pairwise_distances(data))
