@@ -365,7 +365,9 @@ class AlignedUMAP(BaseEstimator):
         if self.n_epochs is None:
             self.n_epochs = 200
 
-        n_epochs = self.n_epochs
+        # n_epochs can be given per model, but the models are laid out together,
+        # so optimise the joint layout for the largest number of epochs
+        n_epochs = int(np.max(self.n_epochs))
 
         self.mappers_ = [
             UMAP(
@@ -509,7 +511,8 @@ class AlignedUMAP(BaseEstimator):
         if self.n_epochs is None:
             self.n_epochs = 200
 
-        n_epochs = self.n_epochs
+        # The layout update runs for the new model's number of epochs
+        n_epochs = get_nth_item_or_val(self.n_epochs, self.n_models_)
 
         new_mapper = UMAP(
             n_neighbors=get_nth_item_or_val(self.n_neighbors, self.n_models_),

@@ -86,6 +86,24 @@ def test_aligned_update_does_not_mutate_inputs(aligned_iris, aligned_iris_relati
     assert len(other_model.embeddings_) == 4
 
 
+def test_aligned_per_model_n_epochs(aligned_iris, aligned_iris_relations):
+    data, target = aligned_iris
+    model = AlignedUMAP(n_epochs=[10, 20, 30])
+    model.fit(data[:3], relations=aligned_iris_relations[:2])
+    assert [embedding.shape for embedding in model.embeddings_] == [(50, 2)] * 3
+    model.update(data[3], relations=aligned_iris_relations[2], n_epochs=15)
+    assert [embedding.shape for embedding in model.embeddings_] == [(50, 2)] * 4
+
+
+def test_aligned_update_with_new_n_epochs(aligned_iris, aligned_iris_relations):
+    data, target = aligned_iris
+    model = AlignedUMAP(n_epochs=20)
+    model.fit(data[:3], relations=aligned_iris_relations[:2])
+    model.update(data[3], relations=aligned_iris_relations[2], n_epochs=30)
+    assert len(model.embeddings_) == 4
+    assert model.mappers_[-1].n_epochs == 30
+
+
 @pytest.mark.skip(reason="Temporarily disable")
 def test_aligned_update_array_error(aligned_iris, aligned_iris_relations):
     data, target = aligned_iris
