@@ -481,6 +481,71 @@ def test_haversine(spatial_data):
     )
 
 
+def _spherical_angle(x, y):
+    # Cartesian atan2 reference avoids the haversine arcsin endpoint.
+    def unit_vector(point):
+        latitude, longitude = np.asarray(point, dtype=np.float64)
+        return np.array(
+            [
+                np.cos(latitude) * np.cos(longitude),
+                np.cos(latitude) * np.sin(longitude),
+                np.sin(latitude),
+            ]
+        )
+
+    u, v = unit_vector(x), unit_vector(y)
+    return np.arctan2(np.linalg.norm(np.cross(u, v)), np.dot(u, v))
+
+
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+@pytest.mark.parametrize(
+    "x,y",
+    [
+        ([-89, 15], [89, -165]),
+        ([-85, 15], [85, -165]),
+        ([-70, 15], [70, -165]),
+        ([10, 20], [-10, 200]),
+        ([-45, 0], [45, 180]),
+        ([0, 0], [0, 180]),
+        ([30, 10], [31, 12]),
+        ([20, 20], [20, 20]),
+    ],
+)
+def test_haversine_finite_at_antipodes(dtype, x, y):
+    x, y = np.deg2rad(np.asarray([x, y], dtype=dtype))
+    expected = _spherical_angle(x, y)
+    atol = 1e-3 if dtype == np.float32 else 1e-7
+    for first, second in [(x, y), (y, x)]:
+        result = dist.haversine(first, second)
+        assert np.isfinite(result)
+        assert 0 <= result <= np.pi
+        assert result == pytest.approx(expected, abs=atol)
+
+
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_haversine_pairwise_antipodes(dtype):
+    points = np.deg2rad(
+        np.asarray(
+            [[-89, 15], [89, -165], [-85, 15], [85, -165], [-70, 15], [70, -165]],
+            dtype=dtype,
+        )
+    )
+    expected = np.array([[_spherical_angle(x, y) for y in points] for x in points])
+    result = dist.numba_aware_pairwise_distances(points, metric=dist.haversine)
+    assert np.isfinite(result).all()
+    np.testing.assert_allclose(
+        result, expected, rtol=0, atol=1e-3 if dtype == np.float32 else 1e-7
+    )
+
+
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_haversine_preserves_nan(dtype):
+    result = dist.haversine(
+        np.array([np.nan, 0], dtype=dtype), np.zeros(2, dtype=dtype)
+    )
+    assert np.isnan(result)
+
+
 def test_hellinger(spatial_data):
     hellinger_data = np.abs(spatial_data[:-2].copy())
     hellinger_data = hellinger_data / hellinger_data.sum(axis=1)[:, np.newaxis]
