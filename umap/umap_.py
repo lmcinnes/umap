@@ -68,6 +68,37 @@ DISCONNECTION_DISTANCES = {
     "dice": 1,
 }
 
+# Metrics whose first keyword argument holds one value per feature (or per
+# pair of features). Their defaults in umap.distances are 2-dimensional
+# placeholders, so on data with any other number of features the compiled
+# metric would read past the end of the placeholder.
+FEATURE_SHAPED_METRIC_KWDS = {
+    "mahalanobis": ("vinv", 2),
+    "seuclidean": ("sigma", 1),
+    "standardised_euclidean": ("sigma", 1),
+    "wminkowski": ("w", 1),
+}
+
+
+def _check_metric_kwds_shape(metric, metric_kwds, n_features, kwds_name):
+    if not isinstance(metric, str) or metric not in FEATURE_SHAPED_METRIC_KWDS:
+        return
+    param, ndim = FEATURE_SHAPED_METRIC_KWDS[metric]
+    expected_shape = (n_features,) * ndim
+    if metric_kwds:
+        # metric_kwds are passed on to the metric positionally
+        shape = np.shape(next(iter(metric_kwds.values())))
+    else:
+        shape = (2,) * ndim
+    if shape != expected_shape:
+        message = (
+            f"metric '{metric}' needs {kwds_name}={{'{param}': ...}} with an "
+            f"array of shape {expected_shape}"
+        )
+        if metric_kwds:
+            message += f", got shape {shape}"
+        raise ValueError(message)
+
 
 def flatten_iter(container):
     for i in container:
@@ -1992,6 +2023,9 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             self._inverse_distance_func = None
         else:
             raise ValueError("metric is neither callable nor a recognised string")
+        _check_metric_kwds_shape(
+            self.metric, self._metric_kwds, self._raw_data.shape[1], "metric_kwds"
+        )
         # set output distance metric
         if callable(self.output_metric):
             out_returns_grad = self._check_custom_metric(
@@ -2019,6 +2053,12 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             raise ValueError(
                 "output_metric is neither callable nor a recognised string"
             )
+        _check_metric_kwds_shape(
+            self.output_metric,
+            self._output_metric_kwds,
+            self.n_components,
+            "output_metric_kwds",
+        )
         # set angularity for NN search based on metric
         if self.metric in (
             "cosine",
