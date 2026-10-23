@@ -2549,7 +2549,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         if n_index_samples <= self.n_neighbors:
             if n_index_samples == 1:
                 self.embedding_ = np.zeros(
-                    (1, self.n_components)
+                    (X.shape[0], self.n_components)
                 )  # needed to sklearn comparability
                 return self
 
