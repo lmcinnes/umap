@@ -1,0 +1,41 @@
+name: umap
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    branches:
+    - master
+  pull_request:
+    branches:
+    - master
+    paths-ignore:
+    - doc/**
+    - README.rst
+concurrency:
+  # Cancel if a new commit is made and things are still running
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  RunAllTests-run_platform_tests:
+    runs-on:
+      - "${{ matrix.image-name }}"
+    strategy:
+      # Don't stop other jobs if one fails
+      fail-fast: false
+      matrix:
+        image-name: [ubuntu-latest, windows-latest, macos-latest, ubuntu-26.04-arm]
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+    - name: checkout
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+    - name: Install uv and set python version to "${{ matrix.python-version }}"
+      uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      with:
+        python-version: "${{ matrix.python-version }}"
+    - name: Install package and dependencies
+      run: |-
+        uv sync --group cicd --extra plot --extra parametric_umap
+    - name: Run tests
+      run: uv run pytest umap/tests --show-capture=no -v --disable-warnings
