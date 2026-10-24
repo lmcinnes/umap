@@ -51,6 +51,24 @@ def test_plot_runs_at_all(mapper, iris, iris_selection):
 
 
 @plot_only
+@pytest.mark.parametrize("interactive_text_search", [False, True])
+def test_show_interactive_plot(mapper, iris, monkeypatch, interactive_text_search):
+    from umap import plot as umap_plot
+
+    displayed = []
+    monkeypatch.setattr(umap_plot, "show_interactive", displayed.append)
+    result = umap_plot.interactive(
+        mapper,
+        labels=iris.target,
+        interactive_text_search=interactive_text_search,
+    )
+
+    umap_plot.show(result)
+
+    assert displayed == [result]
+
+
+@plot_only
 @pytest.mark.parametrize("metric", ["cosine", "manhattan"])
 @pytest.mark.parametrize("sparse_input", [False, True])
 def test_nhood_search_uses_model_metric(metric, sparse_input):
