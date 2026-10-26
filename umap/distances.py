@@ -548,7 +548,7 @@ def haversine(x, y):
     sin_lat = np.sin(0.5 * (x[0] - y[0]))
     sin_long = np.sin(0.5 * (x[1] - y[1]))
     result = np.sqrt(sin_lat**2 + np.cos(x[0]) * np.cos(y[0]) * sin_long**2)
-    return 2.0 * np.arcsin(result)
+    return 2.0 * np.arcsin(np.minimum(result, 1.0))
 
 
 @numba.njit()
