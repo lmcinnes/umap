@@ -82,6 +82,19 @@ def flattened(container):
     return tuple(flatten_iter(container))
 
 
+def _disable_densmap_for_combined_model(model):
+    # densMAP needs the input space distances of the graph edges (``graph_dists_``),
+    # which a combined graph doesn't have: the models may even use different
+    # metrics or features. Combined models are therefore embedded without densMAP.
+    if np.any(model.densmap) or np.any(model.output_dens):
+        warn(
+            "densMAP is not supported for combined models; "
+            "the combined model is embedded without densMAP."
+        )
+    model.densmap = False
+    model.output_dens = False
+
+
 def breadth_first_search(adjmat, start, min_vertices):
     explored = []
     queue = deque([start])
@@ -2236,8 +2249,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         else:
             init = "spectral"
 
-        result.densmap = np.any(result.densmap)
-        result.output_dens = np.any(result.output_dens)
+        _disable_densmap_for_combined_model(result)
 
         result._densmap_kwds = {
             "lambda": np.max(result.dens_lambda),
@@ -2306,8 +2318,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         else:
             init = "spectral"
 
-        result.densmap = np.any(result.densmap)
-        result.output_dens = np.any(result.output_dens)
+        _disable_densmap_for_combined_model(result)
 
         result._densmap_kwds = {
             "lambda": np.max(result.dens_lambda),
@@ -2378,8 +2389,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         else:
             init = "spectral"
 
-        result.densmap = np.any(result.densmap)
-        result.output_dens = np.any(result.output_dens)
+        _disable_densmap_for_combined_model(result)
 
         result._densmap_kwds = {
             "lambda": np.max(result.dens_lambda),

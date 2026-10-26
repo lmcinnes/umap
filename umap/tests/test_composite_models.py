@@ -1,3 +1,5 @@
+import operator
+
 from umap import UMAP
 import pytest
 
@@ -115,3 +117,18 @@ def test_contrastive_trustworthiness_on_iris(iris):
     assert (
         trust >= 0.75
     ), "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust)
+
+
+@pytest.mark.parametrize("op", [operator.mul, operator.add, operator.sub])
+def test_composite_densmap_models(iris, op):
+    iris_model1 = UMAP(n_neighbors=10, random_state=42, n_epochs=50, densmap=True).fit(
+        iris.data[:, :2]
+    )
+    iris_model2 = UMAP(
+        n_neighbors=10, random_state=42, n_epochs=50, output_dens=True
+    ).fit(iris.data[:, 2:])
+    with pytest.warns(UserWarning, match="densMAP is not supported for combined"):
+        combined = op(iris_model1, iris_model2)
+    assert combined.embedding_.shape == (iris.data.shape[0], 2)
+    assert not combined.densmap
+    assert not combined.output_dens
