@@ -396,3 +396,33 @@ def test_component_layout_options(nn_data):
     assert not np.all(single == average)
     assert not np.all(single == complete)
     assert not np.all(average == complete)
+
+
+@pytest.mark.parametrize("linkage", ["single", "complete"])
+def test_component_layout_linkage_input_invariance(nn_data, linkage):
+    dmat = pairwise_distances(nn_data[:300])
+    n_components = 30
+    component_labels = np.arange(dmat.shape[0]) % n_components
+    # The same distances as sparse input, as np.matrix, and with samples
+    # grouped by label.
+    grouped = np.argsort(component_labels, kind="stable")
+    inputs = [
+        (dmat, component_labels),
+        (csr_matrix(dmat), component_labels),
+        (np.matrix(dmat), component_labels),
+        (dmat[grouped][:, grouped], component_labels[grouped]),
+    ]
+    layouts = [
+        component_layout(
+            data,
+            n_components,
+            labels,
+            2,
+            np.random.RandomState(42),
+            metric="precomputed",
+            metric_kwds={"linkage": linkage},
+        )
+        for data, labels in inputs
+    ]
+    for layout in layouts[1:]:
+        assert_array_equal(layouts[0], layout)

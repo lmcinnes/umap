@@ -91,20 +91,37 @@ def component_layout(
             np.fill_diagonal(distance_matrix, 0.0)
         else:
             if linkage == "complete":
-                reducer = np.max
+                reducer, reducer_ufunc = np.max, np.maximum
             elif linkage == "single":
-                reducer = np.min
+                reducer, reducer_ufunc = np.min, np.minimum
             else:
                 raise ValueError(
                     "Unrecognized linkage '%s'. Please choose from "
                     "'average', 'complete', or 'single'" % linkage
                 )
-            for c_i in range(n_components):
-                dm_i = data[component_labels == c_i]
-                for c_j in range(c_i + 1, n_components):
-                    dist = reducer(dm_i[:, component_labels == c_j])
-                    distance_matrix[c_i, c_j] = dist
-                    distance_matrix[c_j, c_i] = dist
+            if scipy.sparse.issparse(data):
+                for c_i in range(n_components):
+                    dm_i = data[component_labels == c_i]
+                    for c_j in range(c_i + 1, n_components):
+                        dist = reducer(dm_i[:, component_labels == c_j])
+                        distance_matrix[c_i, c_j] = dist
+                        distance_matrix[c_j, c_i] = dist
+            else:
+                # One pass per component instead of per pair: reduce the rows
+                # of c_i to one value per sample, then reduce those per later
+                # component with reduceat over the samples sorted by label.
+                data = np.asarray(data)
+                order = np.argsort(component_labels)
+                starts = np.searchsorted(
+                    component_labels[order], np.arange(n_components)
+                )
+                for c_i in range(n_components - 1):
+                    extremes = reducer_ufunc.reduce(
+                        data[component_labels == c_i], axis=0
+                    )
+                    dist = reducer_ufunc.reduceat(extremes[order], starts[c_i + 1 :])
+                    distance_matrix[c_i, c_i + 1 :] = dist
+                    distance_matrix[c_i + 1 :, c_i] = dist
     else:
         for label in range(n_components):
             component_centroids[label] = data[component_labels == label].mean(axis=0)
