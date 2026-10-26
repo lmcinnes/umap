@@ -45,7 +45,7 @@ from umap.utils import submatrix, average_nn_distance
 from bokeh.plotting import show as show_interactive
 from bokeh.plotting import output_file, output_notebook
 from bokeh.layouts import column
-from bokeh.models import CustomJS, TextInput
+from bokeh.models import CustomJS, LayoutDOM, TextInput
 from matplotlib.pyplot import show as show_static
 
 from warnings import warn
@@ -498,7 +498,7 @@ def show(plot_to_show):
     """
     if isinstance(plot_to_show, plt.Axes):
         show_static()
-    elif isinstance(plot_to_show, bpl.figure):
+    elif isinstance(plot_to_show, LayoutDOM):
         show_interactive(plot_to_show)
     elif isinstance(plot_to_show, hv.core.spaces.DynamicMap):
         show_interactive(hv.render(plot_to_show), backend="bokeh")
