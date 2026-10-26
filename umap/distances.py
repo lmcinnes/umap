@@ -1159,7 +1159,8 @@ def spherical_gaussian_grad(x, y):  # pragma: no cover
 
 def get_discrete_params(data, metric):
     if metric == "ordinal":
-        return {"support_size": float(data.max() - data.min()) / 2.0}
+        support_size = float(data.max() - data.min()) / 2.0
+        return {"support_size": support_size if support_size != 0 else 1.0}
     elif metric == "count":
         min_count = scipy.stats.tmin(data)
         max_count = scipy.stats.tmax(data)
@@ -1174,7 +1175,10 @@ def get_discrete_params(data, metric):
         max_length = scipy.stats.tmax(lengths)
         max_dist = max_length / 1.5  # heuristic
         normalisation = max_dist / 2.0  # heuristic
-        return {"normalisation": normalisation, "max_dist": max_dist / 2.0}  # heuristic
+        return {
+            "normalisation": normalisation if normalisation != 0 else 1.0,
+            "max_dist": max_dist / 2.0,
+        }  # heuristic
 
     else:
         return {}
