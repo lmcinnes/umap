@@ -1051,13 +1051,13 @@ def simplicial_set_embedding(
     gamma: float
         Weight to apply to negative samples.
 
-    negative_sample_rate: int (optional, default 5)
+    negative_sample_rate: int
         The number of negative samples to select per positive sample
         in the optimization process. Increasing this value will result
         in greater repulsive force being applied, greater optimization
         cost, but slightly more accuracy.
 
-    n_epochs: int (optional, default 0), or list of int
+    n_epochs: int, or list of int
         The number of training epochs to be used in optimizing the
         low dimensional embedding. Larger values result in more accurate
         embeddings. If 0 is specified a value will be selected based on
