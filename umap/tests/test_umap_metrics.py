@@ -750,6 +750,29 @@ def test_max_dist_guard_normalised(levenshtein_fn):
     assert d == 2.0
 
 
+@pytest.mark.parametrize("normalisation", [1.0, 2.5])
+@pytest.mark.parametrize(
+    "x,y,cutoff,expected",
+    [
+        ("ab", "ba", 1, 1),
+        ("abc", "cab", 1, 1),
+        ("x" * 62 + "ab", "x" * 62 + "ba", 1, 1),
+        ("ab", "ba", 1.5, 1.5),
+        ("ab", "ba", 2, 2),
+        ("ab", "ba", 3, 2),
+        ("ab", "ba", 0, 0),
+    ],
+)
+def test_max_distance_caps_final_score(
+    levenshtein_fn, x, y, cutoff, expected, normalisation
+):
+    # Each pair has true edit distance two, including the long Myers fallback.
+    for first, second in [(x, y), (y, x)]:
+        assert levenshtein_fn(
+            first, second, normalisation=normalisation, max_distance=cutoff
+        ) == pytest.approx(expected / normalisation)
+
+
 def test_fallback_path(levenshtein_fn):
     x = "a" * 64
     y = "a" * 64

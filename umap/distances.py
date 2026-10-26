@@ -1277,7 +1277,7 @@ def levenshtein(x, y, normalisation=1.0, max_distance=20):
         if np.min(v0) > max_distance:
             return float(max_distance) / normalisation
 
-    return float(v0[y_len]) / normalisation
+    return float(min(v0[y_len], max_distance)) / normalisation
 
 
 @numba.njit()
