@@ -105,3 +105,15 @@ def test_transform_sparse_model_with_dense_input(metric):
     expected = model.transform(new_data)
     result = model.transform(new_data.toarray())
     np.testing.assert_allclose(result, expected)
+
+
+@pytest.mark.parametrize("sparse", [False, True])
+@pytest.mark.parametrize("n_features", [6, 10])
+def test_transform_wrong_number_of_features(sparse, n_features):
+    data = np.random.RandomState(42).rand(50, 8)
+    if sparse:
+        data = scipy.sparse.csr_matrix(data)
+    model = UMAP(n_neighbors=5, n_epochs=10, random_state=42).fit(data)
+    new_data = np.random.RandomState(0).rand(3, n_features)
+    with pytest.raises(ValueError, match=f"X has {n_features} features"):
+        model.transform(new_data)

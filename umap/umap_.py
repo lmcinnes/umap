@@ -3112,6 +3112,11 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 X = scipy.sparse.csr_matrix(X)
             elif not self._sparse_data and scipy.sparse.issparse(X):
                 X = X.toarray()
+            if X.shape[1] != self._raw_data.shape[1]:
+                raise ValueError(
+                    f"X has {X.shape[1]} features, but this UMAP model was fit on "
+                    f"data with {self._raw_data.shape[1]} features."
+                )
         x_hash = joblib.hash(X)
         if x_hash == self._input_hash:
             if self.transform_mode == "embedding":
