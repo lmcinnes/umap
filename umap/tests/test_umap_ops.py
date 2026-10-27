@@ -9,6 +9,7 @@ from sklearn.metrics import adjusted_rand_score, pairwise_distances
 from sklearn.preprocessing import normalize
 from numpy.testing import assert_array_equal
 from umap import UMAP
+import umap.umap_ as umap_module
 from umap.umap_ import init_update
 from umap.spectral import component_layout
 import numpy as np
@@ -327,6 +328,15 @@ def test_init_update_averages_original_neighbors():
     np.testing.assert_allclose(init[3], [1.0, 2.0])
 
 
+def test_init_update_skips_missing_neighbors():
+    init = np.zeros((3, 2), dtype=np.float32)
+    init[0] = [2.0, 4.0]
+    init[1] = [6.0, 8.0]
+    # -1 is a neighbour that was pruned (e.g. at infinite distance)
+    init_update(init, 2, np.array([[0, 1], [1, 0], [-1, 0]]))
+    np.testing.assert_allclose(init[2], [2.0, 4.0])
+
+
 def test_umap_update_new_points_without_original_neighbors(iris):
     # https://github.com/lmcinnes/umap/issues/1075
     # some of the new (virginica) points only have new points as neighbours
@@ -334,6 +344,28 @@ def test_umap_update_new_points_without_original_neighbors(iris):
     model.update(iris.data[100:])
     assert model.embedding_.shape == (150, 2)
     assert np.all(np.isfinite(model.embedding_))
+
+
+def test_umap_update_init_uses_graph_neighbors_with_ties(monkeypatch):
+    # With duplicate points many neighbours tie at the k-th distance; the new
+    # points must be initialised from the same neighbours the graph used.
+    rng = np.random.default_rng(0)
+    data = rng.normal(size=(300, 8)).astype(np.float32)
+    data[100:130] = data[0]
+    model = UMAP(n_neighbors=10, n_epochs=20, random_state=42).fit(data)
+
+    captured = {}
+    original_init_update = umap_module.init_update
+
+    def recording_init_update(current_init, n_original_samples, indices):
+        captured["indices"] = np.array(indices)
+        return original_init_update(current_init, n_original_samples, indices)
+
+    monkeypatch.setattr(umap_module, "init_update", recording_init_update)
+    model.update(np.repeat(data[:1], 5, axis=0))
+
+    for row in range(300, 305):
+        assert set(captured["indices"][row]) == set(model.graph_[row].indices)
 
 
 # -----------------

@@ -1462,7 +1462,8 @@ def init_update(current_init, n_original_samples, indices):
     for i in range(n_original_samples, indices.shape[0]):
         n = 0
         for j in range(indices.shape[1]):
-            if indices[i, j] < n_original_samples:
+            # -1 marks a missing neighbour (e.g. at infinite distance)
+            if 0 <= indices[i, j] < n_original_samples:
                 n += 1
                 for d in range(current_init.shape[1]):
                     current_init[i, d] += current_init[indices[i, j], d]
@@ -3599,21 +3600,30 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                             kwds=self._metric_kwds,
                             ensure_all_finite=ensure_all_finite,
                         )
+                # Initialise the new points from the same neighbours the graph uses
+                knn_indices, knn_dists, _ = nearest_neighbors(
+                    dmat,
+                    self._n_neighbors,
+                    "precomputed",
+                    self._metric_kwds,
+                    self.angular_rp_forest,
+                    random_state,
+                    verbose=self.verbose,
+                )
                 self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
                     dmat,
                     self._n_neighbors,
                     random_state,
                     "precomputed",
                     self._metric_kwds,
-                    None,
-                    None,
+                    knn_indices,
+                    knn_dists,
                     self.angular_rp_forest,
                     self.set_op_mix_ratio,
                     self.local_connectivity,
                     True,
                     self.verbose,
                 )
-                knn_indices = np.argsort(dmat)[:, : self.n_neighbors]
             else:
                 # now large data
                 self._small_data = False
