@@ -261,6 +261,37 @@ def test_umap_bad_hellinger_data(nn_data):
         u.fit(-nn_data)
 
 
+@pytest.mark.parametrize(
+    "metric, metric_kwds",
+    [
+        ("mahalanobis", None),
+        ("mahalanobis", {"vinv": np.eye(3)}),
+        ("seuclidean", None),
+        ("standardised_euclidean", {"sigma": np.ones(4)}),
+        ("wminkowski", None),
+    ],
+)
+def test_umap_metric_kwds_bad_shape(nn_data, metric, metric_kwds):
+    u = UMAP(metric=metric, metric_kwds=metric_kwds)
+    with pytest.raises(ValueError, match="metric_kwds"):
+        u.fit(nn_data)
+
+
+def test_umap_output_metric_kwds_bad_shape(nn_data):
+    u = UMAP(n_components=3, output_metric="mahalanobis")
+    with pytest.raises(ValueError, match="output_metric_kwds"):
+        u.fit(nn_data)
+
+
+def test_umap_metric_kwds_matching_shape(nn_data):
+    vinv = np.linalg.inv(np.cov(nn_data, rowvar=False))
+    u = UMAP(metric="mahalanobis", metric_kwds={"vinv": vinv}, n_epochs=11)
+    assert np.all(np.isfinite(u.fit_transform(nn_data[:100])))
+    # the 2-dimensional default still applies to 2-dimensional data
+    u = UMAP(metric="mahalanobis", n_epochs=11)
+    assert np.all(np.isfinite(u.fit_transform(nn_data[:100, :2])))
+
+
 def test_umap_update_bad_params(nn_data):
     dmat = pairwise_distances(nn_data[:100])
     u = UMAP(metric="precomputed", n_epochs=11)
