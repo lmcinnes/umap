@@ -90,7 +90,7 @@ Other improvements
   computation and AlignedUMAP relation handling.
 * Type checkers can use the bundled ``py.typed`` marker.
 * UMAP now requires NumPy 2.0 or later (with SciPy 1.13, Numba 0.60 and
-  PyNNDescent 0.5.13 or later) and supports Python 3.10 to 3.14. On Python
+  PyNNDescent 0.7 or later) and supports Python 3.10 to 3.14. On Python
   3.14 the optional TensorFlow (ParametricUMAP) and RINND dependencies do not
   yet provide wheels.
 

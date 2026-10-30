@@ -12,13 +12,13 @@ Without an output path the committed fixture next to this script is replaced.
 CI regenerates fixtures in its own environment and points the regression test
 at them with the ``UMAP_COMPAT_FIXTURES`` environment variable.
 
-The output is written next to this script and records the platform used, since
-bit-exact numba results are only expected on a matching platform.
+The output records the platform and the versions of NumPy (and its BLAS),
+SciPy, scikit-learn, Numba and PyNNDescent, since bit-exact results are only
+expected when all of them match.
 """
 
 import importlib.util
 import os
-import platform
 import sys
 import warnings
 
@@ -47,10 +47,7 @@ def main(legacy_root, output=None):
     cases_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(cases_module)
 
-    arrays = {
-        "platform": np.array(f"{platform.system()}-{platform.machine()}"),
-        "numba_version": np.array(__import__("numba").__version__),
-    }
+    arrays = {"environment": np.array(cases_module.environment_fingerprint())}
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         for name, case in cases_module.build_cases().items():

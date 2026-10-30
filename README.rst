@@ -98,11 +98,11 @@ Requirements:
 
 * Python 3.10 or greater
 * numpy (2.0 or greater)
-* scipy
-* scikit-learn
-* numba
+* scipy (1.13 or greater)
+* scikit-learn (1.6 or greater)
+* numba (0.60 or greater)
 * tqdm
-* `pynndescent <https://github.com/lmcinnes/pynndescent>`_
+* `pynndescent <https://github.com/lmcinnes/pynndescent>`_ (0.7 or greater)
 
 Recommended packages:
 

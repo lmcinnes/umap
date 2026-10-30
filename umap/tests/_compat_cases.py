@@ -13,6 +13,44 @@ N_SAMPLES = 600
 N_TRANSFORM = 40
 
 
+def environment_fingerprint():
+    """Versions of everything that can change bit-exact results.
+
+    Includes the platform, the numerical libraries, the BLAS/LAPACK NumPy was
+    built with (PCA and spectral initialization), and PyNNDescent, whose
+    nearest-neighbor descent results differ between releases.
+    """
+    import json
+    import platform
+
+    import numba
+    import pynndescent
+    import scipy
+    import sklearn
+
+    try:
+        build = np.show_config(mode="dicts")["Build Dependencies"]
+        linalg = {
+            key: f"{value.get('name')} {value.get('version')}"
+            for key, value in build.items()
+            if key in ("blas", "lapack")
+        }
+    except Exception:  # pragma: no cover - older NumPy build metadata
+        linalg = {}
+    return json.dumps(
+        {
+            "platform": f"{platform.system()}-{platform.machine()}",
+            "numpy": np.__version__,
+            "scipy": scipy.__version__,
+            "scikit-learn": sklearn.__version__,
+            "numba": numba.__version__,
+            "pynndescent": pynndescent.__version__,
+            **linalg,
+        },
+        sort_keys=True,
+    )
+
+
 def _datasets():
     import scipy.sparse
     from sklearn.datasets import load_digits

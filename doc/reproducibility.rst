@@ -209,8 +209,10 @@ The compatibility layout also reproduces results across releases. With
 the same data, parameters and ``random_state``, a fit with
 ``compatibility_layout=True`` in version 0.6 produces exactly the same
 embedding (and the same ``transform`` and ``inverse_transform`` results) as
-the final 0.5.x code line, provided that Numba and the other numerical
-dependencies are the same versions on the same platform. The 0.6 test suite
+the final 0.5.x code line, provided that the platform and dependency
+versions are the same -- in particular Numba, NumPy and the BLAS library it
+uses, SciPy, scikit-learn and PyNNDescent (whose nearest-neighbor descent
+results can change between releases). The 0.6 test suite
 checks this bit-for-bit for a range of configurations, including sparse
 input, custom metrics, non-Euclidean output metrics, DensMAP, supervised
 UMAP and AlignedUMAP.
