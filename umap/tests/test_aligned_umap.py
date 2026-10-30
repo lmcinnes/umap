@@ -1,3 +1,4 @@
+import warnings
 import pytest
 from umap import AlignedUMAP
 from umap.aligned_umap import expand_relations
@@ -193,3 +194,31 @@ def test_expand_relations_shape_and_sum(window_size, shape, total):
     result = expand_relations(_EXPAND_RELATIONS_INPUT, window_size=window_size)
     assert result.shape == shape
     assert int(result.sum()) == total
+
+
+@pytest.mark.parametrize("compatibility_layout", [True, False])
+def test_aligned_compatibility_layout_resolution(
+    aligned_iris, aligned_iris_relations, compatibility_layout
+):
+    data, target = aligned_iris
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", FutureWarning)
+        model = AlignedUMAP(
+            n_epochs=20, random_state=1, compatibility_layout=compatibility_layout
+        ).fit(data, relations=aligned_iris_relations)
+    assert model._compatibility_layout is compatibility_layout
+    assert all(
+        mapper._compatibility_layout is compatibility_layout
+        for mapper in model.mappers_
+    )
+    for embedding in model.embeddings_:
+        assert np.all(np.isfinite(embedding))
+
+
+def test_aligned_default_warns_once(aligned_iris, aligned_iris_relations):
+    data, target = aligned_iris
+    with pytest.warns(FutureWarning) as record:
+        AlignedUMAP(n_epochs=20, random_state=1).fit(
+            data, relations=aligned_iris_relations
+        )
+    assert sum(issubclass(w.category, FutureWarning) for w in record) == 1

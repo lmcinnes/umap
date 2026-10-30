@@ -74,3 +74,19 @@ def run_case(umap_module, fit_data, target, transform_data, kwargs, extra_kwargs
         results["rad_orig"] = model.rad_orig_
         results["rad_emb"] = model.rad_emb_
     return results
+
+
+def run_aligned_case(umap_module, extra_kwargs):
+    """Fit and update an AlignedUMAP model on overlapping digits slices."""
+    from sklearn.datasets import load_digits
+
+    data = load_digits().data.astype(np.float32)
+    slices = [data[i * 200 : (i + 2) * 200] for i in range(3)]
+    relations = [{k: v for v, k in enumerate(range(200, 400))} for _ in range(2)]
+    model = umap_module.AlignedUMAP(
+        n_epochs=N_EPOCHS, random_state=42, **extra_kwargs
+    ).fit(slices, relations=relations)
+    results = {f"embedding_{i}": e.copy() for i, e in enumerate(model.embeddings_)}
+    model.update(data[800:1000], relations={v: v for v in range(200)})
+    results["updated"] = model.embeddings_[-1]
+    return results

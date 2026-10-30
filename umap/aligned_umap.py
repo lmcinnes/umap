@@ -1,3 +1,5 @@
+import inspect
+
 import numpy as np
 import numba
 from sklearn.base import BaseEstimator
@@ -5,7 +7,13 @@ from sklearn.utils import check_array
 
 from umap.sparse import arr_intersect as intersect1d
 from umap.sparse import arr_union as union1d
-from umap.umap_ import UMAP, make_epochs_per_sample
+from warnings import warn
+
+from umap.umap_ import (
+    COMPATIBILITY_LAYOUT_DEFAULT_WARNING,
+    UMAP,
+    make_epochs_per_sample,
+)
 from umap.spectral import spectral_layout
 from umap.layouts import optimize_layout_aligned_euclidean
 
@@ -273,6 +281,71 @@ def init_from_existing(previous_embedding, graph, relations):
 
 
 class AlignedUMAP(BaseEstimator):
+    """Jointly embed a sequence of related datasets with aligned UMAP layouts.
+
+    Each dataset is modelled with its own UMAP fuzzy graph. The embeddings are
+    then optimized together, with an additional regularisation term that keeps
+    related points (given by ``relations`` in :meth:`fit`) close to each other
+    across neighbouring datasets.
+
+    Most parameters have the same meaning as for :class:`umap.UMAP` and may be
+    given either as a single value or as a list/tuple with one value per
+    dataset (``n_neighbors``, ``n_epochs``, ``min_dist``, ``spread``,
+    ``learning_rate``, ``repulsion_strength``, ``negative_sample_rate``,
+    ``local_connectivity``, ``set_op_mix_ratio``, ``unique`` and
+    ``nearest_neighbor_backend``).
+
+    Parameters
+    ----------
+    n_neighbors, n_components, metric, metric_kwds, min_dist, spread, \
+low_memory, set_op_mix_ratio, local_connectivity, repulsion_strength, \
+negative_sample_rate, transform_queue_size, a, b, random_state, \
+angular_rp_forest, target_n_neighbors, target_metric, target_metric_kwds, \
+target_weight, transform_seed, force_approximation_algorithm, verbose, unique:
+        As for :class:`umap.UMAP`; used to build each dataset's fuzzy graph.
+
+    n_epochs: int or list of int (optional, default None)
+        Number of optimization epochs. The joint layout runs for the largest
+        value; ``None`` uses 200.
+
+    learning_rate: float or list of float (optional, default 1.0)
+        Initial learning rate of the aligned optimization.
+
+    alignment_regularisation: float (optional, default 1e-2)
+        Strength of the term that pulls related points together across
+        neighbouring datasets.
+
+    alignment_window_size: int (optional, default 3)
+        How many neighbouring datasets on each side are regularised towards
+        each other.
+
+    compatibility_layout: bool or None (optional, default None)
+        Whether to build the per-dataset graphs and spectral initializations
+        exactly as umap-learn 0.5.x did. ``None`` currently means ``True`` and
+        emits a ``FutureWarning``; the default will change to ``False`` in a
+        future release. Seeded ``compatibility_layout=True`` fits reproduce
+        0.5.x results.
+
+    nearest_neighbor_backend: str or list of str (optional, default "auto")
+        Nearest-neighbor backend for each dataset; see :class:`umap.UMAP`.
+
+    init, recursive_coarsening_ratio:
+        Forwarded to the per-dataset :class:`umap.UMAP` models, but they do
+        not affect ``embeddings_``: the aligned layout is always initialised
+        from spectral embeddings and optimized with the established aligned
+        optimizer. Layout-only options of :class:`umap.UMAP` (``optimizer``,
+        ``init_rescale``, negative-sampling controls and so on) are therefore
+        not exposed here.
+
+    Attributes
+    ----------
+    embeddings_: list of arrays of shape (n_samples_i, n_components)
+        The aligned embedding of each dataset.
+
+    mappers_: list of UMAP
+        The fitted per-dataset models providing the fuzzy graphs.
+    """
+
     def __init__(
         self,
         n_neighbors=15,
@@ -306,6 +379,7 @@ class AlignedUMAP(BaseEstimator):
         verbose=False,
         unique=False,
         nearest_neighbor_backend="auto",
+        compatibility_layout=None,
     ):
 
         self.n_neighbors = n_neighbors
@@ -337,11 +411,34 @@ class AlignedUMAP(BaseEstimator):
         self.force_approximation_algorithm = force_approximation_algorithm
         self.recursive_coarsening_ratio = recursive_coarsening_ratio
         self.nearest_neighbor_backend = nearest_neighbor_backend
+        self.compatibility_layout = compatibility_layout
         self.verbose = verbose
         self.unique = unique
 
         self.a = a
         self.b = b
+
+    def __setstate__(self, state):
+        super().__setstate__(state)
+        # Fill parameters added after the model was pickled with their defaults;
+        # fitted pre-0.6 models always used the legacy pipeline.
+        for name, parameter in inspect.signature(
+            AlignedUMAP.__init__
+        ).parameters.items():
+            if name != "self" and name not in self.__dict__:
+                setattr(self, name, parameter.default)
+        if "embeddings_" in self.__dict__ and "_compatibility_layout" not in (
+            self.__dict__
+        ):
+            self._compatibility_layout = True
+
+    def _resolve_compatibility_layout(self):
+        if self.compatibility_layout is None:
+            warn(COMPATIBILITY_LAYOUT_DEFAULT_WARNING, FutureWarning, stacklevel=3)
+            return True
+        if not isinstance(self.compatibility_layout, (bool, np.bool_)):
+            raise ValueError("compatibility_layout must be True, False, or None")
+        return bool(self.compatibility_layout)
 
     def fit(self, X, y=None, **fit_params):
         if "relations" not in fit_params:
@@ -366,6 +463,7 @@ class AlignedUMAP(BaseEstimator):
             raise ValueError("n_components must be a single integer, and cannot vary")
 
         self.n_models_ = len(X)
+        self._compatibility_layout = self._resolve_compatibility_layout()
 
         if self.n_epochs is None:
             self.n_epochs = 200
@@ -407,6 +505,7 @@ class AlignedUMAP(BaseEstimator):
                 verbose=self.verbose,
                 a=self.a,
                 b=self.b,
+                compatibility_layout=self._compatibility_layout,
             ).fit(X[n], y[n])
             for n in range(self.n_models_)
         ]
@@ -439,6 +538,7 @@ class AlignedUMAP(BaseEstimator):
             self.mappers_[0].graph_,
             self.n_components,
             rng_state_transform,
+            compatibility_layout=self._compatibility_layout,
         )
         expansion = 10.0 / np.abs(first_init).max()
         first_embedding = (first_init * expansion).astype(
@@ -454,6 +554,7 @@ class AlignedUMAP(BaseEstimator):
                 self.mappers_[i].graph_,
                 self.n_components,
                 rng_state_transform,
+                compatibility_layout=self._compatibility_layout,
             )
             expansion = 10.0 / np.abs(next_init).max()
             next_embedding = (next_init * expansion).astype(
@@ -512,6 +613,9 @@ class AlignedUMAP(BaseEstimator):
         X = check_array(X)
 
         self.__dict__ = set_aligned_params(fit_params, self.__dict__, self.n_models_)
+        if not hasattr(self, "_compatibility_layout"):
+            # Models fitted before 0.6 always used the legacy pipeline.
+            self._compatibility_layout = True
 
         # We need n_components to be constant or this won't work
         if type(self.n_components) in (list, tuple, np.ndarray):
@@ -561,6 +665,7 @@ class AlignedUMAP(BaseEstimator):
             verbose=self.verbose,
             a=self.a,
             b=self.b,
+            compatibility_layout=self._compatibility_layout,
         ).fit(X, y)
 
         self.n_models_ += 1

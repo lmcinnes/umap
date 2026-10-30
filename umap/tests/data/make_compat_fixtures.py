@@ -48,6 +48,10 @@ def main(legacy_root):
                 arrays[f"{name}/{key}"] = np.asarray(value)
             print("generated", name)
 
+        for key, value in cases_module.run_aligned_case(umap, {}).items():
+            arrays[f"aligned/{key}"] = np.asarray(value)
+        print("generated aligned")
+
     output = os.path.join(HERE, cases_module.FIXTURE_FILE)
     np.savez_compressed(output, **arrays)
     print("wrote", output)

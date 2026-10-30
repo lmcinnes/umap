@@ -25,7 +25,7 @@ def component_layout(
     random_state,
     metric="euclidean",
     metric_kwds={},
-    compatibility_layout=False,
+    compatibility_layout=True,
     verbose=False,
 ):
     """Provide a layout relating the separate connected components. This is done
@@ -59,10 +59,9 @@ def component_layout(
     random_state: numpy RandomState or equivalent
         A state capable being used as a numpy random state.
 
-    compatibility_layout: bool (optional, default False)
-        Whether to use the compatibility layout code for the embedding.
-        This is the original code used in UMAP, and is not as efficient as the
-        new code, but is kept available for compatibility with older versions of UMAP.
+    compatibility_layout: bool (optional, default True)
+        Whether to reproduce the umap-learn 0.5.x spectral computation exactly
+        (``True``), or use the faster 0.6 eigensolver formulation (``False``).
 
     verbose: bool (optional, default False)
         Whether to print out additional information during the computation.
@@ -204,7 +203,7 @@ def multi_component_layout(
     init="random",
     tol=0.0,
     maxiter=0,
-    compatibility_layout=False,
+    compatibility_layout=True,
     verbose=False,
 ):
     """Specialised layout algorithm for dealing with graphs with many connected components.
@@ -252,10 +251,9 @@ def multi_component_layout(
         Number of iterations the numerical algorithm will go through at most as it
         attempts to compute the embedding.
 
-    compatibility_layout: bool (optional, default False)
-        Whether to use the compatibility layout code for the embedding.
-        This is the original code used in UMAP, and is not as efficient as the
-        new code, but is kept available for compatibility with older versions of UMAP.
+    compatibility_layout: bool (optional, default True)
+        Whether to reproduce the umap-learn 0.5.x spectral computation exactly
+        (``True``), or use the faster 0.6 eigensolver formulation (``False``).
 
     verbose: bool (optional, default False)
         Whether to print out additional information during the computation.
@@ -357,7 +355,7 @@ def spectral_layout(
     metric_kwds={},
     tol=0.0,
     maxiter=0,
-    compatibility_layout=False,
+    compatibility_layout=True,
     verbose=False,
 ):
     """
@@ -398,10 +396,9 @@ def spectral_layout(
         Used only if the multiple connected components are found in the
         graph.
 
-    compatibility_layout: bool (optional, default False)
-        Whether to use the compatibility layout code for the embedding.
-        This is the original code used in UMAP, and is not as efficient as the
-        new code, but is kept available for compatibility with older versions of UMAP.
+    compatibility_layout: bool (optional, default True)
+        Whether to reproduce the umap-learn 0.5.x spectral computation exactly
+        (``True``), or use the faster 0.6 eigensolver formulation (``False``).
 
     verbose: bool (optional, default False)
         Whether to print out additional information during the computation.
@@ -436,7 +433,7 @@ def tswspectral_layout(
     method=None,
     tol=0.0,
     maxiter=0,
-    compatibility_layout=False,
+    compatibility_layout=True,
     verbose=False,
 ):
     """Given a graph, compute the spectral embedding of the graph. This is
@@ -540,7 +537,7 @@ def _spectral_layout(
     method=None,
     tol=0.0,
     maxiter=0,
-    compatibility_layout=False,
+    compatibility_layout=True,
     verbose=False,
 ):
     """General implementation of the spectral embedding of the graph, derived as
@@ -594,10 +591,9 @@ def _spectral_layout(
         Number of iterations the numerical algorithm will go through at most as it
         attempts to compute the embedding.
 
-    compatibility_layout: bool (optional, default False)
-        Whether to use the compatibility layout code for the embedding.
-        This is the original code used in UMAP, and is not as efficient as the
-        new code, but is kept available for compatibility with older versions of UMAP.
+    compatibility_layout: bool (optional, default True)
+        Whether to reproduce the umap-learn 0.5.x spectral computation exactly
+        (``True``), or use the faster 0.6 eigensolver formulation (``False``).
 
     Returns
     -------

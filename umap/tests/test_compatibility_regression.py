@@ -63,3 +63,17 @@ def test_compatibility_layout_reproduces_0_5(fixtures, case_name):
         np.testing.assert_array_equal(
             value, fixtures[f"{case_name}/{key}"], err_msg=f"{case_name}/{key}"
         )
+
+
+def test_aligned_compatibility_layout_reproduces_0_5(fixtures):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        results = _compat_cases.run_aligned_case(umap, dict(compatibility_layout=True))
+    for key, value in results.items():
+        assert value.shape == fixtures[f"aligned/{key}"].shape
+    if not _matching_environment(fixtures):
+        pytest.skip("bit-exact comparison requires matching platform and numba")
+    for key, value in results.items():
+        np.testing.assert_array_equal(
+            value, fixtures[f"aligned/{key}"], err_msg=f"aligned/{key}"
+        )
