@@ -4837,6 +4837,21 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         self._input_hash = _input_data_hash(self._raw_data, self.n_jobs)
         self._input_hash_algorithm = _INPUT_HASH_ALGORITHM
 
+    def __setstate__(self, state):
+        super().__setstate__(state)
+        # Models pickled by umap-learn < 0.6 lack the 0.6 parameters and the
+        # resolved layout options. Fill parameters with their defaults and
+        # mark fitted models as legacy so transform/update keep 0.5 behavior.
+        for name, parameter in inspect.signature(UMAP.__init__).parameters.items():
+            if name != "self" and name not in self.__dict__:
+                setattr(self, name, parameter.default)
+        if "_compatibility_layout" not in self.__dict__ and (
+            "embedding_" in self.__dict__ or "graph_" in self.__dict__
+        ):
+            self._compatibility_layout = True
+            self._optimizer = "compatibility"
+            self._init = self.init
+
     def __repr__(self):
         from sklearn.utils._pprint import _EstimatorPrettyPrinter
         import re

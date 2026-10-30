@@ -1,5 +1,6 @@
 """Tests for the 0.6 transition-release layout defaults and their resolution."""
 
+import pickle
 import warnings
 
 import numpy as np
@@ -119,3 +120,63 @@ def test_seeded_fits_are_reproducible(blobs, kwargs):
     first = _fit(blobs, random_state=7, **kwargs).embedding_
     second = _fit(blobs, random_state=7, **kwargs).embedding_
     np.testing.assert_array_equal(first, second)
+
+
+NEW_IN_0_6 = (
+    "compatibility_layout",
+    "optimizer",
+    "negative_selection_range",
+    "negative_sample_scale",
+    "exclude_graph_neighbors",
+    "negative_sample_scale_adaptation_samples",
+    "recursive_coarsening_ratio",
+    "nearest_neighbor_backend",
+    "coarse_layout_weights",
+    "coarsen_on_layout_weights",
+    "init_rescale",
+    "init_scale_factor",
+    "_compatibility_layout",
+    "_optimizer",
+    "_init",
+    "_data_was_uniqued",
+    "_input_hash_algorithm",
+)
+
+
+def _as_legacy_pickle(model):
+    state = pickle.loads(pickle.dumps(model)).__getstate__()
+    for name in NEW_IN_0_6:
+        state.pop(name, None)
+    state["init"] = "spectral"
+    legacy = UMAP.__new__(UMAP)
+    legacy.__setstate__(state)
+    return legacy
+
+
+def test_models_pickled_before_0_6_still_transform_and_update(blobs):
+    model = _fit(blobs[:100], random_state=3, compatibility_layout=True)
+    expected = model.transform(blobs[100:])
+
+    legacy = _as_legacy_pickle(model)
+
+    assert legacy._compatibility_layout is True
+    assert legacy._optimizer == "compatibility"
+    assert legacy.compatibility_layout is None
+    assert legacy.nearest_neighbor_backend == "auto"
+    np.testing.assert_array_equal(legacy.transform(blobs[100:]), expected)
+    legacy.inverse_transform(legacy.embedding_[:2])
+    legacy.update(blobs[100:])
+    assert legacy.embedding_.shape == (blobs.shape[0], 2)
+    repr(legacy)
+
+
+def test_unfitted_legacy_pickle_resolves_on_fit(blobs):
+    state = UMAP(n_neighbors=10, n_epochs=20).__getstate__()
+    for name in NEW_IN_0_6:
+        state.pop(name, None)
+    legacy = UMAP.__new__(UMAP)
+    legacy.__setstate__(state)
+    assert not hasattr(legacy, "_compatibility_layout")
+    with pytest.warns(FutureWarning):
+        legacy.fit(blobs)
+    assert legacy._compatibility_layout is True
