@@ -708,6 +708,10 @@ def fast_metric_intersection(
     metric: numba function
         The function used to calculate distance over the target array.
 
+    metric_args: tuple
+        Extra arguments for ``metric``, unpacked positionally after the two
+        label vectors: ``metric(discrete_space[i], discrete_space[j], *metric_args)``.
+
     scale: float
         A scaling to apply to the metric.
 
@@ -779,6 +783,11 @@ def reset_local_connectivity(simplicial_set, reset_local_metric=False):
         The simplicial set for which to recalculate with respect to local
         connectivity.
 
+    reset_local_metric: bool (optional, default False)
+        If True, rescale the membership strengths of each row with
+        :func:`reprocess_row` before remerging the local simplicial sets,
+        rather than only max-normalizing them.
+
     Returns
     -------
     simplicial_set: sparse_matrix
@@ -831,6 +840,11 @@ def discrete_metric_simplicial_set_intersection(
     metric: str (optional, default None)
         If not None, then use this metric to determine the
         distance between values.
+
+    metric_kws: dict (optional, default {})
+        Extra arguments for ``metric``. Only the values are used, and they are
+        passed positionally to the metric function, so their insertion order
+        must match the parameters the metric expects.
 
     metric_scale: float (optional, default 1.0)
         If using a custom metric scale the distance values by
