@@ -96,8 +96,8 @@ clarity, simplicity and performance of Numba made the transition necessary.
 
 Requirements:
 
-* Python 3.6 or greater
-* numpy
+* Python 3.10 or greater
+* numpy (2.0 or greater)
 * scipy
 * scikit-learn
 * numba
@@ -162,10 +162,12 @@ dense metrics and parameter combinations:
 
     pip install umap-learn[rinnd]
 
-UMAP uses RINND automatically when it is available and compatible with the input.
-Set ``nearest_neighbor_backend="pynndescent"`` to retain the PyNNDescent backend,
-or ``nearest_neighbor_backend="rinnd"`` to require RINND and report unsupported
-parameters instead of falling back.
+With ``compatibility_layout=False`` (the new 0.6 pipeline), UMAP uses RINND
+automatically for datasets of 4,096 or more samples when it is installed and
+compatible with the input. Set ``nearest_neighbor_backend="pynndescent"`` to
+retain the PyNNDescent backend, or ``nearest_neighbor_backend="rinnd"`` to
+require RINND and report unsupported parameters instead of falling back. The
+default compatibility layout always uses PyNNDescent.
 
 If pip is having difficulties pulling the dependencies then we'd suggest installing
 the dependencies manually using anaconda followed by pulling umap from pip:
@@ -377,7 +379,7 @@ transformation of data. This can be used to support faster inference of new unse
 data, more robust inverse transforms, autoencoder versions of UMAP and
 semi-supervised classification (particularly for data well separated by UMAP and very
 limited amounts of labelled data). See the
-`documentation of Parametric UMAP <https://umap-learn.readthedocs.io/en/0.5dev/parametric_umap.html>`_
+`documentation of Parametric UMAP <https://umap-learn.readthedocs.io/en/latest/parametric_umap.html>`_
 or the
 `example notebooks <https://github.com/lmcinnes/umap/tree/master/notebooks/Parametric_UMAP>`_
 for more.
@@ -426,7 +428,7 @@ An example of making use of these options (based on a subsample of the mnist_784
     embedding, r_orig, r_emb = umap.UMAP(densmap=True, dens_lambda=2.0, n_neighbors=30,
                                          output_dens=True).fit_transform(subsample)
 
-See `the documentation <https://umap-learn.readthedocs.io/en/0.5dev/densmap_demo.html>`_ for more details.
+See `the documentation <https://umap-learn.readthedocs.io/en/latest/densmap_demo.html>`_ for more details.
 
 
 ---------------------------------

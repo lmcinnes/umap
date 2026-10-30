@@ -124,19 +124,35 @@ initialization in place of the new recursive initialization. This makes
 it the most convenient choice when an existing application needs to
 preserve the behavior of earlier UMAP releases.
 
+With a fixed ``random_state``, ``compatibility_layout=True`` reproduces
+the embeddings of the final 0.5.x code line exactly, including
+``transform`` results, on the same platform and dependency versions. See
+:doc:`reproducibility` for details.
+
 The compatibility layout will remain available, but it is intended as a
-transition path rather than the long-term default. Version 0.6 warns
-that ``compatibility_layout`` will default to ``False`` in a future
-release. Code that relies on the old behavior should therefore request
-it explicitly.
+transition path rather than the long-term default. If
+``compatibility_layout`` is not set, version 0.6 uses the compatibility
+layout and emits a ``FutureWarning`` explaining that the default will
+change to ``False`` in a future release. Setting
+``compatibility_layout`` explicitly (to either value) silences the
+warning, so code that relies on the old behavior should request it
+explicitly. Selecting ``optimizer="adam"`` or ``optimizer="momentum"``
+without setting ``compatibility_layout`` is treated as opting in to the
+new behavior, and also does not warn.
 
 There is also an ``optimizer="compatibility"`` setting. This selects the
 original optimizer, but does not by itself restore the other
-nearest-neighbor and initialization choices. Conversely,
-``compatibility_layout=True`` takes precedence over ``optimizer`` and
-uses the original optimizer as part of the full compatibility path.
+nearest-neighbor and initialization choices; it is only meaningful
+together with ``compatibility_layout=False``. Because
+``compatibility_layout=True`` always uses the original optimizer,
+combining it with ``optimizer="adam"`` or ``optimizer="momentum"``
+raises a ``ValueError`` rather than silently ignoring the request.
 Usually the broader ``compatibility_layout`` option is the clearer
 choice when preserving the behavior of an older model is the goal.
+
+Similarly, the default ``init="auto"`` resolves to ``"spectral"`` under
+the compatibility layout and to ``"recursive"`` otherwise. An explicit
+``init`` is always respected.
 
 The Adam optimizer
 ------------------
@@ -344,6 +360,42 @@ intended to become the default. Specifying both options explicitly makes
 the intended behavior clear and allows code written during the
 transition to keep the same behavior across releases.
 
+Advanced initialization controls
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Most users will not need to change the following options; they are
+provided for experimentation and apply only when
+``compatibility_layout=False``.
+
+``coarse_layout_weights``
+    Edge weights used when laying out each coarse level of the recursive
+    initialization. The default ``"transition"`` normalizes the weight
+    leaving each coarse part, so it reflects how strongly parts are
+    connected. ``"fuzzy_union"`` aggregates the fine-graph memberships
+    directly; on large graphs these saturate close to one.
+
+``coarsen_on_layout_weights``
+    Whether deeper levels are coarsened from those layout weights
+    (``True``, the default) or from the fuzzy-union coarse graph.
+
+``init_rescale`` and ``init_scale_factor``
+    After initialization, and before optimization, the coordinates are
+    centered and rescaled. ``"isotropic"`` (the default) applies a single
+    multiplier, preserving the initialization's aspect ratio, so that the
+    robust (5th-95th percentile) span reaches a target that grows with the
+    dataset size and ``repulsion_strength``. ``"per_axis"`` gives every
+    coordinate the same robust span, and ``"graph_edge"`` scales so that
+    the weighted median length of the graph's edges equals
+    ``init_scale_factor``. For the other two methods ``init_scale_factor``
+    multiplies the target span.
+
+``recursive_init_kwds``
+    A dictionary of further options for
+    :func:`umap.label_prop.recursive_init`, such as ``hub_selection``
+    (``"degree"``, ``"diverse"`` or ``"random"``), ``base_init_threshold``
+    or ``anchor_method``. Unknown keys raise a ``ValueError``; the accepted
+    keys are listed in ``umap.umap_.RECURSIVE_INIT_KWDS``.
+
 Using the new optimizers with DensMAP
 -------------------------------------
 
@@ -440,8 +492,11 @@ transforming new points with that model. Some related operations have
 their own optimization problem and therefore retain a specialized
 implementation. In particular, ``inverse_transform`` uses a dedicated
 inverse objective. AlignedUMAP jointly optimizes several embeddings with
-alignment constraints and does not currently expose the Adam, momentum,
-or compatibility optimizer choices.
+alignment constraints using its established optimizer, so it does not
+expose the Adam or momentum choices. It does accept
+``compatibility_layout``, which controls how the per-dataset graphs and
+spectral initializations are built, and with a fixed seed
+``compatibility_layout=True`` reproduces 0.5.x AlignedUMAP results.
 
 Migrating existing code
 -----------------------
@@ -472,3 +527,8 @@ Serialized estimators or saved configurations that contain one of them
 should be updated to the current parameters and the resulting embedding
 should be checked using the criteria appropriate to the original
 application.
+
+Models fitted and pickled with umap-learn 0.5.x can still be loaded. They
+continue to use the compatibility pipeline for ``transform``,
+``inverse_transform`` and ``update``, so results match those produced by
+the original release.

@@ -202,6 +202,29 @@ each and every coordinate of the resulting embeddings match perfectly:
 
 So we have, in fact, reproduced the embedding exactly.
 
+Reproducing results from earlier releases
+-----------------------------------------
+
+The compatibility layout also reproduces results across releases. With
+the same data, parameters and ``random_state``, a fit with
+``compatibility_layout=True`` in version 0.6 produces exactly the same
+embedding (and the same ``transform`` and ``inverse_transform`` results) as
+the final 0.5.x code line, provided that Numba and the other numerical
+dependencies are the same versions on the same platform. The 0.6 test suite
+checks this bit-for-bit for a range of configurations, including sparse
+input, custom metrics, non-Euclidean output metrics, DensMAP, supervised
+UMAP and AlignedUMAP.
+
+That reference includes the bug fixes made after the 0.5.12 release, so a
+small number of configurations differ from 0.5.12 itself. These include
+k-nearest-neighbor tie-breaking for small datasets, points whose
+neighbors are disconnected, spectral initialization of very small graphs,
+``transform`` when ``n_epochs`` is a list, and layouts that previously
+produced NaN values under ``fastmath``.
+
+Models that were fitted and pickled with 0.5.x can be loaded in 0.6 and
+continue to use the compatibility pipeline when transforming or updating.
+
 Reproducibility with the new optimizers
 ---------------------------------------
 

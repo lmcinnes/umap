@@ -1,3 +1,14 @@
+"""Recursive label-propagation initialization for UMAP (``init="recursive"``).
+
+The fuzzy graph is coarsened by label propagation from high-degree hubs into
+roughly ``1 / coarsening_ratio`` as many parts, recursively, until it is small
+enough (``base_init_threshold`` nodes) to place directly from a PCA anchor of
+the data. Each coarse layout is then refined with a short Adam optimization,
+expanded back to the finer level, and Procrustes-aligned with the anchor for
+stability. :func:`recursive_init` is the entry point used by
+:func:`umap.umap_.simplicial_set_embedding`.
+"""
+
 import numpy as np
 import numba
 from scipy.sparse import csr_matrix, issparse
@@ -697,6 +708,40 @@ def label_propagation_init(
     label_propagation_share=0.1,
     layout_graph=None,
 ):
+    """Recursively coarsen ``graph`` and lay it out, returning coordinates.
+
+    This is the recursive worker behind :func:`recursive_init`; most
+    parameters are documented there. Graphs with at most
+    ``base_init_threshold`` nodes are placed directly from ``data`` (the anchor
+    coordinates, available for the nodes in ``subset_mask``). Larger graphs are
+    partitioned into about ``approx_n_parts`` parts by label propagation,
+    the coarse graph is laid out (recursively initialized when
+    ``recursive_init`` is True, otherwise from the anchor), and the coarse
+    layout is expanded back onto ``graph``.
+
+    Parameters
+    ----------
+    graph: scipy.sparse.csr_matrix
+        Symmetric fuzzy graph of this level.
+    data: array of shape (n_subset, n_components)
+        Anchor coordinates of the sampled nodes.
+    subset_mask: array of bool, shape (n_nodes,)
+        Which nodes have anchor coordinates.
+    a, b: float
+        Curve parameters for this level's layout.
+    depth: int
+        Recursion depth (1 at the finest level); scales the base-case spread.
+    scaling: float
+        Multiplier applied to the expanded layout.
+    root_membership: array of int or None
+        Part membership of the original points, tracked down the recursion.
+    layout_graph: scipy.sparse matrix or None
+        Summed layout weights from the finer level (None at the top level).
+
+    Returns
+    -------
+    array of shape (n_nodes, n_components), float32
+    """
     if root_membership is None:
         root_membership = np.arange(graph.shape[0], dtype=np.int64)
 
@@ -944,6 +989,74 @@ def recursive_init(
     coarsen_on_layout_weights=True,
     label_propagation_share=0.1,
 ):
+    """Initial UMAP coordinates from recursive label-propagation coarsening.
+
+    Parameters
+    ----------
+    graph: scipy.sparse.csr_matrix of shape (n_samples, n_samples)
+        The symmetric UMAP fuzzy graph.
+    data: array or sparse matrix of shape (n_samples, n_features)
+        The input data, used to build a PCA anchor that orients the layout.
+    a, b: float
+        UMAP curve parameters.
+    n_components: int (optional, default 2)
+        Dimension of the embedding.
+    base_init_threshold: int (optional, default 1024)
+        Graphs with at most this many nodes are placed from the anchor
+        directly rather than coarsened further.
+    n_embedding_epochs: int (optional, default 50)
+        Epochs for the finest coarse layout; coarser levels use more.
+    approx_n_parts: int or None (optional, default None)
+        Number of parts at the first level; None uses
+        ``max(base_init_threshold, n_samples // coarsening_ratio)``.
+    random_state: numpy RandomState or None (optional, default None)
+        Random state for label propagation, layouts and the anchor.
+    verbose: bool (optional, default False)
+        Whether to report progress.
+    recursive_parallel: bool (optional, default True)
+        Passed as ``parallel`` to the coarse layout optimizations.
+    pca_random_state: numpy RandomState or None (optional, default None)
+        Random state for the anchor PCA; defaults to ``random_state``.
+    curve_schedule: str or dict (optional, default "strong_to_one")
+        How the curve parameters ``a`` and ``b`` change with depth:
+        ``"strong_to_one"``, ``"original"``, or a dict of exponents.
+    good_initialization_policy: str (optional, default "heuristic")
+        When coarse layouts use the schedule for a good initialization:
+        ``"heuristic"``, ``"available"``, ``"always"`` or ``"never"``.
+    coarsening_ratio: int (optional, default 4)
+        Approximate reduction in size per level (2, 3 or 4).
+    hub_selection: str (optional, default "degree")
+        How label-propagation seeds are chosen: ``"degree"`` (highest degree),
+        ``"diverse"`` (high degree, avoiding adjacent hubs) or ``"random"``.
+    remove_coarse_diagonal: bool (optional, default False)
+        Whether to drop self-loops from coarse graphs.
+    anchor_method: str (optional, default "sampled_pca")
+        How the PCA anchor is built: ``"sampled_pca"`` (PCA of a sample),
+        ``"projected_pca"`` (all points projected onto a sampled PCA basis) or
+        ``"full_pca"``.
+    anchor_sample_size: int (optional, default 16384)
+        Sample size used for the anchor PCA.
+    recursive_repulsion_strength: float or dict (optional, default 4.0)
+        Repulsion strength of the coarse layouts; a dict maps depth to value.
+    recursive_negative_sample_rate: int or dict (optional, default 1)
+        Negative sample rate of the coarse layouts; a dict maps depth to value.
+    recursive_negative_selection_range_mode: str or dict (optional, default "scaled_coarse")
+        Negative selection range for coarse layouts: ``"scaled_coarse"``,
+        ``"coarse_n"`` or ``"fixed_200k"``.
+    recursive_negative_selection_range_scale: float or dict (optional, default 0.5)
+        Fraction of the coarse graph used as the range in ``"scaled_coarse"``.
+    coarse_layout_weights: str (optional, default "transition")
+        ``"transition"`` or ``"fuzzy_union"`` edge weights for coarse layouts.
+    coarsen_on_layout_weights: bool (optional, default True)
+        Whether deeper levels are coarsened from the layout weights.
+    label_propagation_share: float (optional, default 0.1)
+        Minimum share of a node's edge weight a label needs in order to be
+        adopted, on levels that use transition weights.
+
+    Returns
+    -------
+    init: array of shape (n_samples, n_components), float32
+    """
     if random_state is None:
         random_state = np.random.RandomState()
     if pca_random_state is None:

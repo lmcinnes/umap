@@ -486,6 +486,12 @@ UMAP constructs. There is also the question of how that graph is turned into
 an embedding. The ``init`` parameter controls the initial coordinates, while
 ``optimizer`` controls how those coordinates are improved.
 
+The default, ``init="auto"``, selects ``"spectral"`` while the compatibility
+layout is in use (the 0.6 default) and ``"recursive"`` when
+``compatibility_layout=False``. Other choices are ``"spectral"``,
+``"tswspectral"``, ``"pca"``, ``"random"``, ``"recursive"``, or an array of
+initial coordinates.
+
 The new ``init="recursive"`` option works by repeatedly coarsening the fuzzy
 graph, laying out the smaller graph, and then expanding the result back to the
 original data. ``recursive_coarsening_ratio`` controls the amount of reduction
@@ -498,4 +504,7 @@ original compatibility optimizer, both can retain parallel layout
 optimization when ``random_state`` is fixed. There are a number of more
 specialized options for controlling their negative sample selection as well.
 Since these choices concern a different stage of the algorithm, they are
-covered in the separate :doc:`optimizers` tutorial.
+covered in the separate :doc:`optimizers` tutorial, along with the more
+specialized initialization controls (``coarse_layout_weights``,
+``coarsen_on_layout_weights``, ``init_rescale``, ``init_scale_factor`` and
+``recursive_init_kwds``).

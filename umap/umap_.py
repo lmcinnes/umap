@@ -544,14 +544,21 @@ def nearest_neighbors(
         The random state to use for approximate NN computations.
 
     low_memory: bool (optional, default True)
-        Whether to pursue lower memory NNdescent.
+        Whether to pursue lower memory NNdescent. Only used when
+        ``compatibility_layout=True``; otherwise low-memory mode is always used.
+
+    use_pynndescent: bool (optional, default True)
+        Retained for backwards compatibility; nearest-neighbor descent is
+        always used for non-precomputed metrics.
 
     n_jobs: int (optional, default -1)
         The number of threads to use for nearest-neighbor construction. A value
         of -1 uses all available cores.
 
-    compatibility_layout: bool (optional, default False)
-        Whether using compatibility layout which alters NNdescent algorithm hyperparameter choices.
+    compatibility_layout: bool (optional, default True)
+        Whether to use the umap-learn 0.5.x nearest-neighbor descent settings
+        (and never RINND). ``False`` selects the faster 0.6 settings and allows
+        the RINND backend.
 
     verbose: bool (optional, default False)
         Whether to print status data during the computation.
@@ -1013,8 +1020,15 @@ def fuzzy_simplicial_set(
     return_dists: bool or None (optional, default None)
         Whether to return the pairwise distance associated with each edge.
 
-    compatibility_layout: bool (optional, default False)
-        Whether using compatibility layout which alters NNdescent algorithm hyperparameter choices.
+    apply_set_operations: bool (optional, default True)
+        Whether to combine the directed local fuzzy sets with the fuzzy
+        union/intersection controlled by ``set_op_mix_ratio``. If False the
+        directed membership graph is returned.
+
+    compatibility_layout: bool (optional, default True)
+        Whether to build the graph exactly as umap-learn 0.5.x did. ``False``
+        uses the 0.6 nearest-neighbor settings and a parallel CSR kernel for
+        the set operations.
 
     Returns
     -------
@@ -1652,7 +1666,10 @@ def simplicial_set_embedding(
     init: string
         How to initialize the low dimensional embedding. Options are:
 
+            * 'auto': 'spectral' with the compatibility layout, otherwise
+                'recursive'.
             * 'spectral': use a spectral embedding of the fuzzy 1-skeleton
+            * 'tswspectral': spectral embedding with a truncated-SVD warm start.
             * 'random': assign initial embedding positions at random.
             * 'pca': use the first n_components from PCA applied to the input data.
             * 'recursive': use label propagation for hierarchical initialization.
@@ -1703,7 +1720,7 @@ def simplicial_set_embedding(
         values are 2, 3, and 4. Smaller values use more coarsening levels and
         trade initialization runtime for potentially stronger initialization.
 
-    coarse_layout_weights: str (optional, default 'fuzzy_union')
+    coarse_layout_weights: str (optional, default 'transition')
         Edge weights used to optimize recursive coarse layouts. ``'transition'``
         normalizes outgoing inter-part weight before symmetrization;
         ``'fuzzy_union'`` aggregates fine-graph fuzzy memberships directly.
@@ -1712,10 +1729,12 @@ def simplicial_set_embedding(
         Whether deeper recursive levels are coarsened from the selected layout
         weights instead of the fuzzy-union coarsening graph.
 
-    init_rescale: str (optional, default 'per_axis')
-        Robust rescaling applied to the initialization. ``'per_axis'`` gives
-        every coordinate the same 5th-to-95th percentile span; ``'isotropic'``
-        applies one multiplier and preserves the initialization's aspect ratio.
+    init_rescale: str (optional, default 'isotropic')
+        Robust rescaling applied to the initialization (new pipeline only).
+        ``'per_axis'`` gives every coordinate the same 5th-to-95th percentile
+        span; ``'isotropic'`` applies one multiplier and preserves the
+        initialization's aspect ratio; ``'graph_edge'`` scales so that the
+        weighted-median graph-edge length equals ``init_scale_factor``.
 
     init_scale_factor: float (optional, default 1.0)
         Multiplier for the target robust span used by ``init_rescale``.
@@ -1728,19 +1747,36 @@ def simplicial_set_embedding(
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
 
-    compatibility_layout: bool (optional, default False)
-        Whether to use the compatibility layout code for the embedding.
-        This is the original code used in UMAP, and is not as efficient as the
-        new code, but is kept available for compatibility with older versions of UMAP.
+    compatibility_layout: bool or None (optional, default None)
+        Whether to reproduce the umap-learn 0.5.x initialization and layout
+        exactly. ``None`` resolves to ``True`` unless ``optimizer`` is 'adam' or
+        'momentum'.
 
-    optimizer: str (optional, default 'adam')
-        The optimizer to use for the embedding. Options are:
-            * 'adam': use the Adam optimizer.
-            * 'momentum': use the SGD-with-momentum optimizer.
-            * 'compatibility': use the legacy UMAP optimizer.
+    optimizer: str or None (optional, default None)
+        The layout optimizer: 'adam', 'momentum' or 'compatibility'. ``None``
+        selects 'compatibility' with the compatibility layout and 'adam'
+        otherwise. A modern optimizer cannot be combined with
+        ``compatibility_layout=True``.
 
     tqdm_kwds: dict
         Key word arguments to be used by the tqdm progress bar.
+
+    negative_selection_range: int (optional, default 200_000)
+        Modern optimizers only: size of the local window, in a random
+        projection ordering of the embedding, from which hard negative samples
+        are drawn on large datasets.
+
+    negative_sample_scale: float or None (optional, default None)
+        Modern Euclidean optimizers only: repulsion multiplier for hard
+        negatives. None derives it from the selection range.
+
+    exclude_graph_neighbors: bool (optional, default False)
+        Modern Euclidean optimizers only: skip negative samples that are graph
+        neighbors of the source point.
+
+    negative_sample_scale_adaptation_samples: int (optional, default 128)
+        Adam with hard negatives only: number of points used to adapt the
+        negative sample scale; 0 disables adaptation.
 
     Returns
     -------
@@ -2340,9 +2376,11 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
     learning_rate: float (optional, default 1.0)
         The initial learning rate for the embedding optimization.
 
-    init: string (optional, default 'spectral')
+    init: string or array (optional, default 'auto')
         How to initialize the low dimensional embedding. Options are:
 
+            * 'auto': 'spectral' when the compatibility layout is in use and
+                'recursive' otherwise.
             * 'spectral': use a spectral embedding of the fuzzy 1-skeleton
             * 'random': assign initial embedding positions at random.
             * 'pca': use the first n_components from PCA applied to the
@@ -2352,33 +2390,9 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 "warm" up the eigensolver. This is intended as an alternative
                 to the 'spectral' method, if that takes an  excessively long
                 time to complete initialization (or fails to complete).
-            * 'recursive': use label propagation for hierarchical initialization.
+            * 'recursive': recursively coarsen the fuzzy graph with label
+                propagation, lay out the coarse graph, and expand the result.
             * A numpy array of initial embedding positions.
-
-    recursive_coarsening_ratio: int (optional, default 4)
-        Target graph reduction ratio at each level when ``init='recursive'``.
-        Supported values are 2, 3, and 4. Ratio 4 is fastest; ratio 3 generally
-        provides stronger initialization and cross-seed consistency for a modest
-        runtime cost; ratio 2 favors initialization quality at a larger cost.
-
-    coarse_layout_weights: str (optional, default 'fuzzy_union')
-        Edge weights used for recursive coarse layouts. ``'transition'`` uses
-        normalized inter-part transition strengths; ``'fuzzy_union'`` directly
-        aggregates fuzzy memberships between parts.
-
-    coarsen_on_layout_weights: bool (optional, default True)
-        Whether subsequent recursive levels are built from the selected coarse
-        layout weights instead of the fuzzy-union coarsening graph.
-
-    init_rescale: str (optional, default 'per_axis')
-        Rescaling applied after initialization and before layout optimization.
-        ``'per_axis'`` gives each coordinate the same robust span;
-        ``'isotropic'`` preserves aspect ratio; ``'graph_edge'`` preserves
-        aspect ratio and scales by weighted-median attractive-edge length.
-
-    init_scale_factor: float (optional, default 1.0)
-        Global target-span multiplier for ``'per_axis'`` and ``'isotropic'``.
-        For ``'graph_edge'``, the target weighted-median edge length.
 
     min_dist: float (optional, default 0.1)
         The effective minimum distance between embedded points. Smaller values
@@ -2396,7 +2410,10 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         For some datasets the nearest neighbor computation can consume a lot of
         memory. If you find that UMAP is failing due to memory constraints
         consider setting this option to True. This approach is more
-        computationally expensive, but avoids excessive memory use.
+        computationally expensive, but avoids excessive memory use. The new
+        (``compatibility_layout=False``) pipeline always uses the low-memory
+        nearest-neighbor descent, so this option only affects the
+        compatibility layout.
 
     n_jobs: int (optional, default -1)
         The number of parallel jobs to run when performing nearest-neighbor
@@ -2460,6 +2477,15 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         Arguments to pass on to the metric, such as the ``p`` value for
         Minkowski distance. If None then no arguments are passed on.
 
+    output_metric: string or function (optional, default 'euclidean')
+        The metric of the embedding space. Non-Euclidean output metrics must
+        support gradients: either a named metric with a gradient (such as
+        'haversine' or 'hyperboloid') or a numba jit'd function returning
+        ``(distance, gradient)``.
+
+    output_metric_kwds: dict (optional, default None)
+        Arguments to pass on to the output metric.
+
     angular_rp_forest: bool (optional, default False)
         Whether to use an angular random projection forest to initialise
         the approximate nearest neighbor search. This can be faster, but is
@@ -2493,6 +2519,14 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
     transform_seed: int (optional, default 42)
         Random seed used for the stochastic aspects of the transform operation.
         This ensures consistency in transform operations.
+
+    transform_mode: string (optional, default 'embedding')
+        Whether ``transform`` returns an embedding ('embedding') or only
+        computes the fuzzy graph of the new points ('graph').
+
+    force_approximation_algorithm: bool (optional, default False)
+        Use approximate nearest-neighbor search even for small datasets (fewer
+        than 4096 samples), which would otherwise use exact distances.
 
     verbose: bool (optional, default False)
         Controls verbosity of logging.
@@ -2564,54 +2598,73 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         item 0 should be 0, the nearest neighbor of item 1 is 1 and so on. Please note
         that you will *not* be able to transform new data in this case.
 
-    compatibility_layout: bool (optional, default False)
-        Whether to use the compatibility layout code for the embedding.
-        This is the original code used in UMAP, and is not as efficient as the
-        new code, but is kept available for compatibility with older versions of UMAP.
+    compatibility_layout: bool or None (optional, default None)
+        Whether to use the umap-learn 0.5.x nearest-neighbor, initialization
+        and layout pipeline. With a fixed ``random_state`` this reproduces
+        0.5.x results exactly. ``None`` currently means ``True`` and emits a
+        ``FutureWarning``, unless ``optimizer`` is 'adam' or 'momentum' (which
+        opts in to the new pipeline). The default will change to ``False`` in
+        a future release; set it explicitly to silence the warning.
 
-    optimizer: str (optional, default 'adam')
-        The optimizer to use for the embedding. Options are:
-            * 'adam': use the Adam optimizer.
-            * 'momentum': use the SGD-with-momentum optimizer.
-            * 'compatibility': use the legacy UMAP optimizer.
+    optimizer: str or None (optional, default None)
+        The layout optimizer. Options are:
+            * 'adam': Adam (the default when ``compatibility_layout=False``).
+            * 'momentum': SGD with momentum.
+            * 'compatibility': the original immediate-update optimizer.
+
+        Adam and momentum are reproducible with a fixed ``random_state``
+        while still optimizing in parallel. With
+        ``compatibility_layout=True`` only 'compatibility' (or None) is valid.
 
     negative_selection_range: int (optional, default 200_000)
-        The range from which to select negative samples during optimization.
+        Modern optimizers only. When the dataset is larger than this, negative
+        samples are drawn from a window of this many points in a random
+        projection ordering of the current embedding (harder negatives)
+        rather than from all points.
 
-    negative_sample_scale: float (optional, default None)
-        The scale factor for negative samples. If None, no scaling is applied.
+    negative_sample_scale: float or None (optional, default None)
+        Modern Euclidean optimizers only. Multiplier for the repulsive force
+        of hard negatives. If None it is derived from the selection range.
 
     exclude_graph_neighbors: bool (optional, default False)
-        Whether to exclude graph neighbors from negative sampling.
+        Modern Euclidean optimizers only. Skip negative samples that are graph
+        neighbors of (or identical to) the source point.
 
     negative_sample_scale_adaptation_samples: int (optional, default 128)
-        The number of samples used to adapt the negative sample scale.
-        These parameters control the behavior of negative sampling during the optimization process.
-        They allow fine-tuning of how negative samples are selected and scaled, which can impact the quality and efficiency of the embedding.
+        Adam with hard-negative selection only. Number of points used to adapt
+        the negative sample scale during the first half of optimization; 0
+        disables adaptation.
 
     recursive_coarsening_ratio: int (optional, default 4)
-        The ratio used for recursive coarsening during the layout optimization.
+        Target graph reduction ratio at each level when ``init='recursive'``.
+        Supported values are 2, 3, and 4. Ratio 4 is fastest; ratio 3 generally
+        provides stronger initialization and cross-seed consistency for a modest
+        runtime cost; ratio 2 favors initialization quality at a larger cost.
 
-    nearest_neighbor_backend: str (optional, default "auto")
-        The backend to use for nearest neighbor search. Options are "auto", "rinnd", or "pynndescent".
-
-    coarse_layout_weights: str (optional, default "transition")
-        The weighting scheme to use for the coarse layout. Options are "transition" or "fuzzy_union".
-        "fuzzy_union" uses a fuzzy union approach for weighting the coarse layout.
-        This parameter allows for different strategies in weighting the coarse layout, which can affect the overall structure and quality of the final embedding.
+    coarse_layout_weights: str (optional, default 'transition')
+        Edge weights used for recursive coarse layouts. ``'transition'`` uses
+        normalized inter-part transition strengths; ``'fuzzy_union'`` directly
+        aggregates fuzzy memberships between parts.
 
     coarsen_on_layout_weights: bool (optional, default True)
-        Whether to apply coarsening based on the layout weights during the optimization process.
+        Whether subsequent recursive levels are built from the selected coarse
+        layout weights instead of the fuzzy-union coarsening graph.
 
-    init_rescale: str (optional, default "isotropic")
-        The rescaling method to apply to the initial embedding. Options are "per_axis","isotropic", and "graph_edge".
-        "per_axis" rescales each axis of the initial embedding independently.
-        "isotropic" rescales the initial embedding to have isotropic variance.
-        "graph_edge" rescales the initial embedding based on the graph edge lengths.
+    init_rescale: str (optional, default 'isotropic')
+        New pipeline only. Rescaling applied after initialization and before
+        layout optimization. ``'isotropic'`` applies one multiplier and
+        preserves the aspect ratio; ``'per_axis'`` gives each coordinate the
+        same robust (5th-95th percentile) span; ``'graph_edge'`` preserves the
+        aspect ratio and scales by the weighted-median graph-edge length.
 
     init_scale_factor: float (optional, default 1.0)
-        The scale factor to apply to the initial embedding after rescaling. This allows for additional control over the overall scale of the initial embedding.
+        Target-span multiplier for ``'per_axis'`` and ``'isotropic'``. For
+        ``'graph_edge'``, the target weighted-median edge length.
 
+    recursive_init_kwds: dict or None (optional, default None)
+        Advanced options forwarded to :func:`umap.label_prop.recursive_init`
+        when ``init='recursive'``; see ``umap.umap_.RECURSIVE_INIT_KWDS`` for
+        the accepted keys.
 
     Attributes
     ----------

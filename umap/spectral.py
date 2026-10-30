@@ -231,6 +231,9 @@ def multi_component_layout(
     dim: int
         The chosen embedding dimension.
 
+    random_state: numpy RandomState or equivalent
+        A state capable being used as a numpy random state.
+
     metric: string or callable (optional, default 'euclidean')
         The metric used to measure distances among the source data points.
 
@@ -483,6 +486,13 @@ def tswspectral_layout(
     maxiter: int, default chosen by implementation
         Number of iterations the numerical algorithm will go through at most as it
         attempts to compute the embedding.
+
+    compatibility_layout: bool (optional, default True)
+        Whether to reproduce the umap-learn 0.5.x spectral computation exactly
+        (``True``), or use the faster 0.6 eigensolver formulation (``False``).
+
+    verbose: bool (optional, default False)
+        Whether to print progress information.
 
     Returns
     -------

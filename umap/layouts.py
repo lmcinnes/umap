@@ -1719,7 +1719,13 @@ def optimize_layout_euclidean(
         If True, the optimization will use a different learning rate schedules etc.
         This is only used if optimizer is "momentum" or "adam".
     random_state: np.random.RandomState, optional (default None)
-        A random number generator instance to use for reproducibility. If None, the global numpy random state is used.
+        A random number generator instance used by the modern optimizers. If
+        None, one is derived deterministically from ``rng_state``.
+    negative_selection_range: int, optional (default 200_000)
+        For the large-input Adam and momentum kernels, draw negative samples
+        from a window of this many vertices in a random projection ordering
+        of the embedding (hard negatives) when it is smaller than the number
+        of vertices.
     negative_sample_scale: float, optional (default None)
         Explicit multiplier for repulsive negative-sample gradients in the
         large-input Adam and momentum kernels. If None, use the configured
