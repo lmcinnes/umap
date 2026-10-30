@@ -17,8 +17,11 @@ import pytest
 import umap
 from umap.tests import _compat_cases
 
-FIXTURE_PATH = os.path.join(
-    os.path.dirname(__file__), "data", _compat_cases.FIXTURE_FILE
+# CI regenerates the fixtures in its own environment (see
+# data/make_compat_fixtures.py) so the exact comparison always runs there.
+FIXTURE_PATH = os.environ.get(
+    "UMAP_COMPAT_FIXTURES",
+    os.path.join(os.path.dirname(__file__), "data", _compat_cases.FIXTURE_FILE),
 )
 
 

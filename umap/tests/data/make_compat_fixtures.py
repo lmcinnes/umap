@@ -6,7 +6,11 @@ commit merged into 0.6 (a2e06aa), which includes bug fixes made after the
 the ``umap`` package)::
 
     git archive a2e06aa umap | tar -x -C /tmp/umap-0.5-final
-    python make_compat_fixtures.py /tmp/umap-0.5-final
+    python make_compat_fixtures.py /tmp/umap-0.5-final [output.npz]
+
+Without an output path the committed fixture next to this script is replaced.
+CI regenerates fixtures in its own environment and points the regression test
+at them with the ``UMAP_COMPAT_FIXTURES`` environment variable.
 
 The output is written next to this script and records the platform used, since
 bit-exact numba results are only expected on a matching platform.
@@ -23,8 +27,15 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-def main(legacy_root):
-    sys.path.insert(0, legacy_root)
+def main(legacy_root, output=None):
+    # An editable install of the development tree registers an import hook that
+    # would shadow the legacy checkout, so drop it before importing umap.
+    sys.meta_path[:] = [
+        finder
+        for finder in sys.meta_path
+        if not type(finder).__module__.startswith("__editable__")
+    ]
+    sys.path.insert(0, os.path.abspath(legacy_root))
     import umap
 
     if not umap.__file__.startswith(os.path.abspath(legacy_root)):
@@ -52,10 +63,11 @@ def main(legacy_root):
             arrays[f"aligned/{key}"] = np.asarray(value)
         print("generated aligned")
 
-    output = os.path.join(HERE, cases_module.FIXTURE_FILE)
+    if output is None:
+        output = os.path.join(HERE, cases_module.FIXTURE_FILE)
     np.savez_compressed(output, **arrays)
     print("wrote", output)
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    main(*sys.argv[1:3])

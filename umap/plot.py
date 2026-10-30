@@ -1566,13 +1566,14 @@ def interactive(
             ),
             background_fill_color=background,
         )
-        plot.circle(
+        plot.scatter(
             x="x",
             y="y",
             source=data_source,
             color=colors,
             size=point_size,
             alpha="alpha",
+            marker="circle",
         )
 
         plot.grid.visible = False

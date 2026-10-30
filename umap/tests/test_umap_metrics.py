@@ -518,7 +518,7 @@ def test_hellinger_proportional_inputs(dtype):
     x = np.array([1.0, 2.0], dtype=dtype)
     y = 2.0 * x
     distance = dist.hellinger(x, y)
-    tolerance = np.sqrt(np.finfo(dtype).eps)
+    tolerance = float(np.sqrt(np.finfo(dtype).eps))
 
     assert np.isfinite(distance)
     assert distance == pytest.approx(0.0, abs=tolerance)
