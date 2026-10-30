@@ -994,10 +994,11 @@ def fuzzy_simplicial_set(
 
     Returns
     -------
-    fuzzy_simplicial_set: coo_matrix
+    fuzzy_simplicial_set: scipy.sparse matrix
         A fuzzy simplicial set represented as a sparse matrix. The (i,
         j) entry of the matrix represents the membership strength of the
-        1-simplex between the ith and jth sample points.
+        1-simplex between the ith and jth sample points. With
+        ``apply_set_operations=True`` this is CSR; otherwise it is COO.
     """
     if knn_indices is None or knn_dists is None:
         knn_indices, knn_dists, _ = nearest_neighbors(

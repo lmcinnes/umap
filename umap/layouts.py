@@ -1868,7 +1868,8 @@ def optimize_layout_euclidean(
                     dens_phi_sum,
                 )
 
-            # FIXME: dens_var_shift might be referenced before assignment
+            # dens_var_shift is always set when densmap is enabled (both the
+            # compatibility and modern setup branches assign it).
             dens_re_std = np.sqrt(np.var(dens_re_sum) + dens_var_shift)
             dens_re_mean = np.mean(dens_re_sum)
             dens_re_cov = np.dot(dens_re_sum, dens_R) / (n_vertices - 1)

@@ -693,3 +693,47 @@ def test_component_layout_linkage_input_invariance(nn_data, linkage):
     ]
     for layout in layouts[1:]:
         assert_array_equal(layouts[0], layout)
+
+
+@pytest.mark.parametrize("set_op_mix_ratio", [1.0, 0.7, 0.5, 0.0])
+def test_modern_fuzzy_set_operations_match_legacy(set_op_mix_ratio):
+    data = np.random.RandomState(0).rand(200, 5).astype(np.float32)
+    graphs = [
+        umap_module.fuzzy_simplicial_set(
+            data,
+            10,
+            0,
+            "euclidean",
+            set_op_mix_ratio=set_op_mix_ratio,
+            compatibility_layout=compatibility_layout,
+        )[0].tocsr()
+        for compatibility_layout in (True, False)
+    ]
+    assert graphs[1].format == "csr"
+    assert graphs[0].nnz == graphs[1].nnz
+    # Pure union and intersection are bit-identical; mixtures may differ by
+    # float32 rounding of the interpolation.
+    tolerance = 0.0 if set_op_mix_ratio in (0.0, 1.0) else 1e-6
+    assert abs(graphs[0] - graphs[1]).max() <= tolerance
+
+
+def test_modern_fuzzy_set_operations_skip_missing_neighbors():
+    knn_indices = np.array([[0, 1, -1], [1, 0, 2], [2, 1, -1]], dtype=np.int32)
+    knn_dists = np.array(
+        [[0.0, 1.0, np.inf], [0.0, 1.0, 2.0], [0.0, 2.0, np.inf]], dtype=np.float32
+    )
+    data = np.zeros((3, 2), dtype=np.float32)
+    graphs = [
+        umap_module.fuzzy_simplicial_set(
+            data,
+            3,
+            0,
+            "euclidean",
+            knn_indices=knn_indices,
+            knn_dists=knn_dists,
+            compatibility_layout=compatibility_layout,
+        )[0].tocsr()
+        for compatibility_layout in (True, False)
+    ]
+    assert abs(graphs[0] - graphs[1]).max() == 0.0
+    assert graphs[1].shape == (3, 3)
