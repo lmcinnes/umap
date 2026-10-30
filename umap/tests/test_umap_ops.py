@@ -17,6 +17,7 @@ import pytest
 import warnings
 from umap.distances import pairwise_special_metric
 from umap.utils import disconnected_vertices, fast_knn_indices
+from umap.umap_ import init_update
 from scipy.sparse import csr_matrix
 
 

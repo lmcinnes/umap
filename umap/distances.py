@@ -913,7 +913,7 @@ def symmetric_kl_grad(x, y, z=1e-11):  # pragma: no cover
     return dist, grad
 
 
-@numba.njit(fastmath=True)
+@numba.njit(fastmath=FASTMATH_FLAGS)
 def correlation_grad(x, y):
     n = x.shape[0]
 
@@ -1529,7 +1529,7 @@ def pairwise_special_metric(
         if kwds:
             kwd_vals = tuple(kwds.values())
 
-            @numba.njit(fastmath=True)
+            @numba.njit(fastmath=FASTMATH_FLAGS)
             def _partial_metric(_X, _Y):
                 return special_metric_func(_X, _Y, *kwd_vals)
 

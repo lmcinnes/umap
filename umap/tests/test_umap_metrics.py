@@ -18,8 +18,8 @@ scipy_full_version = tuple(
 sklearn_full_version = tuple(
     int(n)
     for n in re.findall(r"[0-9]+\.[0-9]+\.?[0-9]*", sklearn_version_)[0].split(".")
-
-)sokalmichener_reference = pytest.mark.skipif(
+)
+sokalmichener_reference = pytest.mark.skipif(
     scipy_full_version >= (1, 17),
     reason="sokalmichener was deprecated in SciPy 1.15 and removed in 1.17",
 )

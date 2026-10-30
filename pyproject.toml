@@ -72,3 +72,9 @@ zip-safe = false
 [tool.setuptools.package-data]
 "*" = ["*.pyx", "*.pxd"]
 "umap" = ["py.typed"]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: long-running tests (deselect with '-m \"not slow\"')",
+    "benchmark: performance benchmarks (skipped by default)",
+]
