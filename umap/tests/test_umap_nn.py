@@ -154,6 +154,7 @@ def test_nearest_neighbors_rinnd_honors_n_jobs_and_includes_self(fake_rinnd):
         np.random.RandomState(42),
         n_jobs=3,
         nearest_neighbor_backend="rinnd",
+        compatibility_layout=False,
     )
     built = fake_rinnd.instances[-1]
 
@@ -173,7 +174,16 @@ def test_nearest_neighbors_rinnd_honors_n_jobs_and_includes_self(fake_rinnd):
 def test_nearest_neighbors_rinnd_skips_normalizing_normalized_cosine_data(fake_rinnd):
     data = normalize(np.random.RandomState(0).normal(size=(32, 4))).astype(np.float32)
 
-    nearest_neighbors(data, 5, "cosine", {}, True, 42, nearest_neighbor_backend="rinnd")
+    nearest_neighbors(
+        data,
+        5,
+        "cosine",
+        {},
+        True,
+        42,
+        nearest_neighbor_backend="rinnd",
+        compatibility_layout=False,
+    )
 
     assert fake_rinnd.instances[-1].kwargs["input_normalized"]
 
@@ -189,6 +199,7 @@ def test_nearest_neighbors_graph_only_returns_no_index(fake_rinnd):
         False,
         42,
         nearest_neighbor_backend="rinnd",
+        compatibility_layout=False,
         graph_only=True,
     )
 
@@ -201,7 +212,14 @@ def test_nearest_neighbors_graph_only_returns_no_index(fake_rinnd):
 def test_rinnd_index_pickles_without_rebuilding_until_queried(fake_rinnd):
     data = np.arange(128, dtype=np.float32).reshape(32, 4) + 1.0
     _, _, index = nearest_neighbors(
-        data, 5, "euclidean", {}, False, 42, nearest_neighbor_backend="rinnd"
+        data,
+        5,
+        "euclidean",
+        {},
+        False,
+        42,
+        nearest_neighbor_backend="rinnd",
+        compatibility_layout=False,
     )
     n_builds = len(fake_rinnd.instances)
 
@@ -217,7 +235,14 @@ def test_rinnd_index_pickles_without_rebuilding_until_queried(fake_rinnd):
 def test_rinnd_index_prepare_delegates_and_rebuilds_after_unpickle(fake_rinnd):
     data = np.arange(128, dtype=np.float32).reshape(32, 4) + 1.0
     _, _, index = nearest_neighbors(
-        data, 5, "euclidean", {}, False, 42, nearest_neighbor_backend="rinnd"
+        data,
+        5,
+        "euclidean",
+        {},
+        False,
+        42,
+        nearest_neighbor_backend="rinnd",
+        compatibility_layout=False,
     )
 
     assert not index._index.is_prepared
@@ -235,7 +260,14 @@ def test_rinnd_index_prepare_delegates_and_rebuilds_after_unpickle(fake_rinnd):
 def test_rinnd_index_update_rebuilds_with_appended_data(fake_rinnd):
     data = normalize(np.random.RandomState(0).normal(size=(32, 4))).astype(np.float32)
     _, _, index = nearest_neighbors(
-        data, 5, "cosine", {}, True, 42, nearest_neighbor_backend="rinnd"
+        data,
+        5,
+        "cosine",
+        {},
+        True,
+        42,
+        nearest_neighbor_backend="rinnd",
+        compatibility_layout=False,
     )
 
     index.update(4.0 * data[:4])
@@ -250,9 +282,11 @@ def test_nearest_neighbors_auto_selects_rinnd_by_size(fake_rinnd):
     small = np.ones((32, 4), dtype=np.float32)
     large = np.ones((umap_module.RINND_MIN_SAMPLES, 4), dtype=np.float32)
 
-    _, _, small_index = nearest_neighbors(small, 5, "euclidean", {}, False, 42)
+    _, _, small_index = nearest_neighbors(
+        small, 5, "euclidean", {}, False, 42, compatibility_layout=False
+    )
     _, _, large_index = nearest_neighbors(
-        large, 5, "euclidean", {}, False, 42, n_jobs=2
+        large, 5, "euclidean", {}, False, 42, n_jobs=2, compatibility_layout=False
     )
 
     assert isinstance(small_index, FakeNNDescent)
@@ -272,6 +306,7 @@ def test_nearest_neighbors_forced_rinnd_reports_unsupported_parameter(fake_rinnd
             False,
             42,
             nearest_neighbor_backend="rinnd",
+            compatibility_layout=False,
         )
 
 
@@ -279,7 +314,14 @@ def test_nearest_neighbors_explicit_pynndescent(fake_rinnd):
     large = np.ones((umap_module.RINND_MIN_SAMPLES, 4), dtype=np.float32)
 
     _, _, index = nearest_neighbors(
-        large, 5, "euclidean", {}, False, 42, nearest_neighbor_backend="pynndescent"
+        large,
+        5,
+        "euclidean",
+        {},
+        False,
+        42,
+        nearest_neighbor_backend="pynndescent",
+        compatibility_layout=False,
     )
 
     assert isinstance(index, FakeNNDescent)
@@ -300,6 +342,7 @@ def test_real_rinnd_graph_matches_pynndescent_layout(metric):
         42,
         n_jobs=2,
         nearest_neighbor_backend="rinnd",
+        compatibility_layout=False,
     )
     graph_indices, _, graph_index = nearest_neighbors(
         data,
@@ -310,6 +353,7 @@ def test_real_rinnd_graph_matches_pynndescent_layout(metric):
         42,
         n_jobs=2,
         nearest_neighbor_backend="rinnd",
+        compatibility_layout=False,
         graph_only=True,
     )
 
@@ -330,6 +374,7 @@ def test_real_rinnd_prepares_lazily_and_update_skips_prepare(monkeypatch):
         n_epochs=10,
         force_approximation_algorithm=True,
         nearest_neighbor_backend="rinnd",
+        compatibility_layout=False,
     ).fit(data[:250])
     index = model._knn_search_index
 

@@ -630,7 +630,6 @@ def _normalised_layout_edges(reduced_graph, summed, weights="transition"):
 
     if summed is None or weights == "fuzzy_union":
         return reduced_graph
-    print("Using transition weights for normalised layout edges")
     external = summed - diags(summed.diagonal())
     external.eliminate_zeros()
     external = external.tocsr()

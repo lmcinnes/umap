@@ -1,3 +1,4 @@
+import pytest
 from umap import UMAP
 from umap.validation import trustworthiness_vector
 from sklearn.datasets import make_blobs
@@ -78,19 +79,26 @@ def test_semisupervised_umap_trustworthiness():
     ), "Insufficiently trustworthy embedding for" "blobs dataset: {}".format(trust)
 
 
-def test_metric_supervised_umap_trustworthiness():
-    data, labels = make_blobs(150, cluster_std=0.5, random_state=42)
+@pytest.mark.parametrize(
+    "compatibility_layout, n_samples, n_epochs, threshold",
+    [(True, 50, 100, 0.95), (False, 150, 200, 0.93)],
+)
+def test_metric_supervised_umap_trustworthiness(
+    compatibility_layout, n_samples, n_epochs, threshold
+):
+    data, labels = make_blobs(n_samples, cluster_std=0.5, random_state=42)
     embedding = UMAP(
         n_neighbors=10,
         min_dist=0.01,
         target_metric="l1",
         target_weight=0.8,
-        n_epochs=200,
+        n_epochs=n_epochs,
         random_state=42,
+        compatibility_layout=compatibility_layout,
     ).fit_transform(data, labels)
     trust = trustworthiness(data, embedding, n_neighbors=10)
     assert (
-        trust >= 0.93
+        trust >= threshold
     ), "Insufficiently trustworthy embedding for" "blobs dataset: {}".format(trust)
 
 

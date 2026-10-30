@@ -242,10 +242,6 @@ def test_blobs_cluster_adam():
     assert adjusted_rand_score(labels, KMeans(5).fit_predict(embedding)) == 1.0
 
 
-def test_adam_is_default_optimizer():
-    assert UMAP().optimizer == "adam"
-
-
 def test_blobs_cluster_momentum():
     data, labels = make_blobs(n_samples=500, n_features=10, centers=5, random_state=42)
     embedding = UMAP(n_epochs=100, optimizer="momentum", random_state=42).fit_transform(

@@ -306,6 +306,7 @@ def test_umap_routes_initialization_rescaling(monkeypatch):
 
     UMAP(
         init="recursive",
+        compatibility_layout=False,
         init_rescale="graph_edge",
         init_scale_factor=1.25,
         n_neighbors=5,

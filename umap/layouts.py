@@ -3,7 +3,12 @@ import numpy as np
 from tqdm.auto import tqdm
 
 import umap.distances as dist
-from umap.utils import FASTMATH_FLAGS, adaptive_bucket_sort, tau_rand_int
+from umap.utils import (
+    COMPATIBILITY_FASTMATH_FLAGS,
+    FASTMATH_FLAGS,
+    adaptive_bucket_sort,
+    tau_rand_int,
+)
 
 PUBLIC_OPTIMIZERS = ("adam", "momentum", "compatibility")
 GENERIC_NEGATIVE_SEARCH_MAX_CANDIDATES = 4
@@ -697,54 +702,6 @@ def optimize_layout_euclidean_single_epoch_adam(
 
 
 @numba.njit(
-    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], f8, f8, f4[::1], f4[::1])",
-    fastmath=FASTMATH_FLAGS,
-    parallel=True,
-    cache=True,
-    locals={
-        "i": numba.types.intp,
-        "j": numba.types.intp,
-        "k": numba.types.intp,
-        "current": numba.types.float32[::1],
-        "other": numba.types.float32[::1],
-        "dist_squared": numba.types.float32,
-        "phi": numba.types.float32,
-    },
-)
-def _optimize_layout_euclidean_densmap_epoch_init_coo(
-    head_embedding,
-    tail_embedding,
-    head,
-    tail,
-    a,
-    b,
-    re_sum,
-    phi_sum,
-):
-    re_sum.fill(0)
-    phi_sum.fill(0)
-
-    for i in numba.prange(head.shape[0]):
-        j = head[i]
-        k = tail[i]
-
-        current = head_embedding[j]
-        other = tail_embedding[k]
-        dist_squared = rdist(current, other)
-
-        phi = 1.0 / (1.0 + a * pow(dist_squared, b))
-
-        re_sum[j] += phi * dist_squared
-        re_sum[k] += phi * dist_squared
-        phi_sum[j] += phi
-        phi_sum[k] += phi
-
-    epsilon = 1e-8
-    for i in range(re_sum.shape[0]):
-        re_sum[i] = np.log(epsilon + (re_sum[i] / phi_sum[i]))
-
-
-@numba.njit(
     "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], f4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], f4[:, ::1], f4[:, ::1], f8, f8, i4[::1], i4[::1], b1)",
     fastmath=FASTMATH_FLAGS,
     parallel=True,
@@ -1231,6 +1188,11 @@ def _optimize_layout_euclidean_densmap_epoch_init_csr(
     re_sum.fill(0)
     phi_sum.fill(0)
 
+    # Each edge contributes to both endpoints, so accumulating inside the
+    # parallel loop would race on ``k``. Compute the per-edge terms in parallel
+    # and accumulate serially to keep seeded runs reproducible.
+    edge_phi = np.empty(indices.shape[0], dtype=np.float32)
+    edge_dist_squared = np.empty(indices.shape[0], dtype=np.float32)
     for j in numba.prange(indptr.shape[0] - 1):
         for raw_index in range(indptr[j], indptr[j + 1]):
             k = indices[raw_index]
@@ -1240,7 +1202,14 @@ def _optimize_layout_euclidean_densmap_epoch_init_csr(
             dist_squared = rdist(current, other)
 
             phi = 1.0 / (1.0 + a * pow(dist_squared, b))
+            edge_phi[raw_index] = phi
+            edge_dist_squared[raw_index] = dist_squared
 
+    for j in range(indptr.shape[0] - 1):
+        for raw_index in range(indptr[j], indptr[j + 1]):
+            k = indices[raw_index]
+            phi = edge_phi[raw_index]
+            dist_squared = edge_dist_squared[raw_index]
             re_sum[j] += phi * dist_squared
             re_sum[k] += phi * dist_squared
             phi_sum[j] += phi
@@ -1252,12 +1221,65 @@ def _optimize_layout_euclidean_densmap_epoch_init_csr(
 
 
 _nb_optimize_layout_euclidean_single_epoch = numba.njit(
-    _optimize_layout_euclidean_single_epoch, fastmath=FASTMATH_FLAGS, parallel=False
+    _optimize_layout_euclidean_single_epoch,
+    fastmath=COMPATIBILITY_FASTMATH_FLAGS,
+    parallel=False,
 )
 
 _nb_optimize_layout_euclidean_single_epoch_parallel = numba.njit(
-    _optimize_layout_euclidean_single_epoch, fastmath=FASTMATH_FLAGS, parallel=True
+    _optimize_layout_euclidean_single_epoch,
+    fastmath=COMPATIBILITY_FASTMATH_FLAGS,
+    parallel=True,
 )
+
+
+def _optimize_layout_euclidean_densmap_epoch_init(
+    head_embedding,
+    tail_embedding,
+    head,
+    tail,
+    a,
+    b,
+    re_sum,
+    phi_sum,
+):
+    re_sum.fill(0)
+    phi_sum.fill(0)
+
+    for i in numba.prange(head.size):
+        j = head[i]
+        k = tail[i]
+
+        current = head_embedding[j]
+        other = tail_embedding[k]
+        dist_squared = rdist(current, other)
+
+        phi = 1.0 / (1.0 + a * pow(dist_squared, b))
+
+        re_sum[j] += phi * dist_squared
+        re_sum[k] += phi * dist_squared
+        phi_sum[j] += phi
+        phi_sum[k] += phi
+
+    epsilon = 1e-8
+    for i in range(re_sum.size):
+        re_sum[i] = np.log(epsilon + (re_sum[i] / phi_sum[i]))
+
+
+_nb_densmap_epoch_init_compatibility = numba.njit(
+    _optimize_layout_euclidean_densmap_epoch_init,
+    fastmath=COMPATIBILITY_FASTMATH_FLAGS,
+    parallel=False,
+)
+# Parallel densMAP statistics race on shared accumulators, exactly as in 0.5.x;
+# this variant is only used for unseeded (non-reproducible) compatibility runs.
+_nb_densmap_epoch_init_compatibility_parallel = numba.njit(
+    _optimize_layout_euclidean_densmap_epoch_init,
+    fastmath=COMPATIBILITY_FASTMATH_FLAGS,
+    parallel=True,
+)
+
+_nb_optimize_layout_generic_single_epoch = None
 
 
 def _get_optimize_layout_euclidean_single_epoch_fn(parallel: bool = False):
@@ -1270,7 +1292,14 @@ def _get_optimize_layout_euclidean_single_epoch_fn(parallel: bool = False):
 def _create_alpha_schedule(optimizer, n_epochs, initial_alpha, good_initialization):
     """Create alpha (learning rate) schedule based on optimizer and initialization quality."""
     if optimizer == "compatibility":
-        return np.linspace(initial_alpha, 0.0, n_epochs, endpoint=False)
+        # Matches the 0.5.x recurrence: the first two epochs both use the
+        # initial learning rate, then alpha decays linearly.
+        schedule = np.empty(n_epochs, dtype=np.float64)
+        alpha = initial_alpha
+        for n in range(n_epochs):
+            schedule[n] = alpha
+            alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
+        return schedule
 
     elif optimizer == "momentum":
         if good_initialization:
@@ -1455,14 +1484,18 @@ def _create_adam_schedules(
 
 
 def _initialize_euclidean_compatibility(
-    head_embedding, rng_state, densmap, densmap_kwds, n_vertices
+    head_embedding, rng_state, densmap, densmap_kwds, n_vertices, parallel=False
 ):
     rng_state_per_sample = np.full(
         (head_embedding.shape[0], len(rng_state)), rng_state, dtype=np.int64
     ) + head_embedding[:, 0].astype(np.float64).view(np.int64).reshape(-1, 1)
 
     if densmap:
-        dens_init_fn = _optimize_layout_euclidean_densmap_epoch_init_coo
+        dens_init_fn = (
+            _nb_densmap_epoch_init_compatibility_parallel
+            if parallel
+            else _nb_densmap_epoch_init_compatibility
+        )
         dens_mu_tot = np.sum(densmap_kwds["mu_sum"]) / 2
         dens_lambda = densmap_kwds["lambda"]
         dens_R = densmap_kwds["R"]
@@ -1481,7 +1514,7 @@ def _initialize_euclidean_compatibility(
         dens_var_shift = 0.0
 
     return {
-        "optimize_fn": _get_optimize_layout_euclidean_single_epoch_fn(parallel=True),
+        "optimize_fn": _get_optimize_layout_euclidean_single_epoch_fn(parallel),
         "rng_state_per_sample": rng_state_per_sample,
         "dens_init_fn": dens_init_fn,
         "dens_mu_tot": dens_mu_tot,
@@ -1745,7 +1778,7 @@ def optimize_layout_euclidean(
     # Initialize optimizer-specific variables
     if optimizer == "compatibility":
         compatibility_state = _initialize_euclidean_compatibility(
-            head_embedding, rng_state, densmap, densmap_kwds, n_vertices
+            head_embedding, rng_state, densmap, densmap_kwds, n_vertices, parallel
         )
         dens_init_fn = compatibility_state["dens_init_fn"]
         dens_mu_tot = compatibility_state["dens_mu_tot"]
@@ -2452,10 +2485,13 @@ def _optimize_layout_generic_single_epoch_adam(
 
 
 def _initialize_generic_compatibility(head_embedding, rng_state):
-    optimize_fn = numba.njit(
-        _optimize_layout_generic_single_epoch,
-        fastmath=FASTMATH_FLAGS,
-    )
+    global _nb_optimize_layout_generic_single_epoch
+    if _nb_optimize_layout_generic_single_epoch is None:
+        # Compiled lazily, once, rather than on every call.
+        _nb_optimize_layout_generic_single_epoch = numba.njit(
+            _optimize_layout_generic_single_epoch, fastmath=COMPATIBILITY_FASTMATH_FLAGS
+        )
+    optimize_fn = _nb_optimize_layout_generic_single_epoch
     rng_state_per_sample = np.full(
         (head_embedding.shape[0], len(rng_state)), rng_state, dtype=np.int64
     ) + head_embedding[:, 0].astype(np.float64).view(np.int64).reshape(-1, 1)

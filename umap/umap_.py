@@ -79,6 +79,18 @@ NPY_INFINITY = np.inf
 NPY_FLOATMAX = np.finfo(np.float32).max
 RINND_MIN_SAMPLES = 4096
 
+MODERN_OPTIMIZERS = ("adam", "momentum")
+DEFAULT_MODERN_OPTIMIZER = "adam"
+COMPATIBILITY_LAYOUT_DEFAULT_WARNING = (
+    "compatibility_layout was not set, so UMAP is using the legacy (0.5.x) "
+    "nearest-neighbor, initialization and layout pipeline. In a future release "
+    "the default will change to compatibility_layout=False, which uses "
+    "recursive initialization and the Adam optimizer and produces different "
+    "embeddings. Set compatibility_layout=True to keep the current behavior and "
+    "silence this warning, or compatibility_layout=False (or optimizer='adam') "
+    "to adopt the new behavior now."
+)
+
 # Metrics whose RINND distances were verified against PyNNDescent. Excludes "dot"
 # (PyNNDescent normalizes the data first) and "russellrao" (differs on zero rows).
 RINND_METRICS = frozenset(
@@ -260,9 +272,9 @@ def raise_disconnected_warning(
         "mid": numba.types.float32,
         "hi": numba.types.float32,
     },
-    fastmath=FASTMATH_FLAGS,
     parallel=True,
-)  # benchmarking `parallel=True` shows it to *decrease* performance
+    fastmath=FASTMATH_FLAGS,
+)
 def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0):
     """Compute a continuous version of the distance to the kth nearest
     neighbor. That is, this is similar to knn-distance but allows continuous
@@ -478,7 +490,7 @@ def nearest_neighbors(
     low_memory=True,
     use_pynndescent=True,
     n_jobs=-1,
-    compatibility_layout=False,
+    compatibility_layout=True,
     verbose=False,
     nearest_neighbor_backend="auto",
     graph_only=False,
@@ -874,7 +886,7 @@ def fuzzy_simplicial_set(
     apply_set_operations=True,
     verbose=False,
     return_dists=None,
-    compatibility_layout=False,
+    compatibility_layout=True,
 ):
     """Given a set of data X, a neighborhood size, and a measure of distance
     compute the fuzzy simplicial set (here represented as a fuzzy graph in
@@ -1037,16 +1049,20 @@ def fuzzy_simplicial_set(
         )
         result.eliminate_zeros()
         if apply_set_operations:
+            # Kept operation-for-operation identical to 0.5.x for exact
+            # reproducibility of compatibility layouts.
             transpose = result.transpose()
-            product = result.multiply(transpose)
+            prod_matrix = result.multiply(transpose)
             if set_op_mix_ratio == 1.0:
-                result += transpose - product
+                result = result + transpose - prod_matrix
+            elif set_op_mix_ratio == 0.0:
+                result = prod_matrix
             else:
                 result = (
-                    set_op_mix_ratio * (result + transpose - product)
-                    + (1.0 - set_op_mix_ratio) * product
+                    set_op_mix_ratio * (result + transpose - prod_matrix)
+                    + (1.0 - set_op_mix_ratio) * prod_matrix
                 )
-            result.eliminate_zeros()
+        result.eliminate_zeros()
 
     if return_dists is None:
         return result, sigmas, rhos
@@ -1485,6 +1501,32 @@ def _densmap_embedding_densities(
         mu_sum[k] += mu
 
 
+def _resolve_layout_options(compatibility_layout, optimizer):
+    """Resolve the effective ``(compatibility_layout, optimizer)`` pair.
+
+    ``None`` values are resolved so that requesting a modern optimizer opts in
+    to the modern pipeline, and otherwise the legacy (0.5.x) pipeline is used.
+    """
+    if optimizer is not None:
+        validate_optimizer(optimizer)
+    if compatibility_layout is None:
+        compatibility_layout = optimizer not in MODERN_OPTIMIZERS
+    elif not isinstance(compatibility_layout, (bool, np.bool_)):
+        raise ValueError("compatibility_layout must be True, False, or None")
+    compatibility_layout = bool(compatibility_layout)
+
+    if compatibility_layout:
+        if optimizer in MODERN_OPTIMIZERS:
+            raise ValueError(
+                f"optimizer={optimizer!r} requires compatibility_layout=False; "
+                "compatibility_layout=True always uses the legacy optimizer."
+            )
+        optimizer = "compatibility"
+    elif optimizer is None:
+        optimizer = DEFAULT_MODERN_OPTIMIZER
+    return compatibility_layout, optimizer
+
+
 def simplicial_set_embedding(
     data,
     graph,
@@ -1507,8 +1549,8 @@ def simplicial_set_embedding(
     euclidean_output=True,
     parallel=False,
     verbose=False,
-    compatibility_layout=False,
-    optimizer="adam",
+    compatibility_layout=None,
+    optimizer=None,
     tqdm_kwds=None,
     negative_selection_range=200_000,
     negative_sample_scale=None,
@@ -1665,8 +1707,22 @@ def simplicial_set_embedding(
         is turned on, this dictionary includes local radii in the original
         data (``rad_orig``) and in the embedding (``rad_emb``).
     """
-    # graph = graph.tocoo()
-    # graph.sum_duplicates()
+    compatibility_layout, optimizer = _resolve_layout_options(
+        compatibility_layout, optimizer
+    )
+    legacy_optimizer = optimizer == "compatibility"
+    if isinstance(init, str) and init == "auto":
+        init = "spectral" if compatibility_layout else "recursive"
+
+    if compatibility_layout:
+        graph = graph.tocoo()
+        graph.sum_duplicates()
+    else:
+        # Modern kernels traverse the graph in CSR order. Copy so that pruning
+        # below never modifies the caller's graph.
+        graph = graph.tocsr(copy=True)
+        graph.sum_duplicates()
+        graph.sort_indices()
     n_vertices = graph.shape[1]
 
     # For smaller datasets we can use more epochs
@@ -1703,7 +1759,10 @@ def simplicial_set_embedding(
             pca = PCA(n_components=n_components, random_state=random_state)
         embedding = pca.fit_transform(data).astype(np.float32)
         embedding = noisy_scale_coords(
-            embedding, random_state, max_coord=20, noise=0.0001
+            embedding,
+            random_state,
+            max_coord=10 if compatibility_layout else 20,
+            noise=0.0001,
         )
     elif isinstance(init, str) and init == "spectral":
         embedding = spectral_layout(
@@ -1717,9 +1776,14 @@ def simplicial_set_embedding(
             verbose=verbose,
         )
         # We add a little noise to avoid local minima for optimization to come
-        embedding = noisy_scale_coords(
-            embedding, random_state, max_coord=40, noise=0.01
-        )
+        if compatibility_layout:
+            embedding = noisy_scale_coords(
+                embedding, random_state, max_coord=10, noise=0.0001
+            )
+        else:
+            embedding = noisy_scale_coords(
+                embedding, random_state, max_coord=40, noise=0.01
+            )
     elif isinstance(init, str) and init == "tswspectral":
         embedding = tswspectral_layout(
             data,
@@ -1732,12 +1796,15 @@ def simplicial_set_embedding(
             verbose=verbose,
         )
         embedding = noisy_scale_coords(
-            embedding, random_state, max_coord=20, noise=0.0001
+            embedding,
+            random_state,
+            max_coord=10 if compatibility_layout else 20,
+            noise=0.0001,
         )
     elif isinstance(init, str) and init == "recursive":
         # Use label propagation initialization
         embedding = recursive_init(
-            graph,
+            graph.tocsr() if compatibility_layout else graph,
             data,
             a,
             b,
@@ -1766,51 +1833,70 @@ def simplicial_set_embedding(
     aux_data = {}
 
     if densmap or output_dens:
-        coo_graph = graph.tocoo()
-        head = coo_graph.row
-        tail = coo_graph.col
-        weight = coo_graph.data
-
         if verbose:
             print(ts() + " Computing original densities")
 
-        dists = densmap_kwds["graph_dists"].tocsr()
-        dists.sort_indices()
-        mu_sum, ro = compute_densities(
-            head,
-            tail,
-            weight,
-            dists.indptr,
-            dists.indices,
-            dists.data,
-            n_vertices,
-        )
+        if compatibility_layout:
+            head = graph.row
+            tail = graph.col
+            mu_sum = np.zeros(n_vertices, dtype=np.float32)
+            ro = np.zeros(n_vertices, dtype=np.float32)
+            dists_csr = densmap_kwds["graph_dists"].tocsr()
+            _densmap_original_densities(
+                head,
+                tail,
+                graph.data,
+                dists_csr.indptr,
+                dists_csr.indices,
+                dists_csr.data,
+                ro,
+                mu_sum,
+            )
+            epsilon = 1e-8
+            ro = np.log(epsilon + (ro / mu_sum))
+        else:
+            coo_graph = graph.tocoo()
+            dists = densmap_kwds["graph_dists"].tocsr()
+            dists.sort_indices()
+            mu_sum, ro = compute_densities(
+                coo_graph.row,
+                coo_graph.col,
+                coo_graph.data,
+                dists.indptr,
+                dists.indices,
+                dists.data,
+                n_vertices,
+            )
 
         if densmap:
             R = (ro - np.mean(ro)) / np.std(ro)
-            if compatibility_layout or optimizer == "compatibility":
-                densmap_kwds["mu"] = coo_graph.data
-            else:
-                # Modern kernels traverse the CSR graph directly, so the
-                # membership weights must use the identical entry ordering.
-                densmap_kwds["mu"] = graph.data
+            # For modern kernels ``graph`` is CSR, so these weights use the
+            # same entry order as kernel traversal.
+            densmap_kwds["mu"] = graph.data
             densmap_kwds["mu_sum"] = mu_sum
             densmap_kwds["R"] = R
 
         if output_dens:
             aux_data["rad_orig"] = ro
 
-    embedding = _rescale_embedding(
-        embedding,
-        embedding.shape[0],
-        gamma,
-        method=init_rescale,
-        scale_factor=init_scale_factor,
-        graph=graph,
-    )
+    if compatibility_layout:
+        embedding = (
+            10.0
+            * (embedding - np.min(embedding, 0))
+            / (np.max(embedding, 0) - np.min(embedding, 0))
+        ).astype(np.float32, order="C")
+    else:
+        embedding = _rescale_embedding(
+            embedding,
+            embedding.shape[0],
+            gamma,
+            method=init_rescale,
+            scale_factor=init_scale_factor,
+            graph=graph,
+        )
 
     if euclidean_output:
-        if compatibility_layout or optimizer == "compatibility":
+        if legacy_optimizer:
             coo_graph = graph.tocoo()
             head = coo_graph.row
             tail = coo_graph.col
@@ -1876,7 +1962,7 @@ def simplicial_set_embedding(
             )
 
     else:
-        if compatibility_layout or optimizer == "compatibility":
+        if legacy_optimizer:
             coo_graph = graph.tocoo()
             head = coo_graph.row
             tail = coo_graph.col
@@ -1968,6 +2054,7 @@ def simplicial_set_embedding(
             knn_dists,
             verbose=verbose,
             return_dists=True,
+            compatibility_layout=compatibility_layout,
         )
 
         emb_graph = emb_graph.tocoo()
@@ -1976,17 +2063,34 @@ def simplicial_set_embedding(
 
         n_vertices = emb_graph.shape[1]
 
-        dists = emb_graph.tocsr()
-        dists.sort_indices()
-        mu_sum, re = compute_densities(
-            head,
-            tail,
-            weight,
-            dists.indptr,
-            dists.indices,
-            dists.data,
-            n_vertices,
-        )
+        if compatibility_layout:
+            mu_sum = np.zeros(n_vertices, dtype=np.float32)
+            re = np.zeros(n_vertices, dtype=np.float32)
+            emb_dists_csr = emb_dists.tocsr()
+            _densmap_embedding_densities(
+                emb_graph.row,
+                emb_graph.col,
+                emb_graph.data,
+                emb_dists_csr.indptr,
+                emb_dists_csr.indices,
+                emb_dists_csr.data,
+                re,
+                mu_sum,
+            )
+            epsilon = 1e-8
+            re = np.log(epsilon + (re / mu_sum))
+        else:
+            emb_dists = emb_dists.tocsr()
+            emb_dists.sort_indices()
+            mu_sum, re = compute_densities(
+                emb_graph.row,
+                emb_graph.col,
+                emb_graph.data,
+                emb_dists.indptr,
+                emb_dists.indices,
+                emb_dists.data,
+                n_vertices,
+            )
 
         aux_data["rad_emb"] = re
 
@@ -2487,7 +2591,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         output_metric_kwds=None,
         n_epochs=None,
         learning_rate=1.0,
-        init="recursive",
+        init="auto",
         min_dist=0.1,
         spread=1.0,
         low_memory=True,
@@ -2518,8 +2622,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         output_dens=False,
         disconnection_distance=None,
         precomputed_knn=(None, None, None),
-        compatibility_layout=False,
-        optimizer="adam",
+        compatibility_layout=None,
+        optimizer=None,
         negative_selection_range=200_000,
         negative_sample_scale=None,
         exclude_graph_neighbors=False,
@@ -2584,14 +2688,6 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         self.coarsen_on_layout_weights = coarsen_on_layout_weights
         self.init_rescale = init_rescale
         self.init_scale_factor = init_scale_factor
-
-        # If compatibility_layout is set and init was default, change to spectral which was the old default
-        if (
-            self.compatibility_layout
-            and type(self.init) is str
-            and self.init == "recursive"
-        ):
-            self.init = "spectral"
         self.optimizer = optimizer
 
         self.n_jobs = n_jobs
@@ -2599,8 +2695,32 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         self.a = a
         self.b = b
 
+    def _resolve_layout_parameters(self):
+        """Resolve ``compatibility_layout``, ``optimizer`` and ``init="auto"``.
+
+        The resolved values are stored as ``_compatibility_layout``,
+        ``_optimizer`` and ``_init`` so that the public parameters are never
+        modified (as required by scikit-learn's estimator API).
+        """
+        if self.compatibility_layout is None and (
+            self.optimizer not in MODERN_OPTIMIZERS
+        ):
+            warn(COMPATIBILITY_LAYOUT_DEFAULT_WARNING, FutureWarning, stacklevel=4)
+        compatibility_layout, optimizer = _resolve_layout_options(
+            self.compatibility_layout, self.optimizer
+        )
+
+        if isinstance(self.init, str) and self.init == "auto":
+            init = "spectral" if compatibility_layout else "recursive"
+        else:
+            init = self.init
+
+        self._compatibility_layout = compatibility_layout
+        self._optimizer = optimizer
+        self._init = init
+
     def _validate_parameters(self):
-        validate_optimizer(self.optimizer)
+        self._resolve_layout_parameters()
         if self.coarse_layout_weights not in ("transition", "fuzzy_union"):
             raise ValueError(
                 "coarse_layout_weights must be 'transition' or 'fuzzy_union'"
@@ -2643,6 +2763,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         if not isinstance(self.init, str) and not isinstance(self.init, np.ndarray):
             raise ValueError("init must be a string or ndarray")
         if isinstance(self.init, str) and self.init not in (
+            "auto",
             "pca",
             "spectral",
             "random",
@@ -2650,7 +2771,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             "recursive",
         ):
             raise ValueError(
-                'string init values must be one of: "pca", "tswspectral",'
+                'string init values must be one of: "auto", "pca", "tswspectral",'
                 ' "spectral", "recursive", or "random"'
             )
         if (
@@ -2838,8 +2959,10 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         if (
             self.n_jobs != 1
             and self.random_state is not None
-            and self.compatibility_layout
-        ):  # turn off parallelism reset in new layout mode
+            and self._compatibility_layout
+        ):
+            # The legacy layout pipeline is only reproducible single-threaded;
+            # the modern pipeline is reproducible in parallel.
             warn(
                 f"n_jobs value {self.n_jobs} overridden to 1 by setting random_state. Use no seed for parallelism."
             )
@@ -3013,7 +3136,16 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         self.dens_frac = flattened([m.dens_frac for m in models])
         self.dens_var_shift = flattened([m.dens_var_shift for m in models])
         self.output_dens = flattened([m.output_dens for m in models])
-        self.compatibility_layout = any([m.compatibility_layout for m in models])
+        self._compatibility_layout = any(
+            [getattr(m, "_compatibility_layout", True) for m in models]
+        )
+        self.compatibility_layout = self._compatibility_layout
+        self._optimizer = (
+            "compatibility"
+            if self._compatibility_layout
+            else getattr(models[0], "_optimizer", DEFAULT_MODERN_OPTIMIZER)
+        )
+        self.optimizer = self._optimizer
 
         self.a = flattened([m.a for m in models])
         self.b = flattened([m.b for m in models])
@@ -3052,11 +3184,6 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
 
         result.densmap = np.any(result.densmap)
         result.output_dens = np.any(result.output_dens)
-        result.optimizer = (
-            result.optimizer[0]
-            if isinstance(result.optimizer, list)
-            else result.optimizer
-        )
 
         result._densmap_kwds = {
             "lambda": np.max(result.dens_lambda),
@@ -3089,8 +3216,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             result.output_dens,
             parallel=False,
             verbose=bool(np.max(result.verbose)),
-            compatibility_layout=result.compatibility_layout,
-            optimizer=result.optimizer,
+            compatibility_layout=result._compatibility_layout,
+            optimizer=result._optimizer,
             tqdm_kwds=self.tqdm_kwds,
         )
 
@@ -3129,11 +3256,6 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
 
         result.densmap = np.any(result.densmap)
         result.output_dens = np.any(result.output_dens)
-        result.optimizer = (
-            result.optimizer[0]
-            if isinstance(result.optimizer, list)
-            else result.optimizer
-        )
 
         result._densmap_kwds = {
             "lambda": np.max(result.dens_lambda),
@@ -3166,8 +3288,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             result.output_dens,
             parallel=False,
             verbose=bool(np.max(result.verbose)),
-            compatibility_layout=result.compatibility_layout,
-            optimizer=result.optimizer,
+            compatibility_layout=result._compatibility_layout,
+            optimizer=result._optimizer,
             tqdm_kwds=self.tqdm_kwds,
         )
 
@@ -3208,11 +3330,6 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
 
         result.densmap = np.any(result.densmap)
         result.output_dens = np.any(result.output_dens)
-        result.optimizer = (
-            result.optimizer[0]
-            if isinstance(result.optimizer, list)
-            else result.optimizer
-        )
 
         result._densmap_kwds = {
             "lambda": np.max(result.dens_lambda),
@@ -3245,8 +3362,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             result.output_dens,
             parallel=False,
             verbose=bool(np.max(result.verbose)),
-            compatibility_layout=result.compatibility_layout,
-            optimizer=result.optimizer,
+            compatibility_layout=result._compatibility_layout,
+            optimizer=result._optimizer,
             tqdm_kwds=self.tqdm_kwds,
         )
 
@@ -3313,7 +3430,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 ensure_all_finite=ensure_all_finite,
             )
         else:
-            init = self.init
+            init = None
 
         self._initial_alpha = self.learning_rate
 
@@ -3326,6 +3443,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             self.knn_search_index = self.precomputed_knn[2]
 
         self._validate_parameters()
+        if init is None:
+            init = self._init
 
         if self.verbose:
             print(str(self))
@@ -3466,7 +3585,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 True,
                 self.verbose,
                 self.densmap or self.output_dens,
-                compatibility_layout=self.compatibility_layout,
+                compatibility_layout=self._compatibility_layout,
             )
             # Report the number of vertices with degree 0 in our our umap.graph_
             # This ensures that they were properly disconnected.
@@ -3547,7 +3666,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 True,
                 self.verbose,
                 self.densmap or self.output_dens,
-                compatibility_layout=self.compatibility_layout,
+                compatibility_layout=self._compatibility_layout,
             )
             # Report the number of vertices with degree 0 in our umap.graph_
             # This ensures that they were properly disconnected.
@@ -3581,7 +3700,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     use_pynndescent=True,
                     n_jobs=self.n_jobs,
                     verbose=self.verbose,
-                    compatibility_layout=self.compatibility_layout,
+                    compatibility_layout=self._compatibility_layout,
                     nearest_neighbor_backend=self.nearest_neighbor_backend,
                 )
             else:
@@ -3613,7 +3732,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 True,
                 self.verbose,
                 self.densmap or self.output_dens,
-                compatibility_layout=self.compatibility_layout,
+                compatibility_layout=self._compatibility_layout,
             )
             # Report the number of vertices with degree 0 in our umap.graph_
             # This ensures that they were properly disconnected.
@@ -3844,8 +3963,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             self.output_metric in ("euclidean", "l2"),
             self.random_state is None,
             self.verbose,
-            compatibility_layout=self.compatibility_layout,
-            optimizer=self.optimizer,
+            compatibility_layout=self._compatibility_layout,
+            optimizer=self._optimizer,
             tqdm_kwds=self.tqdm_kwds,
             negative_selection_range=self.negative_selection_range,
             negative_sample_scale=self.negative_sample_scale,
@@ -4164,7 +4283,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         csr_graph = graph.tocsr()
         csr_graph.eliminate_zeros()
         csr_graph.sort_indices()
-        if self.compatibility_layout or self.optimizer == "compatibility":
+        if self._optimizer == "compatibility":
             epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs)
         else:
             epochs_per_sample = make_epochs_per_sample(csr_graph.data, n_epochs)
@@ -4179,7 +4298,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         # )
 
         if self.output_metric == "euclidean":
-            if self.compatibility_layout or self.optimizer == "compatibility":
+            if self._optimizer == "compatibility":
                 embedding = optimize_layout_euclidean(
                     embedding,
                     self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217,
@@ -4201,7 +4320,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 )
             else:
                 if self.verbose:
-                    print("Using layout optimizer", self.optimizer)
+                    print(ts(), "Using layout optimizer", self._optimizer)
                 embedding = optimize_layout_euclidean(
                     embedding,
                     self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217,
@@ -4219,7 +4338,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     parallel=self.random_state is None,
                     verbose=self.verbose,
                     tqdm_kwds=self.tqdm_kwds,
-                    optimizer=self.optimizer,
+                    optimizer=self._optimizer,
                     csr_indptr=csr_graph.indptr,
                     csr_indices=csr_graph.indices,
                     csr_data=csr_graph.data,
@@ -4235,7 +4354,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     ),
                 )
         else:
-            if self.compatibility_layout or self.optimizer == "compatibility":
+            if self._optimizer == "compatibility":
                 embedding = optimize_layout_generic(
                     embedding,
                     self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217
@@ -4258,7 +4377,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 )
             else:
                 if self.verbose:
-                    print("Using layout optimizer", self.optimizer)
+                    print(ts(), "Using layout optimizer", self._optimizer)
                 embedding = optimize_layout_generic(
                     embedding,
                     self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217
@@ -4277,7 +4396,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     tuple(self._output_metric_kwds.values()),
                     verbose=self.verbose,
                     tqdm_kwds=self.tqdm_kwds,
-                    optimizer=self.optimizer,
+                    optimizer=self._optimizer,
                     csr_indptr=csr_graph.indptr,
                     csr_indices=csr_graph.indices,
                     good_initialization=False,
@@ -4587,7 +4706,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     use_pynndescent=True,
                     n_jobs=self.n_jobs,
                     verbose=self.verbose,
-                    compatibility_layout=self.compatibility_layout,
+                    compatibility_layout=self._compatibility_layout,
                     nearest_neighbor_backend=self.nearest_neighbor_backend,
                 )
 
@@ -4604,7 +4723,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     self.local_connectivity,
                     True,
                     self.verbose,
-                    compatibility_layout=self.compatibility_layout,
+                    compatibility_layout=self._compatibility_layout,
                 )
                 knn_indices = self._knn_indices
 
@@ -4641,8 +4760,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self.output_metric in ("euclidean", "l2"),
                 self.random_state is None,
                 self.verbose,
-                compatibility_layout=self.compatibility_layout,
-                optimizer=self.optimizer,
+                compatibility_layout=self._compatibility_layout,
+                optimizer=self._optimizer,
                 tqdm_kwds=self.tqdm_kwds,
             )
 
@@ -4707,7 +4826,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self.output_metric in ("euclidean", "l2"),
                 self.random_state is None,
                 self.verbose,
-                compatibility_layout=self.compatibility_layout,
+                compatibility_layout=self._compatibility_layout,
                 tqdm_kwds=self.tqdm_kwds,
             )
 

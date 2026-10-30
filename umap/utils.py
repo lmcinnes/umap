@@ -12,6 +12,12 @@ import scipy.sparse
 
 # All fastmath flags except nnan/ninf: LLVM 20+ (numba>=0.62) folds away inf/nan checks under those.
 FASTMATH_FLAGS = {"nsz", "arcp", "contract", "afn", "reassoc"}
+# Legacy (compatibility) layout kernels must reproduce umap-learn 0.5.x
+# bit-for-bit. FMA contraction ("contract", which also depends on the CPU) and
+# reciprocal approximation ("arcp", used by the densMAP gradient) both change
+# rounding, so they are excluded there. The remaining flags were verified not
+# to alter seeded compatibility results.
+COMPATIBILITY_FASTMATH_FLAGS = FASTMATH_FLAGS - {"contract", "arcp"}
 
 
 @numba.njit(parallel=True)

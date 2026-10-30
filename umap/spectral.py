@@ -508,6 +508,27 @@ def tswspectral_layout(
     )
 
 
+def _spectral_initial_block(L, k, init, gen, random_state, sqrt_deg):
+    """Starting block of ``k`` vectors for LOBPCG."""
+    if init == "random":
+        X = gen.normal(size=(L.shape[0], k))
+    elif init == "tsvd":
+        X = TruncatedSVD(
+            n_components=k,
+            random_state=random_state,
+        ).fit_transform(L)
+    else:
+        raise ValueError(
+            "The init parameter must be either 'random' or 'tsvd': "
+            f"{init} is invalid."
+        )
+    # For such a normalized Laplacian, the first eigenvector is always
+    # proportional to sqrt(degrees). We thus replace the first t-SVD guess
+    # with the exact value.
+    X[:, 0] = sqrt_deg / np.linalg.norm(sqrt_deg)
+    return X
+
+
 def _spectral_layout(
     data,
     graph,
@@ -632,6 +653,12 @@ def _spectral_layout(
 
     if verbose:
         print(ts(), "Computing Eigenvectors...")
+    if compatibility_layout:
+        # umap-learn 0.5.x always drew the LOBPCG starting block before
+        # choosing a solver; keep that draw so the random stream is unchanged.
+        X = _spectral_initial_block(L, k, init, gen, random_state, sqrt_deg)
+    else:
+        X = None
     try:
         if method == "eigsh" and n_samples == k:
             # eigsh needs k < n_samples, so solve such small graphs densely
@@ -662,23 +689,8 @@ def _spectral_layout(
                 )
                 eigenvalues = [1.0 - eigenvalue for eigenvalue in eigenvalues]
         elif method == "lobpcg":
-            if init == "random":
-                X = gen.normal(size=(L.shape[0], k))
-            elif init == "tsvd":
-                X = TruncatedSVD(
-                    n_components=k,
-                    random_state=random_state,
-                    # algorithm="arpack"
-                ).fit_transform(L)
-            else:
-                raise ValueError(
-                    "The init parameter must be either 'random' or 'tsvd': "
-                    f"{init} is invalid."
-                )
-            # For such a normalized Laplacian, the first eigenvector is always
-            # proportional to sqrt(degrees). We thus replace the first t-SVD guess
-            # with the exact value.
-            X[:, 0] = sqrt_deg / np.linalg.norm(sqrt_deg)
+            if X is None:
+                X = _spectral_initial_block(L, k, init, gen, random_state, sqrt_deg)
             with warnings.catch_warnings():
                 warnings.filterwarnings(
                     category=UserWarning,

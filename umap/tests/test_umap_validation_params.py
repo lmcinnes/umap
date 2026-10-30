@@ -336,12 +336,12 @@ def test_umap_custom_distance_w_grad(nn_data):
     def dist2(x, y):
         return np.sum(np.abs(x - y)), (x - y)
 
-    u = UMAP(metric=dist1, n_epochs=11)
+    u = UMAP(metric=dist1, n_epochs=11, compatibility_layout=True)
     with pytest.warns(UserWarning) as warnings:
         u.fit(nn_data[:10])
     assert len(warnings) >= 1
 
-    u = UMAP(metric=dist2, n_epochs=11)
+    u = UMAP(metric=dist2, n_epochs=11, compatibility_layout=True)
     with pytest.warns(UserWarning) as warnings:
         u.fit(nn_data[:10])
     assert len(warnings) <= 1
