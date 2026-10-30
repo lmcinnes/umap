@@ -420,88 +420,68 @@ def smooth_knn(nn_data, local_connectivity=1.0):
     return norms
 
 
-@pytest.mark.skip()
-def test_nn_descent_neighbor_accuracy(nn_data):  # pragma: no cover
-    knn_indices, knn_dists, _ = nearest_neighbors(
-        nn_data, 10, "euclidean", {}, False, np.random
+NN_ACCURACY_CASES = [
+    pytest.param(True, "pynndescent", id="compatibility"),
+    pytest.param(False, "pynndescent", id="modern-pynndescent"),
+    pytest.param(
+        False,
+        "rinnd",
+        id="modern-rinnd",
+        marks=pytest.mark.skipif(
+            not umap_module._HAVE_RINND, reason="requires RINND >= 0.3.1"
+        ),
+    ),
+]
+
+
+@pytest.mark.parametrize("compatibility_layout, backend", NN_ACCURACY_CASES)
+@pytest.mark.parametrize("metric", ["euclidean", "cosine"])
+def test_nn_descent_neighbor_accuracy(nn_data, compatibility_layout, backend, metric):
+    data = nn_data.astype(np.float32)
+    knn_indices, _, _ = nearest_neighbors(
+        data,
+        10,
+        metric,
+        {},
+        metric == "cosine",
+        np.random.RandomState(0),
+        compatibility_layout=compatibility_layout,
+        nearest_neighbor_backend=backend,
     )
-    percent_correct = knn(knn_indices, nn_data)
-    assert (
-        percent_correct >= 0.85
-    ), "NN-descent did not get 89% accuracy on nearest neighbors"
+    reference = normalize(data) if metric == "cosine" else data
+    assert knn(knn_indices, reference) >= 0.95
 
 
-@pytest.mark.skip()
-def test_nn_descent_neighbor_accuracy_low_memory(nn_data):  # pragma: no cover
-    knn_indices, knn_dists, _ = nearest_neighbors(
-        nn_data, 10, "euclidean", {}, False, np.random, low_memory=True
+@pytest.mark.parametrize("compatibility_layout", [True, False])
+@pytest.mark.parametrize("metric", ["euclidean", "cosine"])
+def test_sparse_nn_descent_neighbor_accuracy(
+    sparse_nn_data, compatibility_layout, metric
+):
+    knn_indices, _, _ = nearest_neighbors(
+        sparse_nn_data,
+        20,
+        metric,
+        {},
+        metric == "cosine",
+        np.random.RandomState(0),
+        compatibility_layout=compatibility_layout,
     )
-    percent_correct = knn(knn_indices, nn_data)
-    assert (
-        percent_correct >= 0.89
-    ), "NN-descent did not get 89% accuracy on nearest neighbors"
+    reference = sparse_nn_data.toarray()
+    if metric == "cosine":
+        reference = normalize(reference)
+    assert knn(knn_indices, reference) >= 0.9
 
 
-@pytest.mark.skip()
-def test_angular_nn_descent_neighbor_accuracy(nn_data):  # pragma: no cover
-    knn_indices, knn_dists, _ = nearest_neighbors(
-        nn_data, 10, "cosine", {}, True, np.random
+def test_nn_descent_neighbor_accuracy_callable_metric(nn_data):
+    knn_indices, _, _ = nearest_neighbors(
+        nn_data,
+        10,
+        dist.euclidean,
+        {},
+        False,
+        np.random.RandomState(0),
     )
-    angular_data = normalize(nn_data, norm="l2")
-    percent_correct = knn(knn_indices, angular_data)
-    assert (
-        percent_correct >= 0.85
-    ), "NN-descent did not get 89% accuracy on nearest neighbors"
-
-
-@pytest.mark.skip()
-def test_sparse_nn_descent_neighbor_accuracy(sparse_nn_data):  # pragma: no cover
-    knn_indices, knn_dists, _ = nearest_neighbors(
-        sparse_nn_data, 20, "euclidean", {}, False, np.random
-    )
-    percent_correct = knn(knn_indices, sparse_nn_data.todense())
-    assert (
-        percent_correct >= 0.75
-    ), "Sparse NN-descent did not get 90% accuracy on nearest neighbors"
-
-
-@pytest.mark.skip()
-def test_sparse_nn_descent_neighbor_accuracy_low_memory(
-    sparse_nn_data,
-):  # pragma: no cover
-    knn_indices, knn_dists, _ = nearest_neighbors(
-        sparse_nn_data, 20, "euclidean", {}, False, np.random, low_memory=True
-    )
-    percent_correct = knn(knn_indices, sparse_nn_data.todense())
-    assert (
-        percent_correct >= 0.85
-    ), "Sparse NN-descent did not get 90% accuracy on nearest neighbors"
-
-
-@pytest.mark.skip()
-def test_nn_descent_neighbor_accuracy_callable_metric(nn_data):  # pragma: no cover
-    knn_indices, knn_dists, _ = nearest_neighbors(
-        nn_data, 10, dist.euclidean, {}, False, np.random
-    )
-
-    percent_correct = knn(knn_indices, nn_data)
-    assert (
-        percent_correct >= 0.95
-    ), "NN-descent did not get 95% accuracy on nearest neighbors with callable metric"
-
-
-@pytest.mark.skip()
-def test_sparse_angular_nn_descent_neighbor_accuracy(
-    sparse_nn_data,
-):  # pragma: no cover
-    knn_indices, knn_dists, _ = nearest_neighbors(
-        sparse_nn_data, 20, "cosine", {}, True, np.random
-    )
-    angular_data = normalize(sparse_nn_data, norm="l2").toarray()
-    percent_correct = knn(knn_indices, angular_data)
-    assert (
-        percent_correct >= 0.90
-    ), "Sparse NN-descent did not get 90% accuracy on nearest neighbors"
+    assert knn(knn_indices, nn_data) >= 0.95
 
 
 def test_smooth_knn_dist_l1norms(nn_data):
@@ -553,3 +533,70 @@ def test_smooth_knn_dist_disconnected_neighbors():
     # and the finite rows are untouched by the change
     sigmas_finite, rhos_finite = smooth_knn_dist(dists[10:], float(k))
     assert_array_almost_equal(sigmas[10:], sigmas_finite, decimal=5)
+
+
+@pytest.mark.parametrize("error", [TypeError, ValueError])
+def test_auto_backend_falls_back_when_rinnd_rejects_parameters(
+    fake_rinnd, monkeypatch, error
+):
+    def reject(*args, **kwargs):
+        raise error("unsupported option")
+
+    monkeypatch.setattr(umap_module, "RINND", reject)
+    large = np.ones((umap_module.RINND_MIN_SAMPLES, 4), dtype=np.float32)
+
+    _, _, index = nearest_neighbors(
+        large, 5, "euclidean", {}, False, 42, compatibility_layout=False
+    )
+
+    assert isinstance(index, FakeNNDescent)
+
+
+def test_forced_rinnd_reports_rejected_parameters(fake_rinnd, monkeypatch):
+    def reject(*args, **kwargs):
+        raise TypeError("unsupported option")
+
+    monkeypatch.setattr(umap_module, "RINND", reject)
+    with pytest.raises(ValueError, match="RINND backend rejected"):
+        nearest_neighbors(
+            np.ones((32, 4), dtype=np.float32),
+            5,
+            "euclidean",
+            {},
+            False,
+            42,
+            nearest_neighbor_backend="rinnd",
+            compatibility_layout=False,
+        )
+
+
+def test_forced_rinnd_with_compatibility_layout_explains_fix(fake_rinnd):
+    with pytest.raises(ValueError, match="compatibility_layout=False"):
+        nearest_neighbors(
+            np.ones((32, 4), dtype=np.float32),
+            5,
+            "euclidean",
+            {},
+            False,
+            42,
+            nearest_neighbor_backend="rinnd",
+            compatibility_layout=True,
+        )
+
+
+def test_rinnd_index_query_without_rinnd_raises(fake_rinnd, monkeypatch):
+    data = np.arange(128, dtype=np.float32).reshape(32, 4) + 1.0
+    _, _, index = nearest_neighbors(
+        data,
+        5,
+        "euclidean",
+        {},
+        False,
+        42,
+        nearest_neighbor_backend="rinnd",
+        compatibility_layout=False,
+    )
+    restored = pickle.loads(pickle.dumps(index))
+    monkeypatch.setattr(umap_module, "_HAVE_RINND", False)
+    with pytest.raises(ImportError, match="RINND"):
+        restored.query(data[:2], 2)

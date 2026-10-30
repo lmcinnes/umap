@@ -84,8 +84,8 @@ def test_densmap_trustworthiness_compatibility(nn_data, compatibility_option):
     ), "Insufficiently trustworthy embedding for" "nn dataset: {}".format(trust)
 
 
-@pytest.mark.skip()
-def test_densmap_trustworthiness_random_init(nn_data):  # pragma: no cover
+@pytest.mark.parametrize("compatibility_layout", [True, False])
+def test_densmap_trustworthiness_random_init(nn_data, compatibility_layout):
     data = nn_data[:50]
     embedding = UMAP(
         n_neighbors=10,
@@ -93,6 +93,7 @@ def test_densmap_trustworthiness_random_init(nn_data):  # pragma: no cover
         random_state=42,
         init="random",
         densmap=True,
+        compatibility_layout=compatibility_layout,
     ).fit_transform(data)
     trust = trustworthiness(data, embedding, n_neighbors=10)
     assert (

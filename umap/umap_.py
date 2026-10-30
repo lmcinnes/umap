@@ -414,7 +414,11 @@ def _rinnd_eligibility(X, n_neighbors, metric, metric_kwds, compatibility_layout
     if not _HAVE_RINND:
         return False, "RINND >= 0.3.1 is not installed"
     if compatibility_layout:
-        return False, "compatibility_layout requires PyNNDescent"
+        return (
+            False,
+            "compatibility_layout=True always uses PyNNDescent; set "
+            "compatibility_layout=False to use RINND",
+        )
     if scipy.sparse.issparse(X):
         return False, "RINND does not support sparse input"
     if not isinstance(X, np.ndarray) or X.ndim != 2:
