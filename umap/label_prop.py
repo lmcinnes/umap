@@ -368,6 +368,9 @@ def procrustes_align(e1: np.ndarray, e2: np.ndarray) -> np.ndarray:
     e2_shift = e2 - np.sum(e2, axis=0) / e2.shape[0]
     e1_scale_factor = np.sqrt(np.mean(e1_shift**2))
     e2_scale_factor = np.sqrt(np.mean(e2_shift**2))
+    if e1_scale_factor == 0.0 or e2_scale_factor == 0.0:
+        # A collapsed configuration has no orientation to align.
+        return np.eye(e1.shape[1], dtype=e1.dtype)
     e1_scaled = e1_shift / e1_scale_factor
     e2_scaled = e2_shift / e2_scale_factor
     covariance = e2_scaled.T @ e1_scaled
@@ -512,7 +515,7 @@ def remap_labels(labels):
         unique_labels = unique_labels[1:]
     for i, l in enumerate(unique_labels):
         mapping[l] = i
-    next_label = i + 1
+    next_label = unique_labels.shape[0]
     for i in range(labels.shape[0]):
         if labels[i] < 0:
             labels[i] = next_label
@@ -581,8 +584,9 @@ def _fill_unsampled(graph, data, subset_mask):
         row = slice(graph.indptr[i], graph.indptr[i + 1])
         neighbors, weights = graph.indices[row], graph.data[row]
         keep = subset_mask[neighbors]
-        if keep.any():
-            result[i] = (weights[keep] @ result[neighbors[keep]]) / weights[keep].sum()
+        total_weight = weights[keep].sum()
+        if total_weight > 0.0:
+            result[i] = (weights[keep] @ result[neighbors[keep]]) / total_weight
         else:
             result[i] = fallback
     return result
@@ -642,6 +646,25 @@ def _normalised_layout_edges(reduced_graph, summed, weights="transition"):
     return edges
 
 
+def _base_case_layout(graph, data, subset_mask, depth):
+    """Coordinates for a graph small enough to lay out from its anchor data.
+
+    Unsampled nodes are filled from their sampled neighbours, then the result
+    is centred and given a robust (5th-95th percentile) span that grows with
+    the graph size and recursion depth.
+    """
+    if np.all(subset_mask):
+        result = np.array(data)
+    else:
+        result = _fill_unsampled(graph, data, subset_mask)
+    scale = np.log10(result.shape[0]) * 3 * (np.log2(depth + 1))
+    result -= np.mean(result, 0)
+    spread = np.quantile(result, 0.95, 0) - np.quantile(result, 0.05, 0)
+    spread[spread == 0.0] = 1.0
+    result *= scale / spread
+    return result.astype(np.float32)
+
+
 def label_propagation_init(
     graph,
     data,
@@ -678,19 +701,7 @@ def label_propagation_init(
         root_membership = np.arange(graph.shape[0], dtype=np.int64)
 
     if graph.shape[0] <= base_init_threshold:
-        if np.all(subset_mask):
-            result = data
-        else:
-            result = _fill_unsampled(graph, data, subset_mask)
-        # Recenter
-        scale = np.log10(result.shape[0]) * 3 * (np.log2(depth + 1))
-        result -= np.mean(result, 0)
-        spread = np.quantile(result, 0.95, 0) - np.quantile(result, 0.05, 0)
-        spread[spread == 0.0] = 1.0
-        result *= scale / spread
-
-        result = result.astype(np.float32)
-        return result
+        return _base_case_layout(graph, data, subset_mask, depth)
 
     if approx_n_parts is None:
         approx_n_parts = max(
@@ -802,7 +813,7 @@ def label_propagation_init(
             next_b,
             n_iter=n_iter,
             approx_n_parts=approx_n_parts // coarsening_ratio,
-            n_embedding_epochs=int(n_embedding_epochs * np.pow(2, 0.5)),
+            n_embedding_epochs=int(n_embedding_epochs * np.sqrt(2.0)),
             n_components=n_components,
             scaling=scaling,
             random_state=random_state,
@@ -834,7 +845,9 @@ def label_propagation_init(
             coarsening_ratio,
         )
     else:
-        reduced_init = None
+        reduced_init = _base_case_layout(
+            next_graph, reduced_data, reduced_subset_mask, depth + 1
+        )
         good_initialization = False
 
     epochs_per_sample = make_epochs_per_sample(layout_edges.data, n_embedding_epochs)
