@@ -246,6 +246,7 @@ def _optimize_layout_euclidean_single_epoch(
     "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], i4[::1], i4[::1], i4[::1], i8, i8, f8, b1)",
     fastmath=FASTMATH_FLAGS,
     parallel=True,
+    cache=True,
     locals={
         "updates": numba.types.float32[:, ::1],
         "from_node": numba.types.intp,
@@ -379,6 +380,7 @@ def optimize_layout_euclidean_single_epoch_momentum(
     "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], f4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], i4[::1], i4[::1], b1)",
     fastmath=FASTMATH_FLAGS,
     parallel=True,
+    cache=True,
     locals={
         "updates": numba.types.float32[:, ::1],
         "from_node": numba.types.intp,
@@ -579,6 +581,7 @@ def _sample_negative_force_ratio(
     "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], f4[:, ::1], f4[:, ::1], f8, f8, i4[::1], i4[::1], i4[::1], i8, i8, f8, b1)",
     fastmath=FASTMATH_FLAGS,
     parallel=True,
+    cache=True,
     locals={
         "updates": numba.types.float32[:, ::1],
         "from_node": numba.types.intp,
@@ -734,6 +737,7 @@ def optimize_layout_euclidean_single_epoch_adam(
     "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], f4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], f4[:, ::1], f4[:, ::1], f8, f8, i4[::1], i4[::1], b1)",
     fastmath=FASTMATH_FLAGS,
     parallel=True,
+    cache=True,
     locals={
         "updates": numba.types.float32[:, ::1],
         "from_node": numba.types.intp,
@@ -878,6 +882,7 @@ def optimize_small_layout_euclidean_single_epoch_adam(
 @numba.njit(
     fastmath=FASTMATH_FLAGS,
     parallel=True,
+    cache=True,
     locals={
         "updates": numba.types.float32[:, ::1],
         "from_node": numba.types.intp,
@@ -1030,6 +1035,7 @@ def optimize_layout_euclidean_single_epoch_momentum_densmap(
 @numba.njit(
     fastmath=FASTMATH_FLAGS,
     parallel=True,
+    cache=True,
     locals={
         "updates": numba.types.float32[:, ::1],
         "from_node": numba.types.intp,
