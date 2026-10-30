@@ -186,3 +186,61 @@ def test_transform_many_points_into_tiny_reference_embedding(optimizer):
 
     assert embedding.shape == (1500, 2)
     assert np.all(np.isfinite(embedding))
+
+
+@pytest.mark.parametrize("n_epochs", [30, 150, 500])
+def test_momentum_schedules_decay_within_short_runs(n_epochs):
+    from umap.layouts import _create_alpha_schedule, _create_momentum_schedule
+
+    alpha = _create_alpha_schedule("momentum", n_epochs, 1.0, True)
+    momentum = _create_momentum_schedule("momentum", n_epochs, True)
+    assert alpha.shape == momentum.shape == (n_epochs,)
+    # The warm-up must finish within the run so the step size reaches its floor.
+    assert alpha[-1] < 0.25 * alpha[0]
+    assert momentum[-1] > momentum[0]
+
+
+def test_csr_row_sort_check():
+    from umap.layouts import _csr_rows_sorted
+
+    graph = scipy.sparse.random(40, 40, density=0.2, format="csr", random_state=0)
+    graph.sort_indices()
+    assert _csr_rows_sorted(graph.indptr, graph.indices)
+    row = slice(graph.indptr[5], graph.indptr[6])
+    graph.indices[row] = graph.indices[row][::-1].copy()
+    assert not _csr_rows_sorted(graph.indptr, graph.indices)
+
+
+def test_unsorted_graph_rejected_when_excluding_neighbors():
+    from umap.layouts import optimize_layout_euclidean
+
+    graph = scipy.sparse.random(40, 40, density=0.2, format="csr", random_state=0)
+    graph = (graph + graph.T).tocsr()
+    graph.sort_indices()
+    row = slice(graph.indptr[5], graph.indptr[6])
+    graph.indices[row] = graph.indices[row][::-1].copy()
+    embedding = np.random.RandomState(0).normal(size=(40, 2)).astype(np.float32)
+    with pytest.raises(ValueError, match="sorted"):
+        optimize_layout_euclidean(
+            embedding,
+            embedding,
+            None,
+            None,
+            5,
+            40,
+            np.ones(graph.nnz),
+            1.0,
+            1.0,
+            np.array([1, 2, 3], dtype=np.int64),
+            csr_indptr=graph.indptr,
+            csr_indices=graph.indices,
+            csr_data=graph.data.astype(np.float32),
+            exclude_graph_neighbors=True,
+        )
+
+
+def test_aligned_kernel_is_compiled_once():
+    from umap.layouts import _get_aligned_epoch_fn
+
+    assert _get_aligned_epoch_fn(True) is _get_aligned_epoch_fn(True)
+    assert _get_aligned_epoch_fn(False) is not _get_aligned_epoch_fn(True)

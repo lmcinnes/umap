@@ -19,12 +19,19 @@ GENERIC_NEGATIVE_SEARCH_MAX_CANDIDATES = 4
 # policy while retaining neighborhood quality.
 SMALL_LAYOUT_ATTRACTION_SCALE = 0.5
 
+# Adam denominator stabiliser. Larger than the textbook 1e-8 because gradients
+# are float32 and many rows receive only a few, sparse updates per epoch.
+ADAM_EPSILON = 1e-4
+
 # Modern-kernel contract:
 # * Attractive gradients point toward the reference; repulsive gradients point
 #   away from it. Both are accumulated as additions to the source embedding.
 # * Momentum kernels multiply by alpha while accumulating and retain a decayed
 #   update buffer. Adam kernels accumulate raw gradients, apply alpha after
 #   moment normalization, and use n + 1 because epochs are zero-indexed.
+#   Adam is "lazy": a row's moments only advance in epochs where it received
+#   a gradient, while bias correction uses the global epoch (as in TensorFlow's
+#   LazyAdam). The learning-rate schedules are tuned for this behaviour.
 # * CSR schedule arrays share the CSR data/indices ordering. Graph-neighbor
 #   exclusion additionally requires each CSR row's indices to be sorted.
 
@@ -33,6 +40,18 @@ def _random_state_from_rng_state(rng_state):
     """Deterministically derive a RandomState from a tau-rand ``rng_state``."""
     seed = np.asarray(rng_state, dtype=np.int64).view(np.uint64) % np.uint64(2**32)
     return np.random.RandomState(seed.astype(np.uint32))
+
+
+def _csr_rows_sorted(indptr, indices):
+    """Whether every CSR row has strictly increasing column indices."""
+    if indices.shape[0] < 2:
+        return True
+    increasing = np.diff(indices) > 0
+    # Differences that cross a row boundary are irrelevant.
+    row_ends = np.asarray(indptr[1:-1], dtype=np.int64) - 1
+    row_ends = row_ends[(row_ends >= 0) & (row_ends < increasing.shape[0])]
+    increasing[row_ends] = True
+    return bool(np.all(increasing))
 
 
 def validate_optimizer(optimizer):
@@ -707,7 +726,7 @@ def optimize_layout_euclidean_single_epoch_adam(
                     m_est = adam_m[from_node, d] / (1.0 - pow(beta1, n + 1))
                     v_est = adam_v[from_node, d] / (1.0 - pow(beta2, n + 1))
                     head_embedding[from_node, d] += (
-                        alpha * m_est / (np.sqrt(v_est) + 1e-4)
+                        alpha * m_est / (np.sqrt(v_est) + ADAM_EPSILON)
                     )
 
 
@@ -851,7 +870,9 @@ def optimize_small_layout_euclidean_single_epoch_adam(
                 )
                 m_est = adam_m[from_node, d] / (1.0 - pow(beta1, n + 1))
                 v_est = adam_v[from_node, d] / (1.0 - pow(beta2, n + 1))
-                head_embedding[from_node, d] += alpha * m_est / (np.sqrt(v_est) + 1e-4)
+                head_embedding[from_node, d] += (
+                    alpha * m_est / (np.sqrt(v_est) + ADAM_EPSILON)
+                )
 
 
 @numba.njit(
@@ -1166,7 +1187,7 @@ def optimize_layout_euclidean_single_epoch_adam_densmap(
                     m_est = adam_m[from_node, d] / (1.0 - pow(beta1, n + 1))
                     v_est = adam_v[from_node, d] / (1.0 - pow(beta2, n + 1))
                     head_embedding[from_node, d] += (
-                        alpha * m_est / (np.sqrt(v_est) + 1e-4)
+                        alpha * m_est / (np.sqrt(v_est) + ADAM_EPSILON)
                     )
 
 
@@ -1313,7 +1334,7 @@ def _create_alpha_schedule(optimizer, n_epochs, initial_alpha, good_initializati
 
     elif optimizer == "momentum":
         if good_initialization:
-            n_warm_up_epochs = int(max(200, n_epochs / 8))
+            n_warm_up_epochs = min(n_epochs, int(max(200, n_epochs / 8)))
             raw_alpha_schedule = np.asarray(
                 [
                     (1.0 - (float(n) / float(n_warm_up_epochs))) ** 2
@@ -1392,7 +1413,7 @@ def _create_momentum_schedule(optimizer, n_epochs, good_initialization):
 
     elif optimizer == "momentum":
         if good_initialization:
-            n_warm_up_epochs = int(max(200, n_epochs / 8))
+            n_warm_up_epochs = min(n_epochs, int(max(200, n_epochs / 8)))
             raw_alpha_schedule = np.asarray(
                 [
                     (1.0 - (float(n) / float(n_warm_up_epochs))) ** 2
@@ -1738,6 +1759,14 @@ def optimize_layout_euclidean(
     if optimizer != "compatibility" and (csr_indptr is None or csr_indices is None):
         raise ValueError(
             "When using an optimizer other than 'compatibility', csr_indptr and csr_indices must be provided."
+        )
+    if (
+        exclude_graph_neighbors
+        and optimizer != "compatibility"
+        and not _csr_rows_sorted(csr_indptr, csr_indices)
+    ):
+        raise ValueError(
+            "exclude_graph_neighbors requires CSR rows with sorted column indices"
         )
 
     epochs_list = None
@@ -2489,7 +2518,7 @@ def _optimize_layout_generic_single_epoch_adam(
                     m_est = adam_m[from_node, d] / (1.0 - pow(beta1, n + 1))
                     v_est = adam_v[from_node, d] / (1.0 - pow(beta2, n + 1))
                     head_embedding[from_node, d] += (
-                        alpha * m_est / (np.sqrt(v_est) + 1e-4)
+                        alpha * m_est / (np.sqrt(v_est) + ADAM_EPSILON)
                     )
 
     return epoch_of_next_sample, epoch_of_next_negative_sample
@@ -3617,9 +3646,30 @@ def _optimize_layout_aligned_euclidean_single_epoch_adam_experimental(
                     )
                     m_est = adam_m[m][j, d] / (1.0 - pow(beta1, n))
                     v_est = adam_v[m][j, d] / (1.0 - pow(beta2, n))
-                    head_embeddings[m][j, d] += alpha * m_est / (np.sqrt(v_est) + 1e-4)
+                    head_embeddings[m][j, d] += (
+                        alpha * m_est / (np.sqrt(v_est) + ADAM_EPSILON)
+                    )
 
                 updates[m][j, d] = 0.0  # Reset for next iteration
+
+
+_ALIGNED_EPOCH_FNS = {}
+
+
+def _get_aligned_epoch_fn(parallel):
+    """Compile the aligned epoch kernel once per ``parallel`` setting.
+
+    This is the established 0.5.x kernel, so it uses the compatibility
+    fastmath flags to keep seeded AlignedUMAP results unchanged.
+    """
+    parallel = bool(parallel)
+    if parallel not in _ALIGNED_EPOCH_FNS:
+        _ALIGNED_EPOCH_FNS[parallel] = numba.njit(
+            _optimize_layout_aligned_euclidean_single_epoch,
+            fastmath=COMPATIBILITY_FASTMATH_FLAGS,
+            parallel=parallel,
+        )
+    return _ALIGNED_EPOCH_FNS[parallel]
 
 
 def optimize_layout_aligned_euclidean(
@@ -3667,11 +3717,7 @@ def optimize_layout_aligned_euclidean(
         )
         epoch_of_next_sample.append(epochs_per_sample[m].astype(np.float32))
 
-    optimize_fn = numba.njit(
-        _optimize_layout_aligned_euclidean_single_epoch,
-        fastmath=FASTMATH_FLAGS,
-        parallel=parallel,
-    )
+    optimize_fn = _get_aligned_epoch_fn(parallel)
 
     if tqdm_kwds is None:
         tqdm_kwds = {}
