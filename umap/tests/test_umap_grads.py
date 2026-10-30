@@ -298,10 +298,27 @@ def test_symmetric_kl_does_not_modify_inputs(func):
     np.testing.assert_array_equal(y, y_orig)
 
 
+@pytest.mark.parametrize(
+    "x,y",
+    [
+        ([0, 0, 1, 2, 0], [0, 0, 3, 4, 0]),
+        ([0, 0, 1, 2, 0.4], [0, 0, 3, 4, -0.3]),
+        ([1, -2, 0.7, 2.4, 0.6], [-0.5, 1, 1.3, 0.9, -0.4]),
+        ([-1, 0.5, 2, 0.8, -0.7], [2, -0.5, 0.6, 1.7, 0.2]),
+    ],
+)
+def test_gaussian_energy_gradient(x, y):
+    x, y = np.array(x, dtype=np.float64), np.array(y, dtype=np.float64)
+    _, analytic_grad = dist.gaussian_energy_grad(x.copy(), y.copy())
+    numeric_grad = numerical_gradient(
+        lambda z: dist.gaussian_energy_grad(z, y.copy())[0], x
+    )
+    np.testing.assert_allclose(analytic_grad, numeric_grad, rtol=1e-5, atol=1e-6)
+
+
 # TODO
 # canberra
 # haversine
 # hyperboloid
-# gaussian_energy
 # spherical_gaussian_energy
 # diagonal_gaussian_energy

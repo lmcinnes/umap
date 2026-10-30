@@ -701,7 +701,10 @@ def hellinger(x, y):
     elif l1_norm_x == 0 or l1_norm_y == 0:
         return 1.0
     else:
-        return np.sqrt(1 - result / np.sqrt(l1_norm_x * l1_norm_y))
+        denominator = np.sqrt(l1_norm_x * l1_norm_y)
+        if result > denominator:
+            return 0.0
+        return np.sqrt(1 - result / denominator)
 
 
 @numba.njit()
@@ -1092,14 +1095,24 @@ def gaussian_energy_grad(x, y):  # pragma: no cover
     grad[2] -= x_inv_sigma_y_numerator * np.sin(x[4]) ** 2 * sigma_11
     grad[2] += x_inv_sigma_y_numerator * 2 * sigma_12 * np.sin(x[4]) * np.cos(x[4])
     grad[2] /= det_sigma**2 + 1e-8
+    grad[2] += (
+        np.cos(x[4]) ** 2 * sigma_22
+        + np.sin(x[4]) ** 2 * sigma_11
+        - 2 * sigma_12 * np.sin(x[4]) * np.cos(x[4])
+    ) / det_sigma
 
-    grad[3] = mu_1 * (mu_1 * np.cos(x[4]) ** 2 - mu_2 * np.cos(x[4]) * np.sin(x[4]))
-    grad[3] += mu_2 * (mu_2 * np.sin(x[4]) ** 2 - mu_1 * np.cos(x[4]) * np.sin(x[4]))
+    grad[3] = mu_1 * (mu_1 * np.cos(x[4]) ** 2 + mu_2 * np.cos(x[4]) * np.sin(x[4]))
+    grad[3] += mu_2 * (mu_2 * np.sin(x[4]) ** 2 + mu_1 * np.cos(x[4]) * np.sin(x[4]))
     grad[3] *= det_sigma
     grad[3] -= x_inv_sigma_y_numerator * np.sin(x[4]) ** 2 * sigma_22
     grad[3] -= x_inv_sigma_y_numerator * np.cos(x[4]) ** 2 * sigma_11
     grad[3] -= x_inv_sigma_y_numerator * 2 * sigma_12 * np.sin(x[4]) * np.cos(x[4])
     grad[3] /= det_sigma**2 + 1e-8
+    grad[3] += (
+        np.sin(x[4]) ** 2 * sigma_22
+        + np.cos(x[4]) ** 2 * sigma_11
+        + 2 * sigma_12 * np.sin(x[4]) * np.cos(x[4])
+    ) / det_sigma
 
     grad[4] = (x[3] - x[2]) * (
         2 * mu_1 * mu_2 * np.cos(2 * x[4]) - (mu_1**2 - mu_2**2) * np.sin(2 * x[4])
@@ -1107,8 +1120,13 @@ def gaussian_energy_grad(x, y):  # pragma: no cover
     grad[4] *= det_sigma
     grad[4] -= x_inv_sigma_y_numerator * (x[3] - x[2]) * np.sin(2 * x[4]) * sigma_22
     grad[4] -= x_inv_sigma_y_numerator * (x[2] - x[3]) * np.sin(2 * x[4]) * sigma_11
-    grad[4] -= x_inv_sigma_y_numerator * 2 * sigma_12 * (x[2] - x[3]) * np.cos(2 * x[4])
+    grad[4] += x_inv_sigma_y_numerator * 2 * sigma_12 * (x[2] - x[3]) * np.cos(2 * x[4])
     grad[4] /= det_sigma**2 + 1e-8
+    grad[4] += (
+        (x[3] - x[2]) * np.sin(2 * x[4]) * sigma_22
+        + (x[2] - x[3]) * np.sin(2 * x[4]) * sigma_11
+        - 2 * sigma_12 * (x[2] - x[3]) * np.cos(2 * x[4])
+    ) / det_sigma
 
     return dist, grad
 
@@ -1508,6 +1526,14 @@ def pairwise_special_metric(
         )
     else:
         special_metric_func = named_distances[metric]
+        if kwds:
+            kwd_vals = tuple(kwds.values())
+
+            @numba.njit(fastmath=True)
+            def _partial_metric(_X, _Y):
+                return special_metric_func(_X, _Y, *kwd_vals)
+
+            return parallel_special_metric(X, Y, metric=_partial_metric)
     return parallel_special_metric(X, Y, metric=special_metric_func)
 
 
