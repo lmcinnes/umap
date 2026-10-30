@@ -120,3 +120,37 @@ def test_transform_sparse_model_with_dense_input(metric, compatibility_layout):
     expected = model.transform(new_data)
     result = model.transform(new_data.toarray())
     np.testing.assert_allclose(result, expected)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        dict(compatibility_layout=True),
+        dict(compatibility_layout=False, nearest_neighbor_backend="pynndescent"),
+        pytest.param(
+            dict(compatibility_layout=False, nearest_neighbor_backend="rinnd"),
+            marks=pytest.mark.skipif(
+                not __import__("umap.umap_").umap_._HAVE_RINND,
+                reason="requires RINND",
+            ),
+        ),
+    ],
+)
+def test_fit_and_transform_do_not_modify_input(kwargs):
+    rng = np.random.RandomState(0)
+    data = np.abs(rng.normal(size=(300, 8))).astype(np.float32)
+    query = np.abs(rng.normal(size=(20, 8))).astype(np.float32)
+    data_copy, query_copy = data.copy(), query.copy()
+
+    model = UMAP(
+        metric="cosine",
+        n_neighbors=10,
+        n_epochs=10,
+        random_state=0,
+        force_approximation_algorithm=True,
+        **kwargs,
+    ).fit(data)
+    model.transform(query)
+
+    np.testing.assert_array_equal(data, data_copy)
+    np.testing.assert_array_equal(query, query_copy)

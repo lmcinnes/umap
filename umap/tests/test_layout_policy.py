@@ -180,3 +180,33 @@ def test_unfitted_legacy_pickle_resolves_on_fit(blobs):
     with pytest.warns(FutureWarning):
         legacy.fit(blobs)
     assert legacy._compatibility_layout is True
+
+
+def test_update_forwards_layout_options(blobs, monkeypatch):
+    import umap.umap_ as umap_module
+
+    captured = []
+    original = umap_module.simplicial_set_embedding
+
+    def capture(*args, **kwargs):
+        captured.append(kwargs)
+        return original(*args, **kwargs)
+
+    model = _fit(
+        blobs[:100],
+        random_state=3,
+        optimizer="momentum",
+        negative_selection_range=500,
+        init_rescale="per_axis",
+        init_scale_factor=0.5,
+    )
+    monkeypatch.setattr(umap_module, "simplicial_set_embedding", capture)
+    model.update(blobs[100:])
+
+    assert captured, "update() did not re-embed"
+    kwargs = captured[-1]
+    assert kwargs["compatibility_layout"] is False
+    assert kwargs["optimizer"] == "momentum"
+    assert kwargs["negative_selection_range"] == 500
+    assert kwargs["init_rescale"] == "per_axis"
+    assert kwargs["init_scale_factor"] == 0.5

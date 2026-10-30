@@ -3832,6 +3832,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                         1.0,
                         1.0,
                         False,
+                        compatibility_layout=self._compatibility_layout,
                     )
                 else:
                     # Standard case
@@ -3851,6 +3852,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                         1.0,
                         1.0,
                         False,
+                        compatibility_layout=self._compatibility_layout,
                     )
                 # product = self.graph_.multiply(target_graph)
                 # # self.graph_ = 0.99 * product + 0.01 * (self.graph_ +
@@ -3963,13 +3965,21 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             self.output_metric in ("euclidean", "l2"),
             self.random_state is None,
             self.verbose,
+            tqdm_kwds=self.tqdm_kwds,
+            **self._layout_kwds(),
+        )
+
+    def _layout_kwds(self):
+        """Layout options forwarded to ``simplicial_set_embedding``."""
+        return dict(
             compatibility_layout=self._compatibility_layout,
             optimizer=self._optimizer,
-            tqdm_kwds=self.tqdm_kwds,
             negative_selection_range=self.negative_selection_range,
             negative_sample_scale=self.negative_sample_scale,
             exclude_graph_neighbors=self.exclude_graph_neighbors,
-            negative_sample_scale_adaptation_samples=self.negative_sample_scale_adaptation_samples,
+            negative_sample_scale_adaptation_samples=(
+                self.negative_sample_scale_adaptation_samples
+            ),
             recursive_coarsening_ratio=self.recursive_coarsening_ratio,
             coarse_layout_weights=self.coarse_layout_weights,
             coarsen_on_layout_weights=self.coarsen_on_layout_weights,
@@ -4686,6 +4696,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     self.local_connectivity,
                     True,
                     self.verbose,
+                    compatibility_layout=self._compatibility_layout,
                 )
                 knn_indices = np.argsort(dmat)[:, : self.n_neighbors]
             else:
@@ -4762,9 +4773,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self.output_metric in ("euclidean", "l2"),
                 self.random_state is None,
                 self.verbose,
-                compatibility_layout=self._compatibility_layout,
-                optimizer=self._optimizer,
                 tqdm_kwds=self.tqdm_kwds,
+                **self._layout_kwds(),
             )
 
         else:
@@ -4793,6 +4803,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self.local_connectivity,
                 True,
                 self.verbose,
+                compatibility_layout=self._compatibility_layout,
             )
 
             init = np.zeros(
@@ -4828,8 +4839,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self.output_metric in ("euclidean", "l2"),
                 self.random_state is None,
                 self.verbose,
-                compatibility_layout=self._compatibility_layout,
                 tqdm_kwds=self.tqdm_kwds,
+                **self._layout_kwds(),
             )
 
         if self.output_dens:
