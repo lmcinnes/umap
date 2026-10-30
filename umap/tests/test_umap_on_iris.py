@@ -308,11 +308,17 @@ def test_umap_inverse_transform_on_iris(iris, iris_model):
 
 # UMAP transform and inverse transform with a list of n_epochs
 # ------------------------------------------------------------
-def test_umap_transforms_with_n_epochs_list_on_iris(iris, iris_selection):
+@pytest.mark.parametrize("compatibility_layout", [True, False])
+def test_umap_transforms_with_n_epochs_list_on_iris(
+    iris, iris_selection, compatibility_layout
+):
     data = iris.data[iris_selection]
     new_data = iris.data[~iris_selection]
-    list_fitter = UMAP(n_neighbors=10, n_epochs=[20, 100], random_state=42).fit(data)
-    int_fitter = UMAP(n_neighbors=10, n_epochs=100, random_state=42).fit(data)
+    kwargs = dict(
+        n_neighbors=10, random_state=42, compatibility_layout=compatibility_layout
+    )
+    list_fitter = UMAP(n_epochs=[20, 100], **kwargs).fit(data)
+    int_fitter = UMAP(n_epochs=100, **kwargs).fit(data)
 
     # Only the largest value in the list should matter, so both models
     # should transform (and inverse transform) identically.

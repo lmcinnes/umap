@@ -29,6 +29,12 @@ SMALL_LAYOUT_ATTRACTION_SCALE = 0.5
 #   exclusion additionally requires each CSR row's indices to be sorted.
 
 
+def _random_state_from_rng_state(rng_state):
+    """Deterministically derive a RandomState from a tau-rand ``rng_state``."""
+    seed = np.asarray(rng_state, dtype=np.int64).view(np.uint64) % np.uint64(2**32)
+    return np.random.RandomState(seed.astype(np.uint32))
+
+
 def validate_optimizer(optimizer):
     """Validate an optimizer name and return it unchanged."""
     if optimizer not in PUBLIC_OPTIMIZERS:
@@ -258,7 +264,9 @@ def optimize_layout_euclidean_single_epoch_momentum(
 ):
     n_from_vertices = csr_indptr.shape[0] - 1
     transform_mode = n_from_vertices != n_vertices
-    negative_selection_range = max(200, min(n_vertices, negative_selection_range))
+    # At least 200 candidates, but never more than the reference embedding
+    # holds; otherwise the window start would be negative (out-of-bounds).
+    negative_selection_range = min(n_vertices, max(200, negative_selection_range))
     if negative_sample_scale < 0.0:
         negative_sample_scaling = negative_selection_range / n_vertices
     else:
@@ -592,7 +600,9 @@ def optimize_layout_euclidean_single_epoch_adam(
     exclude_graph_neighbors=False,
 ):
     n_from_vertices = csr_indptr.shape[0] - 1
-    negative_selection_range = max(200, min(n_vertices, negative_selection_range))
+    # At least 200 candidates, but never more than the reference embedding
+    # holds; otherwise the window start would be negative (out-of-bounds).
+    negative_selection_range = min(n_vertices, max(200, negative_selection_range))
     if negative_sample_scale < 0.0:
         negative_sample_scaling = negative_selection_range / n_vertices
     else:
@@ -1710,7 +1720,7 @@ def optimize_layout_euclidean(
 
     dim = head_embedding.shape[1]
     if random_state is None:
-        random_state = np.random.RandomState()
+        random_state = _random_state_from_rng_state(rng_state)
     resolved_negative_sample_scale = (
         -1.0 if negative_sample_scale is None else float(negative_sample_scale)
     )
@@ -1951,7 +1961,7 @@ def optimize_layout_euclidean(
                     epochs_per_sample,
                     a,
                     b,
-                    gamma,
+                    gamma_schedule[n],
                     dim,
                     alpha_schedule[n],
                     epochs_per_negative_sample,
@@ -1984,7 +1994,7 @@ def optimize_layout_euclidean(
                     node_order,
                     to_node_order,
                     source_ranks,
-                    block_size=n_vertices // 2,
+                    block_size=max(1, head_embedding.shape[0] // 2),
                     negative_selection_range=negative_selection_range_schedule[n],
                     negative_sample_scale=resolved_negative_sample_scale,
                     exclude_graph_neighbors=exclude_graph_neighbors,
@@ -2093,7 +2103,7 @@ def optimize_layout_euclidean(
                     node_order,
                     to_node_order,
                     source_ranks,
-                    block_size=n_vertices,
+                    block_size=max(1, head_embedding.shape[0]),
                     negative_selection_range=negative_selection_range_schedule[n],
                     negative_sample_scale=resolved_negative_sample_scale,
                     exclude_graph_neighbors=exclude_graph_neighbors,
@@ -2672,7 +2682,7 @@ def optimize_layout_generic(
     dim = head_embedding.shape[1]
 
     if random_state is None:
-        random_state = np.random.RandomState()
+        random_state = _random_state_from_rng_state(rng_state)
 
     validate_optimizer(optimizer)
 

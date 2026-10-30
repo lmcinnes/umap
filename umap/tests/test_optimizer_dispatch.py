@@ -167,3 +167,22 @@ def test_sparse_compatibility_fit_and_transform():
     assert transformed.shape == (30, 2)
     assert np.isfinite(model.embedding_).all()
     assert np.isfinite(transformed).all()
+
+
+@pytest.mark.parametrize("optimizer", ["adam", "momentum"])
+def test_transform_many_points_into_tiny_reference_embedding(optimizer):
+    # More than 1024 query points selects the large-input kernels while the
+    # reference embedding holds fewer points than the minimum negative window.
+    rng = np.random.RandomState(0)
+    model = UMAP(
+        n_neighbors=5,
+        n_epochs=30,
+        optimizer=optimizer,
+        compatibility_layout=False,
+        random_state=0,
+    ).fit(rng.normal(size=(60, 8)).astype(np.float32))
+
+    embedding = model.transform(rng.normal(size=(1500, 8)).astype(np.float32))
+
+    assert embedding.shape == (1500, 2)
+    assert np.all(np.isfinite(embedding))

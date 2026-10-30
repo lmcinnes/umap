@@ -1,3 +1,4 @@
+import numpy as np
 from umap import UMAP
 import pytest
 
@@ -133,3 +134,31 @@ def test_densmap_trustworthiness_on_iris_supervised(iris):
     assert (
         trust >= 0.97
     ), "Insufficiently trustworthy embedding for" "iris dataset: {}".format(trust)
+
+
+def _log_local_radius(embedding, n_neighbors):
+    from sklearn.neighbors import NearestNeighbors
+
+    distances, _ = (
+        NearestNeighbors(n_neighbors=n_neighbors).fit(embedding).kneighbors(embedding)
+    )
+    return np.log(np.mean(distances[:, 1:] ** 2, axis=1) + 1e-8)
+
+
+@pytest.mark.parametrize("compatibility_layout", [True, False])
+def test_output_dens_embedding_radii_match_embedding(iris, compatibility_layout):
+    model = UMAP(
+        densmap=True,
+        output_dens=True,
+        n_epochs=100,
+        random_state=42,
+        compatibility_layout=compatibility_layout,
+    ).fit(iris.data)
+
+    assert model.rad_orig_.shape == model.rad_emb_.shape == (iris.data.shape[0],)
+    assert np.all(np.isfinite(model.rad_emb_))
+    # rad_emb_ must describe local density in the returned embedding.
+    independent = _log_local_radius(model.embedding_, 30)
+    assert np.corrcoef(model.rad_emb_, independent)[0, 1] > 0.8
+    # densMAP preserves the original local radii in the embedding.
+    assert np.corrcoef(model.rad_orig_, model.rad_emb_)[0, 1] > 0.5

@@ -8,7 +8,8 @@ from scipy import sparse
 from sklearn.datasets import load_iris
 from umap import UMAP, AlignedUMAP
 
-# Globals, used for all the tests
+# Globals, used for all the tests. Each fixture draws from its own seeded
+# RandomState so its data does not depend on test selection or order.
 SEED = 189212  # 0b101110001100011100
 np.random.seed(SEED)
 
@@ -18,14 +19,16 @@ np.random.seed(SEED)
 @pytest.fixture(scope="session")
 def spatial_data():
     # - Spatial Data
-    spatial_data = np.random.randn(10, 20)
+    spatial_data = np.random.RandomState(SEED).randn(10, 20)
     # Add some all zero data for corner case test
     return np.vstack([spatial_data, np.zeros((2, 20))])
 
 
 @pytest.fixture(scope="session")
 def binary_data():
-    binary_data = np.random.choice(a=[False, True], size=(10, 20), p=[0.66, 1 - 0.66])
+    binary_data = np.random.RandomState(SEED + 1).choice(
+        a=[False, True], size=(10, 20), p=[0.66, 1 - 0.66]
+    )
     # Add some all zero data for corner case test
     binary_data = np.vstack([binary_data, np.zeros((2, 20), dtype="bool")])
     return binary_data
@@ -47,7 +50,7 @@ def sparse_binary_data(binary_data):
 # -----------------------
 @pytest.fixture(scope="session")
 def nn_data():
-    nn_data = np.random.uniform(0, 1, size=(1000, 5))
+    nn_data = np.random.RandomState(SEED + 2).uniform(0, 1, size=(1000, 5))
     nn_data = np.vstack(
         [nn_data, np.zeros((2, 5))]
     )  # Add some all zero data for corner case test
@@ -56,7 +59,7 @@ def nn_data():
 
 @pytest.fixture(scope="session")
 def binary_nn_data():
-    binary_nn_data = np.random.choice(
+    binary_nn_data = np.random.RandomState(SEED + 3).choice(
         a=[False, True], size=(1000, 5), p=[0.66, 1 - 0.66]
     )
     binary_nn_data = np.vstack(
@@ -67,7 +70,7 @@ def binary_nn_data():
 
 @pytest.fixture(scope="session")
 def sparse_nn_data():
-    return sparse.random(1000, 50, density=0.5, format="csr")
+    return sparse.random(1000, 50, density=0.5, format="csr", random_state=SEED + 4)
 
 
 # Data With Repetitions
@@ -138,7 +141,9 @@ def iris():
 
 @pytest.fixture(scope="session")
 def iris_selection():
-    return np.random.choice([True, False], 150, replace=True, p=[0.75, 0.25])
+    return np.random.RandomState(SEED + 5).choice(
+        [True, False], 150, replace=True, p=[0.75, 0.25]
+    )
 
 
 @pytest.fixture(scope="session")
