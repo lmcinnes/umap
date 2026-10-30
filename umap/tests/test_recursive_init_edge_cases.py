@@ -203,7 +203,7 @@ def test_coarse_layout_graph_sums_weights_between_parts():
 def test_invalid_hub_selection_rejected():
     graph = _path_graph(2000)
     data = np.random.RandomState(0).normal(size=(2000, 2)).astype(np.float32)
-    with pytest.raises(ValueError, match="hub_selection"):
+    with pytest.raises(ValueError, match="hub_selection must be"):
         label_prop.label_propagation_init(
             graph,
             data,
@@ -213,3 +213,25 @@ def test_invalid_hub_selection_rejected():
             random_state=np.random.RandomState(0),
             hub_selection="bogus",
         )
+
+
+@pytest.mark.parametrize("hub_selection", ["degree", "diverse", "random"])
+def test_recursive_init_kwds_forwarded(hub_selection):
+    data, _ = make_blobs(2500, n_features=6, centers=4, random_state=0)
+    embedding = _fit(
+        data.astype(np.float32),
+        recursive_init_kwds=dict(
+            hub_selection=hub_selection,
+            base_init_threshold=512,
+            anchor_method="full_pca",
+        ),
+    )
+    assert np.all(np.isfinite(embedding))
+
+
+def test_recursive_init_kwds_rejects_unknown_keys():
+    data, _ = make_blobs(100, n_features=4, random_state=0)
+    with pytest.raises(ValueError, match="Unknown recursive_init_kwds"):
+        _fit(data, recursive_init_kwds=dict(coarsening_ratio=2))
+    with pytest.raises(ValueError, match="must be a dict"):
+        _fit(data, recursive_init_kwds=[("hub_selection", "random")])

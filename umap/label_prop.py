@@ -730,8 +730,11 @@ def label_propagation_init(
         labels = initialize_labels_from_diverse_hubs(
             labels, approx_n_parts, degrees, graph.indptr, graph.indices
         )
+    elif hub_selection == "random":
+        # Uniformly random seeds; collisions can yield slightly fewer parts.
+        labels = initialize_labels(labels, approx_n_parts, rng_state)
     else:
-        raise ValueError("hub_selection must be 'degree' or 'diverse'")
+        raise ValueError("hub_selection must be 'degree', 'diverse', or 'random'")
 
     prev_unlabeled = np.sum(labels < 0)
     for i in range(n_iter):

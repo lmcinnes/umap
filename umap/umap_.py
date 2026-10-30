@@ -80,6 +80,26 @@ NPY_FLOATMAX = np.finfo(np.float32).max
 RINND_MIN_SAMPLES = 4096
 
 MODERN_OPTIMIZERS = ("adam", "momentum")
+
+# Advanced recursive-initialization controls accepted via recursive_init_kwds.
+RECURSIVE_INIT_KWDS = frozenset(
+    (
+        "base_init_threshold",
+        "n_embedding_epochs",
+        "approx_n_parts",
+        "curve_schedule",
+        "good_initialization_policy",
+        "hub_selection",
+        "remove_coarse_diagonal",
+        "anchor_method",
+        "anchor_sample_size",
+        "recursive_repulsion_strength",
+        "recursive_negative_sample_rate",
+        "recursive_negative_selection_range_mode",
+        "recursive_negative_selection_range_scale",
+        "label_propagation_share",
+    )
+)
 DEFAULT_MODERN_OPTIMIZER = "adam"
 COMPATIBILITY_LAYOUT_DEFAULT_WARNING = (
     "compatibility_layout was not set, so UMAP is using the legacy (0.5.x) "
@@ -1502,6 +1522,21 @@ def _densmap_embedding_densities(
         mu_sum[k] += mu
 
 
+def _validate_recursive_init_kwds(recursive_init_kwds):
+    """Return a validated copy of ``recursive_init_kwds`` (``{}`` for None)."""
+    if recursive_init_kwds is None:
+        return {}
+    if not isinstance(recursive_init_kwds, dict):
+        raise ValueError("recursive_init_kwds must be a dict or None")
+    unknown = set(recursive_init_kwds) - RECURSIVE_INIT_KWDS
+    if unknown:
+        raise ValueError(
+            f"Unknown recursive_init_kwds {sorted(unknown)}; accepted keys are "
+            f"{sorted(RECURSIVE_INIT_KWDS)}"
+        )
+    return dict(recursive_init_kwds)
+
+
 def _resolve_layout_options(compatibility_layout, optimizer):
     """Resolve the effective ``(compatibility_layout, optimizer)`` pair.
 
@@ -1563,6 +1598,7 @@ def simplicial_set_embedding(
     coarsen_on_layout_weights=True,
     init_rescale="isotropic",
     init_scale_factor=1.0,
+    recursive_init_kwds=None,
 ):
     """Perform a fuzzy simplicial set embedding, using a specified
     initialisation method and then minimizing the fuzzy set cross entropy
@@ -1679,6 +1715,11 @@ def simplicial_set_embedding(
 
     init_scale_factor: float (optional, default 1.0)
         Multiplier for the target robust span used by ``init_rescale``.
+
+    recursive_init_kwds: dict or None (optional, default None)
+        Advanced keyword arguments forwarded to
+        :func:`umap.label_prop.recursive_init` when ``init='recursive'``. The
+        accepted keys are listed in ``umap.umap_.RECURSIVE_INIT_KWDS``.
 
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
@@ -1815,6 +1856,7 @@ def simplicial_set_embedding(
             coarsening_ratio=recursive_coarsening_ratio,
             coarse_layout_weights=coarse_layout_weights,
             coarsen_on_layout_weights=coarsen_on_layout_weights,
+            **_validate_recursive_init_kwds(recursive_init_kwds),
         )
     else:
         init_data = np.array(init)
@@ -2635,6 +2677,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         coarsen_on_layout_weights=True,
         init_rescale="isotropic",
         init_scale_factor=1.0,
+        recursive_init_kwds=None,
     ):
         self.n_neighbors = n_neighbors
         self.metric = metric
@@ -2689,6 +2732,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         self.coarsen_on_layout_weights = coarsen_on_layout_weights
         self.init_rescale = init_rescale
         self.init_scale_factor = init_scale_factor
+        self.recursive_init_kwds = recursive_init_kwds
         self.optimizer = optimizer
 
         self.n_jobs = n_jobs
@@ -2722,6 +2766,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
 
     def _validate_parameters(self):
         self._resolve_layout_parameters()
+        _validate_recursive_init_kwds(self.recursive_init_kwds)
         if self.coarse_layout_weights not in ("transition", "fuzzy_union"):
             raise ValueError(
                 "coarse_layout_weights must be 'transition' or 'fuzzy_union'"
@@ -3986,6 +4031,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             coarsen_on_layout_weights=self.coarsen_on_layout_weights,
             init_rescale=self.init_rescale,
             init_scale_factor=self.init_scale_factor,
+            recursive_init_kwds=self.recursive_init_kwds,
         )
 
     def fit_transform(self, X, y=None, ensure_all_finite=True, **kwargs):

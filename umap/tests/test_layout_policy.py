@@ -135,6 +135,7 @@ NEW_IN_0_6 = (
     "coarsen_on_layout_weights",
     "init_rescale",
     "init_scale_factor",
+    "recursive_init_kwds",
     "_compatibility_layout",
     "_optimizer",
     "_init",
