@@ -73,6 +73,8 @@ The new pipeline (``compatibility_layout=False``)
   nearest-neighbor graph (``pip install umap-learn[rinnd]``), selected with
   ``nearest_neighbor_backend`` (``"auto"``, ``"rinnd"`` or
   ``"pynndescent"``). See :doc:`performance` for the requirements.
+* A new tutorial, :doc:`large_datasets`, walks through these choices on
+  three million arXiv papers.
 
 Other improvements
 ~~~~~~~~~~~~~~~~~~
