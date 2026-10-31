@@ -293,10 +293,68 @@ but the spectral initialization took about thirty times as long. The
 eigensolver used by the compatibility layout (the UMAP 0.5 spectral
 initialization) is faster on this graph, but still took between 3min 29s
 and 5min 21s in three otherwise identical runs, depending on how quickly
-it converged. On some graphs the eigensolver fails to converge at all, in
-which case UMAP warns and falls back to a random initialization -- after
-having spent the time trying -- and as we have just seen, at this scale a
-random initialization is not a good fallback.
+it converged (the newer spectral option is more robust in general,
+but slower for some datasets such as this one). On some graphs the
+eigensolver fails to converge at all, in which case UMAP warns and
+falls back to a random initialization -- after having spent the time
+trying -- and as we have just seen, at this scale a random initialization
+is not a good fallback.
+
+To see why recursive initialization works so well we can look at the
+initializations themselves. Setting ``n_epochs=0`` skips the optimization
+entirely, so UMAP returns the initial coordinates (centered and scaled):
+
+.. code:: python3
+
+    initializations = {
+        init: umap.UMAP(
+            metric="cosine",
+            compatibility_layout=False,
+            init=init,
+            n_epochs=0,
+            precomputed_knn=knn,
+            random_state=42,
+        ).fit_transform(data)
+        for init in ("random", "spectral", "recursive")
+    }
+
+.. image:: images/large_datasets_init_only.png
+
+The random initialization is, of course, just noise. The spectral
+initialization has the right global arrangement -- the archives point
+out in different directions from the center -- but it is only a
+skeleton: each archive is stretched out along a ray, and almost none of
+the local structure is there yet. The optimizer has to build nearly all of
+it. The recursive initialization, in contrast, already looks very much
+like the final embedding. Measuring the initializations in the same way
+as before makes the difference clear:
+
+.. list-table::
+   :header-rows: 1
+
+   * - ``init`` (no optimization)
+     - Neighbors preserved
+     - Silhouette by archive
+   * - ``"random"``
+     - 0.0%
+     - -0.05
+   * - ``"spectral"``
+     - 0.1%
+     - 0.04
+   * - ``"recursive"``
+     - 3.1%
+     - 0.17
+
+Here "neighbors preserved" is measured on the same random sample of
+10,000 papers: for each paper we find its 15 nearest neighbors in the
+original 4096 dimensional space (exactly, by brute force), and ask what
+fraction of them are also among its 15 nearest neighbors in the
+embedding. We will use this measure again below. Before
+any optimization the recursive initialization already preserves about
+half as many neighbors as the final embedding does (6.0%), and separates
+the archives at least as well. Each level of the recursion has been laid
+out with a short optimization of its own, so by the time the main
+optimizer starts, its job is largely one of refinement.
 
 The layout optimizer
 --------------------
@@ -365,12 +423,8 @@ computer science:
 With the default repulsion much of the language region is squeezed into
 a dense mass with little visible internal structure. As the repulsion
 increases the region opens up, and more of the distinct groups of papers
-within it are resolved. To put numbers
-on this we can take a random sample of 10,000 papers, find each paper's
-15 nearest neighbors in the original 4096 dimensional space (exactly, by
-brute force), and ask what fraction of them are also among its 15 nearest
-neighbors in the embedding. We can also measure how separated the
-archives are with the silhouette score of the sample by archive.
+within it are resolved. We can put numbers on this with the neighbor
+preservation and silhouette measures from the previous section:
 
 .. list-table::
    :header-rows: 1
