@@ -760,8 +760,8 @@ def label_propagation_init(
 
     if verbose:
         print(
-            ts()
-            + f" Initializing with label propagation: {approx_n_parts} parts, and a graph with {graph.shape[0]} nodes. {a=}, {b=}.",
+            ts() + f" Recursive initialization: coarsening {graph.shape[0]} nodes"
+            f" into about {approx_n_parts} parts",
             flush=True,
         )
 

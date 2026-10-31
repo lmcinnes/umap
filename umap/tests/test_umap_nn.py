@@ -600,3 +600,37 @@ def test_rinnd_index_query_without_rinnd_raises(fake_rinnd, monkeypatch):
     monkeypatch.setattr(umap_module, "_HAVE_RINND", False)
     with pytest.raises(ImportError, match="RINND"):
         restored.query(data[:2], 2)
+
+
+@pytest.mark.parametrize(
+    "kwargs, expected",
+    [
+        (dict(compatibility_layout=True), "0.5.x settings"),
+        (
+            dict(compatibility_layout=False, nearest_neighbor_backend="pynndescent"),
+            "nearest_neighbor_backend='pynndescent'",
+        ),
+    ],
+)
+def test_verbose_reports_nearest_neighbor_backend(capsys, kwargs, expected):
+    data = np.random.RandomState(0).normal(size=(200, 4)).astype(np.float32)
+    nearest_neighbors(data, 5, "euclidean", {}, False, 42, verbose=True, **kwargs)
+    output = capsys.readouterr().out
+    assert "Using PyNNDescent" in output
+    assert expected in output
+
+
+def test_verbose_reports_rinnd_backend(fake_rinnd, capsys):
+    data = np.ones((32, 4), dtype=np.float32)
+    nearest_neighbors(
+        data,
+        5,
+        "euclidean",
+        {},
+        False,
+        42,
+        verbose=True,
+        nearest_neighbor_backend="rinnd",
+        compatibility_layout=False,
+    )
+    assert "Using RINND" in capsys.readouterr().out

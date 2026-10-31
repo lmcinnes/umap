@@ -616,20 +616,31 @@ def nearest_neighbors(
             raise ValueError(f"RINND backend cannot be used: {rinnd_reason}")
         if nearest_neighbor_backend == "auto":
             use_rinnd = rinnd_eligible and X.shape[0] >= RINND_MIN_SAMPLES
+            if not rinnd_eligible:
+                skip_reason = rinnd_reason
+            elif not use_rinnd:
+                skip_reason = f"fewer than {RINND_MIN_SAMPLES} samples"
         else:
             use_rinnd = nearest_neighbor_backend == "rinnd"
+            skip_reason = "nearest_neighbor_backend='pynndescent'"
 
         n_iters = max(5, int(round(np.log2(X.shape[0]))))
         if compatibility_layout:
             n_trees = min(64, 5 + int(round((X.shape[0]) ** 0.5 / 20.0)))
             max_candidates = 60
         else:
-            if verbose:
-                print(
-                    ts(), "Using alternative param NNDescent to find Nearest Neighbors"
-                )
             n_trees = max(4, min(8, 5 + int(round((X.shape[0]) ** 0.5 / 20.0))))
             max_candidates = max(20, min(60, int(1.5 * n_neighbors)))
+        if verbose:
+            if use_rinnd:
+                print(ts(), "Using RINND to find nearest neighbors")
+            else:
+                settings = "0.5.x" if compatibility_layout else "0.6"
+                print(
+                    ts(),
+                    f"Using PyNNDescent with {settings} settings to find nearest "
+                    f"neighbors (RINND not used: {skip_reason})",
+                )
 
         knn_search_index = None
         if use_rinnd:
@@ -659,7 +670,11 @@ def nearest_neighbors(
                     ) from error
                 use_rinnd = False
                 if verbose:
-                    print(ts(), f"RINND unavailable for this input: {error}")
+                    print(
+                        ts(),
+                        f"RINND rejected this input ({error}); falling back to "
+                        "PyNNDescent",
+                    )
         if not use_rinnd:
             knn_search_index = NNDescent(
                 X,
