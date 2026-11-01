@@ -60,8 +60,19 @@ the archive it belongs to (``cs`` or ``hep-th``).
 That is a little over 50GB of ``float32`` vectors. The largest archives
 are computer science (``cs``) with 776,261 papers and mathematics
 (``math``) with 585,316, followed by condensed matter physics and
-astrophysics. We will color the ten largest archives, and show the rest in
-grey.
+astrophysics.
+
+For coloring the plots it helps to group the archives a little. When
+arXiv was entirely physics, each area of physics was given its own
+archive, so ``hep-th``, ``cond-mat`` or ``astro-ph`` sit at the same level
+as all of computer science or mathematics. We will put those archives
+together under physics, and color each broad domain with its own family
+of hues: physics in reds and oranges, computer science in blues,
+mathematics in greens, and so on. Within each domain the largest
+categories get their own shade, and the rest of the domain shares one
+more. A handful of papers from before 1999 use archive names that arXiv
+has since retired, such as ``cmp-lg`` (now ``cs.CL``) or ``alg-geom``
+(now ``math.AG``); we map those to their modern equivalents first.
 
 Plotting millions of points
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -79,23 +90,61 @@ zoom we simply give datashader a smaller range of coordinates to render;
 because it renders every point at full resolution, zooming in reveals
 genuine fine structure rather than just enlarging pixels.
 
+To build the color key we need to say which categories get a shade of
+their own. Here we use the categories with at least 20,000 papers that
+make up at least 2% of their domain; physics is shown at the level of
+its historical archives. The `glasbey <https://github.com/lmcinnes/glasbey>`__
+library (``pip install glasbey``) then generates one block of related
+colors for each domain.
+
 .. code:: python3
 
     import datashader as ds
     import datashader.transfer_functions as tf
+    import glasbey
 
-    top_archives = archive.value_counts().index[:10]
-    archive_labels = pd.Categorical(
-        archive.where(archive.isin(top_archives), "other"),
-        categories=list(top_archives) + ["other"],
+    # Retired archive names and their modern equivalents (from arXiv's taxonomy)
+    subsumed = {
+        "acc-phys": "physics.acc-ph", "adap-org": "nlin.AO", "alg-geom": "math.AG",
+        "ao-sci": "physics.ao-ph", "atom-ph": "physics.atom-ph",
+        "bayes-an": "physics.data-an", "chao-dyn": "nlin.CD",
+        "chem-ph": "physics.chem-ph", "cmp-lg": "cs.CL", "comp-gas": "nlin.CG",
+        "dg-ga": "math.DG", "funct-an": "math.FA", "mtrl-th": "cond-mat.mtrl-sci",
+        "patt-sol": "nlin.PS", "plasm-ph": "physics.plasm-ph", "q-alg": "math.QA",
+        "solv-int": "nlin.SI", "supr-con": "cond-mat.supr-con",
+    }
+    # Every archive that is not listed here is part of physics
+    domains = {
+        "cs": "computer science", "math": "mathematics", "eess": "engineering",
+        "stat": "statistics", "q-bio": "biology", "q-fin": "finance",
+        "econ": "economics",
+    }
+    shown = {
+        "physics": ["cond-mat", "astro-ph", "physics", "hep-ph", "quant-ph",
+                    "hep-th", "gr-qc", "nucl-th", "math-ph"],
+        "computer science": ["cs.CV", "cs.LG", "cs.CL", "cs.AI", "cs.RO",
+                             "cs.IT", "cs.CR"],
+        "mathematics": ["math.AP", "math.CO", "math.PR", "math.AG", "math.OC",
+                        "math.NT", "math.NA"],
+        "engineering": ["eess.SY", "eess.SP"],
+        "statistics": ["stat.ME", "stat.ML"],
+        "biology": [], "finance": [], "economics": [],
+    }
+
+    category = primary_category.replace(subsumed)
+    domain = category.str.split(".").str[0].map(domains).fillna("physics")
+    name = category.where(domain != "physics", category.str.split(".").str[0])
+
+    names = [n for d, cats in shown.items() for n in cats + [f"other {d}"]]
+    palette = glasbey.create_block_palette(
+        [len(cats) + 1 for cats in shown.values()], optimize_palette=False
     )
-    palette = [
-        "#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f",
-        "#edc948", "#b07aa1", "#ff9da7", "#9c755f", "#17becf", "#c8c8c8",
-    ]
-    color_key = dict(zip(archive_labels.categories, palette))
+    color_key = dict(zip(names, palette))
+    labels = pd.Categorical(
+        name.where(name.isin(names), "other " + domain), categories=names
+    )
 
-    def plot(embedding, labels=archive_labels, color_key=color_key,
+    def plot(embedding, labels=labels, color_key=color_key,
              x_range=None, y_range=None, size=1000):
         frame = pd.DataFrame(
             {"x": embedding[:, 0], "y": embedding[:, 1], "label": labels}
@@ -107,10 +156,13 @@ genuine fine structure rather than just enlarging pixels.
         image = tf.shade(aggregate, color_key=color_key, how="eq_hist", min_alpha=60)
         return tf.set_background(image, "white")
 
-All of the plots below were made this way. For the zoomed views we color
-the papers by their primary category within computer science instead of
-by archive, and set ``x_range`` and ``y_range`` to a square around the
-papers we are interested in.
+Here is the resulting color key:
+
+.. image:: images/large_datasets_legend.png
+
+All of the plots below were made with this ``plot`` function and color
+key. For the zoomed views we simply set ``x_range`` and ``y_range`` to a
+square around the papers we are interested in.
 
 Finding nearest neighbors
 -------------------------
@@ -414,16 +466,19 @@ with a few different repulsion strengths:
 At the scale of the whole plot the differences are modest: the archives
 stay where they were and look a little more granular. The differences are
 in the fine structure, and to see them we need to zoom in. Here is the
-region of the plot containing the computation and language papers
-(``cs.CL``), colored by the primary category of each paper within
-computer science:
+region of the plot around the papers on optimization and control
+(``math.OC``). Optimization is used everywhere, so this is a busy
+crossroads of the map, where mathematics (greens), computer science
+(blues), engineering (magentas), statistics (greys) and physics (reds)
+all meet. Each view is centered on the ``math.OC`` papers and sized to
+contain four fifths of them:
 
 .. image:: images/large_datasets_repulsion_zoom.png
 
-With the default repulsion much of the language region is squeezed into
-a dense mass with little visible internal structure. As the repulsion
-increases the region opens up, and more of the distinct groups of papers
-within it are resolved. We can put numbers on this with the neighbor
+With the default repulsion the region is a dense tangle in which the
+different fields blur into each other. As the repulsion increases the
+region opens up, and more of the distinct groups of papers within it are
+resolved. We can put numbers on this with the neighbor
 preservation and silhouette measures from the previous section:
 
 .. list-table::
@@ -483,16 +538,18 @@ scale (20.5% and 20.8% of the 150 nearest neighbors). Tearing does not
 create false neighbors, so these measures do not see it. You can see it
 in the plot, though: the archives have broken up into a web of filaments
 and fragments, and they are less well separated (a silhouette of 0.12,
-against 0.15 for the new pipeline). Zooming in on the computation and
-language papers, as before, makes the problem clear:
+against 0.15 for the new pipeline). Zooming in on the optimization and
+control papers, as before, makes the problem clear:
 
 .. image:: images/large_datasets_old_vs_new_zoom.png
 
-With the original optimizer the language papers have been torn into
-several separate pieces, so the region centered on them is dominated by
-computer vision and robotics papers instead. Nothing in the plot tells
-you that those pieces belong together. The new pipeline keeps the field
-in one piece, with its internal structure laid out within it.
+With the original optimizer the optimization and control papers have been
+scattered: to contain four fifths of them the view has to cover three
+times the area that it does for the new pipeline, and what it shows is a
+web of disconnected filaments and clumps separated by empty space.
+Nothing in the plot tells you that those pieces belong together. The new
+pipeline keeps the region together, with the different fields that meet
+there laid out side by side.
 
 The new optimizer limits the size of each repulsive force with a smooth
 cap that grows with the repulsion strength (rather than clipping every
@@ -542,11 +599,12 @@ off:
 
 .. image:: images/large_datasets_hard_negatives_zoom.png
 
+Here we are looking at the optimization and control region again.
 Without hard negatives, the higher repulsion has separated out groups of
 papers, but much of the region is still compressed into dense clumps with
 empty space between them: most of the uniformly sampled negatives are far
 away and contribute little to the local layout. With hard negatives the
-repulsion acts where it is needed, and the region expands into a much
+repulsion acts where it is needed, and the region fills out into a much
 more detailed structure. The neighbor preservation agrees:
 
 .. list-table::
