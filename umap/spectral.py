@@ -655,7 +655,7 @@ def _spectral_layout(
         )
         return gen.uniform(low=-10.0, high=10.0, size=(n_samples, dim))
     if not method:
-        method = "lobpcg" if compatibility_layout and L.shape[0] >= 2000000 else "eigsh"
+        method = "lobpcg" if L.shape[0] >= 2000000 else "eigsh"
 
     if verbose:
         print(ts(), "Computing Eigenvectors...")
