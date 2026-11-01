@@ -357,7 +357,11 @@ def optimize_layout_euclidean_single_epoch_momentum(
                                 grad_norm = np.sqrt(
                                     grad_coeff * grad_coeff * dist_squared
                                 )
-                                scale = gamma * np.tanh(grad_norm / gamma) / grad_norm
+                                scale = (
+                                    min(gamma, 16.0)
+                                    * np.tanh(grad_norm / gamma)
+                                    / grad_norm
+                                )
                                 for d in range(dim):
                                     updates[from_node, d] += (
                                         alpha
@@ -485,7 +489,11 @@ def optimize_small_layout_euclidean_single_epoch_momentum(
 
                         if grad_coeff > 0.0:
                             grad_norm = np.sqrt(grad_coeff * grad_coeff * dist_squared)
-                            scale = gamma * np.tanh(grad_norm / gamma) / grad_norm
+                            scale = (
+                                min(gamma, 16.0)
+                                * np.tanh(grad_norm / gamma)
+                                / grad_norm
+                            )
                             for d in range(dim):
                                 updates[from_node, d] += (
                                     alpha * grad_coeff * (current[d] - other[d]) * scale
@@ -700,7 +708,11 @@ def optimize_layout_euclidean_single_epoch_adam(
                                 grad_norm = np.sqrt(
                                     grad_coeff * grad_coeff * dist_squared
                                 )
-                                scale = gamma * np.tanh(grad_norm / gamma) / grad_norm
+                                scale = (
+                                    min(gamma, 16.0)
+                                    * np.tanh(grad_norm / gamma)
+                                    / grad_norm
+                                )
                                 for d in range(dim):
                                     updates[from_node, d] += (
                                         grad_coeff * (current[d] - other[d]) * scale
@@ -847,7 +859,11 @@ def optimize_small_layout_euclidean_single_epoch_adam(
                         )
                         if grad_coeff > 0.0:
                             grad_norm = np.sqrt(grad_coeff * grad_coeff * dist_squared)
-                            scale = gamma * np.tanh(grad_norm / gamma) / grad_norm
+                            scale = (
+                                min(gamma, 16.0)
+                                * np.tanh(grad_norm / gamma)
+                                / grad_norm
+                            )
                             for d in range(dim):
                                 updates[from_node, d] += (
                                     grad_coeff * (current[d] - other[d]) * scale
