@@ -5,11 +5,6 @@ from sklearn.preprocessing import normalize
 
 import umap.label_prop as label_prop
 import umap.umap_ as umap_module
-import experiments.recursive_init.run_mnist as run_mnist
-from experiments.recursive_init.run_coarsening import (
-    _format_optional,
-    _paired_difference,
-)
 from umap import UMAP
 
 
@@ -211,53 +206,6 @@ def test_available_good_initialization_requires_finite_nonzero_spread():
 
     with pytest.raises(ValueError, match="good_initialization_policy"):
         label_prop._good_initialization(good, 8, 4, "unknown")
-
-
-def test_stratified_subset_is_deterministic_and_balanced():
-    data = np.arange(120, dtype=np.float32).reshape(60, 2)
-    target = np.repeat(np.arange(3), 20)
-
-    first = run_mnist._stratified_subset(data, target, 30, seed=17)
-    second = run_mnist._stratified_subset(data, target, 30, seed=17)
-
-    assert np.array_equal(first[2], second[2])
-    assert np.array_equal(np.bincount(first[1]), [10, 10, 10])
-    assert first[0].flags.c_contiguous
-
-
-def test_covtype_loader_standardizes_selected_sample(monkeypatch, tmp_path):
-    class Dataset:
-        data = np.column_stack(
-            [np.arange(60, dtype=np.float32), np.arange(60, dtype=np.float32) ** 2]
-        )
-        target = np.repeat(np.arange(1, 4), 20)
-
-    monkeypatch.setattr(run_mnist, "fetch_covtype", lambda data_home: Dataset())
-
-    data, target, indices = run_mnist.load_dataset("covtype", 30, 17, tmp_path)
-
-    assert data.shape == (30, 2)
-    assert target.shape == (30,)
-    assert indices.shape == (30,)
-    assert data.dtype == np.float32
-    assert data.flags.c_contiguous
-    assert np.allclose(data.mean(axis=0), 0.0, atol=1e-6)
-    assert np.allclose(data.std(axis=0), 1.0, atol=1e-6)
-
-
-def test_optional_report_metric_formats_single_seed_as_unavailable():
-    assert _format_optional(None) == "n/a"
-    assert _format_optional(0.123456) == "0.1235"
-
-
-def test_paired_difference_matches_runs_by_seed():
-    baseline = [{"seed": 0, "value": 1.0}, {"seed": 1, "value": 2.0}]
-    candidate = [{"seed": 1, "value": 2.5}, {"seed": 0, "value": 1.25}]
-
-    mean, std = _paired_difference(baseline, candidate, lambda run: run["value"])
-
-    assert mean == pytest.approx(0.375)
-    assert std == pytest.approx(np.std([0.25, 0.5], ddof=1))
 
 
 @pytest.mark.parametrize("ratio", [2, 3, 4])
