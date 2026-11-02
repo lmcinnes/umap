@@ -9,7 +9,7 @@ from sklearn.metrics import adjusted_rand_score, pairwise_distances
 from sklearn.preprocessing import normalize
 from numpy.testing import assert_array_equal
 from umap import UMAP
-from umap.umap_ import init_update
+import umap.umap_ as umap_module
 from umap.spectral import component_layout
 import numpy as np
 import scipy.sparse
@@ -17,7 +17,172 @@ import pytest
 import warnings
 from umap.distances import pairwise_special_metric
 from umap.utils import disconnected_vertices, fast_knn_indices
+from umap.umap_ import init_update
 from scipy.sparse import csr_matrix
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        np.arange(120, dtype=np.float32).reshape(24, 5),
+        csr_matrix(np.arange(120, dtype=np.float32).reshape(24, 5)),
+        csr_matrix((24, 5), dtype=np.float32),
+    ],
+)
+def test_input_data_hash_is_parallel_and_content_deterministic(data):
+    single_threaded = umap_module._input_data_hash(data, n_jobs=1, chunk_size=17)
+    parallel = umap_module._input_data_hash(data, n_jobs=4, chunk_size=17)
+    copied = umap_module._input_data_hash(data.copy(), n_jobs=2, chunk_size=17)
+
+    assert single_threaded == parallel == copied
+
+    changed = data.copy()
+    if scipy.sparse.issparse(changed) and changed.nnz == 0:
+        changed = csr_matrix(
+            ([1.0], ([0], [1])), shape=changed.shape, dtype=changed.dtype
+        )
+    else:
+        changed[0, 1] += 1.0
+    assert umap_module._input_data_hash(changed, chunk_size=17) != single_threaded
+
+    if not scipy.sparse.issparse(data):
+        reshaped = data.reshape(12, 10)
+        converted = data.astype(np.float64)
+        assert umap_module._input_data_hash(reshaped) != single_threaded
+        assert umap_module._input_data_hash(converted) != single_threaded
+
+
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_make_epochs_per_sample_matches_numpy(dtype):
+    weights = np.array([0.0, 1e-6, 0.125, 0.5, 1.0], dtype=dtype)
+    n_epochs = 17
+    expected = np.full(weights.shape[0], -1.0, dtype=np.float64)
+    n_samples = n_epochs * (weights / weights.max())
+    expected[n_samples > 0.0] = float(n_epochs) / np.float64(n_samples[n_samples > 0.0])
+
+    result = umap_module.make_epochs_per_sample(weights, n_epochs)
+
+    assert result.dtype == np.float64
+    np.testing.assert_array_equal(result, expected)
+
+
+def test_make_epochs_per_sample_handles_empty_and_zero_weights():
+    empty = umap_module.make_epochs_per_sample(np.empty(0, dtype=np.float32), 17)
+    zeros = umap_module.make_epochs_per_sample(np.zeros(4, dtype=np.float32), 17)
+
+    assert empty.dtype == np.float64
+    assert empty.shape == (0,)
+    np.testing.assert_array_equal(zeros, -np.ones(4, dtype=np.float64))
+
+
+@pytest.mark.parametrize("mix_ratio", [0.0, 0.3, 1.0])
+def test_fuzzy_set_operation_matches_sparse_expression(mix_ratio):
+    graph = csr_matrix(
+        np.array(
+            [
+                [0.0, 0.25, 0.0, 0.5],
+                [0.75, 0.0, 0.125, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+                [0.25, 0.0, 0.0, 0.0],
+            ],
+            dtype=np.float32,
+        )
+    )
+    transpose = graph.transpose()
+    product = graph.multiply(transpose)
+    expected = mix_ratio * (graph + transpose - product) + (1.0 - mix_ratio) * product
+    expected.eliminate_zeros()
+
+    result = umap_module._fuzzy_set_operation(graph, mix_ratio)
+
+    assert result.dtype == np.float32
+    assert result.has_canonical_format
+    np.testing.assert_allclose(result.toarray(), expected.toarray(), rtol=1e-7)
+
+
+@pytest.mark.parametrize("mix_ratio", [0.0, 0.3, 1.0])
+def test_fuzzy_simplicial_set_matches_sparse_expression(mix_ratio):
+    knn_indices = np.array(
+        [
+            [0, 1, 1, -1],
+            [1, 0, 2, 3],
+            [2, 1, 3, 0],
+            [3, 2, 0, 1],
+        ],
+        dtype=np.int32,
+    )
+    knn_dists = np.array(
+        [
+            [0.0, 0.5, 0.75, np.inf],
+            [0.0, 0.25, 0.5, 1.0],
+            [0.0, 0.25, 0.75, 1.0],
+            [0.0, 0.5, 0.75, 1.0],
+        ],
+        dtype=np.float32,
+    )
+    data = np.zeros((4, 2), dtype=np.float32)
+    sigmas, rhos = umap_module.smooth_knn_dist(
+        knn_dists, float(knn_indices.shape[1]), local_connectivity=1.0
+    )
+    rows, cols, vals, dists = umap_module.compute_membership_strengths(
+        knn_indices, knn_dists, sigmas, rhos, return_dists=True
+    )
+    directed_graph = scipy.sparse.coo_matrix((vals, (rows, cols)), shape=(4, 4))
+    directed_graph.eliminate_zeros()
+    transpose = directed_graph.transpose()
+    product = directed_graph.multiply(transpose)
+    expected = (
+        mix_ratio * (directed_graph + transpose - product) + (1.0 - mix_ratio) * product
+    )
+    expected.eliminate_zeros()
+
+    expected_dists = scipy.sparse.coo_matrix((dists, (rows, cols)), shape=(4, 4))
+    expected_dists = expected_dists.maximum(expected_dists.transpose()).todok()
+
+    result, _, _, result_dists = umap_module.fuzzy_simplicial_set(
+        data,
+        knn_indices.shape[1],
+        np.random.RandomState(42),
+        "euclidean",
+        knn_indices=knn_indices,
+        knn_dists=knn_dists,
+        set_op_mix_ratio=mix_ratio,
+        return_dists=True,
+    )
+
+    np.testing.assert_allclose(result.toarray(), expected.toarray(), rtol=1e-7)
+    np.testing.assert_array_equal(result_dists.toarray(), expected_dists.toarray())
+
+
+def test_transform_cache_uses_equal_input_copy_and_detects_mutation():
+    data, _ = make_blobs(
+        n_samples=40,
+        n_features=4,
+        centers=3,
+        random_state=42,
+    )
+    data = data.astype(np.float32)
+    model = UMAP(n_neighbors=5, n_epochs=5, random_state=42).fit(data)
+
+    assert model.transform(data.copy()) is model.embedding_
+
+    data[0, 0] += 1.0
+    assert model.transform(data) is not model.embedding_
+
+
+def test_transform_supports_legacy_joblib_input_hash():
+    data, _ = make_blobs(
+        n_samples=40,
+        n_features=4,
+        centers=3,
+        random_state=42,
+    )
+    model = UMAP(n_neighbors=5, n_epochs=5, random_state=42).fit(data)
+    del model._input_hash_algorithm
+    model._input_hash = umap_module.joblib.hash(model._raw_data)
+
+    assert model.transform(model._raw_data.copy()) is model.embedding_
+
 
 # Transform isn't stable under batching; hard to opt out of this.
 # @SkipTest
@@ -66,8 +231,109 @@ def test_fast_knn_indices_matches_argsort_with_ties():
 
 def test_blobs_cluster():
     data, labels = make_blobs(n_samples=500, n_features=10, centers=5)
-    embedding = UMAP(n_epochs=100).fit_transform(data)
+    embedding = UMAP(n_epochs=100, compatibility_layout=True).fit_transform(data)
+    assert adjusted_rand_score(labels, KMeans(5).fit_predict(embedding)) >= 0.99
+
+
+# Umap Clusterability
+def test_blobs_cluster_adam():
+    data, labels = make_blobs(n_samples=500, n_features=10, centers=5)
+    embedding = UMAP(n_epochs=100, optimizer="adam").fit_transform(data)
     assert adjusted_rand_score(labels, KMeans(5).fit_predict(embedding)) == 1.0
+
+
+def test_blobs_cluster_momentum():
+    data, labels = make_blobs(n_samples=500, n_features=10, centers=5, random_state=42)
+    embedding = UMAP(n_epochs=100, optimizer="momentum", random_state=42).fit_transform(
+        data
+    )
+    assert adjusted_rand_score(labels, KMeans(5).fit_predict(embedding)) == 1.0
+
+
+@pytest.mark.parametrize("optimizer", ["momentum", "adam"])
+def test_modern_hard_negatives_fit_and_transform(optimizer):
+    data, _ = make_blobs(
+        n_samples=1050,
+        n_features=6,
+        centers=5,
+        random_state=42,
+    )
+    model = UMAP(
+        n_neighbors=10,
+        n_epochs=15,
+        init="random",
+        optimizer=optimizer,
+        negative_selection_range=250,
+        negative_sample_scale=0.25,
+        negative_sample_scale_adaptation_samples=0,
+        exclude_graph_neighbors=True,
+        random_state=42,
+    ).fit(data)
+
+    transformed = model.transform(data[:31] + 0.01)
+
+    assert model.embedding_.shape == (1050, 2)
+    assert transformed.shape == (31, 2)
+    assert np.isfinite(model.embedding_).all()
+    assert np.isfinite(transformed).all()
+
+
+@pytest.mark.parametrize(
+    "optimizer",
+    ["standard", "densmap_standard", "densmap_adam", "densmap_momentum"],
+)
+def test_removed_optimizer_names_are_rejected(optimizer):
+    data, _ = make_blobs(n_samples=30, n_features=4, random_state=42)
+    with pytest.raises(ValueError, match="Unknown optimizer"):
+        UMAP(optimizer=optimizer).fit(data)
+
+
+def test_hard_negative_scale_adaptation_default():
+    assert UMAP().negative_sample_scale_adaptation_samples == 128
+    assert (
+        UMAP(
+            negative_sample_scale_adaptation_samples=0
+        ).negative_sample_scale_adaptation_samples
+        == 0
+    )
+
+
+# Umap Clusterability
+def test_blobs_cluster_compatibility_mode():
+    data, labels = make_blobs(n_samples=500, n_features=10, centers=5)
+    embedding = UMAP(n_epochs=100, compatibility_layout=True).fit_transform(data)
+    assert adjusted_rand_score(labels, KMeans(5).fit_predict(embedding)) == 1.0
+
+
+# Umap Clusterability
+def test_blobs_cluster_compatibility_optimizer():
+    data, labels = make_blobs(n_samples=500, n_features=10, centers=5)
+    embedding = UMAP(n_epochs=100, optimizer="compatibility").fit_transform(data)
+    assert adjusted_rand_score(labels, KMeans(5).fit_predict(embedding)) == 1.0
+
+
+@pytest.mark.parametrize("output_metric", ["euclidean", "haversine"])
+@pytest.mark.parametrize(
+    "compatibility_option",
+    [{"compatibility_layout": True}, {"optimizer": "compatibility"}],
+)
+def test_compatibility_fit_and_transform_dispatch(
+    iris, output_metric, compatibility_option
+):
+    common_parameters = {
+        "n_neighbors": 10,
+        "n_epochs": 30,
+        "init": "spectral",
+        "output_metric": output_metric,
+        "random_state": 42,
+    }
+    model = UMAP(
+        **common_parameters,
+        **compatibility_option,
+    ).fit(iris.data)
+
+    assert np.isfinite(model.embedding_).all()
+    assert np.isfinite(model.transform(iris.data[:10])).all()
 
 
 # Multi-components Layout
@@ -290,6 +556,7 @@ def test_umap_update(iris, iris_subset_model, iris_selection, iris_model):
     error = np.sum(np.abs((new_model.graph_ - comparison_graph).data))
 
     assert error < 2.10
+    assert new_model.transform(new_model._raw_data.copy()) is new_model.embedding_
 
 
 def test_umap_update_large(
@@ -426,3 +693,47 @@ def test_component_layout_linkage_input_invariance(nn_data, linkage):
     ]
     for layout in layouts[1:]:
         assert_array_equal(layouts[0], layout)
+
+
+@pytest.mark.parametrize("set_op_mix_ratio", [1.0, 0.7, 0.5, 0.0])
+def test_modern_fuzzy_set_operations_match_legacy(set_op_mix_ratio):
+    data = np.random.RandomState(0).rand(200, 5).astype(np.float32)
+    graphs = [
+        umap_module.fuzzy_simplicial_set(
+            data,
+            10,
+            0,
+            "euclidean",
+            set_op_mix_ratio=set_op_mix_ratio,
+            compatibility_layout=compatibility_layout,
+        )[0].tocsr()
+        for compatibility_layout in (True, False)
+    ]
+    assert graphs[1].format == "csr"
+    assert graphs[0].nnz == graphs[1].nnz
+    # Pure union and intersection are bit-identical; mixtures may differ by
+    # float32 rounding of the interpolation.
+    tolerance = 0.0 if set_op_mix_ratio in (0.0, 1.0) else 1e-6
+    assert abs(graphs[0] - graphs[1]).max() <= tolerance
+
+
+def test_modern_fuzzy_set_operations_skip_missing_neighbors():
+    knn_indices = np.array([[0, 1, -1], [1, 0, 2], [2, 1, -1]], dtype=np.int32)
+    knn_dists = np.array(
+        [[0.0, 1.0, np.inf], [0.0, 1.0, 2.0], [0.0, 2.0, np.inf]], dtype=np.float32
+    )
+    data = np.zeros((3, 2), dtype=np.float32)
+    graphs = [
+        umap_module.fuzzy_simplicial_set(
+            data,
+            3,
+            0,
+            "euclidean",
+            knn_indices=knn_indices,
+            knn_dists=knn_dists,
+            compatibility_layout=compatibility_layout,
+        )[0].tocsr()
+        for compatibility_layout in (True, False)
+    ]
+    assert abs(graphs[0] - graphs[1]).max() == 0.0
+    assert graphs[1].shape == (3, 3)

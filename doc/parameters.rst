@@ -294,7 +294,7 @@ topological structure of the data.
 
 As mentioned, there is really no requirement to stop at ``n_components=3``. If you are interested in (density based) clustering, or other
 machine learning techniques, it can be beneficial to pick a larger
-embedding dimension (say 10, or 50) closer to the the dimension of the
+embedding dimension (say 10, or 50) closer to the dimension of the
 underlying manifold on which your data lies.
 
 ``metric``
@@ -477,3 +477,34 @@ the HSL metric fattens out the circle according to the saturation and
 lightness. This provides a reasonable demonstration of the power and
 flexibility of UMAP in understanding the underlying topology of data,
 and finding a suitable low dimensional representation of that topology.
+
+Initialization and optimization
+-------------------------------
+
+So far we have concentrated on parameters that determine the fuzzy graph
+UMAP constructs. There is also the question of how that graph is turned into
+an embedding. The ``init`` parameter controls the initial coordinates, while
+``optimizer`` controls how those coordinates are improved.
+
+The default, ``init="auto"``, selects ``"spectral"`` while the compatibility
+layout is in use (the 0.6 default) and ``"recursive"`` when
+``compatibility_layout=False``. Other choices are ``"spectral"``,
+``"tswspectral"``, ``"pca"``, ``"random"``, ``"recursive"``, or an array of
+initial coordinates.
+
+The new ``init="recursive"`` option works by repeatedly coarsening the fuzzy
+graph, laying out the smaller graph, and then expanding the result back to the
+original data. ``recursive_coarsening_ratio`` controls the amount of reduction
+at each stage and can be set to ``2``, ``3``, or ``4``. The default value of
+``4`` is fastest; smaller values spend more time constructing the initial
+layout.
+
+UMAP also provides new Adam and momentum layout optimizers. Unlike the
+original compatibility optimizer, both can retain parallel layout
+optimization when ``random_state`` is fixed. There are a number of more
+specialized options for controlling their negative sample selection as well.
+Since these choices concern a different stage of the algorithm, they are
+covered in the separate :doc:`optimizers` tutorial, along with the more
+specialized initialization controls (``coarse_layout_weights``,
+``coarsen_on_layout_weights``, ``init_rescale``, ``init_scale_factor`` and
+``recursive_init_kwds``).

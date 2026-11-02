@@ -1,0 +1,1102 @@
+"""Recursive label-propagation initialization for UMAP (``init="recursive"``).
+
+The fuzzy graph is coarsened by label propagation from high-degree hubs into
+roughly ``1 / coarsening_ratio`` as many parts, recursively, until it is small
+enough (``base_init_threshold`` nodes) to place directly from a PCA anchor of
+the data. Each coarse layout is then refined with a short Adam optimization,
+expanded back to the finer level, and Procrustes-aligned with the anchor for
+stability. :func:`recursive_init` is the entry point used by
+:func:`umap.umap_.simplicial_set_embedding`.
+"""
+
+import numpy as np
+import numba
+from scipy.sparse import csr_matrix, issparse
+from sklearn.preprocessing import normalize
+from sklearn.utils.extmath import randomized_svd
+
+from umap.layouts import optimize_layout_euclidean
+from umap.utils import (
+    FASTMATH_FLAGS,
+    make_epochs_per_sample,
+    tau_rand,
+    tau_rand_int,
+    ts,
+)
+
+INT32_MIN = np.iinfo(np.int32).min + 1
+INT32_MAX = np.iinfo(np.int32).max - 1
+
+
+def _coarsen_graph(graph, labels, remove_diagonal=False):
+    """Construct the partition map and fuzzy-union coarse graph."""
+    reduction_map = csr_matrix(
+        (np.ones(labels.shape[0]), labels, np.arange(labels.shape[0] + 1)),
+        shape=(labels.shape[0], labels.max() + 1),
+    )
+    if not graph.has_canonical_format:
+        complement_graph = graph.astype(np.float64)
+        complement_graph.data = np.log1p(
+            -np.clip(complement_graph.data, 0.0, 1.0 - 1e-16)
+        )
+        reduced_graph = reduction_map.T * complement_graph * reduction_map
+        reduced_graph.data = 1.0 - np.exp(reduced_graph.data)
+        reduced_graph.eliminate_zeros()
+        if remove_diagonal:
+            reduced_graph.setdiag(0.0)
+            reduced_graph.eliminate_zeros()
+        reduced_graph = reduced_graph.astype(np.float32)
+    else:
+        reduced_graph = _coarse_graph_from_labels(
+            graph, labels, remove_diagonal=remove_diagonal
+        )
+    return reduction_map, reduced_graph
+
+
+@numba.njit(cache=True)
+def _group_rows_by_label(labels, n_labels):
+    label_indptr = np.zeros(n_labels + 1, dtype=np.int64)
+    for row in range(labels.shape[0]):
+        label_indptr[labels[row] + 1] += 1
+    for label in range(n_labels):
+        label_indptr[label + 1] += label_indptr[label]
+
+    next_position = label_indptr[:-1].copy()
+    rows = np.empty(labels.shape[0], dtype=np.int64)
+    for row in range(labels.shape[0]):
+        label = labels[row]
+        rows[next_position[label]] = row
+        next_position[label] += 1
+    return label_indptr, rows
+
+
+@numba.njit(parallel=True, cache=True)
+def _coarse_graph_row_counts(indptr, indices, labels, label_indptr, rows):
+    n_labels = label_indptr.shape[0] - 1
+    counts = np.zeros(n_labels, dtype=np.int64)
+    for label in numba.prange(n_labels):
+        targets = {}
+        for member_index in range(label_indptr[label], label_indptr[label + 1]):
+            row = rows[member_index]
+            for edge in range(indptr[row], indptr[row + 1]):
+                targets[labels[indices[edge]]] = True
+        counts[label] = len(targets)
+    return counts
+
+
+@numba.njit(parallel=True, cache=True)
+def _coarse_graph_fill(
+    indptr, indices, weights, labels, label_indptr, rows, coarse_indptr
+):
+    coarse_indices = np.empty(coarse_indptr[-1], dtype=np.int32)
+    coarse_data = np.empty(coarse_indptr[-1], dtype=np.float64)
+
+    for label in numba.prange(label_indptr.shape[0] - 1):
+        target_sums = {}
+        for member_index in range(label_indptr[label], label_indptr[label + 1]):
+            row = rows[member_index]
+            for edge in range(indptr[row], indptr[row + 1]):
+                target = labels[indices[edge]]
+                weight = np.float64(weights[edge])
+                weight = min(max(weight, 0.0), 1.0 - 1e-16)
+                complement = np.log1p(-weight)
+                if target in target_sums:
+                    target_sums[target] += complement
+                else:
+                    target_sums[target] = complement
+
+        targets = np.empty(len(target_sums), dtype=np.int32)
+        target_index = 0
+        for target in target_sums:
+            targets[target_index] = target
+            target_index += 1
+        targets.sort()
+
+        output_index = coarse_indptr[label]
+        for target in targets:
+            coarse_indices[output_index] = target
+            coarse_data[output_index] = 1.0 - np.exp(target_sums[target])
+            output_index += 1
+
+    return coarse_indices, coarse_data
+
+
+def _coarse_graph_from_labels(graph, labels, remove_diagonal=False):
+    n_labels = labels.max() + 1
+    label_indptr, rows = _group_rows_by_label(labels, n_labels)
+    row_counts = _coarse_graph_row_counts(
+        graph.indptr, graph.indices, labels, label_indptr, rows
+    )
+    coarse_indptr = np.empty(n_labels + 1, dtype=np.int64)
+    coarse_indptr[0] = 0
+    np.cumsum(row_counts, out=coarse_indptr[1:])
+    coarse_indices, coarse_data = _coarse_graph_fill(
+        graph.indptr,
+        graph.indices,
+        graph.data,
+        labels,
+        label_indptr,
+        rows,
+        coarse_indptr,
+    )
+    reduced_graph = csr_matrix(
+        (coarse_data, coarse_indices, coarse_indptr),
+        shape=(n_labels, n_labels),
+    )
+    reduced_graph.eliminate_zeros()
+    if remove_diagonal:
+        reduced_graph.setdiag(0.0)
+        reduced_graph.eliminate_zeros()
+    return reduced_graph.astype(np.float32)
+
+
+def _initial_curve_parameters(a, b, curve_schedule):
+    """Select the curve parameters used by the first coarse layout."""
+    spec = _curve_schedule_spec(curve_schedule)
+    return (
+        np.power(a, spec["initial_a_exponent"]),
+        np.power(b, spec["initial_b_exponent"]),
+    )
+
+
+def _next_curve_parameters(a, b, curve_schedule):
+    """Select curve parameters for the next recursive coarse layout."""
+    spec = _curve_schedule_spec(curve_schedule)
+    return (
+        np.power(a, spec["recursive_a_exponent"]),
+        np.power(b, spec["recursive_b_exponent"]),
+    )
+
+
+def _curve_schedule_spec(curve_schedule):
+    """Normalize legacy and experiment curve schedules into exponent specs."""
+    if isinstance(curve_schedule, dict):
+        return {
+            "initial_a_exponent": float(curve_schedule.get("initial_a_exponent", 1.0)),
+            "initial_b_exponent": float(curve_schedule.get("initial_b_exponent", 1.0)),
+            "recursive_a_exponent": float(
+                curve_schedule.get("recursive_a_exponent", 1.0)
+            ),
+            "recursive_b_exponent": float(
+                curve_schedule.get("recursive_b_exponent", 1.0)
+            ),
+        }
+
+    if curve_schedule == "original":
+        return {
+            "initial_a_exponent": 1.0,
+            "initial_b_exponent": 1.0,
+            "recursive_a_exponent": 1.0,
+            "recursive_b_exponent": 1.0,
+        }
+    if curve_schedule == "strong_to_one":
+        return {
+            "initial_a_exponent": 1.0 / 4.0,
+            "initial_b_exponent": 1.0 / 4.0,
+            "recursive_a_exponent": 1.0 / 4.0,
+            "recursive_b_exponent": 1.0 / 4.0,
+        }
+    raise ValueError(
+        "curve_schedule must be 'strong_to_one', 'original', or an exponent spec dict"
+    )
+
+
+def _good_initialization(
+    reduced_init, approx_n_parts, threshold, policy, coarsening_ratio=4
+):
+    """Resolve whether the conservative optimizer schedule should be used.
+
+    Policies
+    --------
+    heuristic : activate when the coarse graph has enough parts to recurse further.
+    available : activate whenever the recursive coordinates are finite with nonzero spread.
+    always    : unconditionally activate; ignores coordinate quality entirely.
+    """
+    if policy == "heuristic":
+        return approx_n_parts // coarsening_ratio > threshold
+    if policy == "available":
+        if reduced_init is None or not np.all(np.isfinite(reduced_init)):
+            return False
+        spread = np.quantile(reduced_init, 0.95, axis=0) - np.quantile(
+            reduced_init, 0.05, axis=0
+        )
+        return bool(np.all(spread > 0.0))
+    if policy == "always":
+        return True
+    if policy == "never":
+        return False
+    raise ValueError(
+        "good_initialization_policy must be 'heuristic', 'available', 'always', or 'never'"
+    )
+
+
+def _scale_anchor(anchor):
+    """Scale an anchor independently by axis into the historical [0, 10] range."""
+    anchor = np.asarray(anchor, dtype=np.float32, order="C").copy()
+    anchor -= anchor.min(axis=0)
+    span = anchor.max(axis=0) - anchor.min(axis=0)
+    span[span == 0.0] = 1.0
+    anchor /= span
+    anchor *= 10.0
+    return anchor
+
+
+def _resolve_negative_selection_range(n_vertices, mode, scale=1.0):
+    """Resolve the recursive negative-selection range for coarse optimizations."""
+    if mode == "coarse_n":
+        return int(n_vertices)
+    if mode == "fixed_200k":
+        return int(200_000)
+    if mode == "scaled_coarse":
+        value = int(np.round(scale * n_vertices))
+        value = max(1, value)
+        return int(min(value, n_vertices))
+    raise ValueError(
+        "recursive_negative_selection_range_mode must be 'coarse_n', 'fixed_200k', or 'scaled_coarse'"
+    )
+
+
+def _resolve_depth_schedule(value, depth):
+    """Resolve a scalar or per-depth mapping for recursive experiment controls."""
+    if isinstance(value, dict):
+        if depth in value:
+            return value[depth]
+        depth_key = str(depth)
+        if depth_key in value:
+            return value[depth_key]
+        if "default" in value:
+            return value["default"]
+        raise ValueError(
+            "depth schedule dict must contain the requested depth or 'default'"
+        )
+    return value
+
+
+def _anchor_reference(
+    graph,
+    data,
+    n_components,
+    method,
+    sample_size,
+    random_state,
+    verbose=False,
+):
+    """Build coordinates and a mask used to orient recursive layouts."""
+    n_samples = data.shape[0]
+    if method not in ("sampled_pca", "projected_pca", "full_pca"):
+        raise ValueError(
+            "anchor_method must be 'sampled_pca', 'projected_pca', or 'full_pca'"
+        )
+
+    sample_size = min(sample_size, n_samples)
+    if sample_size < n_samples:
+        sample = np.sort(
+            random_state.choice(n_samples, size=sample_size, replace=False)
+        )
+        sample_mask = np.zeros(n_samples, dtype=np.bool_)
+        sample_mask[sample] = True
+        data_sample = data[sample]
+    else:
+        sample_mask = np.ones(n_samples, dtype=np.bool_)
+        data_sample = data
+
+    if issparse(data_sample):
+        feature_mean = np.asarray(data_sample.mean(axis=0)).ravel()
+        centered_sample = data_sample.toarray() - feature_mean
+    else:
+        data_sample = np.asarray(data_sample)
+        finite = np.isfinite(data_sample)
+        finite_counts = finite.sum(axis=0)
+        finite_sums = np.where(finite, data_sample, 0.0).sum(axis=0)
+        feature_mean = np.divide(
+            finite_sums,
+            finite_counts,
+            out=np.zeros_like(finite_sums, dtype=np.float64),
+            where=finite_counts > 0,
+        )
+        centered_sample = np.where(finite, data_sample, feature_mean) - feature_mean
+
+    u, singular_values, components = randomized_svd(
+        centered_sample,
+        n_components=n_components,
+        n_iter=1,
+        n_oversamples=8,
+        random_state=random_state,
+    )
+    if method == "sampled_pca":
+        return _scale_anchor(u * singular_values), sample_mask
+
+    if issparse(data):
+        anchor = np.asarray(data @ components.T)
+    else:
+        projection_data = np.asarray(data)
+        if not np.all(np.isfinite(projection_data)):
+            projection_data = np.where(
+                np.isfinite(projection_data), projection_data, feature_mean
+            )
+        anchor = projection_data @ components.T
+    anchor -= feature_mean @ components.T
+    return _scale_anchor(anchor), np.ones(n_samples, dtype=np.bool_)
+
+
+@numba.njit(parallel=True, cache=True)
+def _expand_layout(indptr, indices, weights, labels, coarse_layout):
+    n_rows = indptr.shape[0] - 1
+    n_components = coarse_layout.shape[1]
+    result = np.zeros((n_rows, n_components), dtype=np.float64)
+
+    for row in numba.prange(n_rows):
+        total_weight = 0.0
+        for edge in range(indptr[row], indptr[row + 1]):
+            weight = weights[edge]
+            total_weight += weight
+            neighbor_label = labels[indices[edge]]
+            for component in range(n_components):
+                result[row, component] += (
+                    weight * coarse_layout[neighbor_label, component]
+                )
+
+        own_label = labels[row]
+        for component in range(n_components):
+            if total_weight > 0.0:
+                result[row, component] /= total_weight
+            result[row, component] = 0.5 * (
+                result[row, component] + coarse_layout[own_label, component]
+            )
+
+    return result
+
+
+@numba.njit(
+    [
+        "f4[:, ::1](f4[:, ::1], f4[:, ::1])",
+        "f8[:, ::1](f8[:, ::1], f8[:, ::1])",
+    ],
+    cache=True,
+)
+def procrustes_align(e1: np.ndarray, e2: np.ndarray) -> np.ndarray:
+    e1_shift = e1 - np.sum(e1, axis=0) / e1.shape[0]
+    e2_shift = e2 - np.sum(e2, axis=0) / e2.shape[0]
+    e1_scale_factor = np.sqrt(np.mean(e1_shift**2))
+    e2_scale_factor = np.sqrt(np.mean(e2_shift**2))
+    if e1_scale_factor == 0.0 or e2_scale_factor == 0.0:
+        # A collapsed configuration has no orientation to align.
+        return np.eye(e1.shape[1], dtype=e1.dtype)
+    e1_scaled = e1_shift / e1_scale_factor
+    e2_scaled = e2_shift / e2_scale_factor
+    covariance = e2_scaled.T @ e1_scaled
+    u, s, vh = np.linalg.svd(covariance)
+    if np.linalg.det(u @ vh) < 0:
+        u[:, -1] *= -1
+    rotation = u @ vh
+    return rotation.astype(e1.dtype)
+
+
+@numba.njit(fastmath=FASTMATH_FLAGS, parallel=True, cache=True)
+def label_prop_iteration_share(indptr, indices, data, labels, rng_state, share):
+    """label_prop_iteration with a scale-free join rule, for coarse levels.
+
+    A node joins the label whose neighbours hold the largest weight, provided
+    that is more than ``share`` of the node's total edge weight. The fixed
+    threshold of 1 in label_prop_iteration suits UMAP's fuzzy graph (and the
+    saturated fuzzy-union coarse graphs, where any one link meets it);
+    transition weights are normalised per part, so it would never be met.
+    """
+    n_rows = indptr.shape[0] - 1
+    result = labels.copy()
+    for i in numba.prange(n_rows):
+        current_l = labels[i]
+        if current_l >= 0:
+            continue
+        local_rng_state = rng_state + i
+        votes = {}
+        total = 0.0
+        for k in range(indptr[i], indptr[i + 1]):
+            j = indices[k]
+            l = labels[j]
+            total += data[k]
+            if l in votes:
+                votes[l] += data[k]
+            else:
+                votes[l] = data[k]
+        max_vote = share * total
+        tie_count = 1
+        for l in votes:
+            if l == -1:
+                continue
+            elif votes[l] > max_vote:
+                max_vote = votes[l]
+                result[i] = l
+                tie_count = 1
+            elif votes[l] == max_vote:
+                tie_count += 1
+                if current_l == -1:
+                    result[i] = l
+                elif tau_rand(local_rng_state) < 1.0 / tie_count:
+                    result[i] = l
+    return result
+
+
+@numba.njit(fastmath=FASTMATH_FLAGS, parallel=True, cache=True)
+def label_prop_iteration(
+    indptr,
+    indices,
+    data,
+    labels,
+    rng_state,
+):
+    n_rows = indptr.shape[0] - 1
+    result = labels.copy()
+
+    for i in numba.prange(n_rows):
+        current_l = labels[i]
+        if current_l >= 0:
+            continue
+        # Create a local rng state for this iteration
+        local_rng_state = rng_state + i
+        votes = {}
+        for k in range(indptr[i], indptr[i + 1]):
+            j = indices[k]
+            l = labels[j]
+            if l in votes:
+                votes[l] += data[k]
+            else:
+                votes[l] = data[k]
+
+        max_vote = 1
+        tie_count = 1
+        for l in votes:
+            if l == -1:
+                continue
+            elif votes[l] > max_vote:
+                max_vote = votes[l]
+                result[i] = l
+                tie_count = 1
+            elif votes[l] == max_vote:
+                tie_count += 1
+                if current_l == -1:
+                    result[i] = l
+                elif tau_rand(local_rng_state) < 1.0 / tie_count:
+                    result[i] = l
+            else:
+                continue
+
+    return result
+
+
+@numba.njit(cache=True)
+def label_outliers(indptr, indices, labels, rng_state):
+    n_rows = indptr.shape[0] - 1
+    max_label = labels.max()
+    num_labels = max(max_label + 1, 1)
+
+    for i in range(n_rows):
+        # Create a local rng state for this iteration
+        local_rng_state = rng_state + i
+        if labels[i] < 0:
+
+            node_queue = [i]
+            unlabelled = True
+            n_iter = 0
+
+            while unlabelled and n_iter < 100 and len(node_queue) > 0:
+
+                n_iter += 1
+                current_node = node_queue.pop()
+                for k in range(indptr[current_node], indptr[current_node + 1]):
+                    j = indices[k]
+                    if labels[j] >= 0:
+                        labels[i] = labels[j]
+                        unlabelled = False
+                        break
+                    else:
+                        node_queue.append(j)
+
+            if unlabelled:
+                labels[i] = tau_rand_int(local_rng_state) % num_labels
+
+    return labels
+
+
+@numba.njit(cache=True)
+def remap_labels(labels):
+    mapping = {}
+    unique_labels = np.unique(labels)
+    if unique_labels[0] == -1:
+        unique_labels = unique_labels[1:]
+    for i, l in enumerate(unique_labels):
+        mapping[l] = i
+    next_label = unique_labels.shape[0]
+    for i in range(labels.shape[0]):
+        if labels[i] < 0:
+            labels[i] = next_label
+            next_label += 1
+        else:
+            labels[i] = mapping[labels[i]]
+
+    return labels
+
+
+@numba.njit(cache=True)
+def initialize_labels(labels, n_parts, rng_state):
+    for i in range(n_parts):
+        labels[tau_rand_int(rng_state) % labels.shape[0]] = i
+    return labels
+
+
+@numba.njit(cache=True)
+def initialize_labels_from_hubs(labels, n_parts, degrees):
+    hubs = np.argsort(degrees)[-n_parts:]
+    for i in range(n_parts):
+        labels[hubs[i]] = i
+    return labels
+
+
+@numba.njit(cache=True)
+def initialize_labels_from_diverse_hubs(labels, n_parts, degrees, indptr, indices):
+    """Choose high-degree hubs while avoiding adjacent hubs when possible."""
+    candidates = np.argsort(degrees)
+    blocked = np.zeros(labels.shape[0], dtype=np.bool_)
+    selected = np.zeros(labels.shape[0], dtype=np.bool_)
+    next_label = 0
+
+    for candidate_index in range(candidates.shape[0] - 1, -1, -1):
+        candidate = candidates[candidate_index]
+        if not blocked[candidate]:
+            labels[candidate] = next_label
+            selected[candidate] = True
+            blocked[candidate] = True
+            for edge in range(indptr[candidate], indptr[candidate + 1]):
+                blocked[indices[edge]] = True
+            next_label += 1
+            if next_label == n_parts:
+                return labels
+
+    for candidate_index in range(candidates.shape[0] - 1, -1, -1):
+        candidate = candidates[candidate_index]
+        if not selected[candidate]:
+            labels[candidate] = next_label
+            next_label += 1
+            if next_label == n_parts:
+                break
+    return labels
+
+
+def _fill_unsampled(graph, data, subset_mask):
+    """Base-case coordinates when some nodes have no anchor data.
+
+    Each unsampled node takes the edge-weighted mean of its sampled
+    neighbours, falling back to the mean of all sampled nodes.
+    """
+    result = np.empty((graph.shape[0], data.shape[1]), dtype=np.float32)
+    result[subset_mask] = data
+    fallback = data.mean(axis=0)
+    for i in np.flatnonzero(~subset_mask):
+        row = slice(graph.indptr[i], graph.indptr[i + 1])
+        neighbors, weights = graph.indices[row], graph.data[row]
+        keep = subset_mask[neighbors]
+        total_weight = weights[keep].sum()
+        if total_weight > 0.0:
+            result[i] = (weights[keep] @ result[neighbors[keep]]) / total_weight
+        else:
+            result[i] = fallback
+    return result
+
+
+_COARSE_LAYOUT_WEIGHTS = ("transition", "fuzzy_union")
+
+
+def _coarse_layout_graph(layout_graph, reduction_map, weights):
+    """Total edge weight between parts, W = R^T W_fine R (internal weight on
+    the diagonal), or None for ``"fuzzy_union"``.
+
+    Summed level by level from the finest graph, so it stays exact down the
+    recursion; each level's layout weights are derived from it by
+    _normalised_layout_edges.
+    """
+    if weights not in _COARSE_LAYOUT_WEIGHTS:
+        raise ValueError(
+            f"coarse_layout_weights must be one of {_COARSE_LAYOUT_WEIGHTS}"
+        )
+    return (reduction_map.T @ layout_graph @ reduction_map).tocsr().astype(np.float64)
+
+
+def _normalised_layout_edges(reduced_graph, summed, weights="transition"):
+    """The graph to lay out at this level, with weights in (0, 1].
+
+    ``"transition"`` (default): built the way UMAP builds its own graph. Each
+        part's directed membership to another is the share of its external
+        connection weight that goes there, f_PQ = W_PQ / sum_Q' W_PQ' (the
+        fine graph's random-walk transition probability between parts), and
+        the two directions are combined by the fuzzy union
+        f_PQ + f_QP - f_PQ f_QP. Each part is normalised by its own
+        connections, so part sizes cancel, no single large part sets the
+        scale, and a weight nears 1 only when most of a part's connections
+        go to one other part.
+    ``"fuzzy_union"``: the coarsening graph, 1 - prod(1 - w_ij). It saturates
+        near 1 once parts hold more than a few points (on MNIST, 40% of
+        coarsest-level edges exceed 0.99, each part linking to a third of all
+        parts), so it no longer says how strongly parts are connected.
+
+    Only relative weights matter to the layout (make_epochs_per_sample divides
+    by the maximum).
+    """
+    from scipy.sparse import diags
+
+    if summed is None or weights == "fuzzy_union":
+        return reduced_graph
+    external = summed - diags(summed.diagonal())
+    external.eliminate_zeros()
+    external = external.tocsr()
+    external.sort_indices()
+    out_weight = np.asarray(external.sum(axis=1)).ravel()
+    directed = diags(1.0 / np.where(out_weight > 0, out_weight, 1.0)) @ external
+    edges = (directed + directed.T - directed.multiply(directed.T)).tocsr()
+    edges.sort_indices()
+    edges.data = np.clip(edges.data, 0.0, 1.0).astype(np.float32)
+    return edges
+
+
+def _base_case_layout(graph, data, subset_mask, depth):
+    """Coordinates for a graph small enough to lay out from its anchor data.
+
+    Unsampled nodes are filled from their sampled neighbours, then the result
+    is centred and given a robust (5th-95th percentile) span that grows with
+    the graph size and recursion depth.
+    """
+    if np.all(subset_mask):
+        result = np.array(data)
+    else:
+        result = _fill_unsampled(graph, data, subset_mask)
+    scale = np.log10(result.shape[0]) * 3 * (np.log2(depth + 1))
+    result -= np.mean(result, 0)
+    spread = np.quantile(result, 0.95, 0) - np.quantile(result, 0.05, 0)
+    spread[spread == 0.0] = 1.0
+    result *= scale / spread
+    return result.astype(np.float32)
+
+
+def label_propagation_init(
+    graph,
+    data,
+    subset_mask,
+    a,
+    b,
+    n_iter=100,
+    n_embedding_epochs=64,
+    approx_n_parts=None,
+    n_components=2,
+    scaling=1.0,
+    random_state=None,
+    recursive_init=True,
+    base_init_threshold=1024,
+    depth=1,
+    verbose=False,
+    root_membership=None,
+    recursive_parallel=True,
+    curve_schedule="strong_to_one",
+    good_initialization_policy="heuristic",
+    coarsening_ratio=4,
+    hub_selection="degree",
+    remove_coarse_diagonal=False,
+    recursive_repulsion_strength=4.0,
+    recursive_negative_sample_rate=1,
+    recursive_negative_selection_range_mode="scaled_coarse",
+    recursive_negative_selection_range_scale=0.5,
+    coarse_layout_weights="transition",
+    coarsen_on_layout_weights=True,
+    label_propagation_share=0.1,
+    layout_graph=None,
+):
+    """Recursively coarsen ``graph`` and lay it out, returning coordinates.
+
+    This is the recursive worker behind :func:`recursive_init`; most
+    parameters are documented there. Graphs with at most
+    ``base_init_threshold`` nodes are placed directly from ``data`` (the anchor
+    coordinates, available for the nodes in ``subset_mask``). Larger graphs are
+    partitioned into about ``approx_n_parts`` parts by label propagation,
+    the coarse graph is laid out (recursively initialized when
+    ``recursive_init`` is True, otherwise from the anchor), and the coarse
+    layout is expanded back onto ``graph``.
+
+    Parameters
+    ----------
+    graph: scipy.sparse.csr_matrix
+        Symmetric fuzzy graph of this level.
+    data: array of shape (n_subset, n_components)
+        Anchor coordinates of the sampled nodes.
+    subset_mask: array of bool, shape (n_nodes,)
+        Which nodes have anchor coordinates.
+    a, b: float
+        Curve parameters for this level's layout.
+    depth: int
+        Recursion depth (1 at the finest level); scales the base-case spread.
+    scaling: float
+        Multiplier applied to the expanded layout.
+    root_membership: array of int or None
+        Part membership of the original points, tracked down the recursion.
+    layout_graph: scipy.sparse matrix or None
+        Summed layout weights from the finer level (None at the top level).
+
+    Returns
+    -------
+    array of shape (n_nodes, n_components), float32
+    """
+    if root_membership is None:
+        root_membership = np.arange(graph.shape[0], dtype=np.int64)
+
+    if graph.shape[0] <= base_init_threshold:
+        return _base_case_layout(graph, data, subset_mask, depth)
+
+    if approx_n_parts is None:
+        approx_n_parts = max(
+            base_init_threshold, int(graph.shape[0] // coarsening_ratio)
+        )
+
+    # Ensure we have fewer parts than samples
+    approx_n_parts = min(approx_n_parts, graph.shape[0] // 2)
+    if approx_n_parts < 2:
+        approx_n_parts = 2
+
+    if verbose:
+        print(
+            ts() + f" Recursive initialization: coarsening {graph.shape[0]} nodes"
+            f" into about {approx_n_parts} parts",
+            flush=True,
+        )
+
+    # Initialize the label propagation process
+    rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
+    labels = np.full(graph.shape[0], -1, dtype=np.int32)
+    degrees = np.squeeze(np.asarray(graph.sum(axis=1)))
+    if hub_selection == "degree":
+        labels = initialize_labels_from_hubs(labels, approx_n_parts, degrees)
+    elif hub_selection == "diverse":
+        labels = initialize_labels_from_diverse_hubs(
+            labels, approx_n_parts, degrees, graph.indptr, graph.indices
+        )
+    elif hub_selection == "random":
+        # Uniformly random seeds; collisions can yield slightly fewer parts.
+        labels = initialize_labels(labels, approx_n_parts, rng_state)
+    else:
+        raise ValueError("hub_selection must be 'degree', 'diverse', or 'random'")
+
+    prev_unlabeled = np.sum(labels < 0)
+    for i in range(n_iter):
+        if (
+            coarsen_on_layout_weights
+            and layout_graph is not None
+            and coarse_layout_weights != "fuzzy_union"
+        ):
+            # Below the top level the graph carries transition weights.
+            labels = label_prop_iteration_share(
+                graph.indptr,
+                graph.indices,
+                graph.data,
+                labels,
+                rng_state,
+                label_propagation_share,
+            )
+        else:
+            labels = label_prop_iteration(
+                graph.indptr,
+                graph.indices,
+                graph.data,
+                labels,
+                rng_state,
+            )
+        if i % 5 == 0:
+            unlabeled = np.sum(labels < 0)
+            if unlabeled == 0 or unlabeled == prev_unlabeled:
+                break
+
+        prev_unlabeled = unlabeled
+    # Handle outliers
+    labels = label_outliers(
+        graph.indptr,
+        graph.indices,
+        labels,
+        rng_state,
+    )
+    # Remap labels to a contiguous range
+    labels = remap_labels(labels)
+
+    base_reduction_map, reduced_graph = _coarsen_graph(
+        graph, labels, remove_diagonal=remove_coarse_diagonal
+    )
+    reduced_layout_graph = _coarse_layout_graph(
+        graph if layout_graph is None else layout_graph,
+        base_reduction_map,
+        coarse_layout_weights,
+    )
+    layout_edges = _normalised_layout_edges(
+        reduced_graph, reduced_layout_graph, coarse_layout_weights
+    )
+    # Optionally coarsen, label-propagate and expand the next level on the
+    # layout weights instead of the fuzzy-union graph.
+    next_graph = layout_edges if coarsen_on_layout_weights else reduced_graph
+    reduced_root_membership = labels[root_membership]
+
+    if not np.all(subset_mask):
+        sampled_map = base_reduction_map[subset_mask]
+        # Parts with no sampled member have no anchor position. Carry them
+        # forward as unsampled instead of letting them default to the origin,
+        # which would drag every coarser average toward (0, 0).
+        reduced_subset_mask = np.asarray(sampled_map.sum(axis=0)).ravel() > 0
+        subset_reduction_map = normalize(sampled_map, axis=0, norm="l1")
+        reduced_data = (subset_reduction_map.T * data).astype(np.float32)
+        reduced_data = reduced_data[reduced_subset_mask]
+    else:
+        l1_normalized_reduction_map = normalize(base_reduction_map, axis=0, norm="l1")
+        reduced_data = (l1_normalized_reduction_map.T * data).astype(np.float32)
+        reduced_subset_mask = np.ones(reduced_graph.shape[0], dtype=np.bool_)
+
+    if recursive_init:
+        next_a, next_b = _next_curve_parameters(a, b, curve_schedule)
+        reduced_init = label_propagation_init(
+            next_graph,
+            reduced_data,
+            reduced_subset_mask,
+            next_a,
+            next_b,
+            n_iter=n_iter,
+            approx_n_parts=approx_n_parts // coarsening_ratio,
+            n_embedding_epochs=int(n_embedding_epochs * np.sqrt(2.0)),
+            n_components=n_components,
+            scaling=scaling,
+            random_state=random_state,
+            recursive_init=True,
+            base_init_threshold=base_init_threshold,
+            depth=depth + 1,
+            verbose=verbose,
+            root_membership=reduced_root_membership,
+            recursive_parallel=recursive_parallel,
+            curve_schedule=curve_schedule,
+            good_initialization_policy=good_initialization_policy,
+            coarsening_ratio=coarsening_ratio,
+            hub_selection=hub_selection,
+            remove_coarse_diagonal=remove_coarse_diagonal,
+            recursive_repulsion_strength=recursive_repulsion_strength,
+            recursive_negative_sample_rate=recursive_negative_sample_rate,
+            recursive_negative_selection_range_mode=recursive_negative_selection_range_mode,
+            recursive_negative_selection_range_scale=recursive_negative_selection_range_scale,
+            coarse_layout_weights=coarse_layout_weights,
+            coarsen_on_layout_weights=coarsen_on_layout_weights,
+            label_propagation_share=label_propagation_share,
+            layout_graph=reduced_layout_graph,
+        ).astype(np.float32)
+        good_initialization = _good_initialization(
+            reduced_init,
+            approx_n_parts,
+            base_init_threshold,
+            good_initialization_policy,
+            coarsening_ratio,
+        )
+    else:
+        reduced_init = _base_case_layout(
+            next_graph, reduced_data, reduced_subset_mask, depth + 1
+        )
+        good_initialization = False
+
+    epochs_per_sample = make_epochs_per_sample(layout_edges.data, n_embedding_epochs)
+    resolved_repulsion_strength = float(
+        _resolve_depth_schedule(recursive_repulsion_strength, depth)
+    )
+    resolved_negative_sample_rate = int(
+        _resolve_depth_schedule(recursive_negative_sample_rate, depth)
+    )
+    resolved_negative_selection_range_mode = _resolve_depth_schedule(
+        recursive_negative_selection_range_mode, depth
+    )
+    resolved_negative_selection_range_scale = float(
+        _resolve_depth_schedule(recursive_negative_selection_range_scale, depth)
+    )
+    negative_selection_range = _resolve_negative_selection_range(
+        reduced_init.shape[0],
+        resolved_negative_selection_range_mode,
+        resolved_negative_selection_range_scale,
+    )
+    reduced_layout = optimize_layout_euclidean(
+        reduced_init,
+        reduced_init,
+        None,
+        None,
+        n_embedding_epochs,
+        reduced_graph.shape[0],
+        epochs_per_sample,
+        a,
+        b,
+        rng_state,
+        resolved_repulsion_strength,
+        0.5,
+        resolved_negative_sample_rate,
+        parallel=recursive_parallel,
+        verbose=verbose,
+        densmap_kwds={},
+        tqdm_kwds={"desc": f"Init recursion depth {depth}", "position": 1},
+        move_other=False,
+        csr_indptr=layout_edges.indptr,
+        csr_indices=layout_edges.indices,
+        csr_data=layout_edges.data,
+        random_state=random_state,
+        optimizer="adam",
+        good_initialization=good_initialization,
+        negative_selection_range=negative_selection_range,
+    )
+
+    result = _expand_layout(
+        graph.indptr,
+        graph.indices,
+        graph.data,
+        labels,
+        reduced_layout,
+    )
+
+    result = (scaling * (result - result.mean(axis=0))).astype(np.float32)
+
+    # Procustes alignment to PCA of the original data for better stability
+    rotation = procrustes_align(data, result[subset_mask])
+    result = result @ rotation
+
+    return result
+
+
+def recursive_init(
+    graph,
+    data,
+    a,
+    b,
+    n_components=2,
+    base_init_threshold=1024,
+    n_embedding_epochs=50,
+    approx_n_parts=None,
+    random_state=None,
+    verbose=False,
+    recursive_parallel=True,
+    pca_random_state=None,
+    curve_schedule="strong_to_one",
+    good_initialization_policy="heuristic",
+    coarsening_ratio=4,
+    hub_selection="degree",
+    remove_coarse_diagonal=False,
+    anchor_method="sampled_pca",
+    anchor_sample_size=16384,
+    recursive_repulsion_strength=4.0,
+    recursive_negative_sample_rate=1,
+    recursive_negative_selection_range_mode="scaled_coarse",
+    recursive_negative_selection_range_scale=0.5,
+    coarse_layout_weights="transition",
+    coarsen_on_layout_weights=True,
+    label_propagation_share=0.1,
+):
+    """Initial UMAP coordinates from recursive label-propagation coarsening.
+
+    Parameters
+    ----------
+    graph: scipy.sparse.csr_matrix of shape (n_samples, n_samples)
+        The symmetric UMAP fuzzy graph.
+    data: array or sparse matrix of shape (n_samples, n_features)
+        The input data, used to build a PCA anchor that orients the layout.
+    a, b: float
+        UMAP curve parameters.
+    n_components: int (optional, default 2)
+        Dimension of the embedding.
+    base_init_threshold: int (optional, default 1024)
+        Graphs with at most this many nodes are placed from the anchor
+        directly rather than coarsened further.
+    n_embedding_epochs: int (optional, default 50)
+        Epochs for the finest coarse layout; coarser levels use more.
+    approx_n_parts: int or None (optional, default None)
+        Number of parts at the first level; None uses
+        ``max(base_init_threshold, n_samples // coarsening_ratio)``.
+    random_state: numpy RandomState or None (optional, default None)
+        Random state for label propagation, layouts and the anchor.
+    verbose: bool (optional, default False)
+        Whether to report progress.
+    recursive_parallel: bool (optional, default True)
+        Passed as ``parallel`` to the coarse layout optimizations.
+    pca_random_state: numpy RandomState or None (optional, default None)
+        Random state for the anchor PCA; defaults to ``random_state``.
+    curve_schedule: str or dict (optional, default "strong_to_one")
+        How the curve parameters ``a`` and ``b`` change with depth:
+        ``"strong_to_one"``, ``"original"``, or a dict of exponents.
+    good_initialization_policy: str (optional, default "heuristic")
+        When coarse layouts use the schedule for a good initialization:
+        ``"heuristic"``, ``"available"``, ``"always"`` or ``"never"``.
+    coarsening_ratio: int (optional, default 4)
+        Approximate reduction in size per level (2, 3 or 4).
+    hub_selection: str (optional, default "degree")
+        How label-propagation seeds are chosen: ``"degree"`` (highest degree),
+        ``"diverse"`` (high degree, avoiding adjacent hubs) or ``"random"``.
+    remove_coarse_diagonal: bool (optional, default False)
+        Whether to drop self-loops from coarse graphs.
+    anchor_method: str (optional, default "sampled_pca")
+        How the PCA anchor is built: ``"sampled_pca"`` (PCA of a sample),
+        ``"projected_pca"`` (all points projected onto a sampled PCA basis) or
+        ``"full_pca"``.
+    anchor_sample_size: int (optional, default 16384)
+        Sample size used for the anchor PCA.
+    recursive_repulsion_strength: float or dict (optional, default 4.0)
+        Repulsion strength of the coarse layouts; a dict maps depth to value.
+    recursive_negative_sample_rate: int or dict (optional, default 1)
+        Negative sample rate of the coarse layouts; a dict maps depth to value.
+    recursive_negative_selection_range_mode: str or dict (optional, default "scaled_coarse")
+        Negative selection range for coarse layouts: ``"scaled_coarse"``,
+        ``"coarse_n"`` or ``"fixed_200k"``.
+    recursive_negative_selection_range_scale: float or dict (optional, default 0.5)
+        Fraction of the coarse graph used as the range in ``"scaled_coarse"``.
+    coarse_layout_weights: str (optional, default "transition")
+        ``"transition"`` or ``"fuzzy_union"`` edge weights for coarse layouts.
+    coarsen_on_layout_weights: bool (optional, default True)
+        Whether deeper levels are coarsened from the layout weights.
+    label_propagation_share: float (optional, default 0.1)
+        Minimum share of a node's edge weight a label needs in order to be
+        adopted, on levels that use transition weights.
+
+    Returns
+    -------
+    init: array of shape (n_samples, n_components), float32
+    """
+    if random_state is None:
+        random_state = np.random.RandomState()
+    if pca_random_state is None:
+        pca_random_state = random_state
+
+    anchor, anchor_mask = _anchor_reference(
+        graph,
+        data,
+        n_components,
+        anchor_method,
+        anchor_sample_size,
+        pca_random_state,
+        verbose,
+    )
+    initial_a, initial_b = _initial_curve_parameters(a, b, curve_schedule)
+    init = label_propagation_init(
+        graph,
+        anchor,
+        anchor_mask,
+        a=initial_a,
+        b=initial_b,
+        n_components=n_components,
+        base_init_threshold=base_init_threshold,
+        n_embedding_epochs=n_embedding_epochs,
+        approx_n_parts=approx_n_parts,
+        random_state=random_state,
+        verbose=verbose,
+        root_membership=np.arange(graph.shape[0], dtype=np.int64),
+        recursive_parallel=recursive_parallel,
+        curve_schedule=curve_schedule,
+        good_initialization_policy=good_initialization_policy,
+        coarsening_ratio=coarsening_ratio,
+        hub_selection=hub_selection,
+        remove_coarse_diagonal=remove_coarse_diagonal,
+        recursive_repulsion_strength=recursive_repulsion_strength,
+        recursive_negative_sample_rate=recursive_negative_sample_rate,
+        recursive_negative_selection_range_mode=recursive_negative_selection_range_mode,
+        recursive_negative_selection_range_scale=recursive_negative_selection_range_scale,
+        coarse_layout_weights=coarse_layout_weights,
+        coarsen_on_layout_weights=coarsen_on_layout_weights,
+        label_propagation_share=label_propagation_share,
+    )
+    return init.astype(np.float32)

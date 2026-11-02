@@ -3,7 +3,11 @@
 # License: BSD 3 clause
 from __future__ import print_function
 
+from concurrent.futures import ThreadPoolExecutor
+import hashlib
+import inspect
 import locale
+import struct
 from collections import deque
 from warnings import warn
 import time
@@ -34,20 +38,35 @@ import umap.distances as dist
 import umap.sparse as sparse
 
 from umap.utils import (
+    FASTMATH_FLAGS,
+    submatrix,
     ts,
     csr_unique,
     fast_knn_indices,
+    make_epochs_per_sample,
 )
 from umap.spectral import spectral_layout, tswspectral_layout
 from umap.layouts import (
     optimize_layout_euclidean,
     optimize_layout_generic,
     optimize_layout_inverse,
+    validate_optimizer,
 )
+from umap.label_prop import label_propagation_init, recursive_init
 
 from pynndescent import NNDescent
 from pynndescent.distances import named_distances as pynn_named_distances
 from pynndescent.sparse import sparse_named_distances as pynn_sparse_named_distances
+
+try:
+    from rinnd import RINND
+    from rinnd import named_distances as rinnd_named_distances
+except ImportError:
+    RINND = None
+    rinnd_named_distances = {}
+
+# rinnd.version() is not a reliable feature check; n_jobs arrived in RINND 0.3.
+_HAVE_RINND = RINND is not None and "n_jobs" in inspect.signature(RINND).parameters
 
 locale.setlocale(locale.LC_NUMERIC, "C")
 
@@ -58,6 +77,75 @@ SMOOTH_K_TOLERANCE = 1e-5
 MIN_K_DIST_SCALE = 1e-3
 NPY_INFINITY = np.inf
 NPY_FLOATMAX = np.finfo(np.float32).max
+RINND_MIN_SAMPLES = 4096
+
+MODERN_OPTIMIZERS = ("adam", "momentum")
+
+# Advanced recursive-initialization controls accepted via recursive_init_kwds.
+RECURSIVE_INIT_KWDS = frozenset(
+    (
+        "base_init_threshold",
+        "n_embedding_epochs",
+        "approx_n_parts",
+        "curve_schedule",
+        "good_initialization_policy",
+        "hub_selection",
+        "remove_coarse_diagonal",
+        "anchor_method",
+        "anchor_sample_size",
+        "recursive_repulsion_strength",
+        "recursive_negative_sample_rate",
+        "recursive_negative_selection_range_mode",
+        "recursive_negative_selection_range_scale",
+        "label_propagation_share",
+    )
+)
+DEFAULT_MODERN_OPTIMIZER = "adam"
+COMPATIBILITY_LAYOUT_DEFAULT_WARNING = (
+    "compatibility_layout was not set, so UMAP is using the legacy (0.5.x) "
+    "nearest-neighbor, initialization and layout pipeline. In a future release "
+    "the default will change to compatibility_layout=False, which uses "
+    "recursive initialization and the Adam optimizer and produces different "
+    "embeddings. Set compatibility_layout=True to keep the current behavior and "
+    "silence this warning, or compatibility_layout=False (or optimizer='adam') "
+    "to adopt the new behavior now."
+)
+
+# Metrics whose RINND distances were verified against PyNNDescent. Excludes "dot"
+# (PyNNDescent normalizes the data first) and "russellrao" (differs on zero rows).
+RINND_METRICS = frozenset(
+    (
+        "euclidean",
+        "l2",
+        "sqeuclidean",
+        "manhattan",
+        "taxicab",
+        "l1",
+        "chebyshev",
+        "linfinity",
+        "linfty",
+        "linf",
+        "canberra",
+        "braycurtis",
+        "cosine",
+        "correlation",
+        "hamming",
+        "jaccard",
+        "dice",
+        "matching",
+        "kulsinski",
+        "rogerstanimoto",
+        "sokalsneath",
+        "sokalmichener",
+        "yule",
+        "hellinger",
+        "jensen_shannon",
+        "symmetric_kl",
+    )
+)
+
+_INPUT_HASH_ALGORITHM = "blake2b-tree-v1"
+_INPUT_HASH_CHUNK_SIZE = 16 * 1024 * 1024
 
 DISCONNECTION_DISTANCES = {
     "correlation": 2,
@@ -67,6 +155,62 @@ DISCONNECTION_DISTANCES = {
     "bit_jaccard": 1,
     "dice": 1,
 }
+
+
+def _input_hash_chunk(chunk):
+    return hashlib.blake2b(chunk, digest_size=32, person=b"umap-chunk-v1").digest()
+
+
+def _update_input_hash(hasher, tag, array, n_jobs, chunk_size):
+    array = np.asarray(array)
+    if not array.flags.c_contiguous:
+        raise ValueError("Input hash arrays must be C-contiguous")
+
+    encoded_tag = tag.encode("ascii")
+    encoded_dtype = array.dtype.str.encode("ascii")
+    hasher.update(struct.pack("<Q", len(encoded_tag)))
+    hasher.update(encoded_tag)
+    hasher.update(struct.pack("<Q", array.ndim))
+    for dimension in array.shape:
+        hasher.update(struct.pack("<Q", dimension))
+    hasher.update(struct.pack("<Q", len(encoded_dtype)))
+    hasher.update(encoded_dtype)
+    for stride in array.strides:
+        hasher.update(struct.pack("<Q", stride))
+    hasher.update(struct.pack("<Q", array.nbytes))
+    byte_view = memoryview(array).cast("B")
+    chunk_starts = range(0, byte_view.nbytes, chunk_size)
+    hasher.update(len(chunk_starts).to_bytes(8, "little"))
+
+    chunks = (
+        byte_view[start : min(start + chunk_size, byte_view.nbytes)]
+        for start in chunk_starts
+    )
+    if n_jobs == 1:
+        digests = map(_input_hash_chunk, chunks)
+        for digest in digests:
+            hasher.update(digest)
+    else:
+        with ThreadPoolExecutor(max_workers=n_jobs) as executor:
+            for digest in executor.map(_input_hash_chunk, chunks):
+                hasher.update(digest)
+
+
+def _input_data_hash(data, n_jobs=-1, chunk_size=_INPUT_HASH_CHUNK_SIZE):
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be positive")
+
+    n_jobs = joblib.effective_n_jobs(n_jobs)
+    hasher = hashlib.blake2b(digest_size=32, person=b"umap-input-v1")
+    if scipy.sparse.isspmatrix_csr(data):
+        hasher.update(b"csr")
+        hasher.update(struct.pack("<QQ", *data.shape))
+        _update_input_hash(hasher, "data", data.data, n_jobs, chunk_size)
+        _update_input_hash(hasher, "indices", data.indices, n_jobs, chunk_size)
+        _update_input_hash(hasher, "indptr", data.indptr, n_jobs, chunk_size)
+    else:
+        _update_input_hash(hasher, "dense", data, n_jobs, chunk_size)
+    return hasher.hexdigest()
 
 
 def flatten_iter(container):
@@ -149,6 +293,7 @@ def raise_disconnected_warning(
         "hi": numba.types.float32,
     },
     parallel=True,
+    fastmath=FASTMATH_FLAGS,
 )
 def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0):
     """Compute a continuous version of the distance to the kth nearest
@@ -265,6 +410,100 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
     return result, rho
 
 
+def _rinnd_eligibility(X, n_neighbors, metric, metric_kwds, compatibility_layout):
+    if not _HAVE_RINND:
+        return False, "RINND >= 0.3.1 is not installed"
+    if compatibility_layout:
+        return (
+            False,
+            "compatibility_layout=True always uses PyNNDescent; set "
+            "compatibility_layout=False to use RINND",
+        )
+    if scipy.sparse.issparse(X):
+        return False, "RINND does not support sparse input"
+    if not isinstance(X, np.ndarray) or X.ndim != 2:
+        return False, "RINND requires a two-dimensional NumPy array"
+    if X.dtype != np.float32:
+        return False, "RINND requires float32 input"
+    if not isinstance(metric, str) or metric not in RINND_METRICS:
+        return False, "metric is not enabled for the RINND backend"
+    if metric not in rinnd_named_distances:
+        return False, "metric is not supported by the installed RINND"
+    if metric_kwds:
+        return False, "RINND does not support metric_kwds"
+    if n_neighbors < 2:
+        return False, "RINND requires n_neighbors of at least 2"
+    return True, None
+
+
+def _rows_are_normalized(X):
+    squared_norms = np.einsum("ij,ij->i", X, X, dtype=np.float64)
+    return bool(np.all(np.abs(squared_norms - 1.0) <= 1e-3))
+
+
+def _build_rinnd(data, n_neighbors, graph_only=False, **kwargs):
+    if kwargs["metric"] == "cosine":
+        kwargs = dict(
+            kwargs, normalize=True, input_normalized=_rows_are_normalized(data)
+        )
+    # RINND omits each point from its own neighbor list; it is added back below.
+    return RINND(data, n_neighbors=n_neighbors, graph_only=graph_only, **kwargs)
+
+
+def _rinnd_neighbor_graph(index):
+    # Requesting n_neighbors and dropping the farthest gives better recall than k - 1.
+    indices, dists = index.neighbor_graph
+    n_samples = indices.shape[0]
+    self_indices = np.arange(n_samples, dtype=indices.dtype)[:, None]
+    self_dists = np.zeros((n_samples, 1), dtype=dists.dtype)
+    return (
+        np.hstack((self_indices, indices[:, :-1])),
+        np.hstack((self_dists, dists[:, :-1])),
+    )
+
+
+class _RINNDIndex:
+    """Queryable RINND index exposing the parts of the NNDescent API UMAP uses."""
+
+    def __init__(self, data, n_neighbors, angular, **kwargs):
+        self._data = data
+        self._n_neighbors = n_neighbors
+        self._angular_trees = angular
+        self._kwargs = kwargs
+        self._build()
+
+    def _build(self):
+        self._index = _build_rinnd(self._data, self._n_neighbors, **self._kwargs)
+        self.neighbor_graph = _rinnd_neighbor_graph(self._index)
+
+    @property
+    def _raw_data(self):
+        return self._data
+
+    def _native_index(self):
+        if self._index is None:
+            if not _HAVE_RINND:
+                raise ImportError("RINND >= 0.3.1 is required to query this index")
+            self._index = _build_rinnd(self._data, self._n_neighbors, **self._kwargs)
+        return self._index
+
+    def query(self, X, k=10, epsilon=0.1):
+        return self._native_index().query(X, k=k, epsilon=epsilon)
+
+    def prepare(self):
+        self._native_index().prepare()
+
+    def update(self, X):
+        self._data = np.vstack((self._data, X))
+        self._build()
+
+    # Native RINND indexes cannot be pickled; the search index is rebuilt lazily.
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state["_index"] = None
+        return state
+
+
 def nearest_neighbors(
     X,
     n_neighbors,
@@ -275,7 +514,10 @@ def nearest_neighbors(
     low_memory=True,
     use_pynndescent=True,
     n_jobs=-1,
+    compatibility_layout=True,
     verbose=False,
+    nearest_neighbor_backend="auto",
+    graph_only=False,
 ):
     """Compute the ``n_neighbors`` nearest points for each data point in ``X``
     under ``metric``. This may be exact, but more likely is approximated via
@@ -302,10 +544,33 @@ def nearest_neighbors(
         The random state to use for approximate NN computations.
 
     low_memory: bool (optional, default True)
-        Whether to pursue lower memory NNdescent.
+        Whether to pursue lower memory NNdescent. Only used when
+        ``compatibility_layout=True``; otherwise low-memory mode is always used.
+
+    use_pynndescent: bool (optional, default True)
+        Retained for backwards compatibility; nearest-neighbor descent is
+        always used for non-precomputed metrics.
+
+    n_jobs: int (optional, default -1)
+        The number of threads to use for nearest-neighbor construction. A value
+        of -1 uses all available cores.
+
+    compatibility_layout: bool (optional, default True)
+        Whether to use the umap-learn 0.5.x nearest-neighbor descent settings
+        (and never RINND). ``False`` selects the faster 0.6 settings and allows
+        the RINND backend.
 
     verbose: bool (optional, default False)
         Whether to print status data during the computation.
+
+    nearest_neighbor_backend: string (optional, default "auto")
+        Backend used for approximate nearest-neighbor construction. Valid values
+        are "auto", "pynndescent", and "rinnd". The "auto" setting uses RINND
+        when it is installed and all supplied parameters are supported.
+
+    graph_only: bool (optional, default False)
+        Whether only the k-nearest-neighbor graph is needed. If True no search
+        index is returned, which allows RINND to skip building query structures.
 
     Returns
     -------
@@ -315,11 +580,18 @@ def nearest_neighbors(
     knn_dists: array of shape (n_samples, n_neighbors)
         The distances to the ``n_neighbors`` closest points in the dataset.
 
-    rp_forest: list of trees
-        The random projection forest used for searching (if used, None otherwise).
+    knn_search_index: search index or None
+        The index used for searching, or None if ``graph_only`` is True or the
+        metric is precomputed.
     """
     if verbose:
         print(ts(), "Finding Nearest Neighbors")
+
+    if nearest_neighbor_backend not in ("auto", "pynndescent", "rinnd"):
+        raise ValueError(
+            "nearest_neighbor_backend must be one of "
+            "{'auto', 'pynndescent', 'rinnd'}"
+        )
 
     if metric == "precomputed":
         # Note that this does not support sparse distance matrices yet ...
@@ -337,25 +609,91 @@ def nearest_neighbors(
 
         knn_search_index = None
     else:
-        # TODO: Hacked values for now
-        n_trees = min(64, 5 + int(round((X.shape[0]) ** 0.5 / 20.0)))
-        n_iters = max(5, int(round(np.log2(X.shape[0]))))
-
-        knn_search_index = NNDescent(
-            X,
-            n_neighbors=n_neighbors,
-            metric=metric,
-            metric_kwds=metric_kwds,
-            random_state=random_state,
-            n_trees=n_trees,
-            n_iters=n_iters,
-            max_candidates=60,
-            low_memory=low_memory,
-            n_jobs=n_jobs,
-            verbose=verbose,
-            compressed=False,
+        rinnd_eligible, rinnd_reason = _rinnd_eligibility(
+            X, n_neighbors, metric, metric_kwds, compatibility_layout
         )
-        knn_indices, knn_dists = knn_search_index.neighbor_graph
+        if nearest_neighbor_backend == "rinnd" and not rinnd_eligible:
+            raise ValueError(f"RINND backend cannot be used: {rinnd_reason}")
+        if nearest_neighbor_backend == "auto":
+            use_rinnd = rinnd_eligible and X.shape[0] >= RINND_MIN_SAMPLES
+            if not rinnd_eligible:
+                skip_reason = rinnd_reason
+            elif not use_rinnd:
+                skip_reason = f"fewer than {RINND_MIN_SAMPLES} samples"
+        else:
+            use_rinnd = nearest_neighbor_backend == "rinnd"
+            skip_reason = "nearest_neighbor_backend='pynndescent'"
+
+        n_iters = max(5, int(round(np.log2(X.shape[0]))))
+        if compatibility_layout:
+            n_trees = min(64, 5 + int(round((X.shape[0]) ** 0.5 / 20.0)))
+            max_candidates = 60
+        else:
+            n_trees = max(4, min(8, 5 + int(round((X.shape[0]) ** 0.5 / 20.0))))
+            max_candidates = max(20, min(60, int(1.5 * n_neighbors)))
+        if verbose:
+            if use_rinnd:
+                print(ts(), "Using RINND to find nearest neighbors")
+            else:
+                settings = "0.5.x" if compatibility_layout else "0.6"
+                print(
+                    ts(),
+                    f"Using PyNNDescent with {settings} settings to find nearest "
+                    f"neighbors (RINND not used: {skip_reason})",
+                )
+
+        knn_search_index = None
+        if use_rinnd:
+            rinnd_kwargs = dict(
+                metric=metric,
+                random_state=check_random_state(random_state).randint(INT32_MAX),
+                n_trees=n_trees,
+                n_iters=n_iters,
+                max_candidates=max_candidates,
+                n_jobs=n_jobs,
+                verbose=verbose,
+            )
+            try:
+                if graph_only:
+                    knn_indices, knn_dists = _rinnd_neighbor_graph(
+                        _build_rinnd(X, n_neighbors, graph_only=True, **rinnd_kwargs)
+                    )
+                else:
+                    knn_search_index = _RINNDIndex(
+                        X, n_neighbors, angular, **rinnd_kwargs
+                    )
+                    knn_indices, knn_dists = knn_search_index.neighbor_graph
+            except (TypeError, ValueError) as error:
+                if nearest_neighbor_backend == "rinnd":
+                    raise ValueError(
+                        f"RINND backend rejected the supplied parameters: {error}"
+                    ) from error
+                use_rinnd = False
+                if verbose:
+                    print(
+                        ts(),
+                        f"RINND rejected this input ({error}); falling back to "
+                        "PyNNDescent",
+                    )
+        if not use_rinnd:
+            knn_search_index = NNDescent(
+                X,
+                n_neighbors=n_neighbors,
+                metric=metric,
+                metric_kwds=metric_kwds,
+                random_state=random_state,
+                n_trees=n_trees,
+                n_iters=n_iters,
+                max_candidates=max_candidates,
+                # Only the compatibility parameters have ever honored low_memory.
+                low_memory=low_memory if compatibility_layout else True,
+                n_jobs=n_jobs,
+                verbose=verbose,
+                compressed=False,
+            )
+            knn_indices, knn_dists = knn_search_index.neighbor_graph
+        if graph_only:
+            knn_search_index = None
 
     if verbose:
         print(ts(), "Finished Nearest Neighbor Search")
@@ -370,6 +708,7 @@ def nearest_neighbors(
         "val": numba.types.float32,
     },
     parallel=True,
+    fastmath=FASTMATH_FLAGS,
 )
 def compute_membership_strengths(
     knn_indices,
@@ -452,6 +791,133 @@ def compute_membership_strengths(
     return rows, cols, vals, dists
 
 
+@numba.njit(parallel=True, cache=True)
+def _fuzzy_set_operation_counts(
+    indptr, indices, transpose_indptr, transpose_indices, mix_ratio
+):
+    n_rows = indptr.shape[0] - 1
+    counts = np.zeros(n_rows, dtype=np.int64)
+    for row in numba.prange(n_rows):
+        left = indptr[row]
+        left_end = indptr[row + 1]
+        right = transpose_indptr[row]
+        right_end = transpose_indptr[row + 1]
+        count = 0
+        while left < left_end and right < right_end:
+            left_column = indices[left]
+            right_column = transpose_indices[right]
+            if left_column == right_column:
+                count += 1
+                left += 1
+                right += 1
+            elif left_column < right_column:
+                if mix_ratio > 0.0:
+                    count += 1
+                left += 1
+            else:
+                if mix_ratio > 0.0:
+                    count += 1
+                right += 1
+        if mix_ratio > 0.0:
+            count += left_end - left
+            count += right_end - right
+        counts[row] = count
+    return counts
+
+
+@numba.njit(parallel=True, cache=True)
+def _fuzzy_set_operation_fill(
+    indptr,
+    indices,
+    data,
+    transpose_indptr,
+    transpose_indices,
+    transpose_data,
+    result_indptr,
+    mix_ratio,
+):
+    result_indices = np.empty(result_indptr[-1], dtype=np.int32)
+    result_data = np.empty(result_indptr[-1], dtype=np.float32)
+    for row in numba.prange(indptr.shape[0] - 1):
+        left = indptr[row]
+        left_end = indptr[row + 1]
+        right = transpose_indptr[row]
+        right_end = transpose_indptr[row + 1]
+        output = result_indptr[row]
+        while left < left_end and right < right_end:
+            left_column = indices[left]
+            right_column = transpose_indices[right]
+            if left_column == right_column:
+                left_value = data[left]
+                right_value = transpose_data[right]
+                product = left_value * right_value
+                result_indices[output] = left_column
+                result_data[output] = (
+                    mix_ratio * (left_value + right_value - product)
+                    + (1.0 - mix_ratio) * product
+                )
+                output += 1
+                left += 1
+                right += 1
+            elif left_column < right_column:
+                if mix_ratio > 0.0:
+                    result_indices[output] = left_column
+                    result_data[output] = mix_ratio * data[left]
+                    output += 1
+                left += 1
+            else:
+                if mix_ratio > 0.0:
+                    result_indices[output] = right_column
+                    result_data[output] = mix_ratio * transpose_data[right]
+                    output += 1
+                right += 1
+        if mix_ratio > 0.0:
+            while left < left_end:
+                result_indices[output] = indices[left]
+                result_data[output] = mix_ratio * data[left]
+                output += 1
+                left += 1
+            while right < right_end:
+                result_indices[output] = transpose_indices[right]
+                result_data[output] = mix_ratio * transpose_data[right]
+                output += 1
+                right += 1
+    return result_indices, result_data
+
+
+def _fuzzy_set_operation(graph, set_op_mix_ratio):
+    graph = graph.tocsr()
+    graph.sum_duplicates()
+    graph.eliminate_zeros()
+    graph.sort_indices()
+    transpose = graph.transpose().tocsr()
+    row_counts = _fuzzy_set_operation_counts(
+        graph.indptr,
+        graph.indices,
+        transpose.indptr,
+        transpose.indices,
+        set_op_mix_ratio,
+    )
+    result_indptr = np.empty(graph.shape[0] + 1, dtype=np.int64)
+    result_indptr[0] = 0
+    np.cumsum(row_counts, out=result_indptr[1:])
+    result_indices, result_data = _fuzzy_set_operation_fill(
+        graph.indptr,
+        graph.indices,
+        graph.data,
+        transpose.indptr,
+        transpose.indices,
+        transpose.data,
+        result_indptr,
+        set_op_mix_ratio,
+    )
+    result = scipy.sparse.csr_matrix(
+        (result_data, result_indices, result_indptr), shape=graph.shape
+    )
+    result.eliminate_zeros()
+    return result
+
+
 def fuzzy_simplicial_set(
     X,
     n_neighbors,
@@ -466,6 +932,7 @@ def fuzzy_simplicial_set(
     apply_set_operations=True,
     verbose=False,
     return_dists=None,
+    compatibility_layout=True,
 ):
     """Given a set of data X, a neighborhood size, and a measure of distance
     compute the fuzzy simplicial set (here represented as a fuzzy graph in
@@ -568,12 +1035,23 @@ def fuzzy_simplicial_set(
     return_dists: bool or None (optional, default None)
         Whether to return the pairwise distance associated with each edge.
 
+    apply_set_operations: bool (optional, default True)
+        Whether to combine the directed local fuzzy sets with the fuzzy
+        union/intersection controlled by ``set_op_mix_ratio``. If False the
+        directed membership graph is returned.
+
+    compatibility_layout: bool (optional, default True)
+        Whether to build the graph exactly as umap-learn 0.5.x did. ``False``
+        uses the 0.6 nearest-neighbor settings and a parallel CSR kernel for
+        the set operations.
+
     Returns
     -------
-    fuzzy_simplicial_set: coo_matrix
+    fuzzy_simplicial_set: scipy.sparse matrix
         A fuzzy simplicial set represented as a sparse matrix. The (i,
         j) entry of the matrix represents the membership strength of the
-        1-simplex between the ith and jth sample points.
+        1-simplex between the ith and jth sample points. With
+        ``apply_set_operations=True`` this is CSR; otherwise it is COO.
     """
     if knn_indices is None or knn_dists is None:
         knn_indices, knn_dists, _ = nearest_neighbors(
@@ -584,6 +1062,8 @@ def fuzzy_simplicial_set(
             angular,
             random_state,
             verbose=verbose,
+            compatibility_layout=compatibility_layout,
+            graph_only=True,
         )
 
     knn_dists = knn_dists.astype(np.float32, copy=False)
@@ -598,44 +1078,50 @@ def fuzzy_simplicial_set(
         knn_indices, knn_dists, sigmas, rhos, return_dists
     )
 
-    result = scipy.sparse.coo_matrix(
-        (vals, (rows, cols)), shape=(X.shape[0], X.shape[0])
-    )
-    result.eliminate_zeros()
+    if return_dists:
+        distance_graph = scipy.sparse.coo_matrix(
+            (dists, (rows, cols)), shape=(X.shape[0], X.shape[0])
+        )
+        result_dists = distance_graph.maximum(distance_graph.transpose()).todok()
+    else:
+        result_dists = None
 
-    if apply_set_operations:
-        transpose = result.transpose()
-
-        prod_matrix = result.multiply(transpose)
-
-        if set_op_mix_ratio == 1.0:
-            # Default fuzzy union: the (1 - ratio) * prod_matrix term is zero, so
-            # skip building/scaling/adding it (saves redundant sparse temporaries).
-            result = result + transpose - prod_matrix
-        elif set_op_mix_ratio == 0.0:
-            # Pure fuzzy intersection.
-            result = prod_matrix
-        else:
-            result = (
-                set_op_mix_ratio * (result + transpose - prod_matrix)
-                + (1.0 - set_op_mix_ratio) * prod_matrix
-            )
-
-    result.eliminate_zeros()
+    if apply_set_operations and not compatibility_layout:
+        membership_indptr = np.arange(
+            0,
+            vals.shape[0] + 1,
+            knn_indices.shape[1],
+            dtype=np.int64,
+        )
+        directed_graph = scipy.sparse.csr_matrix(
+            (vals, cols, membership_indptr), shape=(X.shape[0], X.shape[0])
+        )
+        result = _fuzzy_set_operation(directed_graph, set_op_mix_ratio)
+    else:
+        result = scipy.sparse.coo_matrix(
+            (vals, (rows, cols)), shape=(X.shape[0], X.shape[0])
+        )
+        result.eliminate_zeros()
+        if apply_set_operations:
+            # Kept operation-for-operation identical to 0.5.x for exact
+            # reproducibility of compatibility layouts.
+            transpose = result.transpose()
+            prod_matrix = result.multiply(transpose)
+            if set_op_mix_ratio == 1.0:
+                result = result + transpose - prod_matrix
+            elif set_op_mix_ratio == 0.0:
+                result = prod_matrix
+            else:
+                result = (
+                    set_op_mix_ratio * (result + transpose - prod_matrix)
+                    + (1.0 - set_op_mix_ratio) * prod_matrix
+                )
+        result.eliminate_zeros()
 
     if return_dists is None:
         return result, sigmas, rhos
     else:
-        if return_dists:
-            dmat = scipy.sparse.coo_matrix(
-                (dists, (rows, cols)), shape=(X.shape[0], X.shape[0])
-            )
-
-            dists = dmat.maximum(dmat.transpose()).todok()
-        else:
-            dists = None
-
-        return result, sigmas, rhos, dists
+        return result, sigmas, rhos, result_dists
 
 
 @numba.njit()
@@ -924,29 +1410,6 @@ def general_simplicial_set_union(simplicial_set1, simplicial_set2):
     return result
 
 
-def make_epochs_per_sample(weights, n_epochs):
-    """Given a set of weights and number of epochs generate the number of
-    epochs per sample for each weight.
-
-    Parameters
-    ----------
-    weights: array of shape (n_1_simplices)
-        The weights of how much we wish to sample each 1-simplex.
-
-    n_epochs: int
-        The total number of epochs we want to train for.
-
-    Returns
-    -------
-    An array of number of epochs per sample, one for each 1-simplex.
-    """
-    result = np.full(weights.shape[0], -1.0, dtype=np.float64)
-    n_samples = n_epochs * (weights / weights.max())
-    positive = n_samples > 0  # compute the mask once instead of twice
-    result[positive] = float(n_epochs) / np.float64(n_samples[positive])
-    return result
-
-
 # scale coords so that the largest coordinate is max_coords, then add normal-distributed
 # noise with standard deviation noise
 def noisy_scale_coords(coords, random_state, max_coord=10.0, noise=0.0001):
@@ -955,6 +1418,101 @@ def noisy_scale_coords(coords, random_state, max_coord=10.0, noise=0.0001):
     return coords + random_state.normal(scale=noise, size=coords.shape).astype(
         np.float32
     )
+
+
+def _rescale_embedding(
+    embedding,
+    n_vertices,
+    gamma,
+    method="per_axis",
+    scale_factor=1.0,
+    graph=None,
+):
+    """Center and robustly scale an initialization before optimization."""
+    if method not in ("per_axis", "isotropic", "graph_edge"):
+        raise ValueError(
+            "init_rescale must be 'per_axis', 'isotropic', or 'graph_edge'"
+        )
+    if not np.isfinite(scale_factor) or scale_factor <= 0.0:
+        raise ValueError("init_scale_factor must be finite and greater than zero")
+
+    result = np.asarray(embedding, dtype=np.float32).copy(order="C")
+    result -= np.mean(result, axis=0)
+    if method == "graph_edge":
+        if graph is None:
+            raise ValueError("graph is required when init_rescale='graph_edge'")
+        rows = np.repeat(np.arange(graph.shape[0]), np.diff(graph.indptr))
+        edge_distances = np.linalg.norm(result[rows] - result[graph.indices], axis=1)
+        if edge_distances.size == 0 or np.sum(graph.data, dtype=np.float64) <= 0.0:
+            return result
+        order = np.argsort(edge_distances)
+        cumulative_weight = np.cumsum(graph.data[order], dtype=np.float64)
+        median_index = np.searchsorted(cumulative_weight, cumulative_weight[-1] / 2.0)
+        characteristic_spread = edge_distances[order[median_index]]
+        if characteristic_spread == 0.0:
+            characteristic_spread = 1.0
+        result *= np.float32(scale_factor / characteristic_spread)
+        return result
+
+    target_spread = np.log10(n_vertices) * 3.0 * np.log2(gamma + 1.0) * scale_factor
+    robust_spread = np.quantile(result, 0.95, axis=0) - np.quantile(
+        result, 0.05, axis=0
+    )
+    robust_spread[robust_spread == 0.0] = 1.0
+    if method == "per_axis":
+        multiplier = target_spread / robust_spread
+    else:
+        characteristic_spread = np.exp(np.mean(np.log(robust_spread)))
+        multiplier = target_spread / characteristic_spread
+    result *= np.asarray(multiplier, dtype=np.float32)
+    return result
+
+
+@numba.njit(
+    fastmath=FASTMATH_FLAGS,
+    locals={
+        "mu_sum": numba.types.float32[:],
+        "ro": numba.types.float32[:],
+        "i": numba.types.int64,
+        "j": numba.types.int64,
+        "k": numba.types.int64,
+        "D": numba.types.float32,
+        "mu": numba.types.float32,
+    },
+)
+def compute_densities(
+    row,
+    col,
+    val,
+    dist_indptr,
+    dist_indices,
+    dist_vals,
+    n_vertices,
+):
+    mu_sum = np.zeros(n_vertices, dtype=np.float32)
+    ro = np.zeros(n_vertices, dtype=np.float32)
+    for i in range(len(row)):
+        j = row[i]
+        k = col[i]
+
+        idx = np.searchsorted(dist_indices[dist_indptr[j] : dist_indptr[j + 1]], k)
+        D = (
+            dist_vals[dist_indptr[j] + idx]
+            if idx < (dist_indptr[j + 1] - dist_indptr[j])
+            else 0.0
+        )
+        D = D * D  # match sq-Euclidean used for embedding
+        mu = val[i]
+
+        ro[j] += mu * D
+        ro[k] += mu * D
+        mu_sum[j] += mu
+        mu_sum[k] += mu
+
+    epsilon = 1e-8
+    ro = np.log(epsilon + (ro / mu_sum)).astype(np.float32)
+
+    return mu_sum, ro
 
 
 @numba.njit()
@@ -997,6 +1555,47 @@ def _densmap_embedding_densities(
         mu_sum[k] += mu
 
 
+def _validate_recursive_init_kwds(recursive_init_kwds):
+    """Return a validated copy of ``recursive_init_kwds`` (``{}`` for None)."""
+    if recursive_init_kwds is None:
+        return {}
+    if not isinstance(recursive_init_kwds, dict):
+        raise ValueError("recursive_init_kwds must be a dict or None")
+    unknown = set(recursive_init_kwds) - RECURSIVE_INIT_KWDS
+    if unknown:
+        raise ValueError(
+            f"Unknown recursive_init_kwds {sorted(unknown)}; accepted keys are "
+            f"{sorted(RECURSIVE_INIT_KWDS)}"
+        )
+    return dict(recursive_init_kwds)
+
+
+def _resolve_layout_options(compatibility_layout, optimizer):
+    """Resolve the effective ``(compatibility_layout, optimizer)`` pair.
+
+    ``None`` values are resolved so that requesting a modern optimizer opts in
+    to the modern pipeline, and otherwise the legacy (0.5.x) pipeline is used.
+    """
+    if optimizer is not None:
+        validate_optimizer(optimizer)
+    if compatibility_layout is None:
+        compatibility_layout = optimizer not in MODERN_OPTIMIZERS
+    elif not isinstance(compatibility_layout, (bool, np.bool_)):
+        raise ValueError("compatibility_layout must be True, False, or None")
+    compatibility_layout = bool(compatibility_layout)
+
+    if compatibility_layout:
+        if optimizer in MODERN_OPTIMIZERS:
+            raise ValueError(
+                f"optimizer={optimizer!r} requires compatibility_layout=False; "
+                "compatibility_layout=True always uses the legacy optimizer."
+            )
+        optimizer = "compatibility"
+    elif optimizer is None:
+        optimizer = DEFAULT_MODERN_OPTIMIZER
+    return compatibility_layout, optimizer
+
+
 def simplicial_set_embedding(
     data,
     graph,
@@ -1019,7 +1618,20 @@ def simplicial_set_embedding(
     euclidean_output=True,
     parallel=False,
     verbose=False,
+    compatibility_layout=None,
+    optimizer=None,
     tqdm_kwds=None,
+    negative_selection_range=200_000,
+    negative_sample_scale=None,
+    exclude_graph_neighbors=False,
+    negative_sample_scale_adaptation_samples=128,
+    good_initialization=None,
+    recursive_coarsening_ratio=4,
+    coarse_layout_weights="transition",
+    coarsen_on_layout_weights=True,
+    init_rescale="isotropic",
+    init_scale_factor=1.0,
+    recursive_init_kwds=None,
 ):
     """Perform a fuzzy simplicial set embedding, using a specified
     initialisation method and then minimizing the fuzzy set cross entropy
@@ -1069,9 +1681,13 @@ def simplicial_set_embedding(
     init: string
         How to initialize the low dimensional embedding. Options are:
 
+            * 'auto': 'spectral' with the compatibility layout, otherwise
+                'recursive'.
             * 'spectral': use a spectral embedding of the fuzzy 1-skeleton
+            * 'tswspectral': spectral embedding with a truncated-SVD warm start.
             * 'random': assign initial embedding positions at random.
             * 'pca': use the first n_components from PCA applied to the input data.
+            * 'recursive': use label propagation for hierarchical initialization.
             * A numpy array of initial embedding positions.
 
     random_state: numpy RandomState or equivalent
@@ -1110,11 +1726,72 @@ def simplicial_set_embedding(
         Running in parallel is non-deterministic, and is not used
         if a random seed has been set, to ensure reproducibility.
 
+    good_initialization: bool or None (optional, default None)
+        Internal override for optimizer schedule selection. If None, infer
+        initialization quality from the public ``init`` option as before.
+
+    recursive_coarsening_ratio: int (optional, default 4)
+        Target reduction ratio at each recursive initialization level. Supported
+        values are 2, 3, and 4. Smaller values use more coarsening levels and
+        trade initialization runtime for potentially stronger initialization.
+
+    coarse_layout_weights: str (optional, default 'transition')
+        Edge weights used to optimize recursive coarse layouts. ``'transition'``
+        normalizes outgoing inter-part weight before symmetrization;
+        ``'fuzzy_union'`` aggregates fine-graph fuzzy memberships directly.
+
+    coarsen_on_layout_weights: bool (optional, default True)
+        Whether deeper recursive levels are coarsened from the selected layout
+        weights instead of the fuzzy-union coarsening graph.
+
+    init_rescale: str (optional, default 'isotropic')
+        Robust rescaling applied to the initialization (new pipeline only).
+        ``'per_axis'`` gives every coordinate the same 5th-to-95th percentile
+        span; ``'isotropic'`` applies one multiplier and preserves the
+        initialization's aspect ratio; ``'graph_edge'`` scales so that the
+        weighted-median graph-edge length equals ``init_scale_factor``.
+
+    init_scale_factor: float (optional, default 1.0)
+        Multiplier for the target robust span used by ``init_rescale``.
+
+    recursive_init_kwds: dict or None (optional, default None)
+        Advanced keyword arguments forwarded to
+        :func:`umap.label_prop.recursive_init` when ``init='recursive'``. The
+        accepted keys are listed in ``umap.umap_.RECURSIVE_INIT_KWDS``.
+
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
 
+    compatibility_layout: bool or None (optional, default None)
+        Whether to reproduce the umap-learn 0.5.x initialization and layout
+        exactly. ``None`` resolves to ``True`` unless ``optimizer`` is 'adam' or
+        'momentum'.
+
+    optimizer: str or None (optional, default None)
+        The layout optimizer: 'adam', 'momentum' or 'compatibility'. ``None``
+        selects 'compatibility' with the compatibility layout and 'adam'
+        otherwise. A modern optimizer cannot be combined with
+        ``compatibility_layout=True``.
+
     tqdm_kwds: dict
         Key word arguments to be used by the tqdm progress bar.
+
+    negative_selection_range: int (optional, default 200_000)
+        Modern optimizers only: size of the local window, in a random
+        projection ordering of the embedding, from which hard negative samples
+        are drawn on large datasets.
+
+    negative_sample_scale: float or None (optional, default None)
+        Modern Euclidean optimizers only: repulsion multiplier for hard
+        negatives. None derives it from the selection range.
+
+    exclude_graph_neighbors: bool (optional, default False)
+        Modern Euclidean optimizers only: skip negative samples that are graph
+        neighbors of the source point.
+
+    negative_sample_scale_adaptation_samples: int (optional, default 128)
+        Adam with hard negatives only: number of points used to adapt the
+        negative sample scale; 0 disables adaptation.
 
     Returns
     -------
@@ -1127,8 +1804,22 @@ def simplicial_set_embedding(
         is turned on, this dictionary includes local radii in the original
         data (``rad_orig``) and in the embedding (``rad_emb``).
     """
-    graph = graph.tocoo()
-    graph.sum_duplicates()
+    compatibility_layout, optimizer = _resolve_layout_options(
+        compatibility_layout, optimizer
+    )
+    legacy_optimizer = optimizer == "compatibility"
+    if isinstance(init, str) and init == "auto":
+        init = "spectral" if compatibility_layout else "recursive"
+
+    if compatibility_layout:
+        graph = graph.tocoo()
+        graph.sum_duplicates()
+    else:
+        # Modern kernels traverse the graph in CSR order. Copy so that pruning
+        # below never modifies the caller's graph.
+        graph = graph.tocsr(copy=True)
+        graph.sum_duplicates()
+        graph.sort_indices()
     n_vertices = graph.shape[1]
 
     # For smaller datasets we can use more epochs
@@ -1165,7 +1856,10 @@ def simplicial_set_embedding(
             pca = PCA(n_components=n_components, random_state=random_state)
         embedding = pca.fit_transform(data).astype(np.float32)
         embedding = noisy_scale_coords(
-            embedding, random_state, max_coord=10, noise=0.0001
+            embedding,
+            random_state,
+            max_coord=10 if compatibility_layout else 20,
+            noise=0.0001,
         )
     elif isinstance(init, str) and init == "spectral":
         embedding = spectral_layout(
@@ -1175,11 +1869,18 @@ def simplicial_set_embedding(
             random_state,
             metric=metric,
             metric_kwds=metric_kwds,
+            compatibility_layout=compatibility_layout,
+            verbose=verbose,
         )
         # We add a little noise to avoid local minima for optimization to come
-        embedding = noisy_scale_coords(
-            embedding, random_state, max_coord=10, noise=0.0001
-        )
+        if compatibility_layout:
+            embedding = noisy_scale_coords(
+                embedding, random_state, max_coord=10, noise=0.0001
+            )
+        else:
+            embedding = noisy_scale_coords(
+                embedding, random_state, max_coord=40, noise=0.01
+            )
     elif isinstance(init, str) and init == "tswspectral":
         embedding = tswspectral_layout(
             data,
@@ -1188,9 +1889,29 @@ def simplicial_set_embedding(
             random_state,
             metric=metric,
             metric_kwds=metric_kwds,
+            compatibility_layout=compatibility_layout,
+            verbose=verbose,
         )
         embedding = noisy_scale_coords(
-            embedding, random_state, max_coord=10, noise=0.0001
+            embedding,
+            random_state,
+            max_coord=10 if compatibility_layout else 20,
+            noise=0.0001,
+        )
+    elif isinstance(init, str) and init == "recursive":
+        # Use label propagation initialization
+        embedding = recursive_init(
+            graph.tocsr() if compatibility_layout else graph,
+            data,
+            a,
+            b,
+            n_components=n_components,
+            random_state=random_state,
+            verbose=verbose,
+            coarsening_ratio=recursive_coarsening_ratio,
+            coarse_layout_weights=coarse_layout_weights,
+            coarsen_on_layout_weights=coarsen_on_layout_weights,
+            **_validate_recursive_init_kwds(recursive_init_kwds),
         )
     else:
         init_data = np.array(init)
@@ -1206,40 +1927,49 @@ def simplicial_set_embedding(
                 embedding = init_data
 
     epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs_max)
-
-    head = graph.row
-    tail = graph.col
-    weight = graph.data
-
     rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
-
     aux_data = {}
 
     if densmap or output_dens:
         if verbose:
             print(ts() + " Computing original densities")
 
-        dists = densmap_kwds["graph_dists"]
-
-        mu_sum = np.zeros(n_vertices, dtype=np.float32)
-        ro = np.zeros(n_vertices, dtype=np.float32)
-        dists_csr = dists.tocsr()
-        _densmap_original_densities(
-            head,
-            tail,
-            graph.data,
-            dists_csr.indptr,
-            dists_csr.indices,
-            dists_csr.data,
-            ro,
-            mu_sum,
-        )
-
-        epsilon = 1e-8
-        ro = np.log(epsilon + (ro / mu_sum))
+        if compatibility_layout:
+            head = graph.row
+            tail = graph.col
+            mu_sum = np.zeros(n_vertices, dtype=np.float32)
+            ro = np.zeros(n_vertices, dtype=np.float32)
+            dists_csr = densmap_kwds["graph_dists"].tocsr()
+            _densmap_original_densities(
+                head,
+                tail,
+                graph.data,
+                dists_csr.indptr,
+                dists_csr.indices,
+                dists_csr.data,
+                ro,
+                mu_sum,
+            )
+            epsilon = 1e-8
+            ro = np.log(epsilon + (ro / mu_sum))
+        else:
+            coo_graph = graph.tocoo()
+            dists = densmap_kwds["graph_dists"].tocsr()
+            dists.sort_indices()
+            mu_sum, ro = compute_densities(
+                coo_graph.row,
+                coo_graph.col,
+                coo_graph.data,
+                dists.indptr,
+                dists.indices,
+                dists.data,
+                n_vertices,
+            )
 
         if densmap:
             R = (ro - np.mean(ro)) / np.std(ro)
+            # For modern kernels ``graph`` is CSR, so these weights use the
+            # same entry order as kernel traversal.
             densmap_kwds["mu"] = graph.data
             densmap_kwds["mu_sum"] = mu_sum
             densmap_kwds["R"] = R
@@ -1247,55 +1977,149 @@ def simplicial_set_embedding(
         if output_dens:
             aux_data["rad_orig"] = ro
 
-    embedding = (
-        10.0
-        * (embedding - np.min(embedding, 0))
-        / (np.max(embedding, 0) - np.min(embedding, 0))
-    ).astype(np.float32, order="C")
+    if compatibility_layout:
+        embedding = (
+            10.0
+            * (embedding - np.min(embedding, 0))
+            / (np.max(embedding, 0) - np.min(embedding, 0))
+        ).astype(np.float32, order="C")
+    else:
+        embedding = _rescale_embedding(
+            embedding,
+            embedding.shape[0],
+            gamma,
+            method=init_rescale,
+            scale_factor=init_scale_factor,
+            graph=graph,
+        )
 
     if euclidean_output:
-        embedding = optimize_layout_euclidean(
-            embedding,
-            embedding,
-            head,
-            tail,
-            n_epochs,
-            n_vertices,
-            epochs_per_sample,
-            a,
-            b,
-            rng_state,
-            gamma,
-            initial_alpha,
-            negative_sample_rate,
-            parallel=parallel,
-            verbose=verbose,
-            densmap=densmap,
-            densmap_kwds=densmap_kwds,
-            tqdm_kwds=tqdm_kwds,
-            move_other=True,
-        )
+        if legacy_optimizer:
+            coo_graph = graph.tocoo()
+            head = coo_graph.row
+            tail = coo_graph.col
+            embedding = optimize_layout_euclidean(
+                embedding,
+                embedding,
+                head,
+                tail,
+                n_epochs,
+                n_vertices,
+                epochs_per_sample,
+                a,
+                b,
+                rng_state,
+                gamma,
+                initial_alpha,
+                negative_sample_rate,
+                parallel=parallel,
+                verbose=verbose,
+                densmap_kwds=densmap_kwds,
+                tqdm_kwds=tqdm_kwds,
+                move_other=True,
+                optimizer="compatibility",
+                densmap=densmap,
+            )
+        else:
+            if verbose:
+                print(ts() + f" Using {optimizer} layout optimizer")
+            embedding = optimize_layout_euclidean(
+                embedding,
+                embedding,
+                None,
+                None,
+                n_epochs,
+                n_vertices,
+                epochs_per_sample,
+                a,
+                b,
+                rng_state,
+                gamma,
+                initial_alpha,
+                negative_sample_rate,
+                parallel=parallel,
+                verbose=verbose,
+                densmap_kwds=densmap_kwds,
+                tqdm_kwds=tqdm_kwds,
+                move_other=False,
+                csr_indptr=graph.indptr,
+                csr_indices=graph.indices,
+                csr_data=graph.data,
+                random_state=random_state,
+                good_initialization=(
+                    isinstance(init, str) and init in ["recursive"]
+                    if good_initialization is None
+                    else good_initialization
+                ),
+                optimizer=optimizer,
+                negative_selection_range=negative_selection_range,
+                negative_sample_scale=negative_sample_scale,
+                exclude_graph_neighbors=exclude_graph_neighbors,
+                negative_sample_scale_adaptation_samples=negative_sample_scale_adaptation_samples,
+                densmap=densmap,
+            )
+
     else:
-        embedding = optimize_layout_generic(
-            embedding,
-            embedding,
-            head,
-            tail,
-            n_epochs,
-            n_vertices,
-            epochs_per_sample,
-            a,
-            b,
-            rng_state,
-            gamma,
-            initial_alpha,
-            negative_sample_rate,
-            output_metric,
-            tuple(output_metric_kwds.values()),
-            verbose=verbose,
-            tqdm_kwds=tqdm_kwds,
-            move_other=True,
-        )
+        if legacy_optimizer:
+            coo_graph = graph.tocoo()
+            head = coo_graph.row
+            tail = coo_graph.col
+            embedding = optimize_layout_generic(
+                embedding,
+                embedding,
+                head,
+                tail,
+                n_epochs,
+                n_vertices,
+                epochs_per_sample,
+                a,
+                b,
+                rng_state,
+                gamma,
+                initial_alpha,
+                negative_sample_rate,
+                output_metric,
+                tuple(output_metric_kwds.values()),
+                verbose=verbose,
+                tqdm_kwds=tqdm_kwds,
+                move_other=True,
+                optimizer="compatibility",
+            )
+        else:
+            if verbose:
+                print(ts() + f" Using {optimizer} layout optimizer")
+            embedding = optimize_layout_generic(
+                embedding,
+                embedding,
+                None,
+                None,
+                n_epochs,
+                n_vertices,
+                epochs_per_sample,
+                a,
+                b,
+                rng_state,
+                gamma,
+                initial_alpha,
+                negative_sample_rate,
+                output_metric,
+                tuple(output_metric_kwds.values()),
+                verbose=verbose,
+                tqdm_kwds=tqdm_kwds,
+                move_other=False,
+                csr_indptr=graph.indptr,
+                csr_indices=graph.indices,
+                random_state=random_state,
+                optimizer=optimizer,
+                good_initialization=(
+                    isinstance(init, str)
+                    and init in ["recursive"]
+                    and n_epochs_max >= 400
+                    if good_initialization is None
+                    else good_initialization
+                ),
+                negative_selection_range=negative_selection_range,
+            )
 
     if isinstance(embedding, list):
         aux_data["embedding_list"] = embedding
@@ -1306,11 +2130,7 @@ def simplicial_set_embedding(
             print(ts() + " Computing embedding densities")
 
         # Compute graph in embedding
-        (
-            knn_indices,
-            knn_dists,
-            rp_forest,
-        ) = nearest_neighbors(
+        knn_indices, knn_dists, _ = nearest_neighbors(
             embedding,
             densmap_kwds["n_neighbors"],
             "euclidean",
@@ -1318,6 +2138,8 @@ def simplicial_set_embedding(
             False,
             random_state,
             verbose=verbose,
+            compatibility_layout=compatibility_layout,
+            graph_only=True,
         )
 
         emb_graph, emb_sigmas, emb_rhos, emb_dists = fuzzy_simplicial_set(
@@ -1330,6 +2152,7 @@ def simplicial_set_embedding(
             knn_dists,
             verbose=verbose,
             return_dists=True,
+            compatibility_layout=compatibility_layout,
         )
 
         emb_graph = emb_graph.tocoo()
@@ -1338,25 +2161,34 @@ def simplicial_set_embedding(
 
         n_vertices = emb_graph.shape[1]
 
-        mu_sum = np.zeros(n_vertices, dtype=np.float32)
-        re = np.zeros(n_vertices, dtype=np.float32)
-
-        head = emb_graph.row
-        tail = emb_graph.col
-        emb_dists_csr = emb_dists.tocsr()
-        _densmap_embedding_densities(
-            head,
-            tail,
-            emb_graph.data,
-            emb_dists_csr.indptr,
-            emb_dists_csr.indices,
-            emb_dists_csr.data,
-            re,
-            mu_sum,
-        )
-
-        epsilon = 1e-8
-        re = np.log(epsilon + (re / mu_sum))
+        if compatibility_layout:
+            mu_sum = np.zeros(n_vertices, dtype=np.float32)
+            re = np.zeros(n_vertices, dtype=np.float32)
+            emb_dists_csr = emb_dists.tocsr()
+            _densmap_embedding_densities(
+                emb_graph.row,
+                emb_graph.col,
+                emb_graph.data,
+                emb_dists_csr.indptr,
+                emb_dists_csr.indices,
+                emb_dists_csr.data,
+                re,
+                mu_sum,
+            )
+            epsilon = 1e-8
+            re = np.log(epsilon + (re / mu_sum))
+        else:
+            emb_dists = emb_dists.tocsr()
+            emb_dists.sort_indices()
+            mu_sum, re = compute_densities(
+                emb_graph.row,
+                emb_graph.col,
+                emb_graph.data,
+                emb_dists.indptr,
+                emb_dists.indices,
+                emb_dists.data,
+                n_vertices,
+            )
 
         aux_data["rad_emb"] = re
 
@@ -1559,9 +2391,11 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
     learning_rate: float (optional, default 1.0)
         The initial learning rate for the embedding optimization.
 
-    init: string (optional, default 'spectral')
+    init: string or array (optional, default 'auto')
         How to initialize the low dimensional embedding. Options are:
 
+            * 'auto': 'spectral' when the compatibility layout is in use and
+                'recursive' otherwise.
             * 'spectral': use a spectral embedding of the fuzzy 1-skeleton
             * 'random': assign initial embedding positions at random.
             * 'pca': use the first n_components from PCA applied to the
@@ -1571,6 +2405,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 "warm" up the eigensolver. This is intended as an alternative
                 to the 'spectral' method, if that takes an  excessively long
                 time to complete initialization (or fails to complete).
+            * 'recursive': recursively coarsen the fuzzy graph with label
+                propagation, lay out the coarse graph, and expand the result.
             * A numpy array of initial embedding positions.
 
     min_dist: float (optional, default 0.1)
@@ -1589,7 +2425,21 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         For some datasets the nearest neighbor computation can consume a lot of
         memory. If you find that UMAP is failing due to memory constraints
         consider setting this option to True. This approach is more
-        computationally expensive, but avoids excessive memory use.
+        computationally expensive, but avoids excessive memory use. The new
+        (``compatibility_layout=False``) pipeline always uses the low-memory
+        nearest-neighbor descent, so this option only affects the
+        compatibility layout.
+
+    n_jobs: int (optional, default -1)
+        The number of parallel jobs to run when performing nearest-neighbor
+        search. A value of -1 uses all available cores.
+
+    nearest_neighbor_backend: string (optional, default "auto")
+        Backend used for approximate nearest-neighbor construction. Valid values
+        are "auto", "pynndescent", and "rinnd". The "auto" setting uses RINND
+        when installed and compatible with the input parameters, and otherwise
+        falls back to PyNNDescent. RINND requires dense float32 input, a
+        supported named metric, and empty metric_kwds; it honors n_jobs.
 
     set_op_mix_ratio: float (optional, default 1.0)
         Interpolate between (fuzzy) union and intersection as the set operation
@@ -1642,6 +2492,15 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         Arguments to pass on to the metric, such as the ``p`` value for
         Minkowski distance. If None then no arguments are passed on.
 
+    output_metric: string or function (optional, default 'euclidean')
+        The metric of the embedding space. Non-Euclidean output metrics must
+        support gradients: either a named metric with a gradient (such as
+        'haversine' or 'hyperboloid') or a numba jit'd function returning
+        ``(distance, gradient)``.
+
+    output_metric_kwds: dict (optional, default None)
+        Arguments to pass on to the output metric.
+
     angular_rp_forest: bool (optional, default False)
         Whether to use an angular random projection forest to initialise
         the approximate nearest neighbor search. This can be faster, but is
@@ -1675,6 +2534,14 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
     transform_seed: int (optional, default 42)
         Random seed used for the stochastic aspects of the transform operation.
         This ensures consistency in transform operations.
+
+    transform_mode: string (optional, default 'embedding')
+        Whether ``transform`` returns an embedding ('embedding') or only
+        computes the fuzzy graph of the new points ('graph').
+
+    force_approximation_algorithm: bool (optional, default False)
+        Use approximate nearest-neighbor search even for small datasets (fewer
+        than 4096 samples), which would otherwise use exact distances.
 
     verbose: bool (optional, default False)
         Controls verbosity of logging.
@@ -1745,6 +2612,88 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         nearest neighbor of each item should be itself, e.g. the nearest neighbor of
         item 0 should be 0, the nearest neighbor of item 1 is 1 and so on. Please note
         that you will *not* be able to transform new data in this case.
+
+    compatibility_layout: bool or None (optional, default None)
+        Whether to use the umap-learn 0.5.x nearest-neighbor, initialization
+        and layout pipeline. With a fixed ``random_state`` this reproduces
+        0.5.x results exactly. ``None`` currently means ``True`` and emits a
+        ``FutureWarning``, unless ``optimizer`` is 'adam' or 'momentum' (which
+        opts in to the new pipeline). The default will change to ``False`` in
+        a future release; set it explicitly to silence the warning.
+
+    optimizer: str or None (optional, default None)
+        The layout optimizer. Options are:
+            * 'adam': Adam (the default when ``compatibility_layout=False``).
+            * 'momentum': SGD with momentum.
+            * 'compatibility': the original immediate-update optimizer.
+
+        Adam and momentum are reproducible with a fixed ``random_state``
+        while still optimizing in parallel. With
+        ``compatibility_layout=True`` only 'compatibility' (or None) is valid.
+
+    negative_selection_range: int (optional, default 200_000)
+        Modern optimizers only. When the dataset is larger than this, negative
+        samples are drawn from a window of this many points in a random
+        projection ordering of the current embedding (harder negatives)
+        rather than from all points.
+
+    negative_sample_scale: float or None (optional, default None)
+        Modern Euclidean optimizers only. Multiplier for the repulsive force
+        of hard negatives. If None it is derived from the selection range.
+
+    exclude_graph_neighbors: bool (optional, default False)
+        Modern Euclidean optimizers only. Skip negative samples that are graph
+        neighbors of (or identical to) the source point.
+
+    negative_sample_scale_adaptation_samples: int (optional, default 128)
+        Adam with hard-negative selection only. Number of points used to adapt
+        the negative sample scale during the first half of optimization; 0
+        disables adaptation.
+
+    recursive_coarsening_ratio: int (optional, default 4)
+        Target graph reduction ratio at each level when ``init='recursive'``.
+        Supported values are 2, 3, and 4. Ratio 4 is fastest; ratio 3 generally
+        provides stronger initialization and cross-seed consistency for a modest
+        runtime cost; ratio 2 favors initialization quality at a larger cost.
+
+    coarse_layout_weights: str (optional, default 'transition')
+        Edge weights used for recursive coarse layouts. ``'transition'`` uses
+        normalized inter-part transition strengths; ``'fuzzy_union'`` directly
+        aggregates fuzzy memberships between parts.
+
+    coarsen_on_layout_weights: bool (optional, default True)
+        Whether subsequent recursive levels are built from the selected coarse
+        layout weights instead of the fuzzy-union coarsening graph.
+
+    init_rescale: str (optional, default 'isotropic')
+        New pipeline only. Rescaling applied after initialization and before
+        layout optimization. ``'isotropic'`` applies one multiplier and
+        preserves the aspect ratio; ``'per_axis'`` gives each coordinate the
+        same robust (5th-95th percentile) span; ``'graph_edge'`` preserves the
+        aspect ratio and scales by the weighted-median graph-edge length.
+
+    init_scale_factor: float (optional, default 1.0)
+        Target-span multiplier for ``'per_axis'`` and ``'isotropic'``. For
+        ``'graph_edge'``, the target weighted-median edge length.
+
+    recursive_init_kwds: dict or None (optional, default None)
+        Advanced options forwarded to :func:`umap.label_prop.recursive_init`
+        when ``init='recursive'``; see ``umap.umap_.RECURSIVE_INIT_KWDS`` for
+        the accepted keys.
+
+    Attributes
+    ----------
+    embedding_: array of shape (n_samples, n_components)
+        The low dimensional embedding of the input data.
+
+    embedding_list_: list of arrays
+        If `n_epochs` is a list, this contains the intermediate embeddings
+        at the different epochs specified in that list. Each array in the list
+        has shape (n_samples, n_components).
+
+    graph_: csr_matrix
+        The fuzzy simplicial set graph constructed from the input data.
+
     """
 
     def __init__(
@@ -1757,7 +2706,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         output_metric_kwds=None,
         n_epochs=None,
         learning_rate=1.0,
-        init="spectral",
+        init="auto",
         min_dist=0.1,
         spread=1.0,
         low_memory=True,
@@ -1788,6 +2737,19 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         output_dens=False,
         disconnection_distance=None,
         precomputed_knn=(None, None, None),
+        compatibility_layout=None,
+        optimizer=None,
+        negative_selection_range=200_000,
+        negative_sample_scale=None,
+        exclude_graph_neighbors=False,
+        negative_sample_scale_adaptation_samples=128,
+        recursive_coarsening_ratio=4,
+        nearest_neighbor_backend="auto",
+        coarse_layout_weights="transition",
+        coarsen_on_layout_weights=True,
+        init_rescale="isotropic",
+        init_scale_factor=1.0,
+        recursive_init_kwds=None,
     ):
         self.n_neighbors = n_neighbors
         self.metric = metric
@@ -1828,17 +2790,90 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         self.output_dens = output_dens
         self.disconnection_distance = disconnection_distance
         self.precomputed_knn = precomputed_knn
+        self.compatibility_layout = compatibility_layout
+
+        self.negative_selection_range = negative_selection_range
+        self.negative_sample_scale = negative_sample_scale
+        self.exclude_graph_neighbors = exclude_graph_neighbors
+        self.negative_sample_scale_adaptation_samples = (
+            negative_sample_scale_adaptation_samples
+        )
+        self.recursive_coarsening_ratio = recursive_coarsening_ratio
+        self.nearest_neighbor_backend = nearest_neighbor_backend
+        self.coarse_layout_weights = coarse_layout_weights
+        self.coarsen_on_layout_weights = coarsen_on_layout_weights
+        self.init_rescale = init_rescale
+        self.init_scale_factor = init_scale_factor
+        self.recursive_init_kwds = recursive_init_kwds
+        self.optimizer = optimizer
 
         self.n_jobs = n_jobs
 
         self.a = a
         self.b = b
 
+    def _resolve_layout_parameters(self):
+        """Resolve ``compatibility_layout``, ``optimizer`` and ``init="auto"``.
+
+        The resolved values are stored as ``_compatibility_layout``,
+        ``_optimizer`` and ``_init`` so that the public parameters are never
+        modified (as required by scikit-learn's estimator API).
+        """
+        if self.compatibility_layout is None and (
+            self.optimizer not in MODERN_OPTIMIZERS
+        ):
+            warn(COMPATIBILITY_LAYOUT_DEFAULT_WARNING, FutureWarning, stacklevel=4)
+        compatibility_layout, optimizer = _resolve_layout_options(
+            self.compatibility_layout, self.optimizer
+        )
+
+        if isinstance(self.init, str) and self.init == "auto":
+            init = "spectral" if compatibility_layout else "recursive"
+        else:
+            init = self.init
+
+        self._compatibility_layout = compatibility_layout
+        self._optimizer = optimizer
+        self._init = init
+
     def _validate_parameters(self):
+        self._resolve_layout_parameters()
+        _validate_recursive_init_kwds(self.recursive_init_kwds)
+        if self.coarse_layout_weights not in ("transition", "fuzzy_union"):
+            raise ValueError(
+                "coarse_layout_weights must be 'transition' or 'fuzzy_union'"
+            )
+        if not isinstance(self.coarsen_on_layout_weights, (bool, np.bool_)):
+            raise ValueError("coarsen_on_layout_weights must be a boolean")
+        if self.init_rescale not in ("per_axis", "isotropic", "graph_edge"):
+            raise ValueError(
+                "init_rescale must be 'per_axis', 'isotropic', or 'graph_edge'"
+            )
+        if (
+            isinstance(self.init_scale_factor, (bool, np.bool_))
+            or not isinstance(
+                self.init_scale_factor, (int, float, np.integer, np.floating)
+            )
+            or not np.isfinite(self.init_scale_factor)
+            or self.init_scale_factor <= 0.0
+        ):
+            raise ValueError("init_scale_factor must be finite and greater than zero")
+        if (
+            isinstance(self.recursive_coarsening_ratio, (bool, np.bool_))
+            or not isinstance(self.recursive_coarsening_ratio, (int, np.integer))
+            or self.recursive_coarsening_ratio not in (2, 3, 4)
+        ):
+            raise ValueError("recursive_coarsening_ratio must be one of 2, 3, or 4")
         if self.set_op_mix_ratio < 0.0 or self.set_op_mix_ratio > 1.0:
             raise ValueError("set_op_mix_ratio must be between 0.0 and 1.0")
         if self.repulsion_strength < 0.0:
             raise ValueError("repulsion_strength cannot be negative")
+        if self.negative_sample_scale is not None and self.negative_sample_scale < 0.0:
+            raise ValueError("negative_sample_scale cannot be negative")
+        if self.negative_sample_scale_adaptation_samples < 0:
+            raise ValueError(
+                "negative_sample_scale_adaptation_samples cannot be negative"
+            )
         if self.min_dist > self.spread:
             raise ValueError("min_dist must be less than or equal to spread")
         if self.min_dist < 0.0:
@@ -1846,14 +2881,16 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         if not isinstance(self.init, str) and not isinstance(self.init, np.ndarray):
             raise ValueError("init must be a string or ndarray")
         if isinstance(self.init, str) and self.init not in (
+            "auto",
             "pca",
             "spectral",
             "random",
             "tswspectral",
+            "recursive",
         ):
             raise ValueError(
-                'string init values must be one of: "pca", "tswspectral",'
-                ' "spectral" or "random"'
+                'string init values must be one of: "auto", "pca", "tswspectral",'
+                ' "spectral", "recursive", or "random"'
             )
         if (
             isinstance(self.init, np.ndarray)
@@ -1930,7 +2967,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             if in_returns_grad:
                 _m = self.metric
 
-                @numba.njit(fastmath=True)
+                @numba.njit(fastmath=FASTMATH_FLAGS)
                 def _dist_only(x, y, *kwds):
                     return _m(x, y, *kwds)[0]
 
@@ -2032,11 +3069,22 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
 
         if self.n_jobs < -1 or self.n_jobs == 0:
             raise ValueError("n_jobs must be a postive integer, or -1 (for all cores)")
-        if self.n_jobs != 1 and self.random_state is not None:
-            self.n_jobs = 1
+        if self.nearest_neighbor_backend not in ("auto", "pynndescent", "rinnd"):
+            raise ValueError(
+                "nearest_neighbor_backend must be one of "
+                "{'auto', 'pynndescent', 'rinnd'}"
+            )
+        if (
+            self.n_jobs != 1
+            and self.random_state is not None
+            and self._compatibility_layout
+        ):
+            # The legacy layout pipeline is only reproducible single-threaded;
+            # the modern pipeline is reproducible in parallel.
             warn(
                 f"n_jobs value {self.n_jobs} overridden to 1 by setting random_state. Use no seed for parallelism."
             )
+            self.n_jobs = 1
 
         if self.dens_lambda < 0.0:
             raise ValueError("dens_lambda cannot be negative")
@@ -2102,7 +3150,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     " must be numpy arrays of the same size."
                 )
             # #848: warn but proceed if no search index is present
-            if not isinstance(self.knn_search_index, NNDescent):
+            if not isinstance(self.knn_search_index, (NNDescent, _RINNDIndex)):
                 warn(
                     "precomputed_knn[2] (knn_search_index) "
                     "is not an NNDescent object: transforming new data with transform "
@@ -2137,6 +3185,12 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 # if k for precomputed_knn larger than n_neighbors we simply prune it
                 self.knn_indices = self.knn_indices[:, : self.n_neighbors]
                 self.knn_dists = self.knn_dists[:, : self.n_neighbors]
+
+    def _nn_metric(self):
+        named = (
+            pynn_sparse_named_distances if self._sparse_data else pynn_named_distances
+        )
+        return self.metric if self.metric in named else self._input_distance_func
 
     def _check_custom_metric(self, metric, kwds, data=None):
         # quickly check to determine whether user-defined
@@ -2200,6 +3254,16 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         self.dens_frac = flattened([m.dens_frac for m in models])
         self.dens_var_shift = flattened([m.dens_var_shift for m in models])
         self.output_dens = flattened([m.output_dens for m in models])
+        self._compatibility_layout = any(
+            [getattr(m, "_compatibility_layout", True) for m in models]
+        )
+        self.compatibility_layout = self._compatibility_layout
+        self._optimizer = (
+            "compatibility"
+            if self._compatibility_layout
+            else getattr(models[0], "_optimizer", DEFAULT_MODERN_OPTIMIZER)
+        )
+        self.optimizer = self._optimizer
 
         self.a = flattened([m.a for m in models])
         self.b = flattened([m.b for m in models])
@@ -2270,6 +3334,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             result.output_dens,
             parallel=False,
             verbose=bool(np.max(result.verbose)),
+            compatibility_layout=result._compatibility_layout,
+            optimizer=result._optimizer,
             tqdm_kwds=self.tqdm_kwds,
         )
 
@@ -2340,6 +3406,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             result.output_dens,
             parallel=False,
             verbose=bool(np.max(result.verbose)),
+            compatibility_layout=result._compatibility_layout,
+            optimizer=result._optimizer,
             tqdm_kwds=self.tqdm_kwds,
         )
 
@@ -2412,6 +3480,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             result.output_dens,
             parallel=False,
             verbose=bool(np.max(result.verbose)),
+            compatibility_layout=result._compatibility_layout,
+            optimizer=result._optimizer,
             tqdm_kwds=self.tqdm_kwds,
         )
 
@@ -2478,7 +3548,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 ensure_all_finite=ensure_all_finite,
             )
         else:
-            init = self.init
+            init = None
 
         self._initial_alpha = self.learning_rate
 
@@ -2491,6 +3561,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             self.knn_search_index = self.precomputed_knn[2]
 
         self._validate_parameters()
+        if init is None:
+            init = self._init
 
         if self.verbose:
             print(str(self))
@@ -2501,6 +3573,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
 
         # Check if we should unique the data
         # We've already ensured that we aren't in the precomputed case
+        self._data_was_uniqued = False
         if self.unique:
             # check if the matrix is dense
             if self._sparse_data:
@@ -2530,24 +3603,19 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 )
             # We'll expose an inverse map when unique=True for users to map from our internal structures to their data
             self._unique_inverse_ = inverse
-        # If we aren't asking for unique use the full index.
-        # This will save special cases later.
+            self._data_was_uniqued = True
+            # Use the unique subset for processing
+            X_indexed = X[index]
         else:
-            index = np.arange(X.shape[0])
-            inverse = np.arange(X.shape[0])
-
-        # Compute the indexed copy of X exactly once and reuse it everywhere
-        # below. Previously X[index] was re-materialized at each call site (and
-        # several times just to read .shape[0]), allocating the full N x D matrix
-        # repeatedly. A single copy is kept: it also preserves UMAP's contract of
-        # never mutating the caller's data (and self._raw_data) when a distance
-        # metric writes into the array it is handed.
-        n_index_samples = index.shape[0]
-        X_indexed = X[index]
+            # No uniquing needed - use original data directly
+            index = None
+            inverse = None
+            X_indexed = X
+            self._data_was_uniqued = False
 
         # Error check n_neighbors based on data size
-        if n_index_samples <= self.n_neighbors:
-            if n_index_samples == 1:
+        if X_indexed.shape[0] <= self.n_neighbors:
+            if X_indexed.shape[0] == 1:
                 self.embedding_ = np.zeros(
                     (1, self.n_components)
                 )  # needed to sklearn comparability
@@ -2557,7 +3625,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 "n_neighbors is larger than the dataset size; truncating to "
                 "X.shape[0] - 1"
             )
-            self._n_neighbors = n_index_samples - 1
+            self._n_neighbors = X_indexed.shape[0] - 1
             if self.densmap:
                 self._densmap_kwds["n_neighbors"] = self._n_neighbors
         else:
@@ -2579,23 +3647,21 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             # symmetrical (so we can find neighbors by looking at rows in isolation,
             # rather than also having to consider that sample's column too).
             # print("Computing KNNs for sparse precomputed distances...")
-            if sparse_tril(X).getnnz() != sparse_triu(X).getnnz():
+            if sparse_tril(X_indexed).getnnz() != sparse_triu(X_indexed).getnnz():
                 raise ValueError(
                     "Sparse precomputed distance matrices should be symmetrical!"
                 )
-            if not np.all(X.diagonal() == 0):
+            if not np.all(X_indexed.diagonal() == 0):
                 raise ValueError("Non-zero distances from samples to themselves!")
             if self.knn_dists is None:
-                self._knn_indices = np.zeros((X.shape[0], self.n_neighbors), dtype=int)
+                self._knn_indices = np.zeros(
+                    (X_indexed.shape[0], self.n_neighbors), dtype=int
+                )
                 self._knn_dists = np.zeros(self._knn_indices.shape, dtype=float)
-                # X is CSR (check_array(accept_sparse="csr")), so slice its backing
-                # arrays directly instead of materializing a temporary matrix per row.
-                X_indptr, X_indices, X_data = X.indptr, X.indices, X.data
-                for row_id in range(X.shape[0]):
+                for row_id in range(X_indexed.shape[0]):
                     # Find KNNs row-by-row
-                    row_start, row_end = X_indptr[row_id], X_indptr[row_id + 1]
-                    row_data = X_data[row_start:row_end]
-                    row_indices = X_indices[row_start:row_end]
+                    row_data = X_indexed[row_id].data
+                    row_indices = X_indexed[row_id].indices
                     if len(row_data) < self._n_neighbors:
                         raise ValueError(
                             "Some rows contain fewer than n_neighbors distances!"
@@ -2637,6 +3703,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 True,
                 self.verbose,
                 self.densmap or self.output_dens,
+                compatibility_layout=self._compatibility_layout,
             )
             # Report the number of vertices with degree 0 in our our umap.graph_
             # This ensures that they were properly disconnected.
@@ -2651,7 +3718,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 verbose=self.verbose,
             )
         # Handle small cases efficiently by computing all distances
-        elif n_index_samples < 4096 and not self.force_approximation_algorithm:
+        elif X_indexed.shape[0] < 4096 and not self.force_approximation_algorithm:
             self._small_data = True
             try:
                 # sklearn pairwise_distances fails for callable metric on sparse data
@@ -2717,6 +3784,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 True,
                 self.verbose,
                 self.densmap or self.output_dens,
+                compatibility_layout=self._compatibility_layout,
             )
             # Report the number of vertices with degree 0 in our umap.graph_
             # This ensures that they were properly disconnected.
@@ -2733,13 +3801,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         else:
             # Standard case
             self._small_data = False
-            # Standard case
-            if self._sparse_data and self.metric in pynn_sparse_named_distances:
-                nn_metric = self.metric
-            elif not self._sparse_data and self.metric in pynn_named_distances:
-                nn_metric = self.metric
-            else:
-                nn_metric = self._input_distance_func
+            nn_metric = self._nn_metric()
             if self.knn_dists is None:
                 (
                     self._knn_indices,
@@ -2756,6 +3818,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     use_pynndescent=True,
                     n_jobs=self.n_jobs,
                     verbose=self.verbose,
+                    compatibility_layout=self._compatibility_layout,
+                    nearest_neighbor_backend=self.nearest_neighbor_backend,
                 )
             else:
                 self._knn_indices = self.knn_indices
@@ -2786,6 +3850,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 True,
                 self.verbose,
                 self.densmap or self.output_dens,
+                compatibility_layout=self._compatibility_layout,
             )
             # Report the number of vertices with degree 0 in our umap.graph_
             # This ensures that they were properly disconnected.
@@ -2811,11 +3876,12 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     )
                 )
             if self.target_metric == "string":
-                y_ = y[index]
+                y_ = y[index] if self._data_was_uniqued else y
             else:
-                y_ = check_array(
+                y_full = check_array(
                     y, ensure_2d=False, ensure_all_finite=ensure_all_finite
-                )[index]
+                )
+                y_ = y_full[index] if self._data_was_uniqued else y_full
             if self.target_metric == "categorical":
                 if self.target_weight < 1.0:
                     far_dist = 2.5 * (1.0 / (1.0 - self.target_weight))
@@ -2884,6 +3950,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                         1.0,
                         1.0,
                         False,
+                        compatibility_layout=self._compatibility_layout,
                     )
                 else:
                     # Standard case
@@ -2903,6 +3970,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                         1.0,
                         1.0,
                         False,
+                        compatibility_layout=self._compatibility_layout,
                     )
                 # product = self.graph_.multiply(target_graph)
                 # # self.graph_ = 0.99 * product + 0.01 * (self.graph_ +
@@ -2927,14 +3995,11 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             epochs = (
                 self.n_epochs_list if self.n_epochs_list is not None else self.n_epochs
             )
-            # Use a fresh copy of the (unmutated) raw data here, independent of
-            # X_indexed: a distance metric that writes into the array it is
-            # handed could otherwise corrupt the data PCA-init / densMAP read.
-            self.embedding_, aux_data = self._fit_embed_data(
-                self._raw_data[index],
+            embedding_unique, aux_data = self._fit_embed_data(
+                X_indexed,  # Use processed data directly
                 epochs,
                 init,
-                random_state,  # JH why raw data?
+                random_state,
                 **kwargs,
             )
 
@@ -2946,9 +4011,13 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                         "doesn't support the list of int for 'n_epochs'."
                     )
                 else:
-                    self.embedding_list_ = [
-                        e[inverse] for e in aux_data["embedding_list"]
-                    ]
+                    # Only apply inverse mapping if data was actually uniqued
+                    if self._data_was_uniqued:
+                        self.embedding_list_ = [
+                            e[inverse] for e in aux_data["embedding_list"]
+                        ]
+                    else:
+                        self.embedding_list_ = aux_data["embedding_list"]
 
             # Assign any points that are fully disconnected from our manifold(s) to have embedding
             # coordinates of np.nan.  These will be filtered by our plotting functions automatically.
@@ -2956,20 +4025,28 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             # Might be worth moving this into simplicial_set_embedding or _fit_embed_data
             disconnected_vertices = np.array(self.graph_.sum(axis=1)).flatten() == 0
             if len(disconnected_vertices) > 0:
-                self.embedding_[disconnected_vertices] = np.full(
+                embedding_unique[disconnected_vertices] = np.full(
                     self.n_components, np.nan
                 )
 
-            self.embedding_ = self.embedding_[inverse]
-            if self.output_dens:
-                self.rad_orig_ = aux_data["rad_orig"][inverse]
-                self.rad_emb_ = aux_data["rad_emb"][inverse]
+            # Only apply inverse mapping if data was actually uniqued
+            if self._data_was_uniqued:
+                self.embedding_ = embedding_unique[inverse]
+                if self.output_dens:
+                    self.rad_orig_ = aux_data["rad_orig"][inverse]
+                    self.rad_emb_ = aux_data["rad_emb"][inverse]
+            else:
+                self.embedding_ = embedding_unique
+                if self.output_dens:
+                    self.rad_orig_ = aux_data["rad_orig"]
+                    self.rad_emb_ = aux_data["rad_emb"]
 
         if self.verbose:
             print(ts() + " Finished embedding")
 
         numba.set_num_threads(self._original_n_threads)
-        self._input_hash = joblib.hash(self._raw_data)
+        self._input_hash = _input_data_hash(self._raw_data, self.n_jobs)
+        self._input_hash_algorithm = _INPUT_HASH_ALGORITHM
 
         if self.transform_mode == "embedding":
             # Set number of features out for sklearn API
@@ -3007,6 +4084,26 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             self.random_state is None,
             self.verbose,
             tqdm_kwds=self.tqdm_kwds,
+            **self._layout_kwds(),
+        )
+
+    def _layout_kwds(self):
+        """Layout options forwarded to ``simplicial_set_embedding``."""
+        return dict(
+            compatibility_layout=self._compatibility_layout,
+            optimizer=self._optimizer,
+            negative_selection_range=self.negative_selection_range,
+            negative_sample_scale=self.negative_sample_scale,
+            exclude_graph_neighbors=self.exclude_graph_neighbors,
+            negative_sample_scale_adaptation_samples=(
+                self.negative_sample_scale_adaptation_samples
+            ),
+            recursive_coarsening_ratio=self.recursive_coarsening_ratio,
+            coarse_layout_weights=self.coarse_layout_weights,
+            coarsen_on_layout_weights=self.coarsen_on_layout_weights,
+            init_rescale=self.init_rescale,
+            init_scale_factor=self.init_scale_factor,
+            recursive_init_kwds=self.recursive_init_kwds,
         )
 
     def fit_transform(self, X, y=None, ensure_all_finite=True, **kwargs):
@@ -3112,7 +4209,10 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 X = scipy.sparse.csr_matrix(X)
             elif not self._sparse_data and scipy.sparse.issparse(X):
                 X = X.toarray()
-        x_hash = joblib.hash(X)
+        if getattr(self, "_input_hash_algorithm", None) == _INPUT_HASH_ALGORITHM:
+            x_hash = _input_data_hash(X, self.n_jobs)
+        else:
+            x_hash = joblib.hash(X)
         if x_hash == self._input_hash:
             if self.transform_mode == "embedding":
                 embedding = self.embedding_
@@ -3306,7 +4406,16 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
         graph.eliminate_zeros()
 
-        epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs)
+        # Modern optimizers traverse CSR entries and require one schedule value
+        # per entry. Rebuild after pruning so the CSR graph cannot retain edges
+        # that no longer exist in ``graph.data``.
+        csr_graph = graph.tocsr()
+        csr_graph.eliminate_zeros()
+        csr_graph.sort_indices()
+        if self._optimizer == "compatibility":
+            epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs)
+        else:
+            epochs_per_sample = make_epochs_per_sample(csr_graph.data, n_epochs)
 
         head = graph.row
         tail = graph.col
@@ -3318,44 +4427,113 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         # )
 
         if self.output_metric == "euclidean":
-            embedding = optimize_layout_euclidean(
-                embedding,
-                self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217,
-                head,
-                tail,
-                n_epochs,
-                graph.shape[1],
-                epochs_per_sample,
-                self._a,
-                self._b,
-                rng_state,
-                self.repulsion_strength,
-                self._initial_alpha / 4.0,
-                self.negative_sample_rate,
-                self.random_state is None,
-                verbose=self.verbose,
-                tqdm_kwds=self.tqdm_kwds,
-            )
+            if self._optimizer == "compatibility":
+                embedding = optimize_layout_euclidean(
+                    embedding,
+                    self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217,
+                    head,
+                    tail,
+                    n_epochs,
+                    graph.shape[1],
+                    epochs_per_sample,
+                    self._a,
+                    self._b,
+                    rng_state,
+                    self.repulsion_strength,
+                    self._initial_alpha / 4.0,
+                    self.negative_sample_rate,
+                    self.random_state is None,
+                    verbose=self.verbose,
+                    tqdm_kwds=self.tqdm_kwds,
+                    optimizer="compatibility",
+                )
+            else:
+                if self.verbose:
+                    print(ts(), "Using layout optimizer", self._optimizer)
+                embedding = optimize_layout_euclidean(
+                    embedding,
+                    self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217,
+                    None,
+                    None,
+                    n_epochs,
+                    graph.shape[1],
+                    epochs_per_sample,
+                    self._a,
+                    self._b,
+                    rng_state,
+                    self.repulsion_strength,
+                    self._initial_alpha / 4.0,
+                    self.negative_sample_rate,
+                    parallel=self.random_state is None,
+                    verbose=self.verbose,
+                    tqdm_kwds=self.tqdm_kwds,
+                    optimizer=self._optimizer,
+                    random_state=random_state,
+                    csr_indptr=csr_graph.indptr,
+                    csr_indices=csr_graph.indices,
+                    csr_data=csr_graph.data,
+                    good_initialization=False,
+                    move_other=False,
+                    densmap_kwds=self._densmap_kwds if self.densmap else None,
+                    densmap=self.densmap,
+                    negative_selection_range=self.negative_selection_range,
+                    negative_sample_scale=self.negative_sample_scale,
+                    exclude_graph_neighbors=self.exclude_graph_neighbors,
+                    negative_sample_scale_adaptation_samples=(
+                        self.negative_sample_scale_adaptation_samples
+                    ),
+                )
         else:
-            embedding = optimize_layout_generic(
-                embedding,
-                self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217
-                head,
-                tail,
-                n_epochs,
-                graph.shape[1],
-                epochs_per_sample,
-                self._a,
-                self._b,
-                rng_state,
-                self.repulsion_strength,
-                self._initial_alpha / 4.0,
-                self.negative_sample_rate,
-                self._output_distance_func,
-                tuple(self._output_metric_kwds.values()),
-                verbose=self.verbose,
-                tqdm_kwds=self.tqdm_kwds,
-            )
+            if self._optimizer == "compatibility":
+                embedding = optimize_layout_generic(
+                    embedding,
+                    self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217
+                    head,
+                    tail,
+                    n_epochs,
+                    graph.shape[1],
+                    epochs_per_sample,
+                    self._a,
+                    self._b,
+                    rng_state,
+                    self.repulsion_strength,
+                    self._initial_alpha / 4.0,
+                    self.negative_sample_rate,
+                    self._output_distance_func,
+                    tuple(self._output_metric_kwds.values()),
+                    verbose=self.verbose,
+                    tqdm_kwds=self.tqdm_kwds,
+                    optimizer="compatibility",
+                )
+            else:
+                if self.verbose:
+                    print(ts(), "Using layout optimizer", self._optimizer)
+                embedding = optimize_layout_generic(
+                    embedding,
+                    self.embedding_.astype(np.float32, copy=True),  # Fixes #179 & #217
+                    None,
+                    None,
+                    n_epochs,
+                    graph.shape[1],
+                    epochs_per_sample,
+                    self._a,
+                    self._b,
+                    rng_state,
+                    self.repulsion_strength,
+                    self._initial_alpha / 4.0,
+                    self.negative_sample_rate,
+                    self._output_distance_func,
+                    tuple(self._output_metric_kwds.values()),
+                    verbose=self.verbose,
+                    tqdm_kwds=self.tqdm_kwds,
+                    optimizer=self._optimizer,
+                    random_state=random_state,
+                    csr_indptr=csr_graph.indptr,
+                    csr_indices=csr_graph.indices,
+                    good_initialization=False,
+                    move_other=False,
+                    negative_selection_range=self.negative_selection_range,
+                )
 
         if _input_dtype is not None and np.issubdtype(_input_dtype, np.floating):
             embedding = embedding.astype(_input_dtype, copy=False)
@@ -3395,6 +4573,11 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             )
 
         X = check_array(X, dtype=np.float32, order="C")
+        if X.shape[1] != self.embedding_.shape[1]:
+            raise ValueError(
+                "Inverse transform input must have the same number of dimensions "
+                "as the fitted embedding."
+            )
         random_state = check_random_state(self.transform_seed)
         rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
@@ -3402,7 +4585,27 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         deltri = scipy.spatial.Delaunay(
             self.embedding_, incremental=True, qhull_options="QJ"
         )
-        neighbors = deltri.simplices[deltri.find_simplex(X)]
+        simplex_indices = deltri.find_simplex(X)
+        outside_hull = simplex_indices < 0
+        start_vertices = np.empty(X.shape[0], dtype=np.int32)
+        start_vertices[~outside_hull] = deltri.simplices[
+            simplex_indices[~outside_hull], 0
+        ]
+        if np.any(outside_hull):
+            # ``find_simplex`` returns -1 outside the convex hull. Indexing the
+            # simplices array with that value silently selected an unrelated
+            # final simplex. Use the nearest embedded vertex as a deterministic
+            # extrapolation seed instead.
+            embedding = self.embedding_.astype(np.float32, copy=False)
+            for query_index in np.flatnonzero(outside_hull):
+                displacement = embedding - X[query_index]
+                start_vertices[query_index] = np.argmin(
+                    np.sum(displacement * displacement, axis=1)
+                )
+            warn(
+                f"{np.sum(outside_hull)} inverse-transform point(s) lie outside "
+                "the embedding convex hull; using nearest-vertex extrapolation."
+            )
         n_embed = self.embedding_.shape[0]
         simplices = deltri.simplices
         k = simplices.shape[1]
@@ -3423,8 +4626,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         min_vertices = min(self._raw_data.shape[-1], self._raw_data.shape[0])
 
         neighborhood = [
-            breadth_first_search(adjmat, v[0], min_vertices=min_vertices)
-            for v in neighbors
+            breadth_first_search(adjmat, vertex, min_vertices=min_vertices)
+            for vertex in start_vertices
         ]
         if callable(self.output_metric):
             # need to create another numba.jit-able wrapper for callable
@@ -3432,7 +4635,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             # during param validation in `fit` method)
             _out_m = self.output_metric
 
-            @numba.njit(fastmath=True)
+            @numba.njit(fastmath=FASTMATH_FLAGS)
             def _output_dist_only(x, y, *kwds):
                 return _out_m(x, y, *kwds)[0]
 
@@ -3612,17 +4815,13 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     self.local_connectivity,
                     True,
                     self.verbose,
+                    compatibility_layout=self._compatibility_layout,
                 )
                 knn_indices = np.argsort(dmat)[:, : self.n_neighbors]
             else:
                 # now large data
                 self._small_data = False
-                if self._sparse_data and self.metric in pynn_sparse_named_distances:
-                    nn_metric = self.metric
-                elif not self._sparse_data and self.metric in pynn_named_distances:
-                    nn_metric = self.metric
-                else:
-                    nn_metric = self._input_distance_func
+                nn_metric = self._nn_metric()
 
                 (
                     self._knn_indices,
@@ -3639,6 +4838,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     use_pynndescent=True,
                     n_jobs=self.n_jobs,
                     verbose=self.verbose,
+                    compatibility_layout=self._compatibility_layout,
+                    nearest_neighbor_backend=self.nearest_neighbor_backend,
                 )
 
                 self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
@@ -3654,6 +4855,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     self.local_connectivity,
                     True,
                     self.verbose,
+                    compatibility_layout=self._compatibility_layout,
                 )
                 knn_indices = self._knn_indices
 
@@ -3691,10 +4893,13 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self.random_state is None,
                 self.verbose,
                 tqdm_kwds=self.tqdm_kwds,
+                **self._layout_kwds(),
             )
 
         else:
-            self._knn_search_index.prepare()
+            if isinstance(self._knn_search_index, NNDescent):
+                # PyNNDescent's update relies on state that prepare() builds.
+                self._knn_search_index.prepare()
             self._knn_search_index.update(X)
             self._raw_data = self._knn_search_index._raw_data
             (
@@ -3702,12 +4907,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self._knn_dists,
             ) = self._knn_search_index.neighbor_graph
 
-            if self._sparse_data and self.metric in pynn_sparse_named_distances:
-                nn_metric = self.metric
-            elif not self._sparse_data and self.metric in pynn_named_distances:
-                nn_metric = self.metric
-            else:
-                nn_metric = self._input_distance_func
+            nn_metric = self._nn_metric()
 
             self.graph_, self._sigmas, self._rhos = fuzzy_simplicial_set(
                 self._raw_data,
@@ -3722,6 +4922,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self.local_connectivity,
                 True,
                 self.verbose,
+                compatibility_layout=self._compatibility_layout,
             )
 
             init = np.zeros(
@@ -3758,11 +4959,30 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self.random_state is None,
                 self.verbose,
                 tqdm_kwds=self.tqdm_kwds,
+                **self._layout_kwds(),
             )
 
         if self.output_dens:
             self.rad_orig_ = aux_data["rad_orig"]
             self.rad_emb_ = aux_data["rad_emb"]
+
+        self._input_hash = _input_data_hash(self._raw_data, self.n_jobs)
+        self._input_hash_algorithm = _INPUT_HASH_ALGORITHM
+
+    def __setstate__(self, state):
+        super().__setstate__(state)
+        # Models pickled by umap-learn < 0.6 lack the 0.6 parameters and the
+        # resolved layout options. Fill parameters with their defaults and
+        # mark fitted models as legacy so transform/update keep 0.5 behavior.
+        for name, parameter in inspect.signature(UMAP.__init__).parameters.items():
+            if name != "self" and name not in self.__dict__:
+                setattr(self, name, parameter.default)
+        if "_compatibility_layout" not in self.__dict__ and (
+            "embedding_" in self.__dict__ or "graph_" in self.__dict__
+        ):
+            self._compatibility_layout = True
+            self._optimizer = "compatibility"
+            self._init = self.init
 
     def __repr__(self):
         from sklearn.utils._pprint import _EstimatorPrettyPrinter

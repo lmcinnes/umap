@@ -17,9 +17,10 @@ def inverse_data():
 
 @njit
 def nan_dist(a: np.ndarray, b: np.ndarray):
-    a[0] = np.nan
-    a[1] = np.inf
-    return 0, a
+    result = np.zeros(a.shape[0])
+    result[0] = np.nan
+    result[1] = np.inf
+    return 0, result
 
 
 def test_check_input_data(all_finite_data, inverse_data):
@@ -36,6 +37,7 @@ def test_check_input_data(all_finite_data, inverse_data):
     -------
 
     """
+
     inf_data = all_finite_data.copy()
     inf_data[0] = np.inf
     nan_data = all_finite_data.copy()
@@ -86,22 +88,69 @@ def test_check_input_data(all_finite_data, inverse_data):
         call_umap_functions(inf_nan_data, "allow-nan")
 
 
-def test_transform_dense_model_with_sparse_input():
+@pytest.mark.parametrize("compatibility_layout", [True, False])
+def test_transform_dense_model_with_sparse_input(compatibility_layout):
     data = np.random.RandomState(42).rand(50, 8)
-    model = UMAP(n_neighbors=5, n_epochs=10, random_state=42).fit(data)
+    model = UMAP(
+        n_neighbors=5,
+        n_epochs=10,
+        random_state=42,
+        compatibility_layout=compatibility_layout,
+    ).fit(data)
     new_data = data[:3] + 0.01
     expected = model.transform(new_data)
     result = model.transform(scipy.sparse.csr_matrix(new_data))
     np.testing.assert_allclose(result, expected)
 
 
+@pytest.mark.parametrize("compatibility_layout", [True, False])
 @pytest.mark.parametrize("metric", ["jaccard", "hamming"])
-def test_transform_sparse_model_with_dense_input(metric):
+def test_transform_sparse_model_with_dense_input(metric, compatibility_layout):
     rng = np.random.RandomState(42)
     data = scipy.sparse.random(50, 30, density=0.2, format="csr", random_state=rng)
-    model = UMAP(metric=metric, n_neighbors=5, n_epochs=10, random_state=42)
+    model = UMAP(
+        metric=metric,
+        n_neighbors=5,
+        n_epochs=10,
+        random_state=42,
+        compatibility_layout=compatibility_layout,
+    )
     model.fit(data)
     new_data = scipy.sparse.random(3, 30, density=0.2, format="csr", random_state=rng)
     expected = model.transform(new_data)
     result = model.transform(new_data.toarray())
     np.testing.assert_allclose(result, expected)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        dict(compatibility_layout=True),
+        dict(compatibility_layout=False, nearest_neighbor_backend="pynndescent"),
+        pytest.param(
+            dict(compatibility_layout=False, nearest_neighbor_backend="rinnd"),
+            marks=pytest.mark.skipif(
+                not __import__("umap.umap_").umap_._HAVE_RINND,
+                reason="requires RINND",
+            ),
+        ),
+    ],
+)
+def test_fit_and_transform_do_not_modify_input(kwargs):
+    rng = np.random.RandomState(0)
+    data = np.abs(rng.normal(size=(300, 8))).astype(np.float32)
+    query = np.abs(rng.normal(size=(20, 8))).astype(np.float32)
+    data_copy, query_copy = data.copy(), query.copy()
+
+    model = UMAP(
+        metric="cosine",
+        n_neighbors=10,
+        n_epochs=10,
+        random_state=0,
+        force_approximation_algorithm=True,
+        **kwargs,
+    ).fit(data)
+    model.transform(query)
+
+    np.testing.assert_array_equal(data, data_copy)
+    np.testing.assert_array_equal(query, query_copy)

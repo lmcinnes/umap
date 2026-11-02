@@ -40,27 +40,33 @@ stages:
             linux_py310:
               imageName: 'ubuntu-latest'
               python.version: '3.10'
+              uvExtras: '--extra plot --extra parametric_umap'
             windows_py310:
               imageName: 'windows-latest'
               python.version: '3.10'
+              uvExtras: '--extra plot --extra parametric_umap'
             # mac_py311:
             #   imageName: 'macOS-latest'
             #   python.version: '3.11'
             linux_py311:
               imageName: 'ubuntu-latest'
               python.version: '3.11'
+              uvExtras: '--extra plot --extra parametric_umap'
             windows_py311:
               imageName: 'windows-latest'
               python.version: '3.11'
+              uvExtras: '--extra plot --extra parametric_umap'
             # mac_py312:
             #   imageName: 'macOS-latest'
             #   python.version: '3.12'
             linux_py312:
               imageName: 'ubuntu-latest'
               python.version: '3.12'
+              uvExtras: '--extra plot --extra parametric_umap'
             windows_py312:
               imageName: 'windows-latest'
               python.version: '3.12'
+              uvExtras: '--extra plot --extra parametric_umap'
             # # Disable macOS tests on 3.13 since tensorflow only provides pre-built wheels
             # # for ARM macs and the runner is x86
             # mac_py313:
@@ -69,9 +75,26 @@ stages:
             linux_py313:
               imageName: 'ubuntu-latest'
               python.version: '3.13'
+              uvExtras: '--extra plot --extra parametric_umap'
             windows_py313:
               imageName: 'windows-latest'
               python.version: '3.13'
+              uvExtras: '--extra plot --extra parametric_umap'
+            # TensorFlow does not yet publish Python 3.14 wheels, so ParametricUMAP
+            # tests are skipped there.
+            linux_py314:
+              imageName: 'ubuntu-latest'
+              python.version: '3.14'
+              uvExtras: '--extra plot'
+            windows_py314:
+              imageName: 'windows-latest'
+              python.version: '3.14'
+              uvExtras: '--extra plot'
+            # Exercise the optional RINND nearest-neighbor backend.
+            linux_py312_rinnd:
+              imageName: 'ubuntu-latest'
+              python.version: '3.12'
+              uvExtras: '--extra plot --extra rinnd'
         pool:
           vmImage: $(imageName)
 
@@ -109,7 +132,7 @@ stages:
 
         - script: |
             python -m pip install -U uv
-            uv sync --group cicd --extra plot --extra parametric_umap
+            uv sync --group cicd $(uvExtras)
           env:
             # Ensure that the LLVM_CONFIG environment variable is available during installation
             LLVM_CONFIG: $(LLVM_CONFIG)
@@ -121,6 +144,20 @@ stages:
             # export NUMBA_DISABLE_JIT=1 # Disable numba coverage so tests run on time for now.
             uv run pytest umap/tests --show-capture=no -v --disable-warnings --junitxml=junit/test-results.xml --cov=umap/ --cov-report=xml --cov-report=html
           displayName: 'Run tests'
+
+        # The committed 0.5.x compatibility fixtures only compare bit-for-bit
+        # with the numba version that generated them. Regenerate them from the
+        # final 0.5.x tree in this environment so the check always runs.
+        - script: |
+            set -e
+            LEGACY_COMMIT=a2e06aa18a5356e6a46a6a5fa619923b6ce12056
+            git fetch --depth 1 origin "$LEGACY_COMMIT"
+            mkdir -p "$(Agent.TempDirectory)/umap-0.5-final"
+            git archive "$LEGACY_COMMIT" umap | tar -x -C "$(Agent.TempDirectory)/umap-0.5-final"
+            uv run python umap/tests/data/make_compat_fixtures.py "$(Agent.TempDirectory)/umap-0.5-final" "$(Agent.TempDirectory)/compat_fixtures.npz"
+            UMAP_COMPAT_FIXTURES="$(Agent.TempDirectory)/compat_fixtures.npz" uv run pytest umap/tests/test_compatibility_regression.py -v
+          displayName: 'Verify bit-exact 0.5.x compatibility'
+          condition: and(succeededOrFailed(), eq(variables['Agent.OS'], 'Linux'))
 
         - task: PublishTestResults@2
           inputs:

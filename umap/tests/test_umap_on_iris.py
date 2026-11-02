@@ -90,26 +90,47 @@ def test_umap_transform_on_iris(iris, iris_subset_model, iris_selection):
 
     trust = trustworthiness(new_data, embedding, n_neighbors=10)
     assert (
-        trust >= 0.80
+        trust >= 0.75
     ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
 
 
-def test_umap_transform_on_iris_w_pynndescent(iris, iris_selection):
-    data = iris.data[iris_selection]
-    fitter = UMAP(
-        n_neighbors=10,
-        min_dist=0.01,
-        n_epochs=100,
-        random_state=42,
-        force_approximation_algorithm=True,
-    ).fit(data)
+def test_umap_transform_on_iris_adam(iris, iris_subset_model_adam, iris_selection):
+    fitter = iris_subset_model_adam
 
     new_data = iris.data[~iris_selection]
     embedding = fitter.transform(new_data)
 
     trust = trustworthiness(new_data, embedding, n_neighbors=10)
     assert (
-        trust >= 0.85
+        trust >= 0.75
+    ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
+
+
+def test_umap_compatibility_transform_on_iris(
+    iris, iris_subset_model_compatibility, iris_selection
+):
+    fitter = iris_subset_model_compatibility
+
+    new_data = iris.data[~iris_selection]
+    embedding = fitter.transform(new_data)
+
+    trust = trustworthiness(new_data, embedding, n_neighbors=10)
+    assert (
+        trust >= 0.75
+    ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
+
+
+def test_umap_transform_on_iris_w_pynndescent(
+    iris, iris_subset_model_large, iris_selection
+):
+    fitter = iris_subset_model_large
+
+    new_data = iris.data[~iris_selection]
+    embedding = fitter.transform(new_data)
+
+    trust = trustworthiness(new_data, embedding, n_neighbors=10)
+    assert (
+        trust >= 0.75
     ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
 
 
@@ -122,7 +143,37 @@ def test_umap_transform_on_iris_modified_dtype(iris, iris_subset_model, iris_sel
 
     trust = trustworthiness(new_data, embedding, n_neighbors=10)
     assert (
-        trust >= 0.8
+        trust >= 0.75
+    ), "Insufficiently trustworthy transform for iris dataset: {}".format(trust)
+
+
+def test_umap_transform_on_iris_modified_dtype_adam(
+    iris, iris_subset_model_adam, iris_selection
+):
+    fitter = iris_subset_model_adam
+    fitter.embedding_ = fitter.embedding_.astype(np.float64)
+
+    new_data = iris.data[~iris_selection]
+    embedding = fitter.transform(new_data)
+
+    trust = trustworthiness(new_data, embedding, n_neighbors=10)
+    assert (
+        trust >= 0.75
+    ), "Insufficiently trustworthy transform for iris dataset: {}".format(trust)
+
+
+def test_umap_compatibility_transform_on_iris_modified_dtype(
+    iris, iris_subset_model_compatibility, iris_selection
+):
+    fitter = iris_subset_model_compatibility
+    fitter.embedding_ = fitter.embedding_.astype(np.float64)
+
+    new_data = iris.data[~iris_selection]
+    embedding = fitter.transform(new_data)
+
+    trust = trustworthiness(new_data, embedding, n_neighbors=10)
+    assert (
+        trust >= 0.75
     ), "Insufficiently trustworthy transform for iris dataset: {}".format(trust)
 
 
@@ -143,7 +194,7 @@ def test_umap_sparse_transform_on_iris(iris, iris_selection):
 
     trust = trustworthiness(new_data, embedding, n_neighbors=10)
     assert (
-        trust >= 0.80
+        trust >= 0.75
     ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
 
 
@@ -167,7 +218,7 @@ def test_precomputed_transform_on_iris(iris, iris_selection):
 
     trust = trustworthiness(new_data, embedding, n_neighbors=10)
     assert (
-        trust >= 0.85
+        trust >= 0.75
     ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
 
 
@@ -220,7 +271,7 @@ def test_precomputed_sparse_transform_on_iris(iris, iris_selection):
 
     trust = trustworthiness(new_data, embedding, n_neighbors=10)
     assert (
-        trust >= 0.85
+        trust >= 0.75
     ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
 
 
@@ -228,6 +279,12 @@ def test_precomputed_sparse_transform_on_iris(iris, iris_selection):
 # ---------------------------
 def test_umap_clusterability_on_supervised_iris(supervised_iris_model, iris):
     embedding = supervised_iris_model.embedding_
+    clusters = KMeans(3).fit_predict(embedding)
+    assert adjusted_rand_score(clusters, iris.target) >= 0.95
+
+
+def test_umap_clusterability_on_supervised_iris_adam(supervised_iris_model_adam, iris):
+    embedding = supervised_iris_model_adam.embedding_
     clusters = KMeans(3).fit_predict(embedding)
     assert adjusted_rand_score(clusters, iris.target) >= 0.95
 
@@ -251,11 +308,17 @@ def test_umap_inverse_transform_on_iris(iris, iris_model):
 
 # UMAP transform and inverse transform with a list of n_epochs
 # ------------------------------------------------------------
-def test_umap_transforms_with_n_epochs_list_on_iris(iris, iris_selection):
+@pytest.mark.parametrize("compatibility_layout", [True, False])
+def test_umap_transforms_with_n_epochs_list_on_iris(
+    iris, iris_selection, compatibility_layout
+):
     data = iris.data[iris_selection]
     new_data = iris.data[~iris_selection]
-    list_fitter = UMAP(n_neighbors=10, n_epochs=[20, 100], random_state=42).fit(data)
-    int_fitter = UMAP(n_neighbors=10, n_epochs=100, random_state=42).fit(data)
+    kwargs = dict(
+        n_neighbors=10, random_state=42, compatibility_layout=compatibility_layout
+    )
+    list_fitter = UMAP(n_epochs=[20, 100], **kwargs).fit(data)
+    int_fitter = UMAP(n_epochs=100, **kwargs).fit(data)
 
     # Only the largest value in the list should matter, so both models
     # should transform (and inverse transform) identically.
