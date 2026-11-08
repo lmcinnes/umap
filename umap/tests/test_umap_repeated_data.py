@@ -80,6 +80,15 @@ def test_repeated_points_sparse_equal_nnz_rows():
     assert np.array_equal(model.embedding_[index][inverse], model.embedding_)
 
 
+# NumPy 2.0.0 returns a 2D inverse from np.unique(..., axis=0), which must
+# not add an extra axis to the embedding of dense data.
+def test_repeated_points_dense_embedding_shape():
+    data = np.eye(12)[np.random.RandomState(0).randint(0, 12, 60)]
+    model = UMAP(n_neighbors=3, unique=True, n_epochs=20).fit(data)
+    assert model._unique_inverse_.shape == (60,)
+    assert model.embedding_.shape == (60, 2)
+
+
 # Use force_approximation_algorithm in order to test
 # the region of the code that is called for n>4096
 def test_repeated_points_large_dense_binary(binary_repeats):
