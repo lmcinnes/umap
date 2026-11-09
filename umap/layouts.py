@@ -2985,6 +2985,11 @@ def _optimize_layout_inverse_single_epoch(
             )
 
 
+_nb_optimize_layout_inverse_single_epoch = numba.njit(
+    _optimize_layout_inverse_single_epoch
+)
+
+
 def optimize_layout_inverse(
     head_embedding,
     tail_embedding,
@@ -3093,7 +3098,7 @@ def optimize_layout_inverse(
     epoch_of_next_negative_sample = epochs_per_negative_sample.copy()
     epoch_of_next_sample = epochs_per_sample.copy()
 
-    optimize_fn = numba.njit(_optimize_layout_inverse_single_epoch)
+    optimize_fn = _nb_optimize_layout_inverse_single_epoch
 
     if tqdm_kwds is None:
         tqdm_kwds = {}
