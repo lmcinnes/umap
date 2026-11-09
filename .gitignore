@@ -27,11 +27,22 @@ umap_learn.egg-info
 doc/auto_examples
 doc/_build
 
-# build and dist
+# build directories
 build
 dist
 
-# coverage
+# local experiment data and generated artifacts
+/data/openml/
+/results/mnist_recursive*/
+/results/fashion_mnist_recursive*/
+/results/covtype_recursive*/
+experiments/
+
+# coverage reports
 .coverage
 .coverage.*
 .coverage.xml
+
+# vscode settings
+.vscode/settings.json
+.vscode/tasks.json

@@ -19,6 +19,11 @@ sklearn_full_version = tuple(
     int(n)
     for n in re.findall(r"[0-9]+\.[0-9]+\.?[0-9]*", sklearn_version_)[0].split(".")
 )
+sokalmichener_reference = pytest.mark.skipif(
+    scipy_full_version >= (1, 17),
+    reason="sokalmichener was deprecated in SciPy 1.15 and removed in 1.17",
+)
+
 
 # ===================================================
 #  Metrics Test cases
@@ -241,7 +246,7 @@ def test_russellrao(binary_data, binary_distances):
     binary_check("russellrao", binary_data, binary_distances)
 
 
-@pytest.mark.skipif(sklearn_full_version >= (1, 8), reason="Removed in sklearn 1.8")
+@sokalmichener_reference
 def test_sokalmichener(binary_data, binary_distances):
     binary_check("sokalmichener", binary_data, binary_distances)
 
@@ -388,7 +393,7 @@ def test_sparse_russellrao(sparse_binary_data):
     sparse_binary_check("russellrao", sparse_binary_data)
 
 
-@pytest.mark.skipif(sklearn_full_version >= (1, 8), reason="Removed in sklearn 1.8")
+@sokalmichener_reference
 def test_sparse_sokalmichener(sparse_binary_data):
     sparse_binary_check("sokalmichener", sparse_binary_data)
 
@@ -513,7 +518,7 @@ def test_hellinger_proportional_inputs(dtype):
     x = np.array([1.0, 2.0], dtype=dtype)
     y = 2.0 * x
     distance = dist.hellinger(x, y)
-    tolerance = np.sqrt(np.finfo(dtype).eps)
+    tolerance = float(np.sqrt(np.finfo(dtype).eps))
 
     assert np.isfinite(distance)
     assert distance == pytest.approx(0.0, abs=tolerance)

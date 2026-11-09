@@ -99,6 +99,25 @@ narrower, taller, shorter, sloping one way or another); this results in
 less local density in high dimensional space, and this lack of local
 density has been preserved by DensMAP.
 
+It is worth being clear that DensMAP is an objective rather than a layout
+optimizer. We have left the optimizer at its default above, but DensMAP can
+also be used with either of the new optimizers. For example, to use Adam we
+can write:
+
+.. code:: python3
+
+    adam_dens_mapper = umap.UMAP(
+        densmap=True,
+        compatibility_layout=False,
+        optimizer="adam",
+        random_state=42,
+    ).fit(mnist.data)
+
+Thus there is no need for a special optimizer name for DensMAP. The old
+development names ``"densmap_adam"`` and ``"densmap_momentum"`` are no
+longer accepted; ``densmap=True`` should be set independently instead. See
+:doc:`optimizers` for more detail on choosing a layout optimizer.
+
 Let’s now look at the Fashion-MNIST dataset; as before we’ll start by
 reminding ourselves what the default UMAP results look like:
 
@@ -119,7 +138,6 @@ reminding ourselves what the default UMAP results look like:
     umap.plot.points(mapper, labels=fmnist.target, width=500, height=500)
 
 .. image:: images/densmap_demo_13_1.png
-
 
 Now let’s try running DensMAP. As before that is as simple as setting
 the ``densmap=True`` flag.
@@ -199,7 +217,7 @@ matplotlib and a scatter plot with larger point size:
 
 
 Aside from seeing the issues with overplotting we can see that there
-are, in fact, quite a few points that create a very soft halo of of
+are, in fact, quite a few points that create a very soft halo of
 sparse points around the fringes.
 
 Now let’s try going the other way and reduce ``dens_lambda`` to a small

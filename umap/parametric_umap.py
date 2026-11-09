@@ -133,9 +133,10 @@ class ParametricUMAP(UMAP):
         # (different than n_epochs which is specific to each sample)
         self.n_training_epochs = 1
 
-        # Set optimizer.
+        # Keras optimizer for training the network (``self.optimizer`` is the
+        # UMAP layout optimizer parameter, which ParametricUMAP does not use).
         # Adam is better for parametric_embedding. Use gradient clipping by value.
-        self.optimizer = keras.optimizers.Adam(1e-3, clipvalue=4.0)
+        self.keras_optimizer = keras.optimizers.Adam(1e-3, clipvalue=4.0)
 
         if self.encoder is not None:
             if encoder.outputs[0].shape[-1] != self.n_components:
@@ -335,7 +336,8 @@ class ParametricUMAP(UMAP):
             autoencoder_loss=self.autoencoder_loss,
             landmark_loss_fn=self.landmark_loss_fn,
             landmark_loss_weight=self.landmark_loss_weight,
-            optimizer=self.optimizer,
+            # Not pickled; UMAPModel creates a fresh Adam when it is missing.
+            optimizer=getattr(self, "keras_optimizer", None),
         )
 
     def _fit_embed_data(self, X, n_epochs, init, random_state, landmark_positions=None):
@@ -462,7 +464,8 @@ class ParametricUMAP(UMAP):
             (k, v)
             for (k, v) in self.__dict__.items()
             if should_pickle(k, v)
-            and k not in ("optimizer", "encoder", "decoder", "parametric_model")
+            and k
+            not in ("keras_optimizer", "encoder", "decoder", "parametric_model")
         )
 
     def save(self, save_location, verbose=True, exclude_raw_data=False):

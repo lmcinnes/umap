@@ -1,0 +1,356 @@
+import numpy as np
+import pytest
+from scipy.sparse import csr_matrix
+from sklearn.preprocessing import normalize
+
+import umap.label_prop as label_prop
+import umap.umap_ as umap_module
+from umap import UMAP
+
+
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_procrustes_align_preserves_input_precision(dtype):
+    left = np.eye(3, 2, dtype=dtype)
+    right = np.array([[0, 1], [-1, 0], [1, 1]], dtype=dtype)
+
+    rotation = label_prop.procrustes_align(left, right)
+
+    assert rotation.dtype == dtype
+    assert rotation.flags.c_contiguous
+    np.testing.assert_allclose(rotation.T @ rotation, np.eye(2), atol=1e-5)
+
+
+def test_coarsen_graph_can_remove_partition_self_edges():
+    graph = csr_matrix(np.ones((6, 6), dtype=np.float32))
+    graph.setdiag(0.0)
+    labels = np.array([0, 0, 0, 1, 1, 1], dtype=np.int32)
+
+    _, reduced_graph = label_prop._coarsen_graph(graph, labels, remove_diagonal=True)
+
+    assert np.count_nonzero(reduced_graph.diagonal()) == 0
+    assert reduced_graph.nnz == 2
+
+
+def test_coarsen_graph_preserves_noncanonical_sparse_product_behavior():
+    graph = csr_matrix(
+        (
+            np.array([0.25, 0.5, 0.125], dtype=np.float32),
+            np.array([1, 1, 2], dtype=np.int32),
+            np.array([0, 3, 3, 3], dtype=np.int32),
+        ),
+        shape=(3, 3),
+    )
+    labels = np.array([0, 1, 1], dtype=np.int32)
+    reduction_map = csr_matrix(
+        (np.ones(labels.shape[0]), labels, np.arange(labels.shape[0] + 1)),
+        shape=(labels.shape[0], labels.max() + 1),
+    )
+    complement_graph = graph.astype(np.float64)
+    complement_graph.data = np.log1p(-np.clip(complement_graph.data, 0.0, 1.0 - 1e-16))
+    expected = reduction_map.T * complement_graph * reduction_map
+    expected.data = 1.0 - np.exp(expected.data)
+    expected.eliminate_zeros()
+
+    _, result = label_prop._coarsen_graph(graph, labels)
+
+    assert not graph.has_canonical_format
+    np.testing.assert_array_equal(
+        result.toarray(), expected.astype(np.float32).toarray()
+    )
+
+
+def test_direct_coarsening_and_expansion_handle_empty_graph():
+    graph = csr_matrix((4, 4), dtype=np.float32)
+    labels = np.array([0, 0, 1, 1], dtype=np.int32)
+    coarse_layout = np.arange(6, dtype=np.float32).reshape(2, 3)
+
+    _, reduced_graph = label_prop._coarsen_graph(graph, labels)
+    expanded = label_prop._expand_layout(
+        graph.indptr, graph.indices, graph.data, labels, coarse_layout
+    )
+
+    assert reduced_graph.shape == (2, 2)
+    assert reduced_graph.nnz == 0
+    np.testing.assert_array_equal(expanded, 0.5 * coarse_layout[labels])
+
+
+@pytest.mark.parametrize("remove_diagonal", [False, True])
+def test_coarse_graph_from_labels_matches_sparse_products(remove_diagonal):
+    graph = csr_matrix(
+        np.array(
+            [
+                [0.25, 0.0, 0.5, 0.0, 0.125],
+                [0.75, 0.0, 0.0, 0.25, 0.0],
+                [0.0, 0.5, 1.0, 0.0, 0.0],
+                [0.125, 0.0, 0.25, 0.0, 0.5],
+                [0.0, 0.75, 0.0, 0.25, 0.0],
+            ],
+            dtype=np.float32,
+        )
+    )
+    labels = np.array([0, 0, 1, 2, 2], dtype=np.int32)
+    reduction_map = csr_matrix(
+        (np.ones(labels.shape[0]), labels, np.arange(labels.shape[0] + 1)),
+        shape=(labels.shape[0], labels.max() + 1),
+    )
+    complement_graph = graph.astype(np.float64)
+    complement_graph.data = np.log1p(-np.clip(complement_graph.data, 0.0, 1.0 - 1e-16))
+    expected = reduction_map.T * complement_graph * reduction_map
+    expected.data = 1.0 - np.exp(expected.data)
+    expected.eliminate_zeros()
+    if remove_diagonal:
+        expected.setdiag(0.0)
+        expected.eliminate_zeros()
+    expected = expected.astype(np.float32)
+
+    result = label_prop._coarse_graph_from_labels(
+        graph, labels, remove_diagonal=remove_diagonal
+    )
+
+    assert result.dtype == np.float32
+    assert result.has_sorted_indices
+    np.testing.assert_allclose(result.toarray(), expected.toarray(), rtol=1e-6)
+
+
+def test_expand_layout_matches_sparse_expansion():
+    graph = csr_matrix(
+        np.array(
+            [
+                [0.0, 1.0, 2.0, 0.0],
+                [3.0, 0.0, 4.0, 5.0],
+                [0.0, 0.0, 0.0, 0.0],
+                [6.0, 7.0, 0.0, 0.0],
+            ],
+            dtype=np.float32,
+        )
+    )
+    labels = np.array([0, 0, 1, 1], dtype=np.int32)
+    coarse_layout = np.arange(6, dtype=np.float32).reshape(2, 3)
+    reduction_map = csr_matrix(
+        (np.ones(labels.shape[0]), labels, np.arange(labels.shape[0] + 1)),
+        shape=(labels.shape[0], labels.max() + 1),
+    )
+    expected = (
+        normalize(graph @ reduction_map, norm="l1") @ coarse_layout
+        + normalize(reduction_map, norm="l1") @ coarse_layout
+    ) / 2.0
+
+    result = label_prop._expand_layout(
+        graph.indptr, graph.indices, graph.data, labels, coarse_layout
+    )
+
+    assert result.dtype == np.float64
+    np.testing.assert_allclose(result, expected, rtol=1e-7, atol=1e-7)
+
+
+def test_diverse_hubs_avoid_adjacent_candidates_when_possible():
+    graph = csr_matrix(
+        np.array(
+            [
+                [0, 1, 1, 0, 0, 0],
+                [1, 0, 1, 0, 0, 0],
+                [1, 1, 0, 1, 0, 0],
+                [0, 0, 1, 0, 1, 1],
+                [0, 0, 0, 1, 0, 1],
+                [0, 0, 0, 1, 1, 0],
+            ],
+            dtype=np.float32,
+        )
+    )
+    labels = np.full(6, -1, dtype=np.int32)
+    degrees = np.asarray(graph.sum(axis=1)).ravel()
+
+    result = label_prop.initialize_labels_from_diverse_hubs(
+        labels, 2, degrees, graph.indptr, graph.indices
+    )
+    hubs = np.flatnonzero(result >= 0)
+
+    assert hubs.shape[0] == 2
+    assert graph[hubs[0], hubs[1]] == 0.0
+
+
+@pytest.mark.parametrize(
+    "schedule, expected_initial, expected_next",
+    [
+        ("original", (8.0, 27.0), (8.0, 27.0)),
+        (
+            "strong_to_one",
+            (np.power(8.0, 0.25), np.power(27.0, 0.25)),
+            (np.power(np.power(8.0, 0.25), 0.25), np.power(np.power(27.0, 0.25), 0.25)),
+        ),
+    ],
+)
+def test_curve_parameter_schedules(schedule, expected_initial, expected_next):
+    initial = label_prop._initial_curve_parameters(8.0, 27.0, schedule)
+    following = label_prop._next_curve_parameters(*initial, schedule)
+
+    assert np.allclose(initial, expected_initial)
+    assert np.allclose(following, expected_next)
+
+
+def test_available_good_initialization_requires_finite_nonzero_spread():
+    good = np.array([[0.0, 0.0], [1.0, 2.0], [2.0, 4.0]], dtype=np.float32)
+    flat = np.ones((3, 2), dtype=np.float32)
+    nonfinite = good.copy()
+    nonfinite[0, 0] = np.nan
+
+    assert label_prop._good_initialization(good, 8, 4, "available")
+    assert not label_prop._good_initialization(flat, 8, 4, "available")
+    assert not label_prop._good_initialization(nonfinite, 8, 4, "available")
+    assert not label_prop._good_initialization(good, 8, 4, "heuristic")
+    assert label_prop._good_initialization(flat, 8, 4, "always")
+    assert label_prop._good_initialization(nonfinite, 8, 4, "always")
+    assert label_prop._good_initialization(None, 8, 4, "always")
+    assert not label_prop._good_initialization(good, 8, 4, "never")
+    assert not label_prop._good_initialization(None, 8, 4, "never")
+
+    with pytest.raises(ValueError, match="good_initialization_policy"):
+        label_prop._good_initialization(good, 8, 4, "unknown")
+
+
+@pytest.mark.parametrize("ratio", [2, 3, 4])
+@pytest.mark.parametrize("weights", ["transition", "fuzzy_union"])
+def test_umap_routes_recursive_options(monkeypatch, ratio, weights):
+    captured = {}
+
+    def fake_recursive_init(graph, data, a, b, **kwargs):
+        captured["ratio"] = kwargs["coarsening_ratio"]
+        captured["weights"] = kwargs["coarse_layout_weights"]
+        captured["coarsen_on_layout_weights"] = kwargs["coarsen_on_layout_weights"]
+        return (
+            np.random.RandomState(42)
+            .normal(size=(graph.shape[0], 2))
+            .astype(np.float32)
+        )
+
+    monkeypatch.setattr(umap_module, "recursive_init", fake_recursive_init)
+    data = np.random.RandomState(42).normal(size=(40, 4)).astype(np.float32)
+
+    UMAP(
+        init="recursive",
+        recursive_coarsening_ratio=ratio,
+        coarse_layout_weights=weights,
+        coarsen_on_layout_weights=False,
+        n_neighbors=5,
+        n_epochs=5,
+        random_state=42,
+    ).fit(data)
+
+    assert captured["ratio"] == ratio
+    assert captured["weights"] == weights
+    assert captured["coarsen_on_layout_weights"] is False
+
+
+def test_umap_routes_initialization_rescaling(monkeypatch):
+    captured = {}
+    original = umap_module._rescale_embedding
+
+    def capture_rescaling(*args, **kwargs):
+        captured.update(kwargs)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(umap_module, "_rescale_embedding", capture_rescaling)
+    data = np.random.RandomState(42).normal(size=(40, 4)).astype(np.float32)
+
+    UMAP(
+        init="recursive",
+        compatibility_layout=False,
+        init_rescale="graph_edge",
+        init_scale_factor=1.25,
+        n_neighbors=5,
+        n_epochs=5,
+        random_state=42,
+    ).fit(data)
+
+    assert captured["method"] == "graph_edge"
+    assert captured["scale_factor"] == 1.25
+    assert captured["graph"].shape == (40, 40)
+
+
+def test_pca_anchor_methods_have_expected_membership():
+    data = np.random.RandomState(8).normal(size=(40, 6)).astype(np.float32)
+    graph = csr_matrix(np.eye(40, dtype=np.float32))
+
+    sampled, sampled_mask = label_prop._anchor_reference(
+        graph,
+        data,
+        2,
+        "sampled_pca",
+        12,
+        np.random.RandomState(9),
+    )
+    full, full_mask = label_prop._anchor_reference(
+        graph,
+        data,
+        2,
+        "projected_pca",
+        12,
+        np.random.RandomState(9),
+    )
+
+    assert sampled.shape == (12, 2)
+    assert sampled_mask.sum() == 12
+    assert full.shape == (40, 2)
+    assert full_mask.all()
+    assert np.all(np.isfinite(sampled))
+    assert np.all(np.isfinite(full))
+    assert np.allclose(sampled.min(axis=0), 0.0)
+    assert np.allclose(full.max(axis=0), 10.0)
+
+
+def test_projected_pca_anchor_supports_sparse_projection():
+    data = csr_matrix(np.random.RandomState(10).normal(size=(30, 5)).astype(np.float32))
+    anchor, mask = label_prop._anchor_reference(
+        csr_matrix(np.eye(30, dtype=np.float32)),
+        data,
+        2,
+        "projected_pca",
+        10,
+        np.random.RandomState(11),
+    )
+
+    assert anchor.shape == (30, 2)
+    assert mask.all()
+    assert np.all(np.isfinite(anchor))
+
+
+def test_unknown_anchor_method_is_rejected():
+    with pytest.raises(ValueError, match="anchor_method"):
+        label_prop._anchor_reference(
+            csr_matrix(np.eye(5, dtype=np.float32)),
+            np.ones((5, 3), dtype=np.float32),
+            2,
+            "unknown",
+            5,
+            np.random.RandomState(13),
+        )
+
+
+def test_resolve_negative_selection_range_modes():
+    assert label_prop._resolve_negative_selection_range(123, "coarse_n") == 123
+    assert label_prop._resolve_negative_selection_range(123, "fixed_200k") == 200_000
+    assert (
+        label_prop._resolve_negative_selection_range(123, "scaled_coarse", scale=0.25)
+        == 31
+    )
+    assert (
+        label_prop._resolve_negative_selection_range(123, "scaled_coarse", scale=2.0)
+        == 123
+    )
+
+
+def test_resolve_negative_selection_range_rejects_unknown_mode():
+    with pytest.raises(ValueError, match="recursive_negative_selection_range_mode"):
+        label_prop._resolve_negative_selection_range(16, "bad_mode")
+
+
+def test_resolve_depth_schedule_supports_scalars_and_default_dicts():
+    assert label_prop._resolve_depth_schedule(4.0, 3) == 4.0
+    assert label_prop._resolve_depth_schedule({1: 8.0, "default": 4.0}, 1) == 8.0
+    assert label_prop._resolve_depth_schedule({1: 8.0, "default": 4.0}, 3) == 4.0
+    assert label_prop._resolve_depth_schedule({"2": 0.25, "default": 0.5}, 2) == 0.25
+
+
+def test_resolve_depth_schedule_requires_depth_or_default():
+    with pytest.raises(ValueError, match="depth schedule dict"):
+        label_prop._resolve_depth_schedule({1: 2.0}, 3)

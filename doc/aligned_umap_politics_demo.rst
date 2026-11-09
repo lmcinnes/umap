@@ -831,7 +831,7 @@ the given year and state election. In practice we are undoubtedly going
 to get some of these wrong, and if the goal was a rigorous analysis
 based on this data a lot more care would need to be taken. Since this is
 just a demonstration and we’ll only be using this extra information as a
-colour channel in plots we can excuise a few errors here and there from
+colour channel in plots we can excuse a few errors here and there from
 in-exact data processing.
 
 .. code:: python3

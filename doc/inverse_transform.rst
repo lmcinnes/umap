@@ -142,11 +142,12 @@ it is hard to interpret what should go in some of those gaps as they
 don't really represent anything resembling a smooth transition).
 
 A further note: None of the test points chosen fall outside the convex
-hull of the embedding. This is deliberate -- the inverse transform
-function operates poorly outside the bounds of that convex hull. Be
-warned that if you select points to inverse transform that are outside
-the bounds about the embedding you will likely get strange results
-(often simply snapping to a particular source high dimensional vector).
+hull of the embedding. This is deliberate -- inverse transforms are most
+meaningful for locations that are represented by the fitted embedding. UMAP
+can produce a finite extrapolation for a point outside the convex hull, and
+will warn when doing so, but such a result should be interpreted with care.
+The input to ``inverse_transform`` must also have the same number of
+dimensions as the embedding itself.
 
 Let's continue the demonstration by looking at the Fashion MNIST
 dataset. As before we can load this through sklearn.

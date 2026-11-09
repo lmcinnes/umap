@@ -10,6 +10,15 @@ import numba
 from sklearn.utils.validation import check_is_fitted
 import scipy.sparse
 
+# All fastmath flags except nnan/ninf: LLVM 20+ (numba>=0.62) folds away inf/nan checks under those.
+FASTMATH_FLAGS = {"nsz", "arcp", "contract", "afn", "reassoc"}
+# Legacy (compatibility) layout kernels must reproduce umap-learn 0.5.x
+# bit-for-bit. FMA contraction ("contract", which also depends on the CPU) and
+# reciprocal approximation ("arcp", used by the densMAP gradient) both change
+# rounding, so they are excluded there. The remaining flags were verified not
+# to alter seeded compatibility results.
+COMPATIBILITY_FASTMATH_FLAGS = FASTMATH_FLAGS - {"contract", "arcp"}
+
 
 @numba.njit(parallel=True)
 def fast_knn_indices(X, n_neighbors):
@@ -209,7 +218,7 @@ def average_nn_distance(dist_matrix):
     An array with the average distance to each points nearest neighbors
 
     """
-    (row_idx, col_idx, val) = scipy.sparse.find(dist_matrix)
+    row_idx, col_idx, val = scipy.sparse.find(dist_matrix)
 
     # Count/sum is done per row
     count_non_zero_elems = np.bincount(row_idx)
@@ -223,3 +232,66 @@ def average_nn_distance(dist_matrix):
         )
 
     return averages
+
+
+@numba.njit(parallel=True, cache=True)
+def make_epochs_per_sample(weights, n_epochs):
+    result = np.full(weights.shape[0], -1.0, dtype=np.float64)
+    if weights.shape[0] == 0:
+        return result
+    max_weight = weights.max()
+    typed_n_epochs = weights.dtype.type(n_epochs)
+    for edge in numba.prange(weights.shape[0]):
+        n_samples = typed_n_epochs * (weights[edge] / max_weight)
+        if n_samples > 0.0:
+            result[edge] = float(n_epochs) / np.float64(n_samples)
+    return result
+
+
+@numba.njit(fastmath=FASTMATH_FLAGS, parallel=True, cache=True)
+def adaptive_bucket_sort(values, target_bucket_size=1000, sample_fraction=0.01):
+
+    n_values = values.shape[0]
+    n_buckets = max(1, (n_values + target_bucket_size - 1) // target_bucket_size)
+
+    if n_values <= 1024:
+        return np.argsort(values).astype(np.int32)
+
+    # Estimate bucket boundaries via sampling
+    sample_size = max(min(int(n_values * sample_fraction), 10_000), n_buckets * 10)
+    sample_indices = np.empty(sample_size, dtype=np.int32)
+    sample_values = np.empty(sample_size, dtype=np.float32)
+    step = n_values // sample_size
+    for i in numba.prange(sample_size):
+        sample_indices[i] = (i * step + (i * 17) % step) % n_values
+    for i in numba.prange(sample_size):
+        sample_values[i] = values[sample_indices[i]]
+    boundaries = np.quantile(sample_values, np.linspace(0, 1, n_buckets + 1)[1:-1])
+
+    # Parallel bucket assignment
+    bucket_assignments = np.empty(n_values, dtype=np.int32)
+    for i in numba.prange(n_values):
+        bucket = 0
+        for j in range(n_buckets - 1):
+            if values[i] <= boundaries[j]:
+                break
+            bucket += 1
+        bucket_assignments[i] = bucket
+
+    # Count bucket sizes
+    bucket_counts = np.zeros(n_buckets, dtype=np.int32)
+    for i in range(n_values):
+        bucket_counts[bucket_assignments[i]] += 1
+
+    # Create result by concatenating buckets
+    result = np.empty(n_values, dtype=np.int32)
+    bucket_starts = np.zeros(n_buckets, dtype=np.int32)
+    for i in range(1, n_buckets):
+        bucket_starts[i] = bucket_starts[i - 1] + bucket_counts[i - 1]
+
+    for i in range(n_values):
+        bucket = bucket_assignments[i]
+        result[bucket_starts[bucket]] = i
+        bucket_starts[bucket] += 1
+
+    return result
