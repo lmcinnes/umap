@@ -157,9 +157,8 @@ for UMAP (as used above) is 15, but we will look at values ranging from
     .. container:: umap-parameter-explorer-note
 
         Move the slider to change ``n_neighbors`` and see the embedding update
-        live. The interactive figure computes UMAP in your browser with the
-        WebAssembly port from `Embedding Atlas <https://apple.github.io/embedding-atlas/>`_,
-        so the layouts differ from the ones that ``umap-learn`` makes.
+        live. The figure runs UMAP on the same data in your browser, with the
+        WebAssembly port from `Embedding Atlas <https://apple.github.io/embedding-atlas/>`_.
 
 .. raw:: html
 

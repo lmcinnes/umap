@@ -23,19 +23,12 @@ const VIEW_HEIGHT = 420;
 
 const DEFAULT_PARAMETERS = { n_neighbors: 15, min_dist: 0.1 };
 
-function mulberry32(seed) {
-  return () => {
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-// Random points in the 4-dimensional unit cube, read as (R, G, B, a) colors.
-function randomColorCube() {
-  const random = mulberry32(SEED);
-  return Float32Array.from({ length: POINT_COUNT * INPUT_DIM }, random);
+// The data from the page: np.random.seed(42); np.random.rand(800, 4).
+// Each point is read as an (R, G, B, a) color.
+async function loadColorCube() {
+  const response = await fetch(new URL("data.json", import.meta.url));
+  const rows = await response.json();
+  return Float32Array.from(rows.flat());
 }
 
 // EmbeddingView colors points by category, so quantize RGB into a palette.
@@ -276,7 +269,7 @@ async function main() {
 
   document.documentElement.classList.add("umap-parameter-explorer-enabled");
 
-  const data = randomColorCube();
+  const data = await loadColorCube();
   const colors = colorCategories(data);
 
   for (const element of elements) {
