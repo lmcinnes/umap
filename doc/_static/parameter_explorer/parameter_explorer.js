@@ -27,6 +27,9 @@ const DEFAULT_PARAMETERS = { n_neighbors: 15, min_dist: 0.1 };
 // Each point is read as an (R, G, B, a) color.
 async function loadColorCube() {
   const response = await fetch(new URL("data.json", import.meta.url));
+  if (!response.ok) {
+    throw new Error(`Could not load the data: HTTP ${response.status}`);
+  }
   const rows = await response.json();
   return Float32Array.from(rows.flat());
 }
@@ -114,12 +117,25 @@ function fitViewport({ x, y }, width, height) {
   };
 }
 
-async function hasWebGPU() {
+// The same checks that the EmbeddingView renderer makes before it draws.
+async function canRenderEmbeddingView() {
+  if (navigator.gpu?.wgslLanguageFeatures == null) {
+    return false;
+  }
   try {
-    return (await navigator.gpu?.requestAdapter()) != null;
+    const adapter = await navigator.gpu.requestAdapter();
+    return adapter?.features.has("shader-f16") ?? false;
   } catch {
     return false;
   }
+}
+
+const ENABLED_CLASS = "umap-parameter-explorer-enabled";
+
+// Shows the static figures again, for example when the data does not load.
+function disableExplorers(error) {
+  console.error("UMAP parameter explorer:", error);
+  document.documentElement.classList.remove(ENABLED_CLASS);
 }
 
 function createSlider(parameter, values, initialValue) {
@@ -201,7 +217,10 @@ class ParameterExplorer {
     });
     new ResizeObserver(() => {
       this.width = container.clientWidth;
-      this.view.update({ width: this.width });
+      this.view.update({
+        width: this.width,
+        ...(this.followLayout && this.displayed && { viewportState: fitViewport(this.displayed, this.width, VIEW_HEIGHT) }),
+      });
     }).observe(container);
   }
 
@@ -227,7 +246,7 @@ class ParameterExplorer {
     const generation = ++this.generation;
     this.updates = this.updates
       .then(() => generation === this.generation && this.syncAndAnneal(generation))
-      .catch((error) => console.error("UMAP parameter explorer:", error));
+      .catch(disableExplorers);
     return this.updates;
   }
 
@@ -235,10 +254,11 @@ class ParameterExplorer {
     const { n_neighbors, min_dist } = this.parameters;
     if (this.umap === null || this.modelNeighbors !== n_neighbors) {
       // n_neighbors changes the fuzzy graph itself, so build a new model.
+      const umap = await createUMAP(POINT_COUNT, INPUT_DIM, 2, this.data, { nNeighbors: n_neighbors, minDist: min_dist, seed: SEED });
       this.umap?.destroy();
-      this.alignmentTarget = this.displayed;
-      this.umap = await createUMAP(POINT_COUNT, INPUT_DIM, 2, this.data, { nNeighbors: n_neighbors, minDist: min_dist, seed: SEED });
+      this.umap = umap;
       this.modelNeighbors = n_neighbors;
+      this.alignmentTarget = this.displayed;
       await this.anneal(generation, 1);
     } else {
       // min_dist only changes the low dimensional curve, so the current
@@ -263,25 +283,26 @@ class ParameterExplorer {
 
 async function main() {
   const elements = document.querySelectorAll(".umap-parameter-explorer");
-  if (elements.length === 0 || !(await hasWebGPU())) {
+  if (elements.length === 0 || !(await canRenderEmbeddingView())) {
     return;
   }
 
-  document.documentElement.classList.add("umap-parameter-explorer-enabled");
-
   const data = await loadColorCube();
   const colors = colorCategories(data);
+  const explorers = Array.from(elements, (element) => new ParameterExplorer(element, data, colors));
 
-  for (const element of elements) {
-    const explorer = new ParameterExplorer(element, data, colors);
+  // Show the explorers only when everything is ready. They start when they
+  // scroll into view, which they can do only once they are shown.
+  document.documentElement.classList.add(ENABLED_CLASS);
+  for (const explorer of explorers) {
     const observer = new IntersectionObserver((entries) => {
       if (entries.some((entry) => entry.isIntersecting)) {
         observer.disconnect();
         explorer.update();
       }
     });
-    observer.observe(element);
+    observer.observe(explorer.element);
   }
 }
 
-main();
+main().catch(disableExplorers);
