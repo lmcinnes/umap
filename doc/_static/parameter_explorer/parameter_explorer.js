@@ -14,6 +14,10 @@ const INPUT_DIM = 4;
 const SEED = 42;
 const TOTAL_EPOCHS = 500;
 const EPOCHS_PER_FRAME = 10;
+// A converged layout only needs a gentle push when min_dist changes. A high
+// learning rate would scatter it and make it look like a restart.
+const WARM_START_LEARNING_RATE = 0.2;
+const VIEW_MARGIN = 0.9;
 const COLOR_LEVELS = 6;
 const VIEW_HEIGHT = 420;
 
@@ -62,6 +66,59 @@ function splitCoordinates(embedding) {
     y[i] = embedding[2 * i + 1];
   }
   return { x, y };
+}
+
+const mean = (values) => values.reduce((sum, value) => sum + value, 0) / values.length;
+
+// Similarity transform (rotation, optional reflection, uniform scale and
+// translation) that best maps `source` onto `target` in the least squares
+// sense (2D orthogonal Procrustes analysis).
+function alignTo(source, target) {
+  const [sx, sy, tx, ty] = [source.x, source.y, target.x, target.y].map(mean);
+  let dot = 0;
+  let cross = 0;
+  let mirroredDot = 0;
+  let mirroredCross = 0;
+  let sourceNorm = 0;
+  for (let i = 0; i < POINT_COUNT; i++) {
+    const [ax, ay] = [source.x[i] - sx, source.y[i] - sy];
+    const [bx, by] = [target.x[i] - tx, target.y[i] - ty];
+    dot += ax * bx + ay * by;
+    cross += ax * by - ay * bx;
+    mirroredDot += ax * bx - ay * by;
+    mirroredCross += ax * by + ay * bx;
+    sourceNorm += ax * ax + ay * ay;
+  }
+  const mirror = Math.hypot(mirroredDot, mirroredCross) > Math.hypot(dot, cross);
+  const [c, d] = mirror ? [mirroredDot, mirroredCross] : [dot, cross];
+  const scale = Math.hypot(c, d) / Math.max(sourceNorm, 1e-12);
+  const angle = Math.atan2(d, c);
+  const [cos, sin] = [scale * Math.cos(angle), scale * Math.sin(angle)];
+
+  const x = new Float32Array(POINT_COUNT);
+  const y = new Float32Array(POINT_COUNT);
+  for (let i = 0; i < POINT_COUNT; i++) {
+    const ax = source.x[i] - sx;
+    const ay = mirror ? sy - source.y[i] : source.y[i] - sy;
+    x[i] = tx + cos * ax - sin * ay;
+    y[i] = ty + sin * ax + cos * ay;
+  }
+  return { x, y };
+}
+
+// EmbeddingView maps the larger side of the view to [-1, 1] / scale data units.
+function fitViewport({ x, y }, width, height) {
+  const extent = (values) => values.reduce(([min, max], value) => [Math.min(min, value), Math.max(max, value)], [Infinity, -Infinity]);
+  const [xMin, xMax] = extent(x);
+  const [yMin, yMax] = extent(y);
+  const largerSide = Math.max(width, height);
+  const halfWidth = Math.max((xMax - xMin) / 2, 1e-6);
+  const halfHeight = Math.max((yMax - yMin) / 2, 1e-6);
+  return {
+    x: (xMin + xMax) / 2,
+    y: (yMin + yMax) / 2,
+    scale: VIEW_MARGIN * Math.min(width / largerSide / halfWidth, height / largerSide / halfHeight),
+  };
 }
 
 async function hasWebGPU() {
@@ -115,6 +172,12 @@ class ParameterExplorer {
     this.modelNeighbors = null;
     this.generation = 0;
     this.updates = Promise.resolve();
+    // The view follows the layout until the reader pans or zooms.
+    this.followLayout = true;
+    // A new model starts from a new spectral layout. Each of its frames is
+    // aligned to the layout shown before, so the picture does not flip or turn.
+    this.displayed = null;
+    this.alignmentTarget = null;
 
     const values = parameterValues(element);
     const { label, slider, output } = createSlider(this.parameter, values, this.parameters[this.parameter]);
@@ -128,26 +191,37 @@ class ParameterExplorer {
     container.className = "umap-parameter-explorer__view";
     element.replaceChildren(label, container);
 
-    this.view = new EmbeddingView(container, this.viewProps({ x: new Float32Array(POINT_COUNT), y: new Float32Array(POINT_COUNT) }));
-    new ResizeObserver(() => this.view.update({ width: container.clientWidth })).observe(container);
-  }
-
-  viewProps(coordinates) {
-    return {
-      data: { ...coordinates, category: this.colors.category },
-      categoryColors: this.colors.categoryColors,
-      width: this.element.clientWidth,
+    this.width = container.clientWidth;
+    this.view = new EmbeddingView(container, {
+      data: { x: new Float32Array(POINT_COUNT), y: new Float32Array(POINT_COUNT), category: colors.category },
+      categoryColors: colors.categoryColors,
+      width: this.width,
       height: VIEW_HEIGHT,
       config: { colorScheme: "light", autoLabelEnabled: false },
-    };
+      onViewportState: (viewportState) => {
+        this.followLayout = false;
+        this.view.update({ viewportState });
+      },
+    });
+    new ResizeObserver(() => {
+      this.width = container.clientWidth;
+      this.view.update({ width: this.width });
+    }).observe(container);
   }
 
   render() {
-    this.view.update({ data: { ...splitCoordinates(this.umap.embedding), category: this.colors.category } });
+    const raw = splitCoordinates(this.umap.embedding);
+    const coordinates = this.alignmentTarget ? alignTo(raw, this.alignmentTarget) : raw;
+    this.displayed = coordinates;
+    this.view.update({
+      data: { ...coordinates, category: this.colors.category },
+      ...(this.followLayout && { viewportState: fitViewport(coordinates, this.width, VIEW_HEIGHT) }),
+    });
   }
 
   setParameter(value) {
     this.parameters[this.parameter] = value;
+    this.followLayout = true;
     this.update();
   }
 
@@ -166,21 +240,24 @@ class ParameterExplorer {
     if (this.umap === null || this.modelNeighbors !== n_neighbors) {
       // n_neighbors changes the fuzzy graph itself, so build a new model.
       this.umap?.destroy();
+      this.alignmentTarget = this.displayed;
       this.umap = await createUMAP(POINT_COUNT, INPUT_DIM, 2, this.data, { nNeighbors: n_neighbors, minDist: min_dist, seed: SEED });
       this.modelNeighbors = n_neighbors;
+      await this.anneal(generation, 1);
     } else {
       // min_dist only changes the low dimensional curve, so the current
       // layout is a valid start: re-optimize it in place.
       this.umap.setParameters({ minDist: min_dist });
+      await this.anneal(generation, WARM_START_LEARNING_RATE);
     }
-    await this.anneal(generation);
   }
 
   // Replays UMAP's linear learning-rate decay in small steps so that every
   // frame shows the layout as it converges. A newer update stops it.
-  async anneal(generation) {
-    for (let epoch = 0; epoch < TOTAL_EPOCHS && generation === this.generation; epoch += EPOCHS_PER_FRAME) {
-      this.umap.setParameters({ learningRate: 1 - epoch / TOTAL_EPOCHS });
+  async anneal(generation, initialLearningRate) {
+    const epochs = TOTAL_EPOCHS * initialLearningRate;
+    for (let epoch = 0; epoch < epochs && generation === this.generation; epoch += EPOCHS_PER_FRAME) {
+      this.umap.setParameters({ learningRate: initialLearningRate * (1 - epoch / epochs) });
       await this.umap.step(EPOCHS_PER_FRAME);
       this.render();
       await new Promise(requestAnimationFrame);
