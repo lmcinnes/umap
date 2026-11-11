@@ -1,0 +1,30 @@
+.umap-parameter-explorer {
+  margin: 0 0 24px;
+  border: 1px solid #e1e4e5;
+  background: #fff;
+}
+
+.umap-parameter-explorer__control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e1e4e5;
+  font-weight: normal;
+}
+
+.umap-parameter-explorer__control input[type="range"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.umap-parameter-explorer__control output {
+  min-width: 3em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.umap-parameter-explorer__view {
+  width: 100%;
+}

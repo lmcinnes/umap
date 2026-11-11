@@ -1,0 +1,215 @@
+// Interactive UMAP parameter explorer for the "Basic UMAP Parameters" page.
+//
+// Each element with the class `umap-parameter-explorer` becomes a scatter plot
+// with a slider for one UMAP parameter. The embedding is computed in the
+// browser with the WebAssembly UMAP port from embedding-atlas and drawn with
+// its EmbeddingView component. The component needs WebGPU; without it the
+// static figures that follow the explorer stay visible.
+
+import { EmbeddingView } from "embedding-atlas/component.js";
+import { createUMAP } from "embedding-atlas/umap.js";
+
+const POINT_COUNT = 800;
+const INPUT_DIM = 4;
+const SEED = 42;
+const TOTAL_EPOCHS = 500;
+const EPOCHS_PER_FRAME = 10;
+const COLOR_LEVELS = 6;
+const VIEW_HEIGHT = 420;
+
+const DEFAULT_PARAMETERS = { n_neighbors: 15, min_dist: 0.1 };
+
+function mulberry32(seed) {
+  return () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Random points in the 4-dimensional unit cube, read as (R, G, B, a) colors.
+function randomColorCube() {
+  const random = mulberry32(SEED);
+  return Float32Array.from({ length: POINT_COUNT * INPUT_DIM }, random);
+}
+
+// EmbeddingView colors points by category, so quantize RGB into a palette.
+function colorCategories(data) {
+  const quantize = (value) => Math.min(COLOR_LEVELS - 1, Math.floor(value * COLOR_LEVELS));
+  const category = new Uint8Array(POINT_COUNT);
+  for (let i = 0; i < POINT_COUNT; i++) {
+    const [r, g, b] = data.subarray(i * INPUT_DIM, i * INPUT_DIM + 3).map(quantize);
+    category[i] = (r * COLOR_LEVELS + g) * COLOR_LEVELS + b;
+  }
+
+  const toChannel = (level) => Math.round(((level + 0.5) / COLOR_LEVELS) * 255);
+  const categoryColors = Array.from({ length: COLOR_LEVELS ** 3 }, (_, index) => {
+    const r = Math.floor(index / COLOR_LEVELS ** 2);
+    const g = Math.floor(index / COLOR_LEVELS) % COLOR_LEVELS;
+    const b = index % COLOR_LEVELS;
+    return `rgb(${toChannel(r)}, ${toChannel(g)}, ${toChannel(b)})`;
+  });
+
+  return { category, categoryColors };
+}
+
+function splitCoordinates(embedding) {
+  const x = new Float32Array(POINT_COUNT);
+  const y = new Float32Array(POINT_COUNT);
+  for (let i = 0; i < POINT_COUNT; i++) {
+    x[i] = embedding[2 * i];
+    y[i] = embedding[2 * i + 1];
+  }
+  return { x, y };
+}
+
+async function hasWebGPU() {
+  try {
+    return (await navigator.gpu?.requestAdapter()) != null;
+  } catch {
+    return false;
+  }
+}
+
+function createSlider(parameter, values, initialValue) {
+  const label = document.createElement("label");
+  label.className = "umap-parameter-explorer__control";
+
+  const name = document.createElement("code");
+  name.textContent = parameter;
+
+  const slider = document.createElement("input");
+  slider.type = "range";
+  slider.min = "0";
+  slider.max = String(values.length - 1);
+  slider.step = "1";
+  slider.value = String(values.indexOf(initialValue));
+
+  const output = document.createElement("output");
+  output.textContent = String(initialValue);
+
+  label.append(name, slider, output);
+  return { label, slider, output };
+}
+
+function parameterValues(element) {
+  const { min, max, step, values } = element.dataset;
+  if (values) {
+    return values.split(",").map(Number);
+  }
+  const stepSize = Number(step);
+  const count = Math.round((Number(max) - Number(min)) / stepSize) + 1;
+  const decimals = (step.split(".")[1] ?? "").length;
+  return Array.from({ length: count }, (_, i) => Number((Number(min) + i * stepSize).toFixed(decimals)));
+}
+
+class ParameterExplorer {
+  constructor(element, data, colors) {
+    this.element = element;
+    this.data = data;
+    this.colors = colors;
+    this.parameter = element.dataset.parameter;
+    this.parameters = { ...DEFAULT_PARAMETERS };
+    this.umap = null;
+    this.modelNeighbors = null;
+    this.generation = 0;
+    this.updates = Promise.resolve();
+
+    const values = parameterValues(element);
+    const { label, slider, output } = createSlider(this.parameter, values, this.parameters[this.parameter]);
+    slider.addEventListener("input", () => {
+      const value = values[Number(slider.value)];
+      output.textContent = String(value);
+      this.setParameter(value);
+    });
+
+    const container = document.createElement("div");
+    container.className = "umap-parameter-explorer__view";
+    element.replaceChildren(label, container);
+
+    this.view = new EmbeddingView(container, this.viewProps({ x: new Float32Array(POINT_COUNT), y: new Float32Array(POINT_COUNT) }));
+    new ResizeObserver(() => this.view.update({ width: container.clientWidth })).observe(container);
+  }
+
+  viewProps(coordinates) {
+    return {
+      data: { ...coordinates, category: this.colors.category },
+      categoryColors: this.colors.categoryColors,
+      width: this.element.clientWidth,
+      height: VIEW_HEIGHT,
+      config: { colorScheme: "light", autoLabelEnabled: false },
+    };
+  }
+
+  render() {
+    this.view.update({ data: { ...splitCoordinates(this.umap.embedding), category: this.colors.category } });
+  }
+
+  setParameter(value) {
+    this.parameters[this.parameter] = value;
+    this.update();
+  }
+
+  // Updates run one after another. Each update brings the model in line with
+  // the current parameters, so an update that a newer one supersedes is skipped.
+  update() {
+    const generation = ++this.generation;
+    this.updates = this.updates
+      .then(() => generation === this.generation && this.syncAndAnneal(generation))
+      .catch((error) => console.error("UMAP parameter explorer:", error));
+    return this.updates;
+  }
+
+  async syncAndAnneal(generation) {
+    const { n_neighbors, min_dist } = this.parameters;
+    if (this.umap === null || this.modelNeighbors !== n_neighbors) {
+      // n_neighbors changes the fuzzy graph itself, so build a new model.
+      this.umap?.destroy();
+      this.umap = await createUMAP(POINT_COUNT, INPUT_DIM, 2, this.data, { nNeighbors: n_neighbors, minDist: min_dist, seed: SEED });
+      this.modelNeighbors = n_neighbors;
+    } else {
+      // min_dist only changes the low dimensional curve, so the current
+      // layout is a valid start: re-optimize it in place.
+      this.umap.setParameters({ minDist: min_dist });
+    }
+    await this.anneal(generation);
+  }
+
+  // Replays UMAP's linear learning-rate decay in small steps so that every
+  // frame shows the layout as it converges. A newer update stops it.
+  async anneal(generation) {
+    for (let epoch = 0; epoch < TOTAL_EPOCHS && generation === this.generation; epoch += EPOCHS_PER_FRAME) {
+      this.umap.setParameters({ learningRate: 1 - epoch / TOTAL_EPOCHS });
+      await this.umap.step(EPOCHS_PER_FRAME);
+      this.render();
+      await new Promise(requestAnimationFrame);
+    }
+  }
+}
+
+async function main() {
+  const elements = document.querySelectorAll(".umap-parameter-explorer");
+  if (elements.length === 0 || !(await hasWebGPU())) {
+    return;
+  }
+
+  const data = randomColorCube();
+  const colors = colorCategories(data);
+
+  for (const element of elements) {
+    document.querySelector(`.${element.dataset.fallback}`)?.setAttribute("hidden", "");
+    element.removeAttribute("hidden");
+
+    const explorer = new ParameterExplorer(element, data, colors);
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        observer.disconnect();
+        explorer.update();
+      }
+    });
+    observer.observe(element);
+  }
+}
+
+main();
