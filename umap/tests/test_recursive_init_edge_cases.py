@@ -235,3 +235,27 @@ def test_recursive_init_kwds_rejects_unknown_keys():
         _fit(data, recursive_init_kwds=dict(coarsening_ratio=2))
     with pytest.raises(ValueError, match="must be a dict"):
         _fit(data, recursive_init_kwds=[("hub_selection", "random")])
+
+
+@pytest.mark.parametrize(
+    "n_samples, n_features, n_components",
+    [
+        (6, 50, 7),  # more components than samples
+        (200, 3, 5),  # more components than features
+    ],
+)
+@pytest.mark.parametrize("anchor_method", ["sampled_pca", "projected_pca", "full_pca"])
+def test_recursive_init_more_components_than_pca_axes(
+    n_samples, n_features, n_components, anchor_method
+):
+    # PCA can only provide min(n_samples, n_features) axes for the anchor;
+    # the embedding must still have the requested number of components.
+    data = np.random.RandomState(0).normal(size=(n_samples, n_features))
+    embedding = _fit(
+        data.astype(np.float32),
+        n_components=n_components,
+        n_neighbors=min(15, n_samples - 1),
+        recursive_init_kwds={"anchor_method": anchor_method},
+    )
+    assert embedding.shape == (n_samples, n_components)
+    assert np.all(np.isfinite(embedding))

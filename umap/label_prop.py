@@ -241,6 +241,23 @@ def _scale_anchor(anchor):
     return anchor
 
 
+def _pad_anchor(anchor, n_components, random_state):
+    """Pad an anchor with uniform random axes up to ``n_components`` columns.
+
+    PCA yields at most ``min(n_samples, n_features)`` axes, so an anchor computed for
+    small or low-dimensional data can be narrower than the requested embedding. The
+    missing axes are filled with random coordinates in the same [0, 10] range that
+    :func:`_scale_anchor` produces, mirroring the random fallback of spectral init.
+    """
+    n_missing = n_components - anchor.shape[1]
+    if n_missing <= 0:
+        return anchor
+    padding = random_state.uniform(
+        low=0.0, high=10.0, size=(anchor.shape[0], n_missing)
+    ).astype(np.float32)
+    return np.ascontiguousarray(np.hstack([anchor, padding]))
+
+
 def _resolve_negative_selection_range(n_vertices, mode, scale=1.0):
     """Resolve the recursive negative-selection range for coarse optimizations."""
     if mode == "coarse_n":
@@ -324,7 +341,8 @@ def _anchor_reference(
         random_state=random_state,
     )
     if method == "sampled_pca":
-        return _scale_anchor(u * singular_values), sample_mask
+        anchor = _scale_anchor(u * singular_values)
+        return _pad_anchor(anchor, n_components, random_state), sample_mask
 
     if issparse(data):
         anchor = np.asarray(data @ components.T)
@@ -336,7 +354,8 @@ def _anchor_reference(
             )
         anchor = projection_data @ components.T
     anchor -= feature_mean @ components.T
-    return _scale_anchor(anchor), np.ones(n_samples, dtype=np.bool_)
+    anchor = _pad_anchor(_scale_anchor(anchor), n_components, random_state)
+    return anchor, np.ones(n_samples, dtype=np.bool_)
 
 
 @numba.njit(parallel=True, cache=True)
