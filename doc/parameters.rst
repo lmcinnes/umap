@@ -152,17 +152,20 @@ for UMAP (as used above) is 15, but we will look at values ranging from
     for n in (2, 5, 10, 20, 50, 100, 200):
         draw_umap(n_neighbors=n, title='n_neighbors = {}'.format(n))
 
-Move the slider to change ``n_neighbors`` and see the embedding update
-live. The interactive figure computes UMAP in your browser with the
-WebAssembly port from `Embedding Atlas <https://apple.github.io/embedding-atlas/>`_,
-so the layouts differ from the ones that ``umap-learn`` makes.
-Browsers without WebGPU show the static figures instead.
+.. only:: html
+
+    .. container:: umap-parameter-explorer-note
+
+        Move the slider to change ``n_neighbors`` and see the embedding update
+        live. The interactive figure computes UMAP in your browser with the
+        WebAssembly port from `Embedding Atlas <https://apple.github.io/embedding-atlas/>`_,
+        so the layouts differ from the ones that ``umap-learn`` makes.
 
 .. raw:: html
 
-   <div class="umap-parameter-explorer" data-parameter="n_neighbors" data-values="2,5,10,15,20,50,100,200" data-fallback="n-neighbors-figures" hidden></div>
+   <div class="umap-parameter-explorer" data-parameter="n_neighbors" data-values="2,5,10,15,20,50,100,200"></div>
 
-.. container:: n-neighbors-figures
+.. container:: umap-parameter-explorer-fallback
 
     .. image:: images/parameters_13_1.png
 
@@ -224,14 +227,18 @@ at a range of values from 0.0 through to 0.99.
     for d in (0.0, 0.1, 0.25, 0.5, 0.8, 0.99):
         draw_umap(min_dist=d, title='min_dist = {}'.format(d))
 
-Move the slider to change ``min_dist``. Because ``min_dist`` does not
-change the fuzzy graph, the current layout is optimized again from where it is.
+.. only:: html
+
+    .. container:: umap-parameter-explorer-note
+
+        Move the slider to change ``min_dist``. Because ``min_dist`` does not
+        change the fuzzy graph, the current layout is optimized again from where it is.
 
 .. raw:: html
 
-   <div class="umap-parameter-explorer" data-parameter="min_dist" data-min="0" data-max="0.99" data-step="0.01" data-fallback="min-dist-figures" hidden></div>
+   <div class="umap-parameter-explorer" data-parameter="min_dist" data-min="0" data-max="0.99" data-step="0.01"></div>
 
-.. container:: min-dist-figures
+.. container:: umap-parameter-explorer-fallback
 
     .. image:: images/parameters_16_1.png
 

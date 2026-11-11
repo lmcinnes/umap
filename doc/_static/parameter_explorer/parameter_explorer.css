@@ -1,3 +1,17 @@
+.umap-parameter-explorer,
+.umap-parameter-explorer-note {
+  display: none;
+}
+
+.umap-parameter-explorer-enabled .umap-parameter-explorer,
+.umap-parameter-explorer-enabled .umap-parameter-explorer-note {
+  display: block;
+}
+
+.umap-parameter-explorer-enabled .umap-parameter-explorer-fallback {
+  display: none;
+}
+
 .umap-parameter-explorer {
   margin: 0 0 24px;
   border: 1px solid #e1e4e5;

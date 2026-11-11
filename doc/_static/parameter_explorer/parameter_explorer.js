@@ -3,8 +3,8 @@
 // Each element with the class `umap-parameter-explorer` becomes a scatter plot
 // with a slider for one UMAP parameter. The embedding is computed in the
 // browser with the WebAssembly UMAP port from embedding-atlas and drawn with
-// its EmbeddingView component. The component needs WebGPU; without it the
-// static figures that follow the explorer stay visible.
+// its EmbeddingView component. The component needs WebGPU. Only with it does
+// the page show the explorers and their notes in place of the static figures.
 
 import { EmbeddingView } from "embedding-atlas/component.js";
 import { createUMAP } from "embedding-atlas/umap.js";
@@ -274,13 +274,12 @@ async function main() {
     return;
   }
 
+  document.documentElement.classList.add("umap-parameter-explorer-enabled");
+
   const data = randomColorCube();
   const colors = colorCategories(data);
 
   for (const element of elements) {
-    document.querySelector(`.${element.dataset.fallback}`)?.setAttribute("hidden", "");
-    element.removeAttribute("hidden");
-
     const explorer = new ParameterExplorer(element, data, colors);
     const observer = new IntersectionObserver((entries) => {
       if (entries.some((entry) => entry.isIntersecting)) {
