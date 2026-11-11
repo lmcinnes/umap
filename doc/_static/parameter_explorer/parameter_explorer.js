@@ -198,6 +198,9 @@ class ParameterExplorer {
       width: this.width,
       height: VIEW_HEIGHT,
       config: { colorScheme: "light", autoLabelEnabled: false },
+      // The explorer controls the viewport. Each frame fits it to the layout
+      // until the reader pans or zooms.
+      viewportState: { x: 0, y: 0, scale: 1 },
       onViewportState: (viewportState) => {
         this.followLayout = false;
         this.view.update({ viewportState });
