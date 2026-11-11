@@ -1080,7 +1080,7 @@ def fuzzy_simplicial_set(
             graph_only=True,
         )
 
-    knn_dists = knn_dists.astype(np.float32, copy=False)
+    knn_dists = np.ascontiguousarray(knn_dists, dtype=np.float32)
 
     sigmas, rhos = smooth_knn_dist(
         knn_dists,
