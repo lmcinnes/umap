@@ -716,8 +716,8 @@ def nearest_neighbors(
 
 @numba.njit(
     locals={
-        # A writable Numba type would reject read-only precomputed distances,
-        # even though this function never modifies them.
+        # Accept read-only precomputed distances without copying them merely
+        # for writability; Numba also accepts writable arrays with this type.
         "knn_dists": numba.types.Array(numba.types.float32, 2, "C", readonly=True),
         "sigmas": numba.types.float32[::1],
         "rhos": numba.types.float32[::1],
