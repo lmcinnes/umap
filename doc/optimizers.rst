@@ -220,10 +220,6 @@ optimization and provides a useful modern alternative to Adam. Adam is
 the intended default for new work, while momentum is worth comparing on
 datasets where the optimizer choice matters.
 
-The name ``"momentum"`` replaces the ``"standard"`` name used during
-early development of the new optimizer code. The old name is not
-accepted.
-
 Comparing the resulting embeddings
 ----------------------------------
 
@@ -506,10 +502,6 @@ test the new implementation before changing behavior. The main mappings
 for code that used names from development versions are:
 
 .. code:: ipython3
-
-    # Old development names:
-    # umap.UMAP(optimizer="standard")
-    # umap.UMAP(optimizer="densmap_adam")
     
     momentum_reducer = umap.UMAP(
         compatibility_layout=False,
