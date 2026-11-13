@@ -188,3 +188,78 @@ def test_umap_loss_grads_finite_under_xla():
     for g in grads():
         assert g is not None
         assert not np.any(np.isnan(np.asarray(g))), "NaN gradient under XLA"
+
+
+class _LargeArray(np.ndarray):
+    """Exercise the large-array branch without allocating half a gigabyte."""
+
+    @property
+    def nbytes(self):
+        return 500_000_001
+
+
+@tf_only
+@pytest.mark.parametrize("dims", [(4,), (2, 2, 1)])
+@pytest.mark.parametrize(
+    "large_data,large_landmarks",
+    [(True, False), (False, True), (True, True), (False, False)],
+)
+def test_edge_dataset_static_shapes(dims, large_data, large_landmarks):
+    from scipy.sparse import coo_matrix
+    from umap.parametric_umap import construct_edge_dataset
+
+    X = np.arange(8 * np.prod(dims), dtype=np.float32).reshape((8,) + dims)
+    landmarks = np.arange(16, dtype=np.float32).reshape(8, 2)
+    if large_data:
+        X = X.view(_LargeArray)
+    if large_landmarks:
+        landmarks = landmarks.view(_LargeArray)
+    graph = coo_matrix(
+        (np.ones(8), (np.arange(8), np.roll(np.arange(8), 1))), shape=(8, 8)
+    )
+    dataset, *_ = construct_edge_dataset(X, graph, 2, 4, True, 1.0, landmarks)
+    inputs, outputs = dataset.element_spec
+    assert inputs[0].shape == tf.TensorShape((4,) + dims)
+    assert inputs[1].shape == tf.TensorShape((4,) + dims)
+    assert outputs["reconstruction"].shape == inputs[0].shape
+    assert outputs["global_correlation"].shape == inputs[0].shape
+    assert outputs["landmark_to"].shape == tf.TensorShape((4, 2))
+    options = tf.data.Options()
+    options.threading.private_threadpool_size = 1
+    (head, tail), values = next(iter(dataset.with_options(options)))
+    # The feature's first value encodes its row, so check the sampled landmarks.
+    rows = np.asarray(head).reshape(4, -1)[:, 0].astype(int) // np.prod(dims)
+    np.testing.assert_array_equal(values["landmark_to"], landmarks[rows])
+    np.testing.assert_array_equal(values["reconstruction"], head)
+    np.testing.assert_array_equal(values["global_correlation"], head)
+    assert tail.shape == head.shape
+
+
+@tf_only
+@pytest.mark.parametrize(
+    "large_data,large_landmarks",
+    [(True, False), (False, True), (True, True), (False, False)],
+)
+def test_large_edge_dataset_trains(large_data, large_landmarks):
+    from scipy.sparse import coo_matrix
+    from umap.parametric_umap import construct_edge_dataset, UMAPModel
+
+    X = np.linspace(0, 1, 32, dtype=np.float32).reshape(8, 4)
+    landmarks = np.zeros((8, 2), dtype=np.float32)
+    if large_data:
+        X = X.view(_LargeArray)
+    if large_landmarks:
+        landmarks = landmarks.view(_LargeArray)
+    graph = coo_matrix(
+        (np.ones(8), (np.arange(8), np.roll(np.arange(8), 1))), shape=(8, 8)
+    )
+    dataset, *_ = construct_edge_dataset(X, graph, 2, 4, False, 0.0, landmarks)
+    options = tf.data.Options()
+    options.threading.private_threadpool_size = 1
+    dataset = dataset.with_options(options)
+    encoder = tf.keras.Sequential(
+        [tf.keras.layers.Input(shape=(4,)), tf.keras.layers.Dense(2)]
+    )
+    model = UMAPModel(1.0, 1.0, 2, encoder, None)
+    history = model.fit(dataset, epochs=1, steps_per_epoch=2, verbose=0)
+    assert np.isfinite(history.history["loss"]).all()
