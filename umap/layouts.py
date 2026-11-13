@@ -13,6 +13,8 @@ from umap.utils import (
 
 PUBLIC_OPTIMIZERS = ("adam", "momentum", "compatibility")
 GENERIC_NEGATIVE_SEARCH_MAX_CANDIDATES = 4
+# Below this size, waking numba threads costs more than a serial np.argsort.
+PARALLEL_ARGSORT_MIN_SIZE = 32_768
 
 # Small kernels accumulate all active incident-edge forces for a source before
 # applying one optimizer update. Empirical Iris/Digits force-balance sweeps show
@@ -1475,6 +1477,72 @@ def _finalize_update_buffer(updates, optimizer, momentum=0.0):
         updates[:] = 0.0
 
 
+@numba.njit(parallel=True, cache=True)
+def _parallel_argsort_if_distinct(values, n_chunks):
+    """Argsort ``values`` by sorting ``n_chunks`` chunks in parallel and merging.
+
+    Also returns whether the sorted values are strictly increasing. Only then
+    is the ascending order unique, so the result is exactly
+    ``np.argsort(values)``. Otherwise np.argsort's order among equal values
+    is its own and the caller must use np.argsort.
+    """
+    n_values = values.shape[0]
+    chunk_size = (n_values + n_chunks - 1) // n_chunks
+    order = np.empty(n_values, dtype=np.int32)
+    keys = np.empty(n_values, dtype=values.dtype)
+    for chunk in numba.prange(n_chunks):
+        start = chunk * chunk_size
+        end = min(start + chunk_size, n_values)
+        if start < end:
+            chunk_order = np.argsort(values[start:end])
+            for i in range(end - start):
+                order[start + i] = chunk_order[i] + start
+                keys[start + i] = values[chunk_order[i] + start]
+
+    # Keys travel with the order so the merge reads contiguous memory.
+    order_buffer = np.empty_like(order)
+    key_buffer = np.empty_like(keys)
+    run_size = chunk_size
+    while run_size < n_values:
+        n_merges = (n_values + 2 * run_size - 1) // (2 * run_size)
+        for merge in numba.prange(n_merges):
+            left = merge * 2 * run_size
+            middle = min(left + run_size, n_values)
+            right = min(left + 2 * run_size, n_values)
+            i = left
+            j = middle
+            k = left
+            while i < middle and j < right:
+                if keys[j] < keys[i]:
+                    order_buffer[k] = order[j]
+                    key_buffer[k] = keys[j]
+                    j += 1
+                else:
+                    order_buffer[k] = order[i]
+                    key_buffer[k] = keys[i]
+                    i += 1
+                k += 1
+            while i < middle:
+                order_buffer[k] = order[i]
+                key_buffer[k] = keys[i]
+                i += 1
+                k += 1
+            while j < right:
+                order_buffer[k] = order[j]
+                key_buffer[k] = keys[j]
+                j += 1
+                k += 1
+        order, order_buffer = order_buffer, order
+        keys, key_buffer = key_buffer, keys
+        run_size *= 2
+
+    n_not_increasing = 0
+    for i in numba.prange(n_values - 1):
+        if not keys[i] < keys[i + 1]:
+            n_not_increasing += 1
+    return order, n_not_increasing == 0
+
+
 def _projection_order_and_source_ranks(head_embedding, tail_embedding, random_state):
     """Order references by a random projection and locate every source rank.
 
@@ -1488,7 +1556,14 @@ def _projection_order_and_source_ranks(head_embedding, tail_embedding, random_st
     # Idle OpenBLAS threads keep spinning after a threaded dot and slow numba.
     with threadpool_limits(limits=1, user_api="blas"):
         tail_projection = np.dot(tail_embedding, projection_direction)
-    to_node_order = np.argsort(tail_projection).astype(np.int32)
+    all_distinct = False
+    n_threads = numba.get_num_threads()
+    if tail_projection.shape[0] >= PARALLEL_ARGSORT_MIN_SIZE and n_threads > 1:
+        to_node_order, all_distinct = _parallel_argsort_if_distinct(
+            tail_projection, n_threads
+        )
+    if not all_distinct:
+        to_node_order = np.argsort(tail_projection).astype(np.int32)
 
     if head_embedding.shape[0] == tail_embedding.shape[0]:
         source_ranks = np.empty(head_embedding.shape[0], dtype=np.int32)
