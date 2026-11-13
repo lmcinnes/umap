@@ -3599,6 +3599,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     return_counts=True,
                     axis=0,
                 )[1:4]
+                # NumPy 2.0.0 returns a 2D inverse for axis=0 (reverted in 2.0.1)
+                inverse = inverse.reshape(-1)
             if self.verbose:
                 print(
                     "Unique=True -> Number of data points reduced from ",
