@@ -275,6 +275,63 @@ def test_precomputed_sparse_transform_on_iris(iris, iris_selection):
     ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
 
 
+# Sparse precomputed distances with exactly n_neighbors entries per row
+# ----------------------
+def test_precomputed_sparse_transform_exactly_n_neighbors(iris, iris_selection):
+    n_neighbors = 10
+    data = iris.data[iris_selection]
+    fitter = UMAP(
+        n_neighbors=n_neighbors,
+        min_dist=0.01,
+        random_state=42,
+        n_epochs=100,
+        metric="precomputed",
+    ).fit(sparse.csr_matrix(squareform(pdist(data))))
+
+    new_data = iris.data[~iris_selection]
+    new_distances = cdist(new_data, data)
+    nearest = np.argsort(new_distances, axis=1)[:, :n_neighbors]
+    knn_distances = sparse.csr_matrix(
+        (
+            np.take_along_axis(new_distances, nearest, axis=1).ravel(),
+            nearest.ravel(),
+            np.arange(0, nearest.size + 1, n_neighbors),
+        ),
+        shape=new_distances.shape,
+    )
+
+    embedding = fitter.transform(knn_distances)
+
+    trust = trustworthiness(new_data, embedding, n_neighbors=10)
+    assert (
+        trust >= 0.75
+    ), "Insufficiently trustworthy transform for" "iris dataset: {}".format(trust)
+
+
+def test_precomputed_sparse_fit_exactly_n_neighbors(iris):
+    n_neighbors = 10
+    n_samples = iris.data.shape[0]
+    # Symmetric neighbourhoods: each sample is linked to the 5 samples on either
+    # side of it (wrapping around), so every row holds exactly n_neighbors distances.
+    rows = np.repeat(np.arange(n_samples), n_neighbors)
+    offsets = np.tile(np.r_[1:6, -5:0], n_samples)
+    cols = (rows + offsets) % n_samples
+    distances = np.linalg.norm(iris.data[rows] - iris.data[cols], axis=1)
+    distance_matrix = sparse.csr_matrix(
+        (distances, (rows, cols)), shape=(n_samples, n_samples)
+    )
+
+    embedding = UMAP(
+        n_neighbors=n_neighbors,
+        random_state=42,
+        n_epochs=20,
+        metric="precomputed",
+    ).fit_transform(distance_matrix)
+
+    assert embedding.shape == (n_samples, 2)
+    assert np.all(np.isfinite(embedding))
+
+
 # UMAP Clusterability on Iris
 # ---------------------------
 def test_umap_clusterability_on_supervised_iris(supervised_iris_model, iris):
