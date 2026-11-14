@@ -88,6 +88,7 @@ result resolves finer cluster structure in fewer epochs.
    :align: center
    :alt: UMAP 0.6 embedding of 3 million arXiv papers
 
+
 It is worth comparing the increased detail and fidelity provided by the new
 UMAP 0.6 optimizers. They resolve structure at much finer scales, and can
 significantly improve on the neighbourhood accuracy of UMAP 0.5 despite being
@@ -127,7 +128,10 @@ refining, in a recursive tower of initializations.
 
 The new recursive initialization provides a far better starting point, much
 closer to UMAP's final result than the messy blurs provided by spectral
-initialization or PCA, and it does so faster than either!
+initialization or PCA, and it does so faster than either! Admittedly this
+is the default settings for PCA, and with tuning one could make it faster
+while having relatively little impact on the quality -- but the quality
+of PCA is just not that great to start with.
 
 .. image:: images/whats_new_0_6_initialization.png
    :width: 700
@@ -136,7 +140,8 @@ initialization or PCA, and it does so faster than either!
 
 This results in a starting point that allows UMAP's optimizer to settle (to
 within 1% of the final layout) in far fewer epochs than older initialization
-approaches.
+approaches. You can see this in a race between different initialization methods 
+in the video below.
 
 .. raw:: html
 
@@ -148,6 +153,10 @@ approaches.
               allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
     </div>
 
+
+Overall the new initialization is both more robust that spectral, and more accurate than PCA.
+It provides an excellent starting point for further UMAP optimization, and does so in 
+a surprisingly computationally efficient manner.
 
 New optimizers
 --------------
