@@ -1,5 +1,6 @@
 import numba
 import numpy as np
+from threadpoolctl import threadpool_limits
 from tqdm.auto import tqdm
 
 import umap.distances as dist
@@ -1484,7 +1485,9 @@ def _projection_order_and_source_ranks(head_embedding, tail_embedding, random_st
     dim = head_embedding.shape[1]
     projection_direction = random_state.randn(dim)
     projection_direction /= np.linalg.norm(projection_direction)
-    tail_projection = np.dot(tail_embedding, projection_direction)
+    # Idle OpenBLAS threads keep spinning after a threaded dot and slow numba.
+    with threadpool_limits(limits=1, user_api="blas"):
+        tail_projection = np.dot(tail_embedding, projection_direction)
     to_node_order = np.argsort(tail_projection).astype(np.int32)
 
     if head_embedding.shape[0] == tail_embedding.shape[0]:
@@ -1492,10 +1495,11 @@ def _projection_order_and_source_ranks(head_embedding, tail_embedding, random_st
         source_ranks[to_node_order] = np.arange(tail_embedding.shape[0], dtype=np.int32)
     else:
         sorted_projection = tail_projection[to_node_order]
-        source_ranks = np.searchsorted(
-            sorted_projection,
-            np.dot(head_embedding, projection_direction),
-        ).astype(np.int32)
+        with threadpool_limits(limits=1, user_api="blas"):
+            head_projection = np.dot(head_embedding, projection_direction)
+        source_ranks = np.searchsorted(sorted_projection, head_projection).astype(
+            np.int32
+        )
         source_ranks = np.minimum(source_ranks, tail_embedding.shape[0] - 1)
 
     return to_node_order, source_ranks
