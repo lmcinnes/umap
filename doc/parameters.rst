@@ -115,6 +115,20 @@ choices, and plot the result.
             ax.scatter(u[:,0], u[:,1], u[:,2], c=data, s=100)
         plt.title(title, fontsize=18)
 
+.. raw:: html
+
+   <link rel="stylesheet" href="_static/parameter_explorer/parameter_explorer.css">
+   <script type="importmap">
+     {
+       "imports": {
+         "embedding-atlas/": "https://cdn.jsdelivr.net/npm/embedding-atlas@0.26.0/dist/",
+         "@uwdata/mosaic-core": "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-core@0.33.0/+esm",
+         "@uwdata/mosaic-sql": "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-sql@0.33.0/+esm"
+       }
+     }
+   </script>
+   <script type="module" src="_static/parameter_explorer/parameter_explorer.js"></script>
+
 ``n_neighbors``
 ~~~~~~~~~~~~~~~
 
@@ -138,33 +152,33 @@ for UMAP (as used above) is 15, but we will look at values ranging from
     for n in (2, 5, 10, 20, 50, 100, 200):
         draw_umap(n_neighbors=n, title='n_neighbors = {}'.format(n))
 
+.. only:: html
 
+    .. container:: umap-parameter-explorer-note
 
-.. image:: images/parameters_13_1.png
+        Move the slider to change ``n_neighbors`` and see the embedding update
+        live. The figure runs UMAP on the same data in your browser, with the
+        WebAssembly port from `Embedding Atlas <https://apple.github.io/embedding-atlas/>`_.
 
+.. raw:: html
 
+   <div class="umap-parameter-explorer" data-parameter="n_neighbors" data-values="2,5,10,15,20,50,100,200"></div>
 
-.. image:: images/parameters_13_2.png
+.. container:: umap-parameter-explorer-fallback
 
+    .. image:: images/parameters_13_1.png
 
+    .. image:: images/parameters_13_2.png
 
-.. image:: images/parameters_13_3.png
+    .. image:: images/parameters_13_3.png
 
+    .. image:: images/parameters_13_4.png
 
+    .. image:: images/parameters_13_5.png
 
-.. image:: images/parameters_13_4.png
+    .. image:: images/parameters_13_6.png
 
-
-
-.. image:: images/parameters_13_5.png
-
-
-
-.. image:: images/parameters_13_6.png
-
-
-
-.. image:: images/parameters_13_7.png
+    .. image:: images/parameters_13_7.png
 
 
 With a value of ``n_neighbors=2`` we see that UMAP merely glues together
@@ -212,28 +226,30 @@ at a range of values from 0.0 through to 0.99.
     for d in (0.0, 0.1, 0.25, 0.5, 0.8, 0.99):
         draw_umap(min_dist=d, title='min_dist = {}'.format(d))
 
+.. only:: html
 
-.. image:: images/parameters_16_1.png
+    .. container:: umap-parameter-explorer-note
 
+        Move the slider to change ``min_dist``. Because ``min_dist`` does not
+        change the fuzzy graph, the current layout is optimized again from where it is.
 
+.. raw:: html
 
-.. image:: images/parameters_16_2.png
+   <div class="umap-parameter-explorer" data-parameter="min_dist" data-min="0" data-max="0.99" data-step="0.01"></div>
 
+.. container:: umap-parameter-explorer-fallback
 
+    .. image:: images/parameters_16_1.png
 
-.. image:: images/parameters_16_3.png
+    .. image:: images/parameters_16_2.png
 
+    .. image:: images/parameters_16_3.png
 
+    .. image:: images/parameters_16_4.png
 
-.. image:: images/parameters_16_4.png
+    .. image:: images/parameters_16_5.png
 
-
-
-.. image:: images/parameters_16_5.png
-
-
-
-.. image:: images/parameters_16_6.png
+    .. image:: images/parameters_16_6.png
 
 
 Here we see that with ``min_dist=0.0`` UMAP manages to find small
@@ -266,7 +282,6 @@ points.
 
     draw_umap(n_components=1, title='n_components = 1')
 
-
 .. image:: images/parameters_19_1.png
 
 
@@ -276,7 +291,6 @@ of ``matplotlib``'s basic 3-dimensional plotting.
 .. code:: python3
 
     draw_umap(n_components=3, title='n_components = 3')
-
 
 .. parsed-literal::
 
