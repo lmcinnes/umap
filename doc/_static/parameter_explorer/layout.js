@@ -1,5 +1,5 @@
-// Layout code that the parameter explorer and its evaluation script share.
-// It does not touch the page, so it also runs in Node.
+// Layout code of the parameter explorer that does not touch the page, so it
+// can also run in Node, for example to evaluate the schedules below.
 
 export function splitCoordinates(embedding) {
   const count = embedding.length / 2;
@@ -62,9 +62,9 @@ export function* annealSchedule({ initialLearningRate, epochs, epochsPerFrame })
 // A new layout, like `UMAP().fit` with the default schedule.
 export const SCRATCH_SCHEDULE = { initialLearningRate: 1, epochs: 500, epochsPerFrame: 10 };
 
-// Continues a converged layout after a min_dist change. The evaluation in
-// doc/parameter_explorer_evaluation shows that this reaches layouts as close
-// to a new layout as a new layout with another random seed. Learning rates
+// Continues a converged layout after a min_dist change. An evaluation (see
+// https://github.com/lmcinnes/umap/pull/1341) shows that this reaches layouts
+// as close to a new layout as a new layout with another random seed. Learning rates
 // of 0.05 and lower do not fully apply large decreases of min_dist. The
 // explorer does not show these epochs, so they are a delay: keep them few.
 export const WARM_START_SCHEDULE = { initialLearningRate: 0.2, epochs: 100, epochsPerFrame: 10 };
