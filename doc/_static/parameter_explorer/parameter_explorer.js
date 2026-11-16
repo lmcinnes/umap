@@ -254,7 +254,7 @@ class ParameterExplorer {
       // min_dist only changes the low dimensional curve, so the converged
       // layout is a good start.
       this.umap.setParameters({ minDist: min_dist });
-      await this.warmStart(generation);
+      await this.warmStart();
     }
   }
 
@@ -276,9 +276,10 @@ class ParameterExplorer {
 
   // Optimizes without showing the frames, because the optimization makes the
   // points jitter, then moves the points straight to their new positions.
-  // A newer update does not stop the optimization, so a fast drag still shows
-  // a converged layout after each warm start.
-  async warmStart(generation) {
+  // A newer update stops neither step. During a drag, slider events arrive
+  // all the time, so stopping would hide every result until the drag ends.
+  // The next update then starts from the newest slider value.
+  async warmStart() {
     const from = this.displayed;
     for (const learningRate of annealSchedule(WARM_START_SCHEDULE)) {
       this.umap.setParameters({ learningRate });
@@ -286,9 +287,6 @@ class ParameterExplorer {
       await nextFrame();
     }
     for (const frame of transition(from, this.layout())) {
-      if (generation !== this.generation) {
-        return;
-      }
       this.show(frame);
       await nextFrame();
     }
