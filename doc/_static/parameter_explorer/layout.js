@@ -51,11 +51,14 @@ export function alignTo(source, target) {
   return { x, y };
 }
 
-// UMAP's linear learning-rate decay, cut into frames of `epochsPerFrame`
-// epochs. Yields the learning rate for each frame.
-export function* annealSchedule({ initialLearningRate, epochs, epochsPerFrame }) {
-  for (let epoch = 0; epoch < epochs; epoch += epochsPerFrame) {
-    yield initialLearningRate * (1 - epoch / epochs);
+// UMAP's linear learning-rate decay.
+export const learningRateAt = ({ initialLearningRate, epochs }, epoch) => initialLearningRate * (1 - epoch / epochs);
+
+// The decay cut into frames of `epochsPerFrame` epochs. Yields the learning
+// rate for each frame.
+export function* annealSchedule(schedule) {
+  for (let epoch = 0; epoch < schedule.epochs; epoch += schedule.epochsPerFrame) {
+    yield learningRateAt(schedule, epoch);
   }
 }
 
@@ -64,25 +67,34 @@ export const SCRATCH_SCHEDULE = { initialLearningRate: 1, epochs: 500, epochsPer
 
 // Continues a converged layout after a min_dist change. An evaluation (see
 // https://github.com/lmcinnes/umap/pull/1341) shows that this reaches layouts
-// as close to a new layout as a new layout with another random seed. Learning rates
-// of 0.05 and lower do not fully apply large decreases of min_dist. The
-// explorer does not show these epochs, so they are a delay: keep them few.
+// as close to a new layout as a new layout with another random seed. Learning
+// rates of 0.05 and lower do not fully apply large decreases of min_dist.
 export const WARM_START_SCHEDULE = { initialLearningRate: 0.2, epochs: 100, epochsPerFrame: 10 };
 
-// After a warm start, points move to their new positions over this many
-// frames, in a straight line. Showing the optimization itself makes the
-// points jitter.
-export const TRANSITION_FRAMES = 12;
+// During a warm start, each frame moves the shown points this fraction of the
+// way to the computed points. This filters out the jitter of the
+// optimization: shown frame by frame, points travel 4 to 8 times the distance
+// to their new positions, and smoothed, 1.03 to 1.4 times.
+export const SMOOTHING = 0.1;
 
-const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
+export function smoothToward(from, to, fraction = SMOOTHING) {
+  return {
+    x: from.x.map((value, i) => value + (to.x[i] - value) * fraction),
+    y: from.y.map((value, i) => value + (to.y[i] - value) * fraction),
+  };
+}
 
-// Frames that move each point in a straight line from `from` to `to`.
-export function transition(from, to, frameCount = TRANSITION_FRAMES) {
-  return Array.from({ length: frameCount }, (_, frame) => {
-    const t = easeInOut((frame + 1) / frameCount);
-    return {
-      x: from.x.map((value, i) => value + (to.x[i] - value) * t),
-      y: from.y.map((value, i) => value + (to.y[i] - value) * t),
-    };
-  });
+function rmsSpread({ x, y }) {
+  const [mx, my] = [x, y].map(mean);
+  let sum = 0;
+  for (let i = 0; i < x.length; i++) sum += (x[i] - mx) ** 2 + (y[i] - my) ** 2;
+  return Math.sqrt(sum / x.length);
+}
+
+// True when the shown points are, on average, within 0.2% of the layout's
+// spread from the computed points.
+export function hasSettled(shown, target) {
+  let sum = 0;
+  for (let i = 0; i < target.x.length; i++) sum += Math.hypot(shown.x[i] - target.x[i], shown.y[i] - target.y[i]);
+  return sum / target.x.length < 0.002 * rmsSpread(target);
 }

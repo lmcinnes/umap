@@ -252,8 +252,8 @@ at a range of values from 0.0 through to 0.99.
 
         The code above draws one figure for each value. In the interactive
         figure below, move the slider to change ``min_dist``. Because
-        ``min_dist`` does not change the fuzzy graph, the figure optimizes the
-        current layout further and then moves the points to their new
+        ``min_dist`` does not change the fuzzy graph, the figure continues to
+        optimize the current layout, and the points move smoothly to their new
         positions. Click **Restart** to compute the layout from scratch instead.
         The figures that the code draws are under "Show static renderings".
 

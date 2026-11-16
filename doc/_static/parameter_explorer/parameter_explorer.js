@@ -9,7 +9,16 @@
 import { EmbeddingView } from "embedding-atlas/component.js";
 import { createUMAP } from "embedding-atlas/umap.js";
 
-import { SCRATCH_SCHEDULE, WARM_START_SCHEDULE, alignTo, annealSchedule, splitCoordinates, transition } from "./layout.js";
+import {
+  SCRATCH_SCHEDULE,
+  WARM_START_SCHEDULE,
+  alignTo,
+  annealSchedule,
+  hasSettled,
+  learningRateAt,
+  smoothToward,
+  splitCoordinates,
+} from "./layout.js";
 
 const POINT_COUNT = 800;
 const INPUT_DIM = 4;
@@ -150,6 +159,8 @@ class ParameterExplorer {
     // interrupted is not converged.
     this.converged = false;
     this.restartRequested = false;
+    // While a warm start runs, it takes up min_dist changes itself.
+    this.warmStartRunning = false;
     this.generation = 0;
     this.updates = Promise.resolve();
     // The view follows the layout until the reader pans or zooms.
@@ -217,6 +228,9 @@ class ParameterExplorer {
   setParameter(value) {
     this.parameters[this.parameter] = value;
     this.followLayout = true;
+    if (this.parameter === "min_dist" && this.warmStartRunning) {
+      return;
+    }
     this.update();
   }
 
@@ -253,7 +267,6 @@ class ParameterExplorer {
     } else {
       // min_dist only changes the low dimensional curve, so the converged
       // layout is a good start.
-      this.umap.setParameters({ minDist: min_dist });
       await this.warmStart();
     }
   }
@@ -274,21 +287,39 @@ class ParameterExplorer {
     this.converged = true;
   }
 
-  // Optimizes without showing the frames, because the optimization makes the
-  // points jitter, then moves the points straight to their new positions.
-  // A newer update stops neither step. During a drag, slider events arrive
-  // all the time, so stopping would hide every result until the drag ends.
-  // The next update then starts from the newest slider value.
+  // Runs a short schedule from the current layout and shows each frame
+  // smoothed, which filters out the jitter of the optimization. A min_dist
+  // change during the schedule restarts it with the new value, so the figure
+  // always follows the newest slider value. It ends when the shown points
+  // settle, or when a restart or an n_neighbors change needs a new model.
   async warmStart() {
-    const from = this.displayed;
-    for (const learningRate of annealSchedule(WARM_START_SCHEDULE)) {
-      this.umap.setParameters({ learningRate });
-      await this.umap.step(WARM_START_SCHEDULE.epochsPerFrame);
-      await nextFrame();
-    }
-    for (const frame of transition(from, this.layout())) {
-      this.show(frame);
-      await nextFrame();
+    this.warmStartRunning = true;
+    try {
+      let shown = this.displayed;
+      let minDist = null;
+      let epoch = 0;
+      while (!this.restartRequested && this.modelNeighbors === this.parameters.n_neighbors) {
+        if (minDist !== this.parameters.min_dist) {
+          minDist = this.parameters.min_dist;
+          this.umap.setParameters({ minDist });
+          epoch = 0;
+        }
+        if (epoch < WARM_START_SCHEDULE.epochs) {
+          this.umap.setParameters({ learningRate: learningRateAt(WARM_START_SCHEDULE, epoch) });
+          await this.umap.step(WARM_START_SCHEDULE.epochsPerFrame);
+          epoch += WARM_START_SCHEDULE.epochsPerFrame;
+        }
+        const target = this.layout();
+        shown = smoothToward(shown, target);
+        this.show(shown);
+        if (epoch >= WARM_START_SCHEDULE.epochs && hasSettled(shown, target)) {
+          this.show(target);
+          return;
+        }
+        await nextFrame();
+      }
+    } finally {
+      this.warmStartRunning = false;
     }
   }
 }
