@@ -195,8 +195,6 @@ class ParameterExplorer {
       width: this.width,
       height: VIEW_HEIGHT,
       config: { colorScheme: "light", autoLabelEnabled: false },
-      // The status bar holds selection tools, which the explorer does not use.
-      theme: { statusBar: false },
       // The explorer controls the viewport. Each frame fits it to the layout
       // until the reader pans or zooms.
       viewportState: { x: 0, y: 0, scale: 1 },
