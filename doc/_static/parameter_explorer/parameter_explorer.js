@@ -4,7 +4,7 @@
 // with a slider for one UMAP parameter. The embedding is computed in the
 // browser with the WebAssembly UMAP port from embedding-atlas and drawn with
 // its EmbeddingView component. The component needs WebGPU. Only with it does
-// the page show the explorers and their notes in place of the static figures.
+// the page show the explorers and their notes, and collapse the static figures.
 
 import { EmbeddingView } from "embedding-atlas/component.js";
 import { createUMAP } from "embedding-atlas/umap.js";
@@ -83,10 +83,17 @@ const nextFrame = () => new Promise(requestAnimationFrame);
 
 const ENABLED_CLASS = "umap-parameter-explorer-enabled";
 
+function setExplorersEnabled(enabled) {
+  document.documentElement.classList.toggle(ENABLED_CLASS, enabled);
+  for (const staticFigures of document.querySelectorAll(".umap-parameter-explorer-static")) {
+    staticFigures.open = !enabled;
+  }
+}
+
 // Shows the static figures again, for example when the data does not load.
 function disableExplorers(error) {
   console.error("UMAP parameter explorer:", error);
-  document.documentElement.classList.remove(ENABLED_CLASS);
+  setExplorersEnabled(false);
 }
 
 function createRestartButton() {
@@ -300,7 +307,7 @@ async function main() {
 
   // Show the explorers only when everything is ready. They start when they
   // scroll into view, which they can do only once they are shown.
-  document.documentElement.classList.add(ENABLED_CLASS);
+  setExplorersEnabled(true);
   for (const explorer of explorers) {
     const observer = new IntersectionObserver((entries) => {
       if (entries.some((entry) => entry.isIntersecting)) {

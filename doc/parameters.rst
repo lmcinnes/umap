@@ -88,6 +88,28 @@ major ones:
 -  ``n_components``
 -  ``metric``
 
+.. raw:: html
+
+   <link rel="stylesheet" href="_static/parameter_explorer/parameter_explorer.css">
+   <script type="importmap">
+     {
+       "imports": {
+         "embedding-atlas/": "https://cdn.jsdelivr.net/npm/embedding-atlas@0.26.0/dist/",
+         "@uwdata/mosaic-core": "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-core@0.33.0/+esm",
+         "@uwdata/mosaic-sql": "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-sql@0.33.0/+esm"
+       }
+     }
+   </script>
+   <script type="module" src="_static/parameter_explorer/parameter_explorer.js"></script>
+
+.. only:: html
+
+    .. container:: umap-parameter-explorer-note
+
+        The sections on :ref:`n_neighbors <parameters-n-neighbors>` and
+        :ref:`min_dist <parameters-min-dist>` also have interactive figures,
+        where you can change the parameter with a slider.
+
 Each of these parameters has a distinct effect, and we will look at each
 in turn. To make exploration simpler we will first write a short utility
 function that can fit the data with UMAP given a set of parameter
@@ -115,19 +137,7 @@ choices, and plot the result.
             ax.scatter(u[:,0], u[:,1], u[:,2], c=data, s=100)
         plt.title(title, fontsize=18)
 
-.. raw:: html
-
-   <link rel="stylesheet" href="_static/parameter_explorer/parameter_explorer.css">
-   <script type="importmap">
-     {
-       "imports": {
-         "embedding-atlas/": "https://cdn.jsdelivr.net/npm/embedding-atlas@0.26.0/dist/",
-         "@uwdata/mosaic-core": "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-core@0.33.0/+esm",
-         "@uwdata/mosaic-sql": "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-sql@0.33.0/+esm"
-       }
-     }
-   </script>
-   <script type="module" src="_static/parameter_explorer/parameter_explorer.js"></script>
+.. _parameters-n-neighbors:
 
 ``n_neighbors``
 ~~~~~~~~~~~~~~~
@@ -156,29 +166,37 @@ for UMAP (as used above) is 15, but we will look at values ranging from
 
     .. container:: umap-parameter-explorer-note
 
-        Move the slider to change ``n_neighbors`` and see UMAP compute the new
-        embedding. The figure runs UMAP on the same data in your browser, with the
-        WebAssembly port from `Embedding Atlas <https://apple.github.io/embedding-atlas/>`_.
+        The code above draws one figure for each value. The interactive figure
+        below makes the same comparison: move the slider to change
+        ``n_neighbors`` and see UMAP compute the new embedding. It runs UMAP on
+        the same data in your browser, with the WebAssembly port from
+        `Embedding Atlas <https://apple.github.io/embedding-atlas/>`_. The
+        figures that the code draws are under "Show static renderings".
 
 .. raw:: html
 
    <div class="umap-parameter-explorer" data-parameter="n_neighbors" data-values="2,5,10,15,20,50,100,200"></div>
 
-.. container:: umap-parameter-explorer-fallback
+   <details class="umap-parameter-explorer-static" open>
+   <summary>Show static renderings</summary>
 
-    .. image:: images/parameters_13_1.png
+.. image:: images/parameters_13_1.png
 
-    .. image:: images/parameters_13_2.png
+.. image:: images/parameters_13_2.png
 
-    .. image:: images/parameters_13_3.png
+.. image:: images/parameters_13_3.png
 
-    .. image:: images/parameters_13_4.png
+.. image:: images/parameters_13_4.png
 
-    .. image:: images/parameters_13_5.png
+.. image:: images/parameters_13_5.png
 
-    .. image:: images/parameters_13_6.png
+.. image:: images/parameters_13_6.png
 
-    .. image:: images/parameters_13_7.png
+.. image:: images/parameters_13_7.png
+
+.. raw:: html
+
+   </details>
 
 
 With a value of ``n_neighbors=2`` we see that UMAP merely glues together
@@ -205,6 +223,8 @@ necessarily immediately near their closest color match).
 This effect well exemplifies the local/global tradeoff provided by
 ``n_neighbors``.
 
+.. _parameters-min-dist:
+
 ``min_dist``
 ~~~~~~~~~~~~
 
@@ -230,28 +250,35 @@ at a range of values from 0.0 through to 0.99.
 
     .. container:: umap-parameter-explorer-note
 
-        Move the slider to change ``min_dist``. Because ``min_dist`` does not
-        change the fuzzy graph, the figure optimizes the current layout further
-        and then moves the points to their new positions. Click **Restart** to
-        compute the layout from scratch instead.
+        The code above draws one figure for each value. In the interactive
+        figure below, move the slider to change ``min_dist``. Because
+        ``min_dist`` does not change the fuzzy graph, the figure optimizes the
+        current layout further and then moves the points to their new
+        positions. Click **Restart** to compute the layout from scratch instead.
+        The figures that the code draws are under "Show static renderings".
 
 .. raw:: html
 
    <div class="umap-parameter-explorer" data-parameter="min_dist" data-min="0" data-max="0.99" data-step="0.01"></div>
 
-.. container:: umap-parameter-explorer-fallback
+   <details class="umap-parameter-explorer-static" open>
+   <summary>Show static renderings</summary>
 
-    .. image:: images/parameters_16_1.png
+.. image:: images/parameters_16_1.png
 
-    .. image:: images/parameters_16_2.png
+.. image:: images/parameters_16_2.png
 
-    .. image:: images/parameters_16_3.png
+.. image:: images/parameters_16_3.png
 
-    .. image:: images/parameters_16_4.png
+.. image:: images/parameters_16_4.png
 
-    .. image:: images/parameters_16_5.png
+.. image:: images/parameters_16_5.png
 
-    .. image:: images/parameters_16_6.png
+.. image:: images/parameters_16_6.png
+
+.. raw:: html
+
+   </details>
 
 
 Here we see that with ``min_dist=0.0`` UMAP manages to find small

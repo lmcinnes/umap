@@ -8,8 +8,20 @@
   display: block;
 }
 
-.umap-parameter-explorer-enabled .umap-parameter-explorer-fallback {
+/* Without the explorers, the static figures show as usual: the details
+   element is open and its summary is hidden. */
+.umap-parameter-explorer-static > summary {
   display: none;
+}
+
+.umap-parameter-explorer-enabled .umap-parameter-explorer-static {
+  margin: 0 0 24px;
+}
+
+.umap-parameter-explorer-enabled .umap-parameter-explorer-static > summary {
+  display: list-item;
+  cursor: pointer;
+  color: #2980b9;
 }
 
 .umap-parameter-explorer {
