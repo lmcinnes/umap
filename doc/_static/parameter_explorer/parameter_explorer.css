@@ -18,14 +18,37 @@
   background: #fff;
 }
 
-.umap-parameter-explorer__control {
+.umap-parameter-explorer__controls {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 0;
   padding: 8px 12px;
   border-bottom: 1px solid #e1e4e5;
+}
+
+.umap-parameter-explorer__control {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
   font-weight: normal;
+}
+
+.umap-parameter-explorer__restart {
+  padding: 2px 10px;
+  border: 1px solid #c9ced0;
+  border-radius: 3px;
+  background: #f3f6f6;
+  color: #404040;
+  font: inherit;
+  font-size: 90%;
+  cursor: pointer;
+}
+
+.umap-parameter-explorer__restart:hover {
+  background: #e5ebeb;
 }
 
 .umap-parameter-explorer__control input[type="range"] {

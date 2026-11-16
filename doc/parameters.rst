@@ -156,8 +156,8 @@ for UMAP (as used above) is 15, but we will look at values ranging from
 
     .. container:: umap-parameter-explorer-note
 
-        Move the slider to change ``n_neighbors`` and see the embedding update
-        live. The figure runs UMAP on the same data in your browser, with the
+        Move the slider to change ``n_neighbors`` and see UMAP compute the new
+        embedding. The figure runs UMAP on the same data in your browser, with the
         WebAssembly port from `Embedding Atlas <https://apple.github.io/embedding-atlas/>`_.
 
 .. raw:: html
@@ -231,7 +231,9 @@ at a range of values from 0.0 through to 0.99.
     .. container:: umap-parameter-explorer-note
 
         Move the slider to change ``min_dist``. Because ``min_dist`` does not
-        change the fuzzy graph, the current layout is optimized again from where it is.
+        change the fuzzy graph, the figure optimizes the current layout further
+        and then moves the points to their new positions. Click **Restart** to
+        compute the layout from scratch instead.
 
 .. raw:: html
 

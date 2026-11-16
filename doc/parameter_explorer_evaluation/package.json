@@ -1,0 +1,12 @@
+{
+  "name": "umap-parameter-explorer-evaluation",
+  "private": true,
+  "type": "module",
+  "description": "Compares the layouts of the docs parameter explorer with layouts built from scratch",
+  "scripts": {
+    "evaluate": "node evaluate.mjs"
+  },
+  "dependencies": {
+    "embedding-atlas": "0.26.0"
+  }
+}
