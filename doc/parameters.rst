@@ -168,10 +168,12 @@ for UMAP (as used above) is 15, but we will look at values ranging from
 
         The code above draws one figure for each value. The interactive figure
         below makes the same comparison: move the slider to change
-        ``n_neighbors`` and see UMAP compute the new embedding. It runs UMAP on
-        the same data in your browser, with the WebAssembly port from
-        `Embedding Atlas <https://apple.github.io/embedding-atlas/>`_. The
-        figures that the code draws are under "Show static renderings".
+        ``n_neighbors``, and the points move smoothly to the new embedding. It
+        runs UMAP on the same data in your browser, with the WebAssembly port
+        from `Embedding Atlas <https://apple.github.io/embedding-atlas/>`_.
+        Click **Restart** to watch UMAP compute the embedding from scratch,
+        frame by frame. The figures that the code draws are under "Show static
+        renderings".
 
 .. raw:: html
 
@@ -254,7 +256,8 @@ at a range of values from 0.0 through to 0.99.
         figure below, move the slider to change ``min_dist``. Because
         ``min_dist`` does not change the fuzzy graph, the figure continues to
         optimize the current layout, and the points move smoothly to their new
-        positions. Click **Restart** to compute the layout from scratch instead.
+        positions. Click **Restart** to watch UMAP compute the embedding from
+        scratch instead.
         The figures that the code draws are under "Show static renderings".
 
 .. raw:: html

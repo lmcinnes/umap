@@ -252,6 +252,9 @@ class ParameterExplorer {
 
   async syncAndAnneal(generation) {
     const { n_neighbors, min_dist } = this.parameters;
+    // The first layout and a restart show every frame, so the reader can
+    // watch UMAP converge. A slider change shows the frames smoothed.
+    const smooth = this.displayed !== null && !this.restartRequested;
     if (this.umap === null || this.modelNeighbors !== n_neighbors || this.restartRequested) {
       // n_neighbors changes the fuzzy graph itself, so build a new model.
       const umap = await createUMAP(POINT_COUNT, INPUT_DIM, 2, this.data, { nNeighbors: n_neighbors, minDist: min_dist, seed: SEED });
@@ -260,10 +263,10 @@ class ParameterExplorer {
       this.modelNeighbors = n_neighbors;
       this.restartRequested = false;
       this.alignmentTarget = this.displayed;
-      await this.animate(generation, SCRATCH_SCHEDULE);
+      await this.animate(generation, SCRATCH_SCHEDULE, smooth);
     } else if (!this.converged) {
       this.umap.setParameters({ minDist: min_dist });
-      await this.animate(generation, SCRATCH_SCHEDULE);
+      await this.animate(generation, SCRATCH_SCHEDULE, smooth);
     } else {
       // min_dist only changes the low dimensional curve, so the converged
       // layout is a good start.
@@ -271,20 +274,35 @@ class ParameterExplorer {
     }
   }
 
-  // Shows UMAP's learning-rate decay frame by frame, so the reader sees the
-  // layout converge. A newer update stops it.
-  async animate(generation, schedule) {
+  // Shows UMAP's learning-rate decay frame by frame. Smoothed, the shown
+  // points start at the layout shown before and follow the computed points,
+  // which filters out the large, noisy moves of the first epochs, and then
+  // settle on the result. A newer update stops it.
+  async animate(generation, schedule, smooth) {
     this.converged = false;
+    let shown = this.displayed;
     for (const learningRate of annealSchedule(schedule)) {
       if (generation !== this.generation) {
         return;
       }
       this.umap.setParameters({ learningRate });
       await this.umap.step(schedule.epochsPerFrame);
-      this.show(this.layout());
+      shown = smooth ? smoothToward(shown, this.layout()) : this.layout();
+      this.show(shown);
       await nextFrame();
     }
     this.converged = true;
+
+    const target = this.layout();
+    while (smooth && !hasSettled(shown, target)) {
+      if (generation !== this.generation) {
+        return;
+      }
+      shown = smoothToward(shown, target);
+      this.show(shown);
+      await nextFrame();
+    }
+    this.show(target);
   }
 
   // Runs a short schedule from the current layout and shows each frame
