@@ -4314,8 +4314,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             try:
                 # sklearn pairwise_distances fails for callable metric on sparse data
                 _m = self.metric if self._sparse_data else self._input_distance_func
-                dmat = pairwise_distances(
-                    X, self._raw_data, metric=_m, **self._metric_kwds
+                dmat = dist.numba_aware_pairwise_distances(
+                    X, metric=_m, Y=self._raw_data, **self._metric_kwds
                 )
             except (TypeError, ValueError):
                 # metric is numba.jit'd or not supported by sklearn,

@@ -1547,39 +1547,92 @@ def _symmetric_pairwise_distances(X, metric, result):
         result[i, i] = metric(X[i], X[i])
 
 
-_symmetric_pairwise_kernels = {}
+def _rectangular_pairwise_distances(X, Y, metric, result):
+    for i in range(X.shape[0]):
+        for j in range(Y.shape[0]):
+            result[i, j] = metric(X[i], Y[j])
 
 
-def numba_aware_pairwise_distances(X, metric, **kwds):
+_pairwise_kernels = {}
+
+
+def _pairwise_kernel(loop, arg_types):
+    """Compile ``loop`` once per argument signature and cache it."""
+    key = (loop, numba.types.void(*arg_types))
+    kernel = _pairwise_kernels.get(key)
+    if kernel is None:
+        kernel = numba.njit(key[1], nogil=True)(loop)
+        _pairwise_kernels[key] = kernel
+    return kernel
+
+
+def _is_numba_loopable(A):
+    return (
+        isinstance(A, np.ndarray)
+        and A.ndim == 2
+        and A.shape[0] > 0
+        and A.dtype in (np.float32, np.float64)
+        and np.all(np.isfinite(A))
+    )
+
+
+def _float_return_type(metric, row_type):
+    """The metric's return type for two rows, or None if numba cannot give a float."""
+    try:
+        metric.compile((row_type, row_type))
+    except (RuntimeError, TypeError, numba.core.errors.NumbaError):
+        # e.g. an explicit-signature metric has compilation disabled
+        return None
+    overload = metric.overloads.get((row_type, row_type))
+    if overload is None:
+        return None
+    return_type = overload.signature.return_type
+    # sklearn casts other outputs (ints, ...) with its own rounding; leave those to it
+    if return_type not in (numba.types.float32, numba.types.float64):
+        return None
+    return return_type
+
+
+def numba_aware_pairwise_distances(X, metric, Y=None, **kwds):
     """Same output as sklearn's ``pairwise_distances``; numba metrics loop in numba."""
     if (
         kwds
         or not isinstance(metric, numba.core.registry.CPUDispatcher)
-        or not isinstance(X, np.ndarray)
-        or X.ndim != 2
-        or X.shape[0] == 0
-        or X.dtype not in (np.float32, np.float64)
-        or not np.all(np.isfinite(X))
+        or not _is_numba_loopable(X)
+        or (
+            Y is not None
+            and (
+                not _is_numba_loopable(Y)
+                or Y.shape[1] != X.shape[1]
+                or numba.typeof(Y[0]) != numba.typeof(X[0])
+            )
+        )
     ):
-        return pairwise_distances(X, metric=metric, **kwds)
+        return pairwise_distances(X, Y, metric=metric, **kwds)
+    row_type = numba.typeof(X[0])
+    return_type = _float_return_type(metric, row_type)
+    if return_type is None:
+        return pairwise_distances(X, Y, metric=metric)
     # The metric is passed as a function pointer so LLVM cannot inline it: an
     # inlined fastmath metric can vectorize (and round) differently from the
     # standalone call sklearn makes, which changes the last bit on x86.
-    row_type = numba.typeof(X[0])
-    metric.compile((row_type, row_type))
-    return_type = metric.overloads[(row_type, row_type)].signature.return_type
+    metric_type = numba.types.FunctionType(return_type(row_type, row_type))
     # The output dtype depends on the sklearn version (float64 before 1.8, the
-    # input dtype after), so take it from sklearn itself on a single row.
-    result_dtype = pairwise_distances(X[:1], metric=metric).dtype
-    result = np.empty((X.shape[0], X.shape[0]), dtype=result_dtype)
-    signature = numba.types.void(
-        numba.typeof(X),
-        numba.types.FunctionType(return_type(row_type, row_type)),
-        numba.typeof(result),
-    )
-    kernel = _symmetric_pairwise_kernels.get(signature)
-    if kernel is None:
-        kernel = numba.njit(signature, nogil=True)(_symmetric_pairwise_distances)
-        _symmetric_pairwise_kernels[signature] = kernel
-    kernel(X, metric, result)
+    # input dtype after), so take it from sklearn itself on one pair of rows.
+    Y_probe = X if Y is None else Y
+    result_dtype = pairwise_distances(X[:1], Y_probe[:1], metric=metric).dtype
+    if Y is None:
+        result = np.empty((X.shape[0], X.shape[0]), dtype=result_dtype)
+        kernel = _pairwise_kernel(
+            _symmetric_pairwise_distances,
+            (numba.typeof(X), metric_type, numba.typeof(result)),
+        )
+        kernel(X, metric, result)
+    else:
+        result = np.empty((X.shape[0], Y.shape[0]), dtype=result_dtype)
+        kernel = _pairwise_kernel(
+            _rectangular_pairwise_distances,
+            (numba.typeof(X), numba.typeof(Y), metric_type, numba.typeof(result)),
+        )
+        kernel(X, Y, metric, result)
     return result
