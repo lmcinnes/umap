@@ -308,6 +308,7 @@ def raise_disconnected_warning(
     },
     parallel=True,
     fastmath=FASTMATH_FLAGS,
+    cache=True,
 )
 def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0):
     """Compute a continuous version of the distance to the kth nearest
@@ -723,6 +724,7 @@ def nearest_neighbors(
     },
     parallel=True,
     fastmath=FASTMATH_FLAGS,
+    cache=True,
 )
 def compute_membership_strengths(
     knn_indices,
