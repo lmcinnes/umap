@@ -113,8 +113,9 @@ choices, and plot the result.
 
         The :ref:`n_neighbors <parameters-n-neighbors>` and
         :ref:`min_dist <parameters-min-dist>` sections include interactive
-        figures: move a slider to change the parameter. UMAP runs in your
-        browser on the same data, with the WebAssembly port from
+        figures: move a slider, or click a parameter value in the text, to
+        change the parameter. UMAP runs in your browser on the same data, with
+        the WebAssembly port from
         `Embedding Atlas <https://apple.github.io/embedding-atlas/>`_, so the
         layouts can differ slightly from the static figures.
 
@@ -170,8 +171,7 @@ for UMAP (as used above) is 15, but we will look at values ranging from
     .. container:: umap-parameter-explorer-note
 
         The interactive figure below makes the same comparison as the code
-        above. Move the slider, or click a value in the text such as
-        ``n_neighbors=2``.
+        above.
 
 .. raw:: html
 
@@ -251,8 +251,7 @@ at a range of values from 0.0 through to 0.99.
     .. container:: umap-parameter-explorer-note
 
         The interactive figure below makes the same comparison as the code
-        above. Move the slider, or click a value in the text such as
-        ``min_dist=0.0``.
+        above.
 
 .. raw:: html
 
