@@ -88,10 +88,36 @@ major ones:
 -  ``n_components``
 -  ``metric``
 
+.. raw:: html
+
+   <link rel="stylesheet" href="_static/parameter_explorer/parameter_explorer.css">
+   <script type="importmap">
+     {
+       "imports": {
+         "embedding-atlas/": "https://cdn.jsdelivr.net/npm/embedding-atlas@0.26.0/dist/",
+         "@uwdata/mosaic-core": "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-core@0.33.0/+esm",
+         "@uwdata/mosaic-sql": "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-sql@0.33.0/+esm"
+       }
+     }
+   </script>
+   <script type="module" src="_static/parameter_explorer/parameter_explorer.js"></script>
+
 Each of these parameters has a distinct effect, and we will look at each
 in turn. To make exploration simpler we will first write a short utility
 function that can fit the data with UMAP given a set of parameter
 choices, and plot the result.
+
+.. only:: html
+
+    .. container:: umap-parameter-explorer-note
+
+        The :ref:`n_neighbors <parameters-n-neighbors>` and
+        :ref:`min_dist <parameters-min-dist>` sections include interactive
+        figures: move a slider, or click a parameter value in the text, to
+        change the parameter. UMAP runs in your browser on the same data, with
+        the WebAssembly port from
+        `Embedding Atlas <https://apple.github.io/embedding-atlas/>`_, so the
+        layouts can differ slightly from the static figures.
 
 .. code:: python3
 
@@ -114,6 +140,8 @@ choices, and plot the result.
             ax = fig.add_subplot(111, projection='3d')
             ax.scatter(u[:,0], u[:,1], u[:,2], c=data, s=100)
         plt.title(title, fontsize=18)
+
+.. _parameters-n-neighbors:
 
 ``n_neighbors``
 ~~~~~~~~~~~~~~~
@@ -138,33 +166,37 @@ for UMAP (as used above) is 15, but we will look at values ranging from
     for n in (2, 5, 10, 20, 50, 100, 200):
         draw_umap(n_neighbors=n, title='n_neighbors = {}'.format(n))
 
+.. only:: html
 
+    .. container:: umap-parameter-explorer-note
+
+        The interactive figure below makes the same comparison as the code
+        above.
+
+.. raw:: html
+
+   <div class="umap-parameter-explorer" data-parameter="n_neighbors" data-values="2,5,10,15,20,50,100,200"></div>
+
+   <details class="umap-parameter-explorer-static" open>
+   <summary>Show static renderings</summary>
 
 .. image:: images/parameters_13_1.png
 
-
-
 .. image:: images/parameters_13_2.png
-
-
 
 .. image:: images/parameters_13_3.png
 
-
-
 .. image:: images/parameters_13_4.png
-
-
 
 .. image:: images/parameters_13_5.png
 
-
-
 .. image:: images/parameters_13_6.png
 
-
-
 .. image:: images/parameters_13_7.png
+
+.. raw:: html
+
+   </details>
 
 
 With a value of ``n_neighbors=2`` we see that UMAP merely glues together
@@ -191,6 +223,8 @@ necessarily immediately near their closest color match).
 This effect well exemplifies the local/global tradeoff provided by
 ``n_neighbors``.
 
+.. _parameters-min-dist:
+
 ``min_dist``
 ~~~~~~~~~~~~
 
@@ -212,33 +246,41 @@ at a range of values from 0.0 through to 0.99.
     for d in (0.0, 0.1, 0.25, 0.5, 0.8, 0.99):
         draw_umap(min_dist=d, title='min_dist = {}'.format(d))
 
+.. only:: html
+
+    .. container:: umap-parameter-explorer-note
+
+        The interactive figure below makes the same comparison as the code
+        above.
+
+.. raw:: html
+
+   <div class="umap-parameter-explorer" data-parameter="min_dist" data-min="0" data-max="0.99" data-step="0.01"></div>
+
+   <details class="umap-parameter-explorer-static" open>
+   <summary>Show static renderings</summary>
 
 .. image:: images/parameters_16_1.png
 
-
-
 .. image:: images/parameters_16_2.png
-
-
 
 .. image:: images/parameters_16_3.png
 
-
-
 .. image:: images/parameters_16_4.png
-
-
 
 .. image:: images/parameters_16_5.png
 
-
-
 .. image:: images/parameters_16_6.png
+
+.. raw:: html
+
+   </details>
 
 
 Here we see that with ``min_dist=0.0`` UMAP manages to find small
 connected components, clumps and strings in the data, and emphasises
 these features in the resulting embedding. As ``min_dist`` is increased
+(for example ``min_dist=0.25``, ``min_dist=0.5``, or ``min_dist=0.99``)
 these structures are pushed apart into softer more general features,
 providing a better overarching view of the data at the loss of the more
 detailed topological structure.
@@ -266,7 +308,6 @@ points.
 
     draw_umap(n_components=1, title='n_components = 1')
 
-
 .. image:: images/parameters_19_1.png
 
 
@@ -276,7 +317,6 @@ of ``matplotlib``'s basic 3-dimensional plotting.
 .. code:: python3
 
     draw_umap(n_components=3, title='n_components = 3')
-
 
 .. parsed-literal::
 

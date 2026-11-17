@@ -1,0 +1,86 @@
+/* Without the explorers, the static figures show as usual: the details
+   element is open and its summary is hidden. */
+:root:not(.umap-parameter-explorer-enabled) .umap-parameter-explorer,
+:root:not(.umap-parameter-explorer-enabled) .umap-parameter-explorer-note,
+:root:not(.umap-parameter-explorer-enabled) .umap-parameter-explorer-static > summary {
+  display: none;
+}
+
+.umap-parameter-explorer,
+.umap-parameter-explorer-enabled .umap-parameter-explorer-static {
+  margin: 0 0 24px;
+}
+
+.umap-parameter-explorer-static > summary {
+  cursor: pointer;
+  color: #2980b9;
+}
+
+.umap-parameter-explorer {
+  border: 1px solid #e1e4e5;
+  background: #fff;
+}
+
+.umap-parameter-explorer__controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e1e4e5;
+}
+
+.umap-parameter-explorer__control {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  font-weight: normal;
+}
+
+.umap-parameter-explorer__restart {
+  padding: 2px 10px;
+  border: 1px solid #c9ced0;
+  border-radius: 3px;
+  background: #f3f6f6;
+  color: #404040;
+  font: inherit;
+  font-size: 90%;
+  cursor: pointer;
+}
+
+.umap-parameter-explorer__restart:hover {
+  background: #e5ebeb;
+}
+
+.umap-parameter-explorer__control input[type="range"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.umap-parameter-explorer__control output {
+  min-width: 3em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.umap-parameter-explorer__value {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+}
+
+.umap-parameter-explorer-enabled .umap-parameter-explorer__value {
+  cursor: pointer;
+}
+
+.umap-parameter-explorer-enabled .umap-parameter-explorer__value code.literal {
+  border-color: #2980b9;
+  color: #2980b9;
+}
+
+.umap-parameter-explorer-enabled .umap-parameter-explorer__value:hover code.literal {
+  background: #e5f1fa;
+}
