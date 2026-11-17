@@ -141,7 +141,7 @@ Embedding Atlas
 ---------------
 Embedding Atlas is an open source tool for interactive exploration of large embeddings and their
 metadata. It uses UMAP to project embeddings to two dimensions, and then shows the result in a
-fast WebGPU-based view that scales to a few million points. The tool automatically clusters and
+fast interactive view that scales to a few million points. The tool automatically clusters and
 labels regions of the map, shows density contours, and lets you search for nearest neighbors.
 Linked charts of the metadata let you cross-filter the data, so a selection in the embedding
 updates all other views and the reverse. You can use Embedding Atlas from the command line
