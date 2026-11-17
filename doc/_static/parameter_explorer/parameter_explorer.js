@@ -1,10 +1,6 @@
-// Interactive UMAP parameter explorer for the "Basic UMAP Parameters" page.
-//
-// Each element with the class `umap-parameter-explorer` becomes a scatter plot
-// with a slider for one UMAP parameter. The embedding is computed in the
-// browser with the WebAssembly UMAP port from embedding-atlas and drawn with
-// its EmbeddingView component. The component needs WebGPU. Only with it does
-// the page show the explorers and their notes, and collapse the static figures.
+// Each `.umap-parameter-explorer` element becomes a scatter plot with a slider
+// for one UMAP parameter. EmbeddingView needs WebGPU. Only with it does the
+// page show the explorers and their notes, and collapse the static figures.
 
 import { EmbeddingView } from "embedding-atlas/component.js";
 import { createUMAP } from "embedding-atlas/umap.js";
@@ -62,7 +58,7 @@ function colorCategories(data) {
 
 // EmbeddingView maps the larger side of the view to [-1, 1] / scale data units.
 function fitViewport({ x, y }, width, height) {
-  const extent = (values) => values.reduce(([min, max], value) => [Math.min(min, value), Math.max(max, value)], [Infinity, -Infinity]);
+  const extent = (values) => [Math.min(...values), Math.max(...values)];
   const [xMin, xMax] = extent(x);
   const [yMin, yMax] = extent(y);
   const largerSide = Math.max(width, height);
@@ -99,51 +95,21 @@ function setExplorersEnabled(enabled) {
   }
 }
 
-// Shows the static figures again, for example when the data does not load.
 function disableExplorers(error) {
   console.error("UMAP parameter explorer:", error);
   setExplorersEnabled(false);
 }
 
-function createRestartButton() {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "umap-parameter-explorer__restart";
-  button.textContent = "Restart";
-  button.title = "Compute the layout from scratch";
-  return button;
-}
+const createElement = (tag, properties) => Object.assign(document.createElement(tag), properties);
 
-function createSlider(parameter, values, initialValue) {
-  const label = document.createElement("label");
-  label.className = "umap-parameter-explorer__control";
-
-  const name = document.createElement("code");
-  name.textContent = parameter;
-
-  const slider = document.createElement("input");
-  slider.type = "range";
-  slider.min = "0";
-  slider.max = String(values.length - 1);
-  slider.step = "1";
-  slider.value = String(values.indexOf(initialValue));
-
-  const output = document.createElement("output");
-  output.textContent = String(initialValue);
-
-  label.append(name, slider, output);
-  return { label, slider, output };
-}
-
-function parameterValues(element) {
-  const { min, max, step, values } = element.dataset;
+function parameterValues({ min, max, step, values }) {
   if (values) {
     return values.split(",").map(Number);
   }
-  const stepSize = Number(step);
-  const count = Math.round((Number(max) - Number(min)) / stepSize) + 1;
+  const [start, end, stepSize] = [min, max, step].map(Number);
+  const count = Math.round((end - start) / stepSize) + 1;
   const decimals = (step.split(".")[1] ?? "").length;
-  return Array.from({ length: count }, (_, i) => Number((Number(min) + i * stepSize).toFixed(decimals)));
+  return Array.from({ length: count }, (_, i) => Number((start + i * stepSize).toFixed(decimals)));
 }
 
 class ParameterExplorer {
@@ -155,37 +121,38 @@ class ParameterExplorer {
     this.parameters = { ...DEFAULT_PARAMETERS };
     this.umap = null;
     this.modelNeighbors = null;
-    // A warm start needs a converged layout. A layout that a newer update
-    // interrupted is not converged.
+    // A layout that a newer update interrupted is not converged.
     this.converged = false;
     this.restartRequested = false;
-    // While a warm start runs, it takes up min_dist changes itself.
     this.warmStartRunning = false;
     this.generation = 0;
     this.updates = Promise.resolve();
-    // The view follows the layout until the reader pans or zooms.
     this.followLayout = true;
+    this.displayed = null;
     // A new model starts from a new spectral layout. Each of its frames is
     // aligned to the layout shown before, so the picture does not flip or turn.
-    this.displayed = null;
     this.alignmentTarget = null;
 
-    const values = parameterValues(element);
-    const { label, slider, output } = createSlider(this.parameter, values, this.parameters[this.parameter]);
-    slider.addEventListener("input", () => {
-      const value = values[Number(slider.value)];
-      output.textContent = String(value);
-      this.setParameter(value);
+    this.values = parameterValues(element.dataset);
+    const initialValue = this.parameters[this.parameter];
+    this.slider = createElement("input", { type: "range", max: this.values.length - 1, value: this.values.indexOf(initialValue) });
+    this.slider.addEventListener("input", () => this.selectValue(this.values[this.slider.value]));
+    this.output = createElement("output", { textContent: initialValue });
+    const label = createElement("label", { className: "umap-parameter-explorer__control" });
+    label.append(createElement("code", { textContent: this.parameter }), this.slider, this.output);
+
+    const restartButton = createElement("button", {
+      type: "button",
+      className: "umap-parameter-explorer__restart",
+      textContent: "Restart",
+      title: "Watch UMAP optimize the embedding from its start layout",
     });
-    const restartButton = createRestartButton();
     restartButton.addEventListener("click", () => this.restart());
 
-    const controls = document.createElement("div");
-    controls.className = "umap-parameter-explorer__controls";
+    const controls = createElement("div", { className: "umap-parameter-explorer__controls" });
     controls.append(label, restartButton);
 
     const container = document.createElement("div");
-    container.className = "umap-parameter-explorer__view";
     element.replaceChildren(controls, container);
 
     this.width = container.clientWidth;
@@ -195,8 +162,7 @@ class ParameterExplorer {
       width: this.width,
       height: VIEW_HEIGHT,
       config: { colorScheme: "light", autoLabelEnabled: false },
-      // The explorer controls the viewport. Each frame fits it to the layout
-      // until the reader pans or zooms.
+      // A controlled viewport, so the view does not report its own default.
       viewportState: { x: 0, y: 0, scale: 1 },
       onViewportState: (viewportState) => {
         this.followLayout = false;
@@ -205,11 +171,13 @@ class ParameterExplorer {
     });
     new ResizeObserver(() => {
       this.width = container.clientWidth;
-      this.view.update({
-        width: this.width,
-        ...(this.followLayout && this.displayed && { viewportState: fitViewport(this.displayed, this.width, VIEW_HEIGHT) }),
-      });
+      this.view.update({ width: this.width, ...this.fittedViewport(this.displayed) });
     }).observe(container);
+  }
+
+  // The view follows the layout until the reader pans or zooms.
+  fittedViewport(coordinates) {
+    return this.followLayout && coordinates && { viewportState: fitViewport(coordinates, this.width, VIEW_HEIGHT) };
   }
 
   layout() {
@@ -219,19 +187,18 @@ class ParameterExplorer {
 
   show(coordinates) {
     this.displayed = coordinates;
-    this.view.update({
-      data: { ...coordinates, category: this.colors.category },
-      ...(this.followLayout && { viewportState: fitViewport(coordinates, this.width, VIEW_HEIGHT) }),
-    });
+    this.view.update({ data: { ...coordinates, category: this.colors.category }, ...this.fittedViewport(coordinates) });
   }
 
-  setParameter(value) {
+  selectValue(value) {
+    this.slider.value = this.values.indexOf(value);
+    this.output.textContent = value;
     this.parameters[this.parameter] = value;
     this.followLayout = true;
-    if (this.parameter === "min_dist" && this.warmStartRunning) {
-      return;
+    // A running warm start takes up min_dist changes itself.
+    if (this.parameter !== "min_dist" || !this.warmStartRunning) {
+      this.update();
     }
-    this.update();
   }
 
   restart() {
@@ -247,46 +214,41 @@ class ParameterExplorer {
     this.updates = this.updates
       .then(() => generation === this.generation && this.syncAndAnneal(generation))
       .catch(disableExplorers);
-    return this.updates;
   }
 
   async syncAndAnneal(generation) {
     const { n_neighbors, min_dist } = this.parameters;
-    // The first layout and a restart show every frame, so the reader can
-    // watch UMAP converge. A slider change shows the frames smoothed.
+    // The first layout and a restart show raw frames, so the reader can watch
+    // UMAP converge.
     const smooth = this.displayed !== null && !this.restartRequested;
-    if (this.umap === null || this.modelNeighbors !== n_neighbors || this.restartRequested) {
+    if (this.modelNeighbors !== n_neighbors || this.restartRequested) {
       // n_neighbors changes the fuzzy graph itself, so build a new model.
+      this.restartRequested = false;
       const umap = await createUMAP(POINT_COUNT, INPUT_DIM, 2, this.data, { nNeighbors: n_neighbors, minDist: min_dist, seed: SEED });
       this.umap?.destroy();
       this.umap = umap;
       this.modelNeighbors = n_neighbors;
-      this.restartRequested = false;
       this.alignmentTarget = this.displayed;
-      await this.animate(generation, SCRATCH_SCHEDULE, smooth);
-    } else if (!this.converged) {
-      this.umap.setParameters({ minDist: min_dist });
-      await this.animate(generation, SCRATCH_SCHEDULE, smooth);
-    } else {
+    } else if (this.converged) {
       // min_dist only changes the low dimensional curve, so the converged
       // layout is a good start.
-      await this.warmStart();
+      return this.warmStart();
+    } else {
+      this.umap.setParameters({ minDist: min_dist });
     }
+    await this.animate(generation, smooth);
   }
 
-  // Shows UMAP's learning-rate decay frame by frame. Smoothed, the shown
-  // points start at the layout shown before and follow the computed points,
-  // which filters out the large, noisy moves of the first epochs, and then
-  // settle on the result. A newer update stops it.
-  async animate(generation, schedule, smooth) {
+  // Smoothing filters out the large, noisy moves of the first epochs.
+  async animate(generation, smooth) {
     this.converged = false;
     let shown = this.displayed;
-    for (const learningRate of annealSchedule(schedule)) {
+    for (const learningRate of annealSchedule(SCRATCH_SCHEDULE)) {
       if (generation !== this.generation) {
         return;
       }
       this.umap.setParameters({ learningRate });
-      await this.umap.step(schedule.epochsPerFrame);
+      await this.umap.step(SCRATCH_SCHEDULE.epochsPerFrame);
       shown = smooth ? smoothToward(shown, this.layout()) : this.layout();
       this.show(shown);
       await nextFrame();
@@ -305,11 +267,9 @@ class ParameterExplorer {
     this.show(target);
   }
 
-  // Runs a short schedule from the current layout and shows each frame
-  // smoothed, which filters out the jitter of the optimization. A min_dist
-  // change during the schedule restarts it with the new value, so the figure
-  // always follows the newest slider value. It ends when the shown points
-  // settle, or when a restart or an n_neighbors change needs a new model.
+  // A min_dist change during the schedule restarts it with the new value, so
+  // the figure always follows the newest slider value. The loop ends when the
+  // shown points settle, or when a newer update needs a new model.
   async warmStart() {
     this.warmStartRunning = true;
     try {
@@ -342,6 +302,33 @@ class ParameterExplorer {
   }
 }
 
+// Makes each mention of a slider value in the section, such as
+// ``n_neighbors=2``, a button that shows this value in the explorer.
+function linkValueMentions(explorer) {
+  const section = explorer.element.closest("section");
+  const pattern = new RegExp(`^${explorer.parameter}\\s*=\\s*([0-9.]+)$`);
+  for (const literal of section?.querySelectorAll("code.literal") ?? []) {
+    const value = Number(literal.textContent.trim().match(pattern)?.[1]);
+    if (!explorer.values.includes(value)) {
+      continue;
+    }
+    const button = createElement("button", {
+      type: "button",
+      className: "umap-parameter-explorer__value",
+      title: "Show this value in the interactive figure",
+    });
+    literal.replaceWith(button);
+    button.append(literal);
+    button.addEventListener("click", () => {
+      if (!document.documentElement.classList.contains(ENABLED_CLASS)) {
+        return;
+      }
+      explorer.selectValue(value);
+      explorer.element.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+  }
+}
+
 async function main() {
   const elements = document.querySelectorAll(".umap-parameter-explorer");
   if (elements.length === 0 || !(await canRenderEmbeddingView())) {
@@ -352,10 +339,11 @@ async function main() {
   const colors = colorCategories(data);
   const explorers = Array.from(elements, (element) => new ParameterExplorer(element, data, colors));
 
-  // Show the explorers only when everything is ready. They start when they
-  // scroll into view, which they can do only once they are shown.
+  // The explorers start when they scroll into view, which they can do only
+  // once they are shown.
   setExplorersEnabled(true);
   for (const explorer of explorers) {
+    linkValueMentions(explorer);
     const observer = new IntersectionObserver((entries) => {
       if (entries.some((entry) => entry.isIntersecting)) {
         observer.disconnect();

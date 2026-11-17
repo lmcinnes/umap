@@ -1,31 +1,22 @@
-.umap-parameter-explorer,
-.umap-parameter-explorer-note {
-  display: none;
-}
-
-.umap-parameter-explorer-enabled .umap-parameter-explorer,
-.umap-parameter-explorer-enabled .umap-parameter-explorer-note {
-  display: block;
-}
-
 /* Without the explorers, the static figures show as usual: the details
    element is open and its summary is hidden. */
-.umap-parameter-explorer-static > summary {
+:root:not(.umap-parameter-explorer-enabled) .umap-parameter-explorer,
+:root:not(.umap-parameter-explorer-enabled) .umap-parameter-explorer-note,
+:root:not(.umap-parameter-explorer-enabled) .umap-parameter-explorer-static > summary {
   display: none;
 }
 
+.umap-parameter-explorer,
 .umap-parameter-explorer-enabled .umap-parameter-explorer-static {
   margin: 0 0 24px;
 }
 
-.umap-parameter-explorer-enabled .umap-parameter-explorer-static > summary {
-  display: list-item;
+.umap-parameter-explorer-static > summary {
   cursor: pointer;
   color: #2980b9;
 }
 
 .umap-parameter-explorer {
-  margin: 0 0 24px;
   border: 1px solid #e1e4e5;
   background: #fff;
 }
@@ -74,6 +65,22 @@
   font-variant-numeric: tabular-nums;
 }
 
-.umap-parameter-explorer__view {
-  width: 100%;
+.umap-parameter-explorer__value {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+}
+
+.umap-parameter-explorer-enabled .umap-parameter-explorer__value {
+  cursor: pointer;
+}
+
+.umap-parameter-explorer-enabled .umap-parameter-explorer__value code.literal {
+  border-color: #2980b9;
+  color: #2980b9;
+}
+
+.umap-parameter-explorer-enabled .umap-parameter-explorer__value:hover code.literal {
+  background: #e5f1fa;
 }

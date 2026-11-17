@@ -14,9 +14,10 @@ export function splitCoordinates(embedding) {
 
 const mean = (values) => values.reduce((sum, value) => sum + value, 0) / values.length;
 
-// Similarity transform (rotation, optional reflection, uniform scale and
-// translation) that best maps `source` onto `target` in the least squares
-// sense (2D orthogonal Procrustes analysis).
+// Rotation, optional reflection, and translation that best map `source` onto
+// `target` in the least squares sense (2D orthogonal Procrustes analysis).
+// No scaling: the least squares scale shrinks the layout when the layouts
+// differ, and repeated alignments would shrink it toward zero.
 export function alignTo(source, target) {
   const count = source.x.length;
   const [sx, sy, tx, ty] = [source.x, source.y, target.x, target.y].map(mean);
@@ -24,7 +25,6 @@ export function alignTo(source, target) {
   let cross = 0;
   let mirroredDot = 0;
   let mirroredCross = 0;
-  let sourceNorm = 0;
   for (let i = 0; i < count; i++) {
     const [ax, ay] = [source.x[i] - sx, source.y[i] - sy];
     const [bx, by] = [target.x[i] - tx, target.y[i] - ty];
@@ -32,13 +32,11 @@ export function alignTo(source, target) {
     cross += ax * by - ay * bx;
     mirroredDot += ax * bx - ay * by;
     mirroredCross += ax * by + ay * bx;
-    sourceNorm += ax * ax + ay * ay;
   }
   const mirror = Math.hypot(mirroredDot, mirroredCross) > Math.hypot(dot, cross);
   const [c, d] = mirror ? [mirroredDot, mirroredCross] : [dot, cross];
-  const scale = Math.hypot(c, d) / Math.max(sourceNorm, 1e-12);
-  const angle = Math.atan2(d, c);
-  const [cos, sin] = [scale * Math.cos(angle), scale * Math.sin(angle)];
+  const norm = Math.max(Math.hypot(c, d), 1e-12);
+  const [cos, sin] = [c / norm, d / norm];
 
   const x = new Float32Array(count);
   const y = new Float32Array(count);
@@ -54,8 +52,7 @@ export function alignTo(source, target) {
 // UMAP's linear learning-rate decay.
 export const learningRateAt = ({ initialLearningRate, epochs }, epoch) => initialLearningRate * (1 - epoch / epochs);
 
-// The decay cut into frames of `epochsPerFrame` epochs. Yields the learning
-// rate for each frame.
+// Yields the learning rate for each frame of `epochsPerFrame` epochs.
 export function* annealSchedule(schedule) {
   for (let epoch = 0; epoch < schedule.epochs; epoch += schedule.epochsPerFrame) {
     yield learningRateAt(schedule, epoch);

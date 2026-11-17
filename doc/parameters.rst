@@ -102,18 +102,21 @@ major ones:
    </script>
    <script type="module" src="_static/parameter_explorer/parameter_explorer.js"></script>
 
-.. only:: html
-
-    .. container:: umap-parameter-explorer-note
-
-        The sections on :ref:`n_neighbors <parameters-n-neighbors>` and
-        :ref:`min_dist <parameters-min-dist>` also have interactive figures,
-        where you can change the parameter with a slider.
-
 Each of these parameters has a distinct effect, and we will look at each
 in turn. To make exploration simpler we will first write a short utility
 function that can fit the data with UMAP given a set of parameter
 choices, and plot the result.
+
+.. only:: html
+
+    .. container:: umap-parameter-explorer-note
+
+        The :ref:`n_neighbors <parameters-n-neighbors>` and
+        :ref:`min_dist <parameters-min-dist>` sections include interactive
+        figures: move a slider to change the parameter. UMAP runs in your
+        browser on the same data, with the WebAssembly port from
+        `Embedding Atlas <https://apple.github.io/embedding-atlas/>`_, so the
+        layouts can differ slightly from the static figures.
 
 .. code:: python3
 
@@ -166,14 +169,9 @@ for UMAP (as used above) is 15, but we will look at values ranging from
 
     .. container:: umap-parameter-explorer-note
 
-        The code above draws one figure for each value. The interactive figure
-        below makes the same comparison: move the slider to change
-        ``n_neighbors``, and the points move smoothly to the new embedding. It
-        runs UMAP on the same data in your browser, with the WebAssembly port
-        from `Embedding Atlas <https://apple.github.io/embedding-atlas/>`_.
-        Click **Restart** to watch UMAP compute the embedding from scratch,
-        frame by frame. The figures that the code draws are under "Show static
-        renderings".
+        The interactive figure below makes the same comparison as the code
+        above. Move the slider, or click a value in the text such as
+        ``n_neighbors=2``.
 
 .. raw:: html
 
@@ -252,13 +250,9 @@ at a range of values from 0.0 through to 0.99.
 
     .. container:: umap-parameter-explorer-note
 
-        The code above draws one figure for each value. In the interactive
-        figure below, move the slider to change ``min_dist``. Because
-        ``min_dist`` does not change the fuzzy graph, the figure continues to
-        optimize the current layout, and the points move smoothly to their new
-        positions. Click **Restart** to watch UMAP compute the embedding from
-        scratch instead.
-        The figures that the code draws are under "Show static renderings".
+        The interactive figure below makes the same comparison as the code
+        above. Move the slider, or click a value in the text such as
+        ``min_dist=0.0``.
 
 .. raw:: html
 
@@ -287,6 +281,7 @@ at a range of values from 0.0 through to 0.99.
 Here we see that with ``min_dist=0.0`` UMAP manages to find small
 connected components, clumps and strings in the data, and emphasises
 these features in the resulting embedding. As ``min_dist`` is increased
+(for example ``min_dist=0.25``, ``min_dist=0.5``, or ``min_dist=0.99``)
 these structures are pushed apart into softer more general features,
 providing a better overarching view of the data at the loss of the more
 detailed topological structure.
