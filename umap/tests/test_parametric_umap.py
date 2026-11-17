@@ -21,6 +21,67 @@ not_windows = pytest.mark.skipif(
 )
 
 
+@tf_only
+@pytest.mark.parametrize("a,b", [(1.0, 1.0), (1.577, 0.895)])
+@pytest.mark.parametrize("graph_probability", [0.0, 0.25, 1.0])
+@pytest.mark.parametrize("repulsion_strength", [0.0, 1.0, 2.0])
+def test_cross_entropy_matches_umap_kernel(a, b, graph_probability, repulsion_strength):
+    from umap.parametric_umap import (
+        compute_cross_entropy,
+        convert_distance_to_log_probability,
+    )
+
+    distances = np.array([0.0, 0.1, 1.0, 10.0, 100.0], dtype=np.float64)
+    log_probabilities = convert_distance_to_log_probability(distances, a, b)
+    attraction, repulsion, total = compute_cross_entropy(
+        graph_probability, log_probabilities, repulsion_strength=repulsion_strength
+    )
+
+    probabilities = 1.0 / (1.0 + a * distances ** (2 * b))
+    expected_attraction = -graph_probability * np.log(probabilities)
+    expected_repulsion = (
+        -(1.0 - graph_probability)
+        * np.log(np.maximum(1.0 - probabilities, 1e-4))
+        * repulsion_strength
+    )
+    np.testing.assert_allclose(attraction, expected_attraction, atol=1e-12)
+    np.testing.assert_allclose(repulsion, expected_repulsion, atol=1e-12)
+    np.testing.assert_allclose(
+        total, expected_attraction + expected_repulsion, atol=1e-12
+    )
+
+
+@tf_only
+def test_cross_entropy_repulsion_near_unit_probability():
+    from umap.parametric_umap import compute_cross_entropy
+
+    # 1 - exp(log_probability) rounds to zero in float32 for this input.
+    log_probability = tf.constant([-1e-8], dtype=tf.float32)
+    _, repulsion, _ = compute_cross_entropy(0.0, log_probability, EPS=1e-12)
+    expected = -np.log(-np.expm1(-1e-8))
+    np.testing.assert_allclose(repulsion, [expected], rtol=1e-6)
+
+
+@tf_only
+@pytest.mark.parametrize("graph_probability", [0.0, 0.25, 1.0])
+def test_cross_entropy_finite_gradients_at_zero_distance(graph_probability):
+    from umap.parametric_umap import (
+        compute_cross_entropy,
+        convert_distance_to_log_probability,
+    )
+
+    distances = tf.Variable([0.0, 1e-6, 0.1, 1.0, 10.0], dtype=tf.float32)
+    with tf.GradientTape() as tape:
+        log_probabilities = convert_distance_to_log_probability(distances)
+        _, _, total = compute_cross_entropy(graph_probability, log_probabilities)
+        loss = tf.reduce_sum(total)
+
+    assert np.all(np.isfinite(total))
+    gradient = tape.gradient(loss, distances)
+    assert gradient is not None
+    assert np.all(np.isfinite(gradient))
+
+
 @pytest.fixture(scope="session")
 def moon_dataset():
     X, _ = make_moons(200)
