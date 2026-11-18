@@ -3102,6 +3102,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 f"n_jobs value {self.n_jobs} overridden to 1 by setting random_state. Use no seed for parallelism."
             )
             self.n_jobs = 1
+        self.n_jobs = min(self.n_jobs, numba.config.NUMBA_NUM_THREADS)
 
         if self.dens_lambda < 0.0:
             raise ValueError("dens_lambda cannot be negative")
