@@ -2073,6 +2073,7 @@ def simplicial_set_embedding(
                 exclude_graph_neighbors=exclude_graph_neighbors,
                 negative_sample_scale_adaptation_samples=negative_sample_scale_adaptation_samples,
                 densmap=densmap,
+                _enable_l9=True,
             )
 
     else:
