@@ -3674,10 +3674,14 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     (X_indexed.shape[0], self.n_neighbors), dtype=int
                 )
                 self._knn_dists = np.zeros(self._knn_indices.shape, dtype=float)
+                X_indptr = X_indexed.indptr
+                X_indices = X_indexed.indices
+                X_data = X_indexed.data
                 for row_id in range(X_indexed.shape[0]):
                     # Find KNNs row-by-row
-                    row_data = X_indexed[row_id].data
-                    row_indices = X_indexed[row_id].indices
+                    row_start, row_end = X_indptr[row_id], X_indptr[row_id + 1]
+                    row_data = X_data[row_start:row_end]
+                    row_indices = X_indices[row_start:row_end]
                     if len(row_data) < self._n_neighbors:
                         raise ValueError(
                             "Some rows contain fewer than n_neighbors distances!"
