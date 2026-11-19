@@ -473,7 +473,8 @@ def sparse_correlation(ind1, data1, ind2, data2, n_features):
 
     dot_prod_inds, dot_prod_data = sparse_mul(ind1, shifted_data1, ind2, shifted_data2)
 
-    common_indices = set(dot_prod_inds)
+    # A shared coordinate may have a zero product after mean centering.
+    common_indices = set(arr_intersect(ind1, ind2))
 
     for i in range(dot_prod_data.shape[0]):
         dot_product += dot_prod_data[i]
