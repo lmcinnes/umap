@@ -305,6 +305,11 @@ def test_symmetric_kl_does_not_modify_inputs(func):
         ([0, 0, 1, 2, 0.4], [0, 0, 3, 4, -0.3]),
         ([1, -2, 0.7, 2.4, 0.6], [-0.5, 1, 1.3, 0.9, -0.4]),
         ([-1, 0.5, 2, 0.8, -0.7], [2, -0.5, 0.6, 1.7, 0.2]),
+        # Angles outside the principal branch covered by arcsin(sin(theta)).
+        # grad[4] must include the d(arcsin(sin(t)))/dt = sign(cos(t)) chain.
+        ([0, 0, 1, 2, 2.29], [0, 0, 3, 4, -1.2]),
+        ([1, -2, 0.7, 2.4, -2.29], [-0.5, 1, 1.3, 0.9, 2.6]),
+        ([0, 0, 1, 2, 3.0], [0, 0, 3, 4, 0.0]),
     ],
 )
 def test_gaussian_energy_gradient(x, y):

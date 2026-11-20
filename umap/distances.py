@@ -1057,6 +1057,9 @@ def gaussian_energy_grad(x, y):  # pragma: no cover
     y[3] = np.abs(y[3])
 
     # Ensure angle is in range -pi,pi
+    # d(arcsin(sin(t)))/dt = sign(cos(t)); the raw-angle sign is needed so the
+    # gradient w.r.t. the pre-wrap angle stays correct outside [-pi/2, pi/2].
+    angle_sign = np.sign(np.cos(x[4]))
     x[4] = np.arcsin(np.sin(x[4]))
     y[4] = np.arcsin(np.sin(y[4]))
 
@@ -1127,6 +1130,7 @@ def gaussian_energy_grad(x, y):  # pragma: no cover
         + (x[2] - x[3]) * np.sin(2 * x[4]) * sigma_11
         - 2 * sigma_12 * (x[2] - x[3]) * np.cos(2 * x[4])
     ) / det_sigma
+    grad[4] *= angle_sign
 
     return dist, grad
 
