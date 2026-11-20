@@ -726,6 +726,26 @@ def test_component_layout_linkage_input_invariance(nn_data, linkage):
         assert_array_equal(layouts[0], layout)
 
 
+def test_component_layout_average_linkage_sparse_input_with_implicit_zeros(nn_data):
+    dmat = pairwise_distances(nn_data[:300])
+    n_components = 30
+    component_labels = np.arange(dmat.shape[0]) % n_components
+    dmat[dmat > np.median(dmat)] = 0.0
+    layouts = [
+        component_layout(
+            data,
+            n_components,
+            component_labels,
+            2,
+            np.random.RandomState(42),
+            metric="precomputed",
+            metric_kwds={"linkage": "average"},
+        )
+        for data in (dmat, csr_matrix(dmat))
+    ]
+    np.testing.assert_allclose(layouts[0], layouts[1])
+
+
 @pytest.mark.parametrize("set_op_mix_ratio", [1.0, 0.7, 0.5, 0.0])
 def test_modern_fuzzy_set_operations_match_legacy(set_op_mix_ratio):
     data = np.random.RandomState(0).rand(200, 5).astype(np.float32)

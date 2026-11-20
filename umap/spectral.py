@@ -99,7 +99,10 @@ def component_layout(
                 shape=(n_samples, n_components),
             )
             counts = np.asarray(membership.sum(axis=0)).ravel()
-            block_sums = np.asarray((membership.T @ data) @ membership)
+            block_sums = (membership.T @ data) @ membership
+            if scipy.sparse.issparse(block_sums):
+                block_sums = block_sums.toarray()
+            block_sums = np.asarray(block_sums)
             distance_matrix = block_sums / np.outer(counts, counts)
             np.fill_diagonal(distance_matrix, 0.0)
         else:
