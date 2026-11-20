@@ -447,11 +447,9 @@ def sparse_correlation(ind1, data1, ind2, data2, n_features):
         return 0.0
     elif ind1.shape[0] == 0 or ind2.shape[0] == 0:
         return 1.0
-
-    for i in range(data1.shape[0]):
-        mu_x += data1[i]
-    for i in range(data2.shape[0]):
-        mu_y += data2[i]
+        
+    mu_x = np.sum(data1[:len(data1.shape[0])])
+    mu_y = np.sum(data2[:len(data2.shape[0])])
 
     mu_x /= n_features
     mu_y /= n_features
@@ -475,8 +473,7 @@ def sparse_correlation(ind1, data1, ind2, data2, n_features):
 
     common_indices = set(dot_prod_inds)
 
-    for i in range(dot_prod_data.shape[0]):
-        dot_product += dot_prod_data[i]
+    dot_product = np.sum(dot_prod_data[:len(dot_prod_data.shape[0])])
 
     for i in range(ind1.shape[0]):
         if ind1[i] not in common_indices:
