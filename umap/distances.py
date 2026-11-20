@@ -1307,6 +1307,12 @@ def levenshtein_myers_ascii(x, y, normalisation=1.0, max_distance=20):
     if abs(x_len - y_len) > max_distance:
         return float(max_distance) / normalisation
 
+    # An empty x would make top_bit below 1 << -1, which is undefined
+    if x_len == 0:
+        return float(y_len) / normalisation
+    if y_len == 0:
+        return float(x_len) / normalisation
+
     # Myers' bit-parallel algorithm is limited to word size
     # fall back to levenshtein if words are large
     if x_len > 63 or y_len > 63:
