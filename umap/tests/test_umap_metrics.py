@@ -710,6 +710,14 @@ def test_core_distances(levenshtein_fn, x, y, expected):
     assert levenshtein_fn(y, x) == float(expected)
 
 
+@pytest.mark.parametrize("x,y,expected", [("", "", 0), ("", "a", 1), ("", "abc", 3)])
+def test_empty_strings_without_jit(levenshtein_fn, x, y, expected):
+    # Compiled results for an empty string can depend on the platform (#1359),
+    # while the plain Python version raises on a negative shift.
+    assert levenshtein_fn.py_func(x, y) == float(expected)
+    assert levenshtein_fn.py_func(y, x) == float(expected)
+
+
 ASCII_TESTS = [
     ("\x00", "\x00", 0),  # NUL character
     ("\x7f", "\x7f", 0),  # DEL character
