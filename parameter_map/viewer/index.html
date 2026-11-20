@@ -204,7 +204,7 @@ async function main() {
   // once for small changes and at a limited pace for jumps. ``level`` is the
   // whole level on show, for picking and overlays.
   const state = {target: 0, shown: 0, level: 0, view: null, colour: '', hover: null, selected: null,
-                 mode: 'grid', point: null};
+                 mode: 'grid', point: null, flash: null};
   // The deepest cell showing each run, to carry a selection between views.
   const deepest = new Map(meta.cells[levels].map(cell => [cell.run, cell]));
 
@@ -337,6 +337,7 @@ async function main() {
         getFillColor: pointColour, getRadius: radius, radiusUnits: 'pixels',
         updateTriggers: {getFillColor: state.colour, getRadius: radius},
       }),
+      flashLayer(radius),
       new deck.ScatterplotLayer({
         id: 'marked', data: marked, filled: false, stroked: true,
         getPosition: d => [meta.runs[d.run].xy[0] * world, meta.runs[d.run].xy[1] * world],
@@ -358,6 +359,7 @@ async function main() {
         getFillColor: cell => [...ramp(meanLevel(cell, state.colour)), 120],
       }));
     }
+    result.push(flashLayer());
     const outlines = [state.selected && {...state.selected, colour: [31, 119, 180], width: 3},
                       settled && state.hover && {...state.hover, colour: [31, 41, 51], width: 1.5}].filter(Boolean);
     result.push(new deck.PolygonLayer({
@@ -524,9 +526,93 @@ async function main() {
     previewBox.style.top = `${y}px`;
   }
 
+  // On switching views, the new view centres on the runs the old one had on
+  // screen: at the median of their positions, zoomed so that the middle
+  // FOCUS_SHARE of them fits on each axis. They are then briefly ringed.
+  const FOCUS_SHARE = 0.8, FOCUS_PAD = 1.15, FLASH_MS = 1500, FLASH_COLOUR = [217, 119, 6];
+  const scatterAt = run => [meta.runs[run].xy[0] * world, meta.runs[run].xy[1] * world];
+  const gridAt = run => {
+    const cell = deepest.get(run), size = cellSize(levels);
+    return [(cell.x + 0.5) * size, (cell.y + 0.5) * size];
+  };
+  function onScreen([x, y]) {
+    const scale = 2 ** state.view.zoom, [cx, cy] = state.view.target;
+    return Math.abs(x - cx) <= mapElement.clientWidth / 2 / scale
+      && Math.abs(y - cy) <= mapElement.clientHeight / 2 / scale;
+  }
+  // The runs on screen: in the grid, every run that a tile whose centre is
+  // on screen stands for; in the scatter, every point on screen.
+  function runsOnScreen() {
+    if (state.mode === 'scatter') return RUN_IDS.filter(run => onScreen(scatterAt(run)));
+    const level = Math.min(Math.max(state.level, top), levels), shift = levels - level;
+    const size = cellSize(level);
+    return meta.cells[levels].filter(cell => onScreen(
+      [((cell.x >> shift) + 0.5) * size, ((cell.y >> shift) + 0.5) * size])).map(cell => cell.run);
+  }
+  function focusOn(points) {
+    const sorted = d => points.map(p => p[d]).sort((a, b) => a - b);
+    const at = (values, t) => values[Math.round(t * (values.length - 1))];
+    const xs = sorted(0), ys = sorted(1);
+    const low = (1 - FOCUS_SHARE) / 2, high = 1 - low;
+    const centre = [at(xs, 0.5), at(ys, 0.5)];
+    // Twice the larger reach from the median, so the whole box is on screen.
+    const span = (values, mid) => Math.max(2 * Math.max(at(values, high) - mid, mid - at(values, low)),
+                                           3 * cellSize(levels));
+    const minZoom = Math.min(fit, top - levels) - 0.5;
+    const zoom = Math.min(Math.max(Math.log2(Math.min(
+      mapElement.clientWidth / (span(xs, centre[0]) * FOCUS_PAD),
+      (mapElement.clientHeight - reserved()) / (span(ys, centre[1]) * FOCUS_PAD))), minZoom), 1);
+    state.view = {target: [centre[0], centre[1] - reserved() / 2 / 2 ** zoom, 0], zoom};
+    state.target = state.shown = levelAt(zoom);
+    state.level = Math.round(state.shown);
+    untouched = false;
+    deckgl.setProps({initialViewState: {...state.view, minZoom, maxZoom: 1}});
+  }
+  // A fading ring around the runs just focused on.
+  function flash(runs) {
+    state.flash = {runs, start: performance.now()};
+    const step = now => {
+      if (!state.flash) return;
+      if (now - state.flash.start > FLASH_MS) state.flash = null;
+      render();
+      if (state.flash) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+  const flashOpacity = () => Math.max(1 - (performance.now() - state.flash.start) / FLASH_MS, 0);
+  function flashLayer(radius) {
+    if (!state.flash) return null;
+    if (state.mode === 'scatter') {
+      return new deck.ScatterplotLayer({
+        id: 'flash', data: state.flash.runs, filled: false, stroked: true, opacity: flashOpacity(),
+        getPosition: scatterAt, getRadius: radius + 2, radiusUnits: 'pixels',
+        getLineColor: FLASH_COLOUR, getLineWidth: 1.5, lineWidthUnits: 'pixels',
+      });
+    }
+    if (!Number.isInteger(state.shown)) return null;
+    const shift = levels - state.level, keys = new Set();
+    for (const run of state.flash.runs) {
+      const cell = deepest.get(run);
+      keys.add(`${cell.x >> shift},${cell.y >> shift}`);
+    }
+    const cells = [...keys].map(key => cellAt(state.level, ...key.split(',').map(Number)));
+    return new deck.PolygonLayer({
+      id: 'flash', data: cells, filled: false, stroked: true, opacity: flashOpacity(),
+      getPolygon: cell => square(cell, state.level), getLineColor: FLASH_COLOUR,
+      getLineWidth: 3, lineWidthUnits: 'pixels',
+    });
+  }
+
   function setMode(mode) {
+    if (mode === state.mode) return;
+    const runs = runsOnScreen();
     state.mode = mode;
     state.hover = null; state.point = null;
+    if (runs.length) {
+      focusOn(runs.map(mode === 'scatter' ? scatterAt : gridAt));
+      // Ringing every run says nothing.
+      if (runs.length < meta.runs.length) flash(runs);
+    }
     previewBox.style.display = 'none';
     document.getElementById('view-grid').classList.toggle('on', mode === 'grid');
     document.getElementById('view-scatter').classList.toggle('on', mode === 'scatter');
