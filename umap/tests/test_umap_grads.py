@@ -322,3 +322,13 @@ def test_gaussian_energy_gradient(x, y):
 # hyperboloid
 # spherical_gaussian_energy
 # diagonal_gaussian_energy
+
+
+@pytest.mark.parametrize("dim", [4, 16, 64])
+def test_braycurtis_gradient_signed_coordinates(dim):
+    assert_gradient_matches_finite_diff(
+        dist.bray_curtis,
+        dist.bray_curtis_grad,
+        sampler=sample_normal_pairs,
+        dim=dim,
+    )
