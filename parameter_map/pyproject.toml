@@ -1,0 +1,19 @@
+[project]
+name = "umap-parameter-map"
+version = "0.1.0"
+description = "Generation pipeline for the UMAP parameter-map documentation gallery"
+requires-python = ">=3.12"
+dependencies = [
+    "umap-learn",
+    "pillow",
+    "shufflesnap>=0.4",
+    "pyarrow>=26.0.1",
+    "glasbey>=0.4.0",
+    "datashader>=0.19.1",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+umap-learn = { path = "..", editable = true }
