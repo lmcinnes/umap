@@ -28,12 +28,17 @@ INT32_MIN = np.iinfo(np.int32).min + 1
 INT32_MAX = np.iinfo(np.int32).max - 1
 
 
-def _coarsen_graph(graph, labels, remove_diagonal=False):
-    """Construct the partition map and fuzzy-union coarse graph."""
-    reduction_map = csr_matrix(
+def _reduction_map(labels):
+    """Sparse 0/1 map from each node to its part."""
+    return csr_matrix(
         (np.ones(labels.shape[0]), labels, np.arange(labels.shape[0] + 1)),
         shape=(labels.shape[0], labels.max() + 1),
     )
+
+
+def _coarsen_graph(graph, labels, remove_diagonal=False):
+    """Construct the partition map and fuzzy-union coarse graph."""
+    reduction_map = _reduction_map(labels)
     if not graph.has_canonical_format:
         complement_graph = graph.astype(np.float64)
         complement_graph.data = np.log1p(
@@ -323,15 +328,26 @@ def _anchor_reference(
     else:
         data_sample = np.asarray(data_sample)
         finite = np.isfinite(data_sample)
-        finite_counts = finite.sum(axis=0)
-        finite_sums = np.where(finite, data_sample, 0.0).sum(axis=0)
+        all_finite = bool(finite.all())
+        if all_finite:
+            # Same values as the masked forms below, without two full passes.
+            finite_counts = np.full(
+                data_sample.shape[1], data_sample.shape[0], dtype=np.int64
+            )
+            finite_sums = data_sample.sum(axis=0)
+        else:
+            finite_counts = finite.sum(axis=0)
+            finite_sums = np.where(finite, data_sample, 0.0).sum(axis=0)
         feature_mean = np.divide(
             finite_sums,
             finite_counts,
             out=np.zeros_like(finite_sums, dtype=np.float64),
             where=finite_counts > 0,
         )
-        centered_sample = np.where(finite, data_sample, feature_mean) - feature_mean
+        if all_finite:
+            centered_sample = data_sample - feature_mean
+        else:
+            centered_sample = np.where(finite, data_sample, feature_mean) - feature_mean
 
     u, singular_values, components = randomized_svd(
         centered_sample,
@@ -411,6 +427,43 @@ def procrustes_align(e1: np.ndarray, e2: np.ndarray) -> np.ndarray:
     return rotation.astype(e1.dtype)
 
 
+# Label propagation gathers each node's per-label vote totals. A dense slot
+# table indexed by label replaces a typed dict per node: it is much faster and
+# keeps the dict's insertion order and float32 sums, so results are unchanged.
+_LABEL_PROP_CHUNKS = 64
+
+
+@numba.njit(inline="always")
+def _gather_votes(
+    indptr, indices, data, labels, row, label_min, slot_of_label, vote_labels, vote_sums
+):
+    """Collect (label, total weight) for ``row`` in first-appearance order."""
+    n_votes = 0
+    for k in range(indptr[row], indptr[row + 1]):
+        label = labels[indices[k]]
+        slot = slot_of_label[label - label_min]
+        if slot < 0:
+            slot_of_label[label - label_min] = n_votes
+            vote_labels[n_votes] = label
+            vote_sums[n_votes] = data[k]
+            n_votes += 1
+        else:
+            vote_sums[slot] += data[k]
+    for v in range(n_votes):
+        slot_of_label[vote_labels[v] - label_min] = -1
+    return n_votes
+
+
+@numba.njit(inline="always")
+def _vote_scratch(indptr, labels):
+    max_degree = 0
+    for row in range(indptr.shape[0] - 1):
+        max_degree = max(max_degree, indptr[row + 1] - indptr[row])
+    label_min = min(labels.min(), -1)
+    n_slots = labels.max() - label_min + 1
+    return max_degree, label_min, n_slots
+
+
 @numba.njit(fastmath=FASTMATH_FLAGS, parallel=True, cache=True)
 def label_prop_iteration_share(indptr, indices, data, labels, rng_state, share):
     """label_prop_iteration with a scale-free join rule, for coarse levels.
@@ -423,36 +476,49 @@ def label_prop_iteration_share(indptr, indices, data, labels, rng_state, share):
     """
     n_rows = indptr.shape[0] - 1
     result = labels.copy()
-    for i in numba.prange(n_rows):
-        current_l = labels[i]
-        if current_l >= 0:
-            continue
-        local_rng_state = rng_state + i
-        votes = {}
-        total = 0.0
-        for k in range(indptr[i], indptr[i + 1]):
-            j = indices[k]
-            l = labels[j]
-            total += data[k]
-            if l in votes:
-                votes[l] += data[k]
-            else:
-                votes[l] = data[k]
-        max_vote = share * total
-        tie_count = 1
-        for l in votes:
-            if l == -1:
+    if n_rows == 0:
+        return result
+    max_degree, label_min, n_slots = _vote_scratch(indptr, labels)
+    n_chunks = min(n_rows, _LABEL_PROP_CHUNKS)
+    chunk_size = (n_rows + n_chunks - 1) // n_chunks
+    for chunk in numba.prange(n_chunks):
+        slot_of_label = np.full(n_slots, -1, dtype=np.int64)
+        vote_labels = np.empty(max(max_degree, 1), dtype=labels.dtype)
+        vote_sums = np.empty(max(max_degree, 1), dtype=data.dtype)
+        local_rng_state = np.empty_like(rng_state)
+        for i in range(chunk * chunk_size, min((chunk + 1) * chunk_size, n_rows)):
+            current_l = labels[i]
+            if current_l >= 0:
                 continue
-            elif votes[l] > max_vote:
-                max_vote = votes[l]
-                result[i] = l
-                tie_count = 1
-            elif votes[l] == max_vote:
-                tie_count += 1
-                if current_l == -1:
+            n_votes = _gather_votes(
+                indptr, indices, data, labels, i, label_min,
+                slot_of_label, vote_labels, vote_sums,
+            )
+            total = 0.0
+            for k in range(indptr[i], indptr[i + 1]):
+                total += data[k]
+            have_state = False
+            max_vote = share * total
+            tie_count = 1
+            for v in range(n_votes):
+                l = vote_labels[v]
+                if l == -1:
+                    continue
+                elif vote_sums[v] > max_vote:
+                    max_vote = vote_sums[v]
                     result[i] = l
-                elif tau_rand(local_rng_state) < 1.0 / tie_count:
-                    result[i] = l
+                    tie_count = 1
+                elif vote_sums[v] == max_vote:
+                    tie_count += 1
+                    if current_l == -1:
+                        result[i] = l
+                    else:
+                        if not have_state:
+                            for s in range(rng_state.shape[0]):
+                                local_rng_state[s] = rng_state[s] + i
+                            have_state = True
+                        if tau_rand(local_rng_state) < 1.0 / tie_count:
+                            result[i] = l
     return result
 
 
@@ -466,39 +532,46 @@ def label_prop_iteration(
 ):
     n_rows = indptr.shape[0] - 1
     result = labels.copy()
-
-    for i in numba.prange(n_rows):
-        current_l = labels[i]
-        if current_l >= 0:
-            continue
-        # Create a local rng state for this iteration
-        local_rng_state = rng_state + i
-        votes = {}
-        for k in range(indptr[i], indptr[i + 1]):
-            j = indices[k]
-            l = labels[j]
-            if l in votes:
-                votes[l] += data[k]
-            else:
-                votes[l] = data[k]
-
-        max_vote = 1
-        tie_count = 1
-        for l in votes:
-            if l == -1:
+    if n_rows == 0:
+        return result
+    max_degree, label_min, n_slots = _vote_scratch(indptr, labels)
+    n_chunks = min(n_rows, _LABEL_PROP_CHUNKS)
+    chunk_size = (n_rows + n_chunks - 1) // n_chunks
+    for chunk in numba.prange(n_chunks):
+        slot_of_label = np.full(n_slots, -1, dtype=np.int64)
+        vote_labels = np.empty(max(max_degree, 1), dtype=labels.dtype)
+        vote_sums = np.empty(max(max_degree, 1), dtype=data.dtype)
+        local_rng_state = np.empty_like(rng_state)
+        for i in range(chunk * chunk_size, min((chunk + 1) * chunk_size, n_rows)):
+            current_l = labels[i]
+            if current_l >= 0:
                 continue
-            elif votes[l] > max_vote:
-                max_vote = votes[l]
-                result[i] = l
-                tie_count = 1
-            elif votes[l] == max_vote:
-                tie_count += 1
-                if current_l == -1:
+            n_votes = _gather_votes(
+                indptr, indices, data, labels, i, label_min,
+                slot_of_label, vote_labels, vote_sums,
+            )
+            have_state = False
+            max_vote = 1.0
+            tie_count = 1
+            for v in range(n_votes):
+                l = vote_labels[v]
+                if l == -1:
+                    continue
+                elif vote_sums[v] > max_vote:
+                    max_vote = vote_sums[v]
                     result[i] = l
-                elif tau_rand(local_rng_state) < 1.0 / tie_count:
-                    result[i] = l
-            else:
-                continue
+                    tie_count = 1
+                elif vote_sums[v] == max_vote:
+                    tie_count += 1
+                    if current_l == -1:
+                        result[i] = l
+                    else:
+                        if not have_state:
+                            for s in range(rng_state.shape[0]):
+                                local_rng_state[s] = rng_state[s] + i
+                            have_state = True
+                        if tau_rand(local_rng_state) < 1.0 / tie_count:
+                            result[i] = l
 
     return result
 
@@ -625,19 +698,142 @@ def _fill_unsampled(graph, data, subset_mask):
 _COARSE_LAYOUT_WEIGHTS = ("transition", "fuzzy_union")
 
 
+_COARSE_SUM_CHUNKS = 48
+
+
+@numba.njit(parallel=True, cache=True)
+def _sum_by_label_pairs(indptr, indices, weights, labels, label_indptr, rows):
+    """Sorted CSR of W_PQ = sum of w_ij over i in part P, j in part Q."""
+    n_labels = label_indptr.shape[0] - 1
+    n_chunks = max(1, min(n_labels, _COARSE_SUM_CHUNKS))
+    chunk_size = (n_labels + n_chunks - 1) // n_chunks
+
+    counts = np.zeros(n_labels, dtype=np.int64)
+    for chunk in numba.prange(n_chunks):
+        seen = np.full(n_labels, -1, dtype=np.int64)
+        for label in range(chunk * chunk_size, min((chunk + 1) * chunk_size, n_labels)):
+            count = 0
+            for member in range(label_indptr[label], label_indptr[label + 1]):
+                row = rows[member]
+                for edge in range(indptr[row], indptr[row + 1]):
+                    target = labels[indices[edge]]
+                    if seen[target] != label:
+                        seen[target] = label
+                        count += 1
+            counts[label] = count
+
+    coarse_indptr = np.zeros(n_labels + 1, dtype=np.int64)
+    max_count = 0
+    for label in range(n_labels):
+        coarse_indptr[label + 1] = coarse_indptr[label] + counts[label]
+        max_count = max(max_count, counts[label])
+    coarse_indices = np.empty(coarse_indptr[-1], dtype=np.int32)
+    coarse_data = np.empty(coarse_indptr[-1], dtype=np.float64)
+
+    for chunk in numba.prange(n_chunks):
+        seen = np.full(n_labels, -1, dtype=np.int64)
+        sums = np.zeros(n_labels, dtype=np.float64)
+        touched = np.empty(max(max_count, 1), dtype=np.int64)
+        for label in range(chunk * chunk_size, min((chunk + 1) * chunk_size, n_labels)):
+            n_touched = 0
+            for member in range(label_indptr[label], label_indptr[label + 1]):
+                row = rows[member]
+                for edge in range(indptr[row], indptr[row + 1]):
+                    target = labels[indices[edge]]
+                    if seen[target] != label:
+                        seen[target] = label
+                        touched[n_touched] = target
+                        n_touched += 1
+                        sums[target] = np.float64(weights[edge])
+                    else:
+                        sums[target] += np.float64(weights[edge])
+            targets = np.sort(touched[:n_touched])
+            output = coarse_indptr[label]
+            for k in range(n_touched):
+                coarse_indices[output + k] = targets[k]
+                coarse_data[output + k] = sums[targets[k]]
+    return coarse_indptr, coarse_indices, coarse_data
+
+
 def _coarse_layout_graph(layout_graph, reduction_map, weights):
     """Total edge weight between parts, W = R^T W_fine R (internal weight on
     the diagonal), or None for ``"fuzzy_union"``.
 
     Summed level by level from the finest graph, so it stays exact down the
     recursion; each level's layout weights are derived from it by
-    _normalised_layout_edges.
+    _normalised_layout_edges. Computed by grouping fine edges by their parts'
+    labels (equal to the sparse product up to floating-point summation order).
     """
     if weights not in _COARSE_LAYOUT_WEIGHTS:
         raise ValueError(
             f"coarse_layout_weights must be one of {_COARSE_LAYOUT_WEIGHTS}"
         )
-    return (reduction_map.T @ layout_graph @ reduction_map).tocsr().astype(np.float64)
+    reduction_map = reduction_map.tocsr()
+    if not np.array_equal(np.diff(reduction_map.indptr), np.ones(reduction_map.shape[0])):
+        # Not a partition (one part per node): use the general product.
+        return (reduction_map.T @ layout_graph @ reduction_map).tocsr().astype(np.float64)
+    layout_graph = layout_graph.tocsr()
+    labels = reduction_map.indices.astype(np.int64)
+    n_parts = reduction_map.shape[1]
+    label_indptr, rows = _group_rows_by_label(labels, n_parts)
+    coarse_indptr, coarse_indices, coarse_data = _sum_by_label_pairs(
+        layout_graph.indptr, layout_graph.indices, layout_graph.data,
+        labels, label_indptr, rows,
+    )
+    return csr_matrix(
+        (coarse_data, coarse_indices, coarse_indptr), shape=(n_parts, n_parts)
+    )
+
+
+@numba.njit(parallel=True, cache=True)
+def _transition_edges(indptr, indices, data):
+    """Fuzzy union of the row-normalised off-diagonal weights of a sorted CSR
+    matrix with a symmetric sparsity pattern; ok is False if it isn't."""
+    n_rows = indptr.shape[0] - 1
+    inverse_out = np.empty(n_rows, dtype=np.float64)
+    counts = np.zeros(n_rows, dtype=np.int64)
+    for row in numba.prange(n_rows):
+        total = 0.0
+        count = 0
+        for edge in range(indptr[row], indptr[row + 1]):
+            if indices[edge] != row:
+                total += data[edge]
+                count += 1
+        inverse_out[row] = 1.0 / (total if total > 0 else 1.0)
+        counts[row] = count
+
+    edge_indptr = np.zeros(n_rows + 1, dtype=np.int64)
+    for row in range(n_rows):
+        edge_indptr[row + 1] = edge_indptr[row] + counts[row]
+    edge_indices = np.empty(edge_indptr[-1], dtype=np.int32)
+    edge_data = np.empty(edge_indptr[-1], dtype=np.float32)
+    misses = np.zeros(n_rows, dtype=np.int64)
+    for row in numba.prange(n_rows):
+        output = edge_indptr[row]
+        for edge in range(indptr[row], indptr[row + 1]):
+            col = indices[edge]
+            if col == row:
+                continue
+            forward = inverse_out[row] * data[edge]
+            # Weight of the reverse edge, by binary search in the sorted row.
+            lo = indptr[col]
+            hi = indptr[col + 1]
+            while lo < hi:
+                mid = (lo + hi) // 2
+                if indices[mid] < row:
+                    lo = mid + 1
+                else:
+                    hi = mid
+            backward = 0.0
+            if lo < indptr[col + 1] and indices[lo] == row:
+                backward = inverse_out[col] * data[lo]
+            else:
+                misses[row] += 1
+            value = (forward + backward) - forward * backward
+            edge_indices[output] = col
+            edge_data[output] = min(max(value, 0.0), 1.0)
+            output += 1
+    return edge_indptr, edge_indices, edge_data, misses.sum() == 0
 
 
 def _normalised_layout_edges(reduced_graph, summed, weights="transition"):
@@ -660,10 +856,24 @@ def _normalised_layout_edges(reduced_graph, summed, weights="transition"):
     Only relative weights matter to the layout (make_epochs_per_sample divides
     by the maximum).
     """
-    from scipy.sparse import diags
-
     if summed is None or weights == "fuzzy_union":
         return reduced_graph
+    summed = summed.tocsr()
+    if not summed.has_sorted_indices:
+        summed = summed.copy()
+        summed.sort_indices()
+    edge_indptr, edge_indices, edge_data, symmetric = _transition_edges(
+        summed.indptr, summed.indices, summed.data.astype(np.float64, copy=False)
+    )
+    if symmetric:
+        return csr_matrix((edge_data, edge_indices, edge_indptr), shape=summed.shape)
+    return _normalised_layout_edges_sparse(summed)
+
+
+def _normalised_layout_edges_sparse(summed):
+    """Sparse-algebra form of the transition weights, for any pattern."""
+    from scipy.sparse import diags
+
     external = summed - diags(summed.diagonal())
     external.eliminate_zeros()
     external = external.tocsr()
@@ -674,6 +884,17 @@ def _normalised_layout_edges(reduced_graph, summed, weights="transition"):
     edges.sort_indices()
     edges.data = np.clip(edges.data, 0.0, 1.0).astype(np.float32)
     return edges
+
+
+def _coarse_layout_threads(n_parts, available):
+    """Threads for a coarse layout: small levels finish sooner on a few threads
+    (less fork-join and cross-core traffic per epoch). Results do not depend
+    on the thread count."""
+    if n_parts < 2048:
+        return min(available, 4)
+    if n_parts < 8192:
+        return min(available, 8)
+    return available
 
 
 def _base_case_layout(graph, data, subset_mask, depth):
@@ -840,9 +1061,15 @@ def label_propagation_init(
     # Remap labels to a contiguous range
     labels = remap_labels(labels)
 
-    base_reduction_map, reduced_graph = _coarsen_graph(
-        graph, labels, remove_diagonal=remove_coarse_diagonal
-    )
+    # The fuzzy-union coarse graph is only read when it is laid out or
+    # coarsened further; the default transition weights use neither.
+    if coarse_layout_weights == "fuzzy_union" or not coarsen_on_layout_weights:
+        base_reduction_map, reduced_graph = _coarsen_graph(
+            graph, labels, remove_diagonal=remove_coarse_diagonal
+        )
+    else:
+        base_reduction_map, reduced_graph = _reduction_map(labels), None
+    n_parts = base_reduction_map.shape[1]
     reduced_layout_graph = _coarse_layout_graph(
         graph if layout_graph is None else layout_graph,
         base_reduction_map,
@@ -868,7 +1095,7 @@ def label_propagation_init(
     else:
         l1_normalized_reduction_map = normalize(base_reduction_map, axis=0, norm="l1")
         reduced_data = (l1_normalized_reduction_map.T * data).astype(np.float32)
-        reduced_subset_mask = np.ones(reduced_graph.shape[0], dtype=np.bool_)
+        reduced_subset_mask = np.ones(n_parts, dtype=np.bool_)
 
     if recursive_init:
         next_a, next_b = _next_curve_parameters(a, b, curve_schedule)
@@ -935,33 +1162,38 @@ def label_propagation_init(
         resolved_negative_selection_range_mode,
         resolved_negative_selection_range_scale,
     )
-    reduced_layout = optimize_layout_euclidean(
-        reduced_init,
-        reduced_init,
-        None,
-        None,
-        n_embedding_epochs,
-        reduced_graph.shape[0],
-        epochs_per_sample,
-        a,
-        b,
-        rng_state,
-        resolved_repulsion_strength,
-        0.5,
-        resolved_negative_sample_rate,
-        parallel=recursive_parallel,
-        verbose=verbose,
-        densmap_kwds={},
-        tqdm_kwds={"desc": f"Init recursion depth {depth}", "position": 1},
-        move_other=False,
-        csr_indptr=layout_edges.indptr,
-        csr_indices=layout_edges.indices,
-        csr_data=layout_edges.data,
-        random_state=random_state,
-        optimizer="adam",
-        good_initialization=good_initialization,
-        negative_selection_range=negative_selection_range,
-    )
+    available_threads = numba.get_num_threads()
+    numba.set_num_threads(_coarse_layout_threads(n_parts, available_threads))
+    try:
+        reduced_layout = optimize_layout_euclidean(
+            reduced_init,
+            reduced_init,
+            None,
+            None,
+            n_embedding_epochs,
+            n_parts,
+            epochs_per_sample,
+            a,
+            b,
+            rng_state,
+            resolved_repulsion_strength,
+            0.5,
+            resolved_negative_sample_rate,
+            parallel=recursive_parallel,
+            verbose=verbose,
+            densmap_kwds={},
+            tqdm_kwds={"desc": f"Init recursion depth {depth}", "position": 1},
+            move_other=False,
+            csr_indptr=layout_edges.indptr,
+            csr_indices=layout_edges.indices,
+            csr_data=layout_edges.data,
+            random_state=random_state,
+            optimizer="adam",
+            good_initialization=good_initialization,
+            negative_selection_range=negative_selection_range,
+        )
+    finally:
+        numba.set_num_threads(available_threads)
 
     result = _expand_layout(
         graph.indptr,

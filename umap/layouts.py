@@ -269,7 +269,7 @@ def _optimize_layout_euclidean_single_epoch(
             )
 
 
-@numba.njit
+@numba.njit(cache=True)
 def _l9_make_table(a,b,gamma,scale,bits=7):
  bins=1<<bits
  table=np.empty(60*(bins+1),np.float64)

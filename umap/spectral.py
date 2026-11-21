@@ -7,10 +7,6 @@ import numpy as np
 import scipy.linalg
 import scipy.sparse
 import scipy.sparse.csgraph
-from sklearn.decomposition import TruncatedSVD
-from sklearn.manifold import SpectralEmbedding
-from sklearn.metrics import pairwise_distances
-from sklearn.metrics.pairwise import _VALID_METRICS as SKLEARN_PAIRWISE_VALID_METRICS
 
 from umap.distances import pairwise_special_metric, SPECIAL_METRICS
 from umap.sparse import SPARSE_SPECIAL_METRICS, sparse_named_distances
@@ -72,6 +68,9 @@ def component_layout(
         The ``dim``-dimensional embedding of the ``n_components``-many
         connected components.
     """
+    from sklearn.manifold import SpectralEmbedding  # deferred: costly at import
+    from sklearn.metrics import pairwise_distances  # deferred: costly at import
+    from sklearn.metrics.pairwise import _VALID_METRICS as SKLEARN_PAIRWISE_VALID_METRICS  # deferred: costly at import
     if data is None:
         # We don't have data to work with; just guess
         return np.random.random(size=(n_components, dim)) * 10.0
@@ -267,6 +266,8 @@ def multi_component_layout(
         The initial embedding of ``graph``.
     """
 
+    from sklearn.decomposition import TruncatedSVD  # deferred: costly at import
+    from sklearn.metrics import pairwise_distances  # deferred: costly at import
     result = np.empty((graph.shape[0], dim), dtype=np.float32)
 
     if True:
@@ -517,6 +518,7 @@ def tswspectral_layout(
 
 def _spectral_initial_block(L, k, init, gen, random_state, sqrt_deg):
     """Starting block of ``k`` vectors for LOBPCG."""
+    from sklearn.decomposition import TruncatedSVD  # deferred: costly at import
     if init == "random":
         X = gen.normal(size=(L.shape[0], k))
     elif init == "tsvd":

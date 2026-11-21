@@ -16,10 +16,7 @@ from scipy.optimize import curve_fit
 from sklearn.base import BaseEstimator, ClassNamePrefixFeaturesOutMixin
 from sklearn.utils import check_array, check_random_state
 from sklearn.utils.validation import check_is_fitted
-from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import normalize
-from sklearn.neighbors import KDTree
-from sklearn.decomposition import PCA, TruncatedSVD
 
 try:
     import joblib
@@ -1868,6 +1865,9 @@ def simplicial_set_embedding(
             low=-10.0, high=10.0, size=(graph.shape[0], n_components)
         ).astype(np.float32)
     elif isinstance(init, str) and init == "pca":
+        # Deferred: sklearn.decomposition is costly to import and rarely needed.
+        from sklearn.decomposition import PCA, TruncatedSVD
+
         if scipy.sparse.issparse(data):
             pca = TruncatedSVD(n_components=n_components, random_state=random_state)
         else:
@@ -1935,6 +1935,8 @@ def simplicial_set_embedding(
         init_data = np.array(init)
         if len(init_data.shape) == 2:
             if np.unique(init_data, axis=0).shape[0] < init_data.shape[0]:
+                from sklearn.neighbors import KDTree  # deferred: costly at import
+
                 tree = KDTree(init_data)
                 dist, ind = tree.query(init_data, k=2)
                 nndist = np.mean(dist[:, 1])
@@ -3955,6 +3957,9 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 # Handle the small case as precomputed as before
                 if y.shape[0] < 4096:
                     try:
+                        # Deferred: sklearn.metrics is costly to import.
+                        from sklearn.metrics import pairwise_distances
+
                         ydmat = pairwise_distances(
                             y_, metric=self.target_metric, **self._target_metric_kwds
                         )

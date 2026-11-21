@@ -259,3 +259,80 @@ def test_recursive_init_more_components_than_pca_axes(
     )
     assert embedding.shape == (n_samples, n_components)
     assert np.all(np.isfinite(embedding))
+
+
+def _random_symmetric_graph(n, density, seed):
+    graph = scipy.sparse.random(
+        n, n, density=density, format="csr", random_state=seed, dtype=np.float32
+    )
+    graph = (graph + graph.T).tocsr()
+    graph.sort_indices()
+    return graph
+
+
+@pytest.mark.parametrize("unsorted", [False, True])
+def test_coarse_layout_graph_matches_sparse_product(unsorted):
+    rng = np.random.RandomState(1)
+    graph = _random_symmetric_graph(600, 0.03, 2)
+    if unsorted:
+        for row in range(0, 600, 7):
+            span = slice(graph.indptr[row], graph.indptr[row + 1])
+            order = rng.permutation(span.stop - span.start)
+            graph.indices[span] = graph.indices[span][order]
+            graph.data[span] = graph.data[span][order]
+        graph.has_sorted_indices = False
+    labels = rng.randint(0, 37, 600)
+    labels[:37] = np.arange(37)
+    reduction_map = label_prop._reduction_map(labels)
+    expected = (reduction_map.T @ graph @ reduction_map).toarray()
+    summed = label_prop._coarse_layout_graph(graph, reduction_map, "transition")
+    assert summed.dtype == np.float64 and summed.has_sorted_indices
+    np.testing.assert_allclose(summed.toarray(), expected, rtol=1e-12)
+
+
+def test_coarse_layout_graph_handles_non_partition_maps():
+    graph = _random_symmetric_graph(50, 0.2, 3)
+    reduction_map = scipy.sparse.random(50, 6, density=0.5, format="csr", random_state=4)
+    expected = (reduction_map.T @ graph @ reduction_map).toarray()
+    summed = label_prop._coarse_layout_graph(graph, reduction_map, "transition")
+    np.testing.assert_allclose(summed.toarray(), expected, rtol=1e-12)
+
+
+def test_normalised_layout_edges_match_sparse_algebra():
+    graph = _random_symmetric_graph(400, 0.05, 5)
+    labels = np.random.RandomState(6).randint(0, 60, 400)
+    labels[:60] = np.arange(60)
+    summed = label_prop._coarse_layout_graph(
+        graph, label_prop._reduction_map(labels), "transition"
+    )
+    edges = label_prop._normalised_layout_edges(None, summed, "transition")
+    expected = label_prop._normalised_layout_edges_sparse(summed)
+    assert edges.dtype == np.float32
+    np.testing.assert_array_equal(edges.indptr, expected.indptr)
+    np.testing.assert_array_equal(edges.indices, expected.indices)
+    np.testing.assert_array_equal(edges.data, expected.data)
+
+
+def test_normalised_layout_edges_fall_back_for_asymmetric_patterns():
+    summed = scipy.sparse.csr_matrix(
+        np.array([[1.0, 2.0, 0.0], [0.0, 1.0, 3.0], [4.0, 0.0, 1.0]])
+    )
+    edges = label_prop._normalised_layout_edges(None, summed, "transition")
+    expected = label_prop._normalised_layout_edges_sparse(summed)
+    np.testing.assert_array_equal(edges.toarray(), expected.toarray())
+
+
+def test_coarse_layout_threads_never_exceed_available():
+    for available in (1, 3, 12):
+        for n_parts in (10, 3000, 50_000):
+            threads = label_prop._coarse_layout_threads(n_parts, available)
+            assert 1 <= threads <= available
+    assert label_prop._coarse_layout_threads(50_000, 12) == 12
+
+
+def test_label_propagation_init_restores_thread_count(multi_level_blobs):
+    import numba
+
+    before = numba.get_num_threads()
+    _fit(multi_level_blobs[:3000], n_epochs=5)
+    assert numba.get_num_threads() == before

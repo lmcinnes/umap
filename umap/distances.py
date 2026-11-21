@@ -4,7 +4,6 @@
 import numba
 import numpy as np
 import scipy.stats
-from sklearn.metrics import pairwise_distances
 
 from umap.utils import FASTMATH_FLAGS
 
@@ -1511,6 +1510,7 @@ def chunked_parallel_special_metric(X, Y=None, metric=hellinger, chunk_size=16):
 def pairwise_special_metric(
     X, Y=None, metric="hellinger", kwds=None, ensure_all_finite=True
 ):
+    from sklearn.metrics import pairwise_distances  # deferred: costly at import
     if callable(metric):
         if kwds is not None:
             kwd_vals = tuple(kwds.values())
@@ -1595,6 +1595,7 @@ def _float_return_type(metric, row_type):
 
 def numba_aware_pairwise_distances(X, metric, Y=None, **kwds):
     """Same output as sklearn's ``pairwise_distances``; numba metrics loop in numba."""
+    from sklearn.metrics import pairwise_distances  # deferred: costly at import
     if (
         kwds
         or not isinstance(metric, numba.core.registry.CPUDispatcher)
