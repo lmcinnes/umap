@@ -273,20 +273,20 @@ the original).
 .. image:: images/basic_usage_17_1.png
 
 
-The Gentoo penguins (green) form a distinct group, as the scatterplot
-matrix above also suggests. Which group looks closer to Gentoo here,
-Adelie (blue) or Chinstrap (orange)? :doc:`interpreting_embeddings`
-uses these same measurements and a new, fixed-seed layout to compare
-the distances between species centroids in both spaces.
-
 This does a useful job of capturing the structure of the data, and as
-can be seen from the matrix of scatterplots this is relatively accurate.
+can be seen from the matrix of scatterplots this is relatively accurate 
+(It is still worth noting that this scatterplot does not capture the 
+*entire* charactersitics of the underlying data as-is; please refer to 
+the :doc:`interpreting_embeddings` tutorial for more details on how to
+interpret the results of UMAP more carefully).
 Of course we learned at least this much just from that matrix of
 scatterplots -- which we could do since we only had four different
 dimensions to analyse. If we had data with a larger number of dimensions
 the scatterplot matrix would quickly become unwieldy to plot, and far
 harder to interpret. So moving on from the Penguin dataset, let's consider
 the digits dataset.
+
+
 
 Digits data
 -----------
