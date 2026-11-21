@@ -143,74 +143,85 @@ we plan to integrate it into this library in near future.
 What can I read from my own UMAP plot?
 --------------------------------------
 
-Pick a single penguin and you might ask which other birds resemble it.
-Step back and the space between the colored groups might make you wonder
-which species resemble each other. Start with the question
-you are trying to answer.
+Now let's detail how to interpret your own UMAP plot. The following 
+figure illustrates common tasks and questions that arise when investigating an embedding, 
+regadless on whether UMAP or another dimensionality reduction method was used. 
 
 .. figure:: images/interpretation_tasks.png
-   :alt: The first row illustrates neighbors, isolated points and groups. The second illustrates distances between points and groups, local density and class separability.
+   :alt: The first row illustrates neighborhood, outlier and cluster identification. The second illustrates point distance, cluster distance, cluster density and class separability investigation.
 
-   The first row helps you select observations to examine together.
-   The second asks how those observations relate in the input data.
+   The tasks in the first row can be appropriately answered using UMAP embeddings. 
+   However, for the tasks in the second row, UMAP embeddings may not be appropriate, and you should check the original data to answer those questions.
 
-Patterns to look for in the embedding
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**Which cases resemble this one?** Select a penguin and inspect the
-records for several nearby dots. Do they have similar bills, similar
-body masses, or both? If the identity of a particular neighbor matters,
-list the closest observations in the original four features and check
-whether that individual appears. Finding that all 15 neighbors are
-Gentoo establishes the species of the neighbors. It leaves open whether
-the *same 15 individuals* are neighbors in the plot.
+The followings are descriptions of the tasks illustrated in the figure above, along with the reasoning on why UMAP embeddings may or may not be appropriate for answering them.
 
-**What makes this isolated point worth a look?** Suppose an orange
-Chinstrap dot sits next to a blue Adelie group. Compare its measurements
-with those of other Chinstraps. One feature might be unusual, or a rare
-combination might be made up of individually common values. If you find
-many similar Chinstraps in the input, describe the point as isolated
-in this view. Calling it an outlier in the data would require further
-evidence.
+Patterns that can be faithfully read from the UMAP embedding
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**What do the points in this group share?** Select several points
-from the middle and several from the edge of an island. Does the common
-feature you found in the middle extend to the edge? Compare observations
-on opposite sides of a visible gap. If many are neighbors in the input,
-a continuous change may have appeared as a split. Counting the islands
-would then give a misleading count of groups.
+**Neighborhood identification.** This task finds the data points that
+are similar to a given point by looking at the points right next to it
+in the embedding. UMAP is built to keep points that are neighbors in the
+input data close together in the embedding. Points that sit next to each
+other in the plot are therefore usually similar in the original data
+too. This is exactly what UMAP optimizes, so you can trust the plot for
+this task.
 
-Relationships to check in the input data
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+**Outlier identification.** This task finds outliers, that is, points
+that do not belong to any cluster. UMAP places neighbors close together
+and keeps non-neighbors apart, so a point that is not a neighbor of the
+points in a cluster ends up clearly separated from that cluster. Points
+that sit apart from the clusters in the plot are therefore good
+candidates for outliers.
 
-**How different are two observations?** Suppose the line from A to B
-looks twice as long as the line from A to C. To check the ordering or
-the ratio, calculate both distances using the same input features,
-scaling and metric. Then inspect individual features if you want to
-explain the difference. Check how much bill length and body mass each contributed.
+**Cluster identification.** This task finds clusters, that is, sets of
+points that belong together. For example, you may count the clusters or
+select one of them to look at it in detail. Points in the same cluster
+are neighbors of one another, and UMAP keeps neighbors close and
+non-neighbors apart. A cluster in the input data therefore shows up as a
+clearly visible cluster in the embedding. You can trust the plot for
+finding clusters and for seeing which points belong to the same cluster.
 
-**Which groups are most similar?** In the penguin example the question
-concerned the *average* member of each species, so we compared their
-centroids in the four measurements. Two groups can have nearby centroids
-even when individual members differ widely. If you care how different
-a typical cross-group pair is, take one observation from each group and
-examine the distribution of distances across such pairs.
+Patterns that require checking in the input data
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**Which group is denser?** Recall how the small yellow group spread out
-in UMAP. To compare local crowding in your own data, find the distance
-from each observation to its tenth nearest other observation in the
-input. With the same features, metric and neighborhood size, a smaller
-radius means more observations fit nearby. If you want to know which
-group contains more observations, count the records. A large sample and
-a tightly packed neighborhood answer different questions.
+**Point distance investigation.** This task reads the distance between
+two points in the embedding as a measure of how different they are, for
+example to decide whether A is closer to B than to C. UMAP only tries to
+keep neighbors close. Points that are not neighbors are simply pushed
+apart, and UMAP does not control by how much. The distance between two
+far-apart points in the plot can therefore be much larger or smaller
+than their real distance. To compare distances, compute them in the
+input data.
 
-**How well do known classes separate?** Select points where two colors
-meet and inspect whether their input-space neighbors have mixed labels
-too. In the penguin example, labels were added after fitting. If labels
-were used to fit a :doc:`supervised embedding <supervised>`, their
-separation in the plot also reflects that supervision. If the question
-is whether you can predict the species of a new bird, split the data
-before fitting the pipeline and evaluate predictions on held-out birds.
+**Cluster distance investigation.** This task reads the distance between
+clusters in the embedding as a measure of how similar they are, for
+example to decide which of two clusters is closer to a third one. Points
+in different clusters are mostly not neighbors, so the data do not
+decide the size of the gap between clusters. The gaps and the placement
+of the clusters can also change with the random seed and the parameters.
+To compare clusters, measure the distance between them in the input
+data, for example between the cluster means.
+
+**Cluster density investigation.** This task compares how tightly packed
+different clusters are, to see how much the points within each cluster
+vary. UMAP looks only at the neighbors of each point and rescales
+distances according to how far away those neighbors are. As a result,
+tight clusters and loose clusters end up looking about equally crowded.
+A cluster that looks compact in the plot may be spread out in the input
+data, and the reverse can also happen. Please check densities in
+the input data, for example with the distance from each point to its
+k-th nearest neighbor. You can also use densMAP, which is designed to
+keep this information.
+
+**Class separability investigation.** This task looks at how clearly
+labeled classes, shown as colors, are separated from each other in the
+embedding. The plot does show whether two classes are mixed with each
+other. However, UMAP pushes non-neighbors apart, so classes can look more
+cleanly separated than they really are. How far apart the colors are in
+the plot therefore does not tell you how separable the classes are. To
+measure separability directly, use the input data, for example by checking 
+how well a classifier predicts the labels of held-out points.
 
 Further reading
 ---------------
