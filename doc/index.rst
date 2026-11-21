@@ -55,6 +55,7 @@ PyPI install, presuming you have numba and sklearn and all its requirements
    :caption: User Guide / Tutorial:
 
    basic_usage
+   interpreting_embeddings
    parameters
    plotting
    reproducibility
