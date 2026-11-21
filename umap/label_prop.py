@@ -387,10 +387,6 @@ def _expand_layout(indptr, indices, weights, labels, coarse_layout):
 
 
 @numba.njit(
-    [
-        "f4[:, ::1](f4[:, ::1], f4[:, ::1])",
-        "f8[:, ::1](f8[:, ::1], f8[:, ::1])",
-    ],
     cache=True,
 )
 def procrustes_align(e1: np.ndarray, e2: np.ndarray) -> np.ndarray:

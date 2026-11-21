@@ -246,7 +246,6 @@ def _optimize_layout_euclidean_single_epoch(
 
 
 @numba.njit(
-    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], i4[::1], i4[::1], i4[::1], i8, i8, f8, b1)",
     fastmath=FASTMATH_FLAGS,
     parallel=True,
     cache=True,
@@ -384,7 +383,6 @@ def optimize_layout_euclidean_single_epoch_momentum(
 
 
 @numba.njit(
-    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], f4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], i4[::1], i4[::1], b1)",
     fastmath=FASTMATH_FLAGS,
     parallel=True,
     cache=True,
@@ -589,7 +587,6 @@ def _sample_negative_force_ratio(
 
 
 @numba.njit(
-    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], f4[:, ::1], f4[:, ::1], f8, f8, i4[::1], i4[::1], i4[::1], i8, i8, f8, b1)",
     fastmath=FASTMATH_FLAGS,
     parallel=True,
     cache=True,
@@ -749,7 +746,6 @@ def optimize_layout_euclidean_single_epoch_adam(
 
 
 @numba.njit(
-    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], f4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], f4[:, ::1], f4[:, ::1], f8, f8, i4[::1], i4[::1], b1)",
     fastmath=FASTMATH_FLAGS,
     parallel=True,
     cache=True,
@@ -1740,7 +1736,6 @@ def _l9_lookup(t,table,bits=7):
 
 
 @numba.njit(
-    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], f4[:, ::1], f4[:, ::1], f8, f8, i4[::1], i4[::1], i4[::1], i8, i8, f8, b1, f8[::1])",
     fastmath=FASTMATH_FLAGS,
     parallel=True,
     cache=True,
@@ -2280,9 +2275,9 @@ def optimize_layout_euclidean(
                     csr_data,
                     n_vertices,
                     epochs_per_sample,
-                    a,
-                    b,
-                    gamma_schedule[n],
+                    np.float64(a),
+                    np.float64(b),
+                    np.float64(gamma_schedule[n]),
                     dim,
                     alpha_schedule[n],
                     epochs_per_negative_sample,
@@ -2302,9 +2297,9 @@ def optimize_layout_euclidean(
                     csr_indices,
                     n_vertices,
                     epochs_per_sample,
-                    a,
-                    b,
-                    gamma_schedule[n],
+                    np.float64(a),
+                    np.float64(b),
+                    np.float64(gamma_schedule[n]),
                     dim,
                     alpha_schedule[n],
                     epochs_per_negative_sample,
@@ -2316,7 +2311,9 @@ def optimize_layout_euclidean(
                     to_node_order,
                     source_ranks,
                     block_size=max(1, head_embedding.shape[0] // 2),
-                    negative_selection_range=negative_selection_range_schedule[n],
+                    negative_selection_range=np.int64(
+                        negative_selection_range_schedule[n]
+                    ),
                     negative_sample_scale=resolved_negative_sample_scale,
                     exclude_graph_neighbors=exclude_graph_neighbors,
                 )
@@ -2381,9 +2378,9 @@ def optimize_layout_euclidean(
                     csr_data,
                     n_vertices,
                     epochs_per_sample,
-                    a,
-                    b,
-                    gamma_schedule[n],
+                    np.float64(a),
+                    np.float64(b),
+                    np.float64(gamma_schedule[n]),
                     dim,
                     alpha_schedule[n],
                     epochs_per_negative_sample,
@@ -2393,8 +2390,8 @@ def optimize_layout_euclidean(
                     updates,
                     adam_m,
                     adam_v,
-                    beta1_schedule[n],
-                    beta2_schedule[n],
+                    np.float64(beta1_schedule[n]),
+                    np.float64(beta2_schedule[n]),
                     node_order,
                     to_node_order,
                     exclude_graph_neighbors=exclude_graph_neighbors,
@@ -2421,9 +2418,9 @@ def optimize_layout_euclidean(
                         csr_indices,
                         n_vertices,
                         epochs_per_sample,
-                        a,
-                        b_schedule[n],
-                        gamma_schedule[n],
+                        np.float64(a),
+                        np.float64(b_schedule[n]),
+                        np.float64(gamma_schedule[n]),
                         dim,
                         alpha_schedule[n],
                         epochs_per_negative_sample,
@@ -2433,13 +2430,15 @@ def optimize_layout_euclidean(
                         updates,
                         adam_m,
                         adam_v,
-                        beta1_schedule[n],
-                        beta2_schedule[n],
+                        np.float64(beta1_schedule[n]),
+                        np.float64(beta2_schedule[n]),
                         node_order,
                         to_node_order,
                         source_ranks,
                         block_size=max(1, head_embedding.shape[0]),
-                        negative_selection_range=negative_selection_range_schedule[n],
+                        negative_selection_range=np.int64(
+                            negative_selection_range_schedule[n]
+                        ),
                         negative_sample_scale=resolved_negative_sample_scale,
                         exclude_graph_neighbors=exclude_graph_neighbors,
                         radial_table=_l9_table,
@@ -2452,9 +2451,9 @@ def optimize_layout_euclidean(
                         csr_indices,
                         n_vertices,
                         epochs_per_sample,
-                        a,
-                        b_schedule[n],
-                        gamma_schedule[n],
+                        np.float64(a),
+                        np.float64(b_schedule[n]),
+                        np.float64(gamma_schedule[n]),
                         dim,
                         alpha_schedule[n],
                         epochs_per_negative_sample,
@@ -2464,13 +2463,15 @@ def optimize_layout_euclidean(
                         updates,
                         adam_m,
                         adam_v,
-                        beta1_schedule[n],
-                        beta2_schedule[n],
+                        np.float64(beta1_schedule[n]),
+                        np.float64(beta2_schedule[n]),
                         node_order,
                         to_node_order,
                         source_ranks,
                         block_size=max(1, head_embedding.shape[0]),
-                        negative_selection_range=negative_selection_range_schedule[n],
+                        negative_selection_range=np.int64(
+                            negative_selection_range_schedule[n]
+                        ),
                         negative_sample_scale=resolved_negative_sample_scale,
                         exclude_graph_neighbors=exclude_graph_neighbors,
                     )
