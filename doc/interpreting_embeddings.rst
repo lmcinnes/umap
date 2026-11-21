@@ -234,4 +234,4 @@ Further reading
   Reduction in Four Domains <https://doi.org/10.1109/TVCG.2025.3567989>`_.
   IEEE Transactions on Visualization and Computer Graphics (2025).
 * Ashwin Narayan, Bonnie Berger, and Hyunghoon Cho, `Assessing single-cell transcriptomic variability through density-preserving data visualization`. Nature Biotechnology (2021).
-* Hyeon Jeon, Kwon Ko, Soohyun Lee, Jake Hyun, Taehyun Yang, Gyehun Go, Jaemin Jo, and Jinwook Seo. "UMATO: Bridging local and global structures for reliable visual analytics with dimensionality reduction." IEEE Transactions on Visualization and Computer Graphics (2025).
+* Hyeon Jeon, Kwon Ko, Soohyun Lee, Jake Hyun, Taehyun Yang, Gyehun Go, Jaemin Jo, and Jinwook Seo. `UMATO: Bridging local and global structures for reliable visual analytics with dimensionality reduction.` IEEE Transactions on Visualization and Computer Graphics (2025).
