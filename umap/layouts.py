@@ -245,8 +245,36 @@ def _optimize_layout_euclidean_single_epoch(
             )
 
 
+@numba.njit
+def _l9_make_table(a,b,gamma,scale,bits=7):
+ bins=1<<bits
+ table=np.empty(60*(bins+1),np.float64)
+ for exponent in range(87,147):
+  power=2.0**(exponent-127)
+  for k in range(bins+1):
+   t=power*(1.0+k/bins);r=np.sqrt(t)
+   if gamma<=0 or scale<=0 or b<=0:table[(exponent-87)*(bins+1)+k]=0.
+   else:
+    c=scale*2.0*gamma*b/((.001+t)*(1+a*t**b))
+    table[(exponent-87)*(bins+1)+k]=min(gamma,16.0)*np.tanh(c*r/gamma)/r
+ return table
+
+
+@numba.njit(inline='always')
+def _l9_lookup(t,table,bits=7):
+ rawbits=np.float32(t).view(np.uint32);exponent=(rawbits>>np.uint32(23))&np.uint32(255)
+ if exponent<87 or exponent>=147:return -1.0
+ mantissa=rawbits & np.uint32(0x7fffff);shift=23-bits;k=mantissa >> np.uint32(shift);frac=(mantissa & np.uint32((1<<shift)-1))*(1.0/(1<<shift))
+ offset=(int(exponent)-87)*((1<<bits)+1)+int(k)
+ return table[offset]+frac*(table[offset+1]-table[offset])
+
+
+# Empty radial table: tells a kernel to compute repulsion directly.
+_L9_NO_TABLE = np.zeros(0, dtype=np.float64)
+
+
 @numba.njit(
-    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], i4[::1], i4[::1], i4[::1], i8, i8, f8, b1)",
+    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], i4[::1], i4[::1], i4[::1], i8, i8, f8, b1, f8[::1])",
     fastmath=FASTMATH_FLAGS,
     parallel=True,
     cache=True,
@@ -284,7 +312,9 @@ def optimize_layout_euclidean_single_epoch_momentum(
     negative_selection_range=200_000,
     negative_sample_scale=-1.0,
     exclude_graph_neighbors=False,
+    radial_table=_L9_NO_TABLE,
 ):
+    use_radial_table = radial_table.shape[0] > 0
     n_from_vertices = csr_indptr.shape[0] - 1
     transform_mode = n_from_vertices != n_vertices
     # At least 200 candidates, but never more than the reference embedding
@@ -350,6 +380,14 @@ def optimize_layout_euclidean_single_epoch_momentum(
 
                         dist_squared = rdist(current, other)
 
+                        if dist_squared > 0.0 and use_radial_table:
+                            coeff = _l9_lookup(dist_squared, radial_table, 9)
+                            if coeff >= 0.0:
+                                for d in range(dim):
+                                    updates[from_node, d] += (
+                                        alpha * coeff * (current[d] - other[d])
+                                    )
+                                continue
                         if dist_squared > 0.0:
                             grad_coeff = negative_sample_scaling * 2.0 * gamma * b
                             grad_coeff /= (0.001 + dist_squared) * (
@@ -1715,28 +1753,25 @@ def _run_euclidean_compatibility_epoch(
 
 
 
-@numba.njit
-def _l9_make_table(a,b,gamma,scale,bits=7):
- bins=1<<bits
- table=np.empty(60*(bins+1),np.float64)
- for exponent in range(87,147):
-  power=2.0**(exponent-127)
-  for k in range(bins+1):
-   t=power*(1.0+k/bins);r=np.sqrt(t)
-   if gamma<=0 or scale<=0 or b<=0:table[(exponent-87)*(bins+1)+k]=0.
-   else:
-    c=scale*2.0*gamma*b/((.001+t)*(1+a*t**b))
-    table[(exponent-87)*(bins+1)+k]=min(gamma,16.0)*np.tanh(c*r/gamma)/r
- return table
+def _l9_table_key(a, b, gamma, negative_sample_scale, negative_selection_range, n_vertices):
+    """Return the radial-table key for an epoch, or None when ineligible.
 
-
-@numba.njit(inline='always')
-def _l9_lookup(t,table,bits=7):
- rawbits=np.float32(t).view(np.uint32);exponent=(rawbits>>np.uint32(23))&np.uint32(255)
- if exponent<87 or exponent>=147:return -1.0
- mantissa=rawbits & np.uint32(0x7fffff);shift=23-bits;k=mantissa >> np.uint32(shift);frac=(mantissa & np.uint32((1<<shift)-1))*(1.0/(1<<shift))
- offset=(int(exponent)-87)*((1<<bits)+1)+int(k)
- return table[offset]+frac*(table[offset+1]-table[offset])
+    The table depends only on the squared distance, so it is valid for any
+    embedding dimension, for transform, and with graph-neighbor exclusion. The
+    scale must match the ``negative_sample_scaling`` the kernels compute.
+    """
+    if negative_sample_scale < 0.0:
+        clipped_range = min(n_vertices, max(200, negative_selection_range))
+        negative_sample_scale = clipped_range / n_vertices
+    if not (
+        np.isfinite(a) and 1e-8 <= a <= 1e8
+        and np.isfinite(b) and 0.5 <= b <= 1.5
+        and np.isfinite(gamma) and 1e-8 <= gamma <= 1e8
+        and np.isfinite(negative_sample_scale)
+        and 1e-8 <= negative_sample_scale <= 1e8
+    ):
+        return None
+    return (a, b, gamma, negative_sample_scale)
 
 
 @numba.njit(
@@ -1924,7 +1959,7 @@ def optimize_layout_euclidean(
     exclude_graph_neighbors=False,
     negative_sample_scale_adaptation_samples=128,
     densmap=False,
-    _enable_l9=False,
+    _enable_l9=True,
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
     fuzzy set cross entropy between the 1-skeletons of the high dimensional
@@ -2157,7 +2192,7 @@ def optimize_layout_euclidean(
             head_embedding, tail_embedding, random_state
         )
 
-    _l9_table_key = None
+    _l9_key = None
     _l9_table = None
     for n in tqdm(range(n_epochs), **tqdm_kwds):
         if (
@@ -2295,6 +2330,17 @@ def optimize_layout_euclidean(
                     exclude_graph_neighbors=exclude_graph_neighbors,
                 )
             else:
+                _new_key = (
+                    _l9_table_key(
+                        a, b, gamma_schedule[n],
+                        resolved_negative_sample_scale,
+                        negative_selection_range_schedule[n], n_vertices,
+                    )
+                    if _enable_l9 else None
+                )
+                if _new_key is not None and _l9_key != _new_key:
+                    _l9_table = _l9_make_table(*_new_key, 9)
+                    _l9_key = _new_key
                 optimize_layout_euclidean_single_epoch_momentum(
                     head_embedding,
                     tail_embedding,
@@ -2319,6 +2365,7 @@ def optimize_layout_euclidean(
                     negative_selection_range=negative_selection_range_schedule[n],
                     negative_sample_scale=resolved_negative_sample_scale,
                     exclude_graph_neighbors=exclude_graph_neighbors,
+                    radial_table=_l9_table if _new_key is not None else _L9_NO_TABLE,
                 )
             _finalize_update_buffer(updates, "momentum", momentum_schedule[n])
             random_state.shuffle(node_order)
@@ -2400,20 +2447,18 @@ def optimize_layout_euclidean(
                     exclude_graph_neighbors=exclude_graph_neighbors,
                 )
             else:
-                _l9_eligible = (
-                    _enable_l9 and head_embedding is tail_embedding and dim == 2
-                    and not exclude_graph_neighbors
-                    and np.isfinite(a) and 1e-8 <= a <= 1e8
-                    and np.isfinite(b_schedule[n]) and 0.5 <= b_schedule[n] <= 1.5
-                    and np.isfinite(gamma_schedule[n]) and 1e-8 <= gamma_schedule[n] <= 1e8
-                    and np.isfinite(resolved_negative_sample_scale)
-                    and 1e-8 <= resolved_negative_sample_scale <= 1e8
+                _new_key = (
+                    _l9_table_key(
+                        a, b_schedule[n], gamma_schedule[n],
+                        resolved_negative_sample_scale,
+                        negative_selection_range_schedule[n], n_vertices,
+                    )
+                    if _enable_l9 else None
                 )
-                if _l9_eligible:
-                    _new_key = (a, b_schedule[n], gamma_schedule[n], resolved_negative_sample_scale)
-                    if _l9_table_key != _new_key:
+                if _new_key is not None:
+                    if _l9_key != _new_key:
                         _l9_table = _l9_make_table(*_new_key, 9)
-                        _l9_table_key = _new_key
+                        _l9_key = _new_key
                     _l9_single_epoch_adam(
                         head_embedding,
                         tail_embedding,
