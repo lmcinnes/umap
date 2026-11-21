@@ -274,9 +274,9 @@ the original).
 
 
 This does a useful job of capturing the structure of the data, and as
-can be seen from the matrix of scatterplots this is relatively accurate 
-(It is still worth noting that this scatterplot does not capture the 
-*entire* charactersitics of the underlying data as-is; please refer to 
+can be seen from the matrix of scatterplots this is relatively accurate
+(it is still worth noting that this scatterplot does not capture the
+*entire* characteristics of the underlying data as-is; please refer to
 the :doc:`interpreting_embeddings` tutorial for more details on how to
 interpret the results of UMAP more carefully).
 Of course we learned at least this much just from that matrix of
@@ -285,8 +285,6 @@ dimensions to analyse. If we had data with a larger number of dimensions
 the scatterplot matrix would quickly become unwieldy to plot, and far
 harder to interpret. So moving on from the Penguin dataset, let's consider
 the digits dataset.
-
-
 
 Digits data
 -----------
