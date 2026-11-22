@@ -376,14 +376,27 @@ provided for experimentation and apply only when
 
 ``init_rescale`` and ``init_scale_factor``
     After initialization, and before optimization, the coordinates are
-    centered and rescaled. ``"isotropic"`` (the default) applies a single
-    multiplier, preserving the initialization's aspect ratio, so that the
-    robust (5th-95th percentile) span reaches a target that grows with the
-    dataset size and ``repulsion_strength``. ``"per_axis"`` gives every
-    coordinate the same robust span, and ``"graph_edge"`` scales so that
-    the weighted median length of the graph's edges equals
-    ``init_scale_factor``. For the other two methods ``init_scale_factor``
-    multiplies the target span.
+    centered and rescaled. How large the starting layout is matters: a
+    layout that starts larger than the optimizer would reach on its own keeps
+    the extra space between clusters, because attraction over long distances
+    is too weak to close it, and clusters can tear. A layout that starts
+    small costs some of the epoch budget expanding. ``"isotropic"`` (the
+    default) applies a single multiplier, preserving the initialization's
+    aspect ratio, so that the robust radius (from the 5th-95th percentile
+    span of each axis) reaches a target. The target sits slightly below the
+    size the layout reaches by itself within ``n_epochs``, which depends on
+    ``min_dist`` and ``spread``, ``repulsion_strength`` and
+    ``negative_sample_rate``. On large datasets it is at least the room their
+    local structure needs, which grows with the number of points.
+    ``repulsion_strength`` above 16 is capped in the layout kernel; it still
+    enlarges the start, but gently (100 starts about twice as large as 16).
+    ``"per_axis"`` uses the same target but gives every coordinate the same
+    robust span. ``"graph_edge"`` scales so that the weighted median length
+    of the graph's edges equals ``init_scale_factor``. ``"legacy"`` keeps the
+    earlier rule, a span of ``log10(n) * 3 * log2(repulsion_strength + 1)``.
+    For every method except ``"graph_edge"``, ``init_scale_factor``
+    multiplies the target; values above 1 add persistent space between
+    clusters.
 
 ``recursive_init_kwds``
     A dictionary of further options for

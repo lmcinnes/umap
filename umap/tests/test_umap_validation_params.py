@@ -127,25 +127,110 @@ def test_umap_rejects_non_boolean_coarsen_on_layout_weights(nn_data):
         u.fit(nn_data)
 
 
-def test_rescale_embedding_per_axis_matches_existing_rule():
+def _robust_spans(embedding):
+    return np.quantile(embedding, 0.95, axis=0) - np.quantile(embedding, 0.05, axis=0)
+
+
+def test_rescale_embedding_legacy_matches_earlier_rule():
     embedding = np.random.RandomState(42).normal(size=(100, 2)).astype(np.float32)
-    result = umap_module._rescale_embedding(embedding, 100, 8.0)
+    embedding[:, 1] *= 4.0
+    result = umap_module._rescale_embedding(
+        embedding, 100, 8.0, method="legacy", scale_factor=1.5
+    )
     expected = embedding - embedding.mean(axis=0)
-    spread = np.quantile(expected, 0.95, axis=0) - np.quantile(expected, 0.05, axis=0)
-    target = np.log10(100) * 3.0 * np.log2(9.0)
-    expected *= (target / spread).astype(np.float32)
+    spread = _robust_spans(expected)
+    target = np.log10(100) * 3.0 * np.log2(9.0) * 1.5
+    expected *= np.float32(target / np.exp(np.mean(np.log(spread))))
 
     assert np.allclose(result, expected)
 
 
-def test_rescale_embedding_isotropic_preserves_aspect_ratio():
+def test_rescale_embedding_per_axis_sets_equal_spans_at_target_radius():
+    embedding = np.random.RandomState(42).normal(size=(100, 3)).astype(np.float32)
+    embedding[:, 1] *= 4.0
+    result = umap_module._rescale_embedding(
+        embedding, 100, 1.0, method="per_axis", scale_factor=2.0, target_radius=5.0
+    )
+    span_per_rms = umap_module.INIT_TARGET_PARAMS["span_per_rms"]
+
+    assert np.allclose(_robust_spans(result), span_per_rms * 10.0 / np.sqrt(3), rtol=1e-5)
+
+
+def test_rescale_embedding_isotropic_preserves_aspect_ratio_at_target_radius():
     embedding = np.random.RandomState(42).normal(size=(100, 2)).astype(np.float32)
     embedding[:, 1] *= 4.0
-    result = umap_module._rescale_embedding(embedding, 100, 8.0, method="isotropic")
-    before = np.quantile(embedding, 0.95, axis=0) - np.quantile(embedding, 0.05, axis=0)
-    after = np.quantile(result, 0.95, axis=0) - np.quantile(result, 0.05, axis=0)
+    result = umap_module._rescale_embedding(
+        embedding, 100, 8.0, method="isotropic", target_radius=5.0
+    )
+    before = _robust_spans(embedding)
+    after = _robust_spans(result)
+    span_per_rms = umap_module.INIT_TARGET_PARAMS["span_per_rms"]
 
     assert after[1] / after[0] == pytest.approx(before[1] / before[0])
+    assert np.sqrt(np.sum((after / span_per_rms) ** 2)) == pytest.approx(5.0, rel=1e-5)
+
+
+@pytest.mark.parametrize("method", ["isotropic", "per_axis"])
+def test_rescale_embedding_requires_target_radius(method):
+    embedding = np.random.RandomState(42).normal(size=(10, 2)).astype(np.float32)
+    with pytest.raises(ValueError, match="target_radius"):
+        umap_module._rescale_embedding(embedding, 10, 1.0, method=method)
+
+
+def _target(**kwargs):
+    a, b = umap_module.find_ab_params(1.0, kwargs.pop("min_dist", 0.1))
+    args = dict(
+        n_vertices=70_000, a=a, b=b, gamma=1.0, negative_sample_rate=5, n_epochs=200
+    )
+    args.update(kwargs)
+    return umap_module._init_target_radius(**args)
+
+
+def test_init_target_radius_matches_study_rule():
+    # MNIST-size defaults: the study's rule gives a 5-95% span of 8.90, i.e. an
+    # RMS radius of 0.435 * 8.90 in 2D (experiments/init_scale, score_rule.py).
+    assert _target() == pytest.approx(0.435 * 8.90, rel=0.01)
+
+
+def test_init_target_radius_grows_with_epochs():
+    radii = [_target(n_epochs=e) for e in (50, 200, 500, 1600)]
+
+    assert all(r1 < r2 for r1, r2 in zip(radii, radii[1:]))
+
+
+def test_init_target_radius_depends_on_repulsion_product_below_cap():
+    assert _target(gamma=2.0, negative_sample_rate=5) == pytest.approx(
+        _target(gamma=1.0, negative_sample_rate=10)
+    )
+
+
+def test_init_target_radius_damps_gamma_above_cap():
+    base = _target(gamma=16.0)
+
+    assert _target(gamma=100.0) == pytest.approx(2.0 * base, rel=0.01)
+    assert _target(gamma=30.0) == pytest.approx(base * (30 / 16) ** 0.378, rel=1e-6)
+
+
+def test_init_target_radius_is_dimension_free_below_the_floor():
+    assert _target(n_vertices=10_000, n_components=10) == pytest.approx(
+        _target(n_vertices=10_000, n_components=2)
+    )
+
+
+def test_init_target_radius_floor_binds_only_at_large_n():
+    for n, binds in ((70_000, False), (2_000_000, True)):
+        without_floor = _target(n_vertices=n, params={"phi": 0.0})
+        assert (_target(n_vertices=n) > without_floor) == binds
+
+
+def test_init_target_radius_params_override():
+    assert _target(params={"kappa": 1.0}) == pytest.approx(_target() / 0.85)
+
+
+def test_init_target_radius_handles_no_repulsion():
+    radius = _target(gamma=0.0)
+
+    assert np.isfinite(radius) and radius > 0.0
 
 
 def test_rescale_embedding_graph_edge_sets_weighted_median_distance():
@@ -173,7 +258,7 @@ def test_rescale_embedding_graph_edge_handles_empty_graph():
     assert np.allclose(result, embedding - embedding.mean(axis=0))
 
 
-@pytest.mark.parametrize("method", ["per_axis", "isotropic", "graph_edge"])
+@pytest.mark.parametrize("method", ["per_axis", "isotropic", "graph_edge", "legacy"])
 def test_umap_accepts_initialization_rescaling(method):
     u = UMAP(init_rescale=method, init_scale_factor=1.25)
 

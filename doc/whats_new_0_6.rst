@@ -226,6 +226,8 @@ Other changes and bug fixes
 * Optional RINND nearest-neighbour backend
   (``pip install umap-learn[rinnd]``, ``nearest_neighbor_backend``).
 * New initialization scaling controls: ``init_rescale`` and ``init_scale_factor``.
+  The default start size follows the epoch budget, kernel and negative
+  sampling settings rather than a fixed formula.
 * ``inverse_transform``: vectorized Delaunay adjacency (~2700x faster, 50%
   less RAM), dimension validation, and a warning plus nearest-point
   extrapolation for queries outside the convex hull.

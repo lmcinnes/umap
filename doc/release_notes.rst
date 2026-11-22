@@ -60,9 +60,11 @@ The new pipeline (``compatibility_layout=False``)
   controls how gradually this happens. ``coarse_layout_weights``,
   ``coarsen_on_layout_weights`` and ``recursive_init_kwds`` provide advanced
   control.
-* ``init_rescale`` (``"isotropic"``, ``"per_axis"`` or ``"graph_edge"``) and
-  ``init_scale_factor`` control how the initialization is centered and scaled
-  before optimization.
+* ``init_rescale`` (``"isotropic"``, ``"per_axis"``, ``"graph_edge"`` or
+  ``"legacy"``) and ``init_scale_factor`` control how the initialization is
+  centered and scaled before optimization. The default target size accounts
+  for ``n_epochs``, ``min_dist`` and ``spread``, ``repulsion_strength``,
+  negative sampling, the dataset size and ``n_components``.
 * Hard-negative sampling controls for the modern kernels:
   ``negative_selection_range``, ``negative_sample_scale``,
   ``negative_sample_scale_adaptation_samples`` and

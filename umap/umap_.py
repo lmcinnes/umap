@@ -47,6 +47,7 @@ from umap.utils import (
 )
 from umap.spectral import spectral_layout, tswspectral_layout
 from umap.layouts import (
+    _create_alpha_schedule,
     optimize_layout_euclidean,
     optimize_layout_generic,
     optimize_layout_inverse,
@@ -1438,6 +1439,107 @@ def noisy_scale_coords(coords, random_state, max_coord=10.0, noise=0.0001):
     )
 
 
+INIT_RESCALE_METHODS = ("isotropic", "per_axis", "graph_edge", "legacy")
+
+# Constants of the initialization target used by init_rescale='isotropic' and
+# 'per_axis' (see _init_target_radius). The fitted constants come from about
+# 3,700 Adam layouts of MNIST, Fashion-MNIST and synthetic data (n up to 2M,
+# n_components 2-10). kappa, phi and gamma_excess_exponent are judgement calls
+# rather than fits; edit this dictionary before fitting to try other values.
+INIT_TARGET_PARAMS = {
+    # Start this fraction of the radius a small start reaches within the epoch
+    # budget. Starting above it leaves gaps the layout never closes.
+    "kappa": 0.85,
+    # Fraction of the large-n local-resolution floor to guarantee.
+    "phi": 0.5,
+    # Mirrors the layout kernel's per-sample repulsion cap min(gamma, 16).
+    "gamma_cap": 16.0,
+    # gamma above the cap enlarges the start as (gamma / gamma_cap) ** this;
+    # 0.378 makes gamma = 100 start twice as large as gamma = 16.
+    "gamma_excess_exponent": 0.378,
+    # Budget-reachable radius R(B): R ** q = R0 ** q + K * A(B), where A(B) is
+    # the summed Adam step size over B epochs and, with lam = a ** (-1 / 2b),
+    #   q = q0 + q1 * b
+    #   g = min(gamma, gamma_cap) * negative_sample_rate / 1.5 * s ** s_exponent
+    #   K = exp(k0) * lam ** k1 * g / (1 + g / exp(k2))
+    #   R0 = exp(r0) * g ** r1 * lam ** r2
+    # with s the hard-negative repulsion scale.
+    "q": (1.1812, 1.2343),
+    "s_exponent": 0.6165,
+    "K": (-1.6522, 1.9043, 3.5898),
+    "R0": (1.2034, 0.2605, 0.6542),
+    # Large-n floor: R_floor = c * lam * (2b - 1) * n ** (p * 2 / n_components).
+    "floor": (0.0599, 0.4187),
+    # Ratio of a layout axis's 5-95% span to its RMS (3.29 for a Gaussian).
+    "span_per_rms": 3.25,
+}
+
+
+def _init_target_radius(
+    n_vertices,
+    a,
+    b,
+    gamma,
+    negative_sample_rate,
+    n_epochs,
+    initial_alpha=1.0,
+    negative_selection_range=200_000,
+    negative_sample_scale=None,
+    n_components=2,
+    params=None,
+):
+    """RMS radius to give the initialization before optimization.
+
+    The target is the larger of two limits, both in absolute layout units:
+
+    * a ceiling, ``kappa`` times the radius that a small start reaches within
+      ``n_epochs`` of the Adam layout. Starting larger leaves gaps between
+      clusters that attraction is too weak to close, so clusters tear;
+    * a floor, ``phi`` times the radius large datasets need for their local
+      structure to fit, which grows with ``n`` and the kernel length.
+
+    ``gamma`` above the kernel's cap adds a dampened enlargement on top.
+    """
+    p = INIT_TARGET_PARAMS if params is None else {**INIT_TARGET_PARAMS, **params}
+    n_vertices = max(int(n_vertices), 1)
+    b = float(b)
+    lam = float(a) ** (-1.0 / (2.0 * b))
+    if negative_sample_scale is None:
+        s_neg = (min(negative_selection_range, n_vertices) / n_vertices) ** 0.75
+    else:
+        s_neg = float(negative_sample_scale)
+    g = (
+        min(float(gamma), p["gamma_cap"])
+        * float(negative_sample_rate)
+        / 1.5
+        * max(s_neg, 1e-12) ** p["s_exponent"]
+    )
+    g = max(g, 1e-12)
+
+    n_epochs = int(n_epochs)
+    travel = (
+        float(np.sum(_create_alpha_schedule("adam", n_epochs, initial_alpha, True)))
+        if n_epochs > 0
+        else 0.0
+    )
+    q = p["q"][0] + p["q"][1] * b
+    k0, k1, k2 = p["K"]
+    K = np.exp(k0) * lam**k1 * g / (1.0 + g / np.exp(k2))
+    r0, r1, r2 = p["R0"]
+    R0 = np.exp(r0) * g**r1 * lam**r2
+    ceiling = (R0**q + K * max(travel, 0.0)) ** (1.0 / q)
+
+    c, exponent = p["floor"]
+    floor = c * lam * max(2.0 * b - 1.0, 0.0) * n_vertices ** (
+        exponent * 2.0 / max(int(n_components), 1)
+    )
+
+    radius = max(p["kappa"] * ceiling, p["phi"] * floor, lam)
+    if gamma > p["gamma_cap"]:
+        radius *= (float(gamma) / p["gamma_cap"]) ** p["gamma_excess_exponent"]
+    return float(radius)
+
+
 def _rescale_embedding(
     embedding,
     n_vertices,
@@ -1445,14 +1547,24 @@ def _rescale_embedding(
     method="per_axis",
     scale_factor=1.0,
     graph=None,
+    target_radius=None,
 ):
-    """Center and robustly scale an initialization before optimization."""
-    if method not in ("per_axis", "isotropic", "graph_edge"):
+    """Center and robustly scale an initialization before optimization.
+
+    'isotropic' and 'per_axis' scale to ``target_radius * scale_factor``,
+    measured as the robust radius sqrt(sum_i (s_i / span_per_rms) ** 2) with
+    s_i the 5-95% span of axis i. 'legacy' reproduces the earlier 0.6
+    development rule: a geometric-mean 5-95% span of
+    log10(n) * 3 * log2(gamma + 1) * scale_factor.
+    """
+    if method not in INIT_RESCALE_METHODS:
         raise ValueError(
-            "init_rescale must be 'per_axis', 'isotropic', or 'graph_edge'"
+            "init_rescale must be 'isotropic', 'per_axis', 'graph_edge' or 'legacy'"
         )
     if not np.isfinite(scale_factor) or scale_factor <= 0.0:
         raise ValueError("init_scale_factor must be finite and greater than zero")
+    if method in ("isotropic", "per_axis") and target_radius is None:
+        raise ValueError(f"target_radius is required when init_rescale='{method}'")
 
     result = np.asarray(embedding, dtype=np.float32).copy(order="C")
     result -= np.mean(result, axis=0)
@@ -1472,16 +1584,25 @@ def _rescale_embedding(
         result *= np.float32(scale_factor / characteristic_spread)
         return result
 
-    target_spread = np.log10(n_vertices) * 3.0 * np.log2(gamma + 1.0) * scale_factor
     robust_spread = np.quantile(result, 0.95, axis=0) - np.quantile(
         result, 0.05, axis=0
     )
     robust_spread[robust_spread == 0.0] = 1.0
-    if method == "per_axis":
-        multiplier = target_spread / robust_spread
-    else:
+    if method == "legacy":
+        target_spread = (
+            np.log10(n_vertices) * 3.0 * np.log2(gamma + 1.0) * scale_factor
+        )
         characteristic_spread = np.exp(np.mean(np.log(robust_spread)))
         multiplier = target_spread / characteristic_spread
+    else:
+        span_per_rms = INIT_TARGET_PARAMS["span_per_rms"]
+        radius = target_radius * scale_factor
+        if method == "per_axis":
+            n_components = result.shape[1]
+            multiplier = span_per_rms * radius / np.sqrt(n_components) / robust_spread
+        else:
+            robust_radius = np.sqrt(np.sum((robust_spread / span_per_rms) ** 2))
+            multiplier = radius / robust_radius
     result *= np.asarray(multiplier, dtype=np.float32)
     return result
 
@@ -1764,13 +1885,20 @@ def simplicial_set_embedding(
 
     init_rescale: str (optional, default 'isotropic')
         Robust rescaling applied to the initialization (new pipeline only).
-        ``'per_axis'`` gives every coordinate the same 5th-to-95th percentile
-        span; ``'isotropic'`` applies one multiplier and preserves the
-        initialization's aspect ratio; ``'graph_edge'`` scales so that the
-        weighted-median graph-edge length equals ``init_scale_factor``.
+        ``'isotropic'`` and ``'per_axis'`` scale to a target radius computed
+        from the number of points, ``n_epochs``, ``a`` and ``b``, ``gamma``,
+        the negative sampling settings and ``n_components`` (see
+        ``_init_target_radius``); ``'isotropic'`` applies one multiplier and
+        preserves the initialization's aspect ratio, while ``'per_axis'``
+        gives every coordinate the same 5th-to-95th percentile span.
+        ``'graph_edge'`` scales so that the weighted-median graph-edge length
+        equals ``init_scale_factor``. ``'legacy'`` uses the earlier rule, a
+        geometric-mean span of ``log10(n) * 3 * log2(gamma + 1)``.
 
     init_scale_factor: float (optional, default 1.0)
-        Multiplier for the target robust span used by ``init_rescale``.
+        Multiplier on the target used by ``init_rescale``. Values above 1 add
+        spacing between clusters that the layout does not remove and can tear
+        clusters apart; values below 1 cost some of the epoch budget.
 
     recursive_init_kwds: dict or None (optional, default None)
         Advanced keyword arguments forwarded to
@@ -2002,6 +2130,26 @@ def simplicial_set_embedding(
             / (np.max(embedding, 0) - np.min(embedding, 0))
         ).astype(np.float32, order="C")
     else:
+        target_radius = None
+        if init_rescale in ("isotropic", "per_axis"):
+            target_radius = _init_target_radius(
+                embedding.shape[0],
+                a,
+                b,
+                gamma,
+                negative_sample_rate,
+                n_epochs_max,
+                initial_alpha=initial_alpha,
+                negative_selection_range=negative_selection_range,
+                negative_sample_scale=negative_sample_scale,
+                n_components=embedding.shape[1],
+            )
+            if verbose:
+                print(
+                    ts()
+                    + f" Initialization target radius {target_radius * init_scale_factor:.3g}"
+                    f" ({init_rescale})"
+                )
         embedding = _rescale_embedding(
             embedding,
             embedding.shape[0],
@@ -2009,6 +2157,7 @@ def simplicial_set_embedding(
             method=init_rescale,
             scale_factor=init_scale_factor,
             graph=graph,
+            target_radius=target_radius,
         )
 
     if euclidean_output:
@@ -2687,13 +2836,22 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
 
     init_rescale: str (optional, default 'isotropic')
         New pipeline only. Rescaling applied after initialization and before
-        layout optimization. ``'isotropic'`` applies one multiplier and
+        layout optimization. ``'isotropic'`` and ``'per_axis'`` scale to a
+        target radius set by the dataset size, ``n_epochs``, ``min_dist`` and
+        ``spread``, ``repulsion_strength``, the negative sampling settings and
+        ``n_components``: slightly below the size the layout reaches on its
+        own within ``n_epochs``, and at least the room large datasets need for
+        their local structure. ``'isotropic'`` applies one multiplier and
         preserves the aspect ratio; ``'per_axis'`` gives each coordinate the
-        same robust (5th-95th percentile) span; ``'graph_edge'`` preserves the
+        same robust (5th-95th percentile) span. ``'graph_edge'`` preserves the
         aspect ratio and scales by the weighted-median graph-edge length.
+        ``'legacy'`` uses the earlier rule, a span of
+        ``log10(n) * 3 * log2(repulsion_strength + 1)``.
 
     init_scale_factor: float (optional, default 1.0)
-        Target-span multiplier for ``'per_axis'`` and ``'isotropic'``. For
+        Multiplier on the target for ``'isotropic'``, ``'per_axis'`` and
+        ``'legacy'``. Values above 1 add spacing between clusters that the
+        layout does not remove and can tear clusters apart. For
         ``'graph_edge'``, the target weighted-median edge length.
 
     recursive_init_kwds: dict or None (optional, default None)
@@ -2865,9 +3023,9 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             )
         if not isinstance(self.coarsen_on_layout_weights, (bool, np.bool_)):
             raise ValueError("coarsen_on_layout_weights must be a boolean")
-        if self.init_rescale not in ("per_axis", "isotropic", "graph_edge"):
+        if self.init_rescale not in INIT_RESCALE_METHODS:
             raise ValueError(
-                "init_rescale must be 'per_axis', 'isotropic', or 'graph_edge'"
+                "init_rescale must be 'isotropic', 'per_axis', 'graph_edge' or 'legacy'"
             )
         if (
             isinstance(self.init_scale_factor, (bool, np.bool_))
