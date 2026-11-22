@@ -211,20 +211,14 @@ def test_csr_row_sort_check():
     assert not _csr_rows_sorted(graph.indptr, graph.indices)
 
 
-@pytest.mark.parametrize("n_threads", [1, 3])
-@pytest.mark.parametrize("above_parallel_threshold", [False, True])
+@pytest.mark.parametrize("n_points", [1000, 40_007])
 @pytest.mark.parametrize("with_ties", [False, True])
-def test_projection_order_matches_numpy_argsort(
-    n_threads, above_parallel_threshold, with_ties
-):
-    import numba
+def test_projection_order_is_near_exact(n_points, with_ties):
     from umap.layouts import (
-        PARALLEL_ARGSORT_MIN_SIZE,
-        _parallel_argsort_if_distinct,
+        PROJECTION_MAX_BUCKET,
+        PROJECTION_POINTS_PER_BUCKET,
         _projection_order_and_source_ranks,
     )
-
-    n_points = PARALLEL_ARGSORT_MIN_SIZE + 7 if above_parallel_threshold else 1000
 
     embedding = np.random.RandomState(0).randn(n_points, 2).astype(np.float32)
     if with_ties:
@@ -233,25 +227,109 @@ def test_projection_order_matches_numpy_argsort(
     expected_state = np.random.RandomState(1)
     direction = expected_state.randn(2)
     direction /= np.linalg.norm(direction)
-    expected_order = np.argsort(np.dot(embedding, direction)).astype(np.int32)
+    projection = np.dot(embedding, direction)
+    exact_ranks = np.empty(n_points, dtype=np.int64)
+    exact_ranks[np.argsort(projection, kind="stable")] = np.arange(n_points)
 
-    original_threads = numba.get_num_threads()
-    numba.set_num_threads(min(n_threads, numba.config.NUMBA_NUM_THREADS))
-    try:
-        order, ranks = _projection_order_and_source_ranks(
-            embedding, embedding, random_state
-        )
-    finally:
-        numba.set_num_threads(original_threads)
-
-    np.testing.assert_array_equal(order, expected_order)
-    np.testing.assert_array_equal(ranks[order], np.arange(n_points))
-    assert random_state.randint(2**31) == expected_state.randint(2**31)
-    # Distinct projections must take the parallel path, not only the fallback.
-    _, all_distinct = _parallel_argsort_if_distinct(
-        np.dot(embedding, direction), n_threads
+    order, ranks = _projection_order_and_source_ranks(
+        embedding, embedding, random_state
     )
-    assert all_distinct != with_ties
+
+    assert order.dtype == np.int32 and ranks.dtype == np.int32
+    np.testing.assert_array_equal(np.sort(order), np.arange(n_points))
+    np.testing.assert_array_equal(ranks[order], np.arange(n_points))
+    # Only order within a bucket is lost, so ranks stay close to exact.
+    assert np.abs(ranks - exact_ranks).max() <= PROJECTION_MAX_BUCKET
+    assert np.abs(ranks - exact_ranks).max() <= 64
+    # Out-of-order neighbours share a bucket, so they differ by under its width.
+    bucket_width = np.ptp(projection) / (n_points // PROJECTION_POINTS_PER_BUCKET)
+    assert np.all(np.diff(projection[order]) >= -bucket_width * (1 + 1e-9))
+    assert random_state.randint(2**31) == expected_state.randint(2**31)
+
+
+def test_projection_order_falls_back_to_exact_sort_for_outliers():
+    from umap.layouts import _projection_order_and_source_ranks
+
+    embedding = np.random.RandomState(2).randn(5000, 2).astype(np.float32)
+    embedding[17] = 1e6  # squeezes every other point into a few buckets
+    random_state = np.random.RandomState(3)
+    direction = np.random.RandomState(3).randn(2)
+    direction /= np.linalg.norm(direction)
+    order, ranks = _projection_order_and_source_ranks(
+        embedding, embedding, random_state
+    )
+    np.testing.assert_array_equal(order, np.argsort(np.dot(embedding, direction)))
+    np.testing.assert_array_equal(ranks[order], np.arange(5000))
+
+
+def test_projection_ranks_for_transform_are_near_insertion_points():
+    from umap.layouts import _projection_order_and_source_ranks
+
+    rng = np.random.RandomState(5)
+    tail = rng.randn(20_000, 2).astype(np.float32)
+    head = rng.randn(3_000, 2).astype(np.float32) * 1.5
+    random_state = np.random.RandomState(6)
+    direction = np.random.RandomState(6).randn(2)
+    direction /= np.linalg.norm(direction)
+    order, ranks = _projection_order_and_source_ranks(head, tail, random_state)
+    np.testing.assert_array_equal(np.sort(order), np.arange(20_000))
+    exact = np.minimum(
+        np.searchsorted(np.sort(np.dot(tail, direction)), np.dot(head, direction)),
+        19_999,
+    )
+    assert ranks.shape == (3_000,) and ranks.min() >= 0 and ranks.max() <= 19_999
+    assert np.abs(ranks.astype(np.int64) - exact).max() <= 64
+
+
+@pytest.mark.parametrize("n_chunks", [1, 3, 12])
+@pytest.mark.parametrize("kind", ["normal", "clustered", "ties"])
+def test_parallel_argsort_matches_numpy(n_chunks, kind):
+    from umap.layouts import _parallel_argsort_if_distinct
+
+    rng = np.random.RandomState(4)
+    if kind == "normal":
+        values = rng.normal(size=50_000)
+    elif kind == "clustered":
+        values = np.concatenate(
+            [rng.normal(loc=c, scale=1e-3, size=5_000) for c in range(10)]
+        )
+    else:
+        values = np.round(rng.normal(size=50_000), 2)
+    order, all_distinct = _parallel_argsort_if_distinct(values, n_chunks)
+    assert all_distinct == (kind != "ties")
+    np.testing.assert_array_equal(np.sort(order), np.arange(values.shape[0]))
+    assert np.all(np.diff(values[order]) >= 0)
+    if all_distinct:
+        np.testing.assert_array_equal(order, np.argsort(values))
+
+
+def test_parallel_random_permutation_is_valid_deterministic_and_uniform():
+    from collections import Counter
+
+    from umap.layouts import _parallel_random_permutation
+
+    for n_values in (1, 2, 511, 70_000):
+        permutation = _parallel_random_permutation(7, n_values, 4)
+        assert permutation.dtype == np.int32
+        np.testing.assert_array_equal(np.sort(permutation), np.arange(n_values))
+    reference = _parallel_random_permutation(123, 70_000, 12)
+    for n_chunks in (1, 3, 7):
+        np.testing.assert_array_equal(
+            reference, _parallel_random_permutation(123, 70_000, n_chunks)
+        )
+    assert not np.array_equal(reference, _parallel_random_permutation(124, 70_000, 12))
+    counts = Counter(
+        tuple(_parallel_random_permutation(seed, 3, 2)) for seed in range(30_000)
+    )
+    assert len(counts) == 6
+    assert all(abs(c / 30_000 - 1 / 6) < 0.01 for c in counts.values())
+    # Two buckets: every value should be equally likely to come first.
+    first = np.bincount(
+        [_parallel_random_permutation(seed, 1030, 3)[0] for seed in range(20_000)],
+        minlength=1030,
+    )
+    halves = first[:515].sum(), first[515:].sum()
+    assert abs(halves[0] - halves[1]) < 600
 
 
 def test_unsorted_graph_rejected_when_excluding_neighbors():

@@ -1,6 +1,9 @@
 import numba
 import numpy as np
-from threadpoolctl import threadpool_limits
+from numba import types
+from numba.core import cgutils
+from numba.extending import intrinsic
+from threadpoolctl import ThreadpoolController
 from tqdm.auto import tqdm
 
 import umap.distances as dist
@@ -37,6 +40,27 @@ ADAM_EPSILON = 1e-4
 #   LazyAdam). The learning-rate schedules are tuned for this behaviour.
 # * CSR schedule arrays share the CSR data/indices ordering. Graph-neighbor
 #   exclusion additionally requires each CSR row's indices to be sorted.
+
+
+@intrinsic
+def _atomic_fetch_add(typingctx, counter, value):
+    """Atomically add ``value`` to ``counter[0]`` and return its old value."""
+    if not (
+        isinstance(counter, types.Array)
+        and counter.ndim == 1
+        and counter.dtype == types.int64
+    ):
+        return None
+    signature = types.int64(counter, types.int64)
+
+    def codegen(context, builder, sig, args):
+        array = context.make_array(sig.args[0])(context, builder, args[0])
+        pointer = cgutils.get_item_pointer(
+            context, builder, sig.args[0], array, [context.get_constant(types.intp, 0)]
+        )
+        return builder.atomic_rmw("add", pointer, args[1], "monotonic")
+
+    return signature, codegen
 
 
 def _random_state_from_rng_state(rng_state):
@@ -245,8 +269,45 @@ def _optimize_layout_euclidean_single_epoch(
             )
 
 
+@numba.njit
+def _l9_make_table(a, b, gamma, scale, bits=7):
+    bins = 1 << bits
+    table = np.empty(60 * (bins + 1), np.float64)
+    for exponent in range(87, 147):
+        power = 2.0 ** (exponent - 127)
+        for k in range(bins + 1):
+            t = power * (1.0 + k / bins)
+            r = np.sqrt(t)
+            if gamma <= 0 or scale <= 0 or b <= 0:
+                table[(exponent - 87) * (bins + 1) + k] = 0.0
+            else:
+                c = scale * 2.0 * gamma * b / ((0.001 + t) * (1 + a * t**b))
+                table[(exponent - 87) * (bins + 1) + k] = (
+                    min(gamma, 16.0) * np.tanh(c * r / gamma) / r
+                )
+    return table
+
+
+@numba.njit(inline="always")
+def _l9_lookup(t, table, bits=7):
+    rawbits = np.float32(t).view(np.uint32)
+    exponent = (rawbits >> np.uint32(23)) & np.uint32(255)
+    if exponent < 87 or exponent >= 147:
+        return -1.0
+    mantissa = rawbits & np.uint32(0x7FFFFF)
+    shift = 23 - bits
+    k = mantissa >> np.uint32(shift)
+    frac = (mantissa & np.uint32((1 << shift) - 1)) * (1.0 / (1 << shift))
+    offset = (int(exponent) - 87) * ((1 << bits) + 1) + int(k)
+    return table[offset] + frac * (table[offset + 1] - table[offset])
+
+
+# Empty radial table: tells a kernel to compute repulsion directly.
+_L9_NO_TABLE = np.zeros(0, dtype=np.float64)
+
+
 @numba.njit(
-    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], i4[::1], i4[::1], i4[::1], i8, i8, f8, b1)",
+    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], i4[::1], i4[::1], i4[::1], i8, i8, f8, b1, f8[::1])",
     fastmath=FASTMATH_FLAGS,
     parallel=True,
     cache=True,
@@ -284,7 +345,9 @@ def optimize_layout_euclidean_single_epoch_momentum(
     negative_selection_range=200_000,
     negative_sample_scale=-1.0,
     exclude_graph_neighbors=False,
+    radial_table=_L9_NO_TABLE,
 ):
+    use_radial_table = radial_table.shape[0] > 0
     n_from_vertices = csr_indptr.shape[0] - 1
     transform_mode = n_from_vertices != n_vertices
     # At least 200 candidates, but never more than the reference embedding
@@ -350,6 +413,14 @@ def optimize_layout_euclidean_single_epoch_momentum(
 
                         dist_squared = rdist(current, other)
 
+                        if dist_squared > 0.0 and use_radial_table:
+                            coeff = _l9_lookup(dist_squared, radial_table, 9)
+                            if coeff >= 0.0:
+                                for d in range(dim):
+                                    updates[from_node, d] += (
+                                        alpha * coeff * (current[d] - other[d])
+                                    )
+                                continue
                         if dist_squared > 0.0:
                             grad_coeff = negative_sample_scaling * 2.0 * gamma * b
                             grad_coeff /= (0.001 + dist_squared) * (
@@ -1479,62 +1550,70 @@ def _finalize_update_buffer(updates, optimizer, momentum=0.0):
 
 @numba.njit(parallel=True, cache=True)
 def _parallel_argsort_if_distinct(values, n_chunks):
-    """Argsort ``values`` by sorting ``n_chunks`` chunks in parallel and merging.
+    """Argsort ``values`` with a parallel sample sort.
 
-    Also returns whether the sorted values are strictly increasing. Only then
-    is the ascending order unique, so the result is exactly
-    ``np.argsort(values)``. Otherwise np.argsort's order among equal values
-    is its own and the caller must use np.argsort.
+    Regularly sampled splitters partition the values into ordered buckets,
+    which are scattered and then sorted independently in parallel. Also
+    returns whether the sorted values are strictly increasing. Only then is
+    the ascending order unique, so the result is exactly ``np.argsort(values)``.
+    Otherwise np.argsort's order among equal values is its own and the caller
+    must use np.argsort.
     """
     n_values = values.shape[0]
+    n_buckets = max(2, 8 * n_chunks)
+    sample_size = min(n_values, 16 * n_buckets)
+    sample = np.empty(sample_size, dtype=values.dtype)
+    for i in range(sample_size):
+        sample[i] = values[(i * n_values) // sample_size]
+    sample.sort()
+    splitters = np.empty(n_buckets - 1, dtype=values.dtype)
+    for j in range(n_buckets - 1):
+        splitters[j] = sample[((j + 1) * sample_size) // n_buckets]
+
     chunk_size = (n_values + n_chunks - 1) // n_chunks
-    order = np.empty(n_values, dtype=np.int32)
-    keys = np.empty(n_values, dtype=values.dtype)
+    bucket_of = np.empty(n_values, dtype=np.int32)
+    counts = np.zeros((n_chunks, n_buckets), dtype=np.int64)
     for chunk in numba.prange(n_chunks):
         start = chunk * chunk_size
         end = min(start + chunk_size, n_values)
-        if start < end:
-            chunk_order = np.argsort(values[start:end])
-            for i in range(end - start):
-                order[start + i] = chunk_order[i] + start
-                keys[start + i] = values[chunk_order[i] + start]
+        for i in range(start, end):
+            bucket = np.searchsorted(splitters, values[i], side="right")
+            bucket_of[i] = bucket
+            counts[chunk, bucket] += 1
 
-    # Keys travel with the order so the merge reads contiguous memory.
-    order_buffer = np.empty_like(order)
-    key_buffer = np.empty_like(keys)
-    run_size = chunk_size
-    while run_size < n_values:
-        n_merges = (n_values + 2 * run_size - 1) // (2 * run_size)
-        for merge in numba.prange(n_merges):
-            left = merge * 2 * run_size
-            middle = min(left + run_size, n_values)
-            right = min(left + 2 * run_size, n_values)
-            i = left
-            j = middle
-            k = left
-            while i < middle and j < right:
-                if keys[j] < keys[i]:
-                    order_buffer[k] = order[j]
-                    key_buffer[k] = keys[j]
-                    j += 1
-                else:
-                    order_buffer[k] = order[i]
-                    key_buffer[k] = keys[i]
-                    i += 1
-                k += 1
-            while i < middle:
-                order_buffer[k] = order[i]
-                key_buffer[k] = keys[i]
-                i += 1
-                k += 1
-            while j < right:
-                order_buffer[k] = order[j]
-                key_buffer[k] = keys[j]
-                j += 1
-                k += 1
-        order, order_buffer = order_buffer, order
-        keys, key_buffer = key_buffer, keys
-        run_size *= 2
+    # Bucket-major offsets keep buckets contiguous and in value order.
+    offsets = np.empty((n_chunks, n_buckets), dtype=np.int64)
+    bucket_bounds = np.empty(n_buckets + 1, dtype=np.int64)
+    total = 0
+    for bucket in range(n_buckets):
+        bucket_bounds[bucket] = total
+        for chunk in range(n_chunks):
+            offsets[chunk, bucket] = total
+            total += counts[chunk, bucket]
+    bucket_bounds[n_buckets] = total
+
+    scattered = np.empty(n_values, dtype=np.int32)
+    for chunk in numba.prange(n_chunks):
+        start = chunk * chunk_size
+        end = min(start + chunk_size, n_values)
+        position = offsets[chunk].copy()
+        for i in range(start, end):
+            bucket = bucket_of[i]
+            scattered[position[bucket]] = i
+            position[bucket] += 1
+
+    order = np.empty(n_values, dtype=np.int32)
+    keys = np.empty(n_values, dtype=values.dtype)
+    for bucket in numba.prange(n_buckets):
+        lo = bucket_bounds[bucket]
+        hi = bucket_bounds[bucket + 1]
+        if hi > lo:
+            members = scattered[lo:hi]
+            member_values = values[members]
+            local_order = np.argsort(member_values)
+            for k in range(hi - lo):
+                order[lo + k] = members[local_order[k]]
+                keys[lo + k] = member_values[local_order[k]]
 
     n_not_increasing = 0
     for i in numba.prange(n_values - 1):
@@ -1543,19 +1622,193 @@ def _parallel_argsort_if_distinct(values, n_chunks):
     return order, n_not_increasing == 0
 
 
+@numba.njit(inline="always")
+def _splitmix64(x):
+    z = x + np.uint64(0x9E3779B97F4A7C15)
+    z = (z ^ (z >> np.uint64(30))) * np.uint64(0xBF58476D1CE4E5B9)
+    z = (z ^ (z >> np.uint64(27))) * np.uint64(0x94D049BB133111EB)
+    return z ^ (z >> np.uint64(31))
+
+
+@numba.njit(inline="always")
+def _bounded_random(state, bound):
+    # Multiply-shift map of the top 32 bits onto [0, bound); the bias is at
+    # most bound / 2**32, far below sampling noise for these sizes.
+    return ((state >> np.uint64(32)) * np.uint64(bound)) >> np.uint64(32)
+
+
+@numba.njit(parallel=True, cache=True)
+def _parallel_random_permutation(seed, n_values, n_chunks):
+    """A uniformly random permutation of ``range(n_values)`` as int32.
+
+    Every value draws a uniformly random bucket, buckets are filled by a
+    parallel scatter, and each bucket is then Fisher-Yates shuffled on its
+    own. This is equivalent to sorting by i.i.d. random keys, so the result is
+    uniform. Randomness comes from a counter-based hash, so the output is
+    fully determined by ``seed`` and independent of the thread count used.
+    """
+    # The bucket count depends only on n_values, and scattering preserves
+    # index order within a bucket, so n_chunks only changes the work split.
+    n_buckets = max(1, min(4096, n_values // 512))
+    key = _splitmix64(np.uint64(seed))
+    chunk_size = (n_values + n_chunks - 1) // n_chunks
+    bucket_of = np.empty(n_values, dtype=np.int32)
+    counts = np.zeros((n_chunks, n_buckets), dtype=np.int64)
+    for chunk in numba.prange(n_chunks):
+        start = chunk * chunk_size
+        end = min(start + chunk_size, n_values)
+        for i in range(start, end):
+            state = _splitmix64(key ^ (np.uint64(i) * np.uint64(0xD1B54A32D192ED03)))
+            bucket = _bounded_random(state, n_buckets)
+            bucket_of[i] = bucket
+            counts[chunk, bucket] += 1
+
+    offsets = np.empty((n_chunks, n_buckets), dtype=np.int64)
+    bucket_bounds = np.empty(n_buckets + 1, dtype=np.int64)
+    total = 0
+    for bucket in range(n_buckets):
+        bucket_bounds[bucket] = total
+        for chunk in range(n_chunks):
+            offsets[chunk, bucket] = total
+            total += counts[chunk, bucket]
+    bucket_bounds[n_buckets] = total
+
+    permutation = np.empty(n_values, dtype=np.int32)
+    for chunk in numba.prange(n_chunks):
+        start = chunk * chunk_size
+        end = min(start + chunk_size, n_values)
+        position = offsets[chunk].copy()
+        for i in range(start, end):
+            bucket = bucket_of[i]
+            permutation[position[bucket]] = i
+            position[bucket] += 1
+
+    for bucket in numba.prange(n_buckets):
+        lo = bucket_bounds[bucket]
+        hi = bucket_bounds[bucket + 1]
+        state = _splitmix64(key + np.uint64(bucket + 1) * np.uint64(0xA0761D6478BD642F))
+        for k in range(hi - lo - 1, 0, -1):
+            state = _splitmix64(state)
+            j = lo + np.int64(_bounded_random(state, k + 1))
+            swap = permutation[lo + k]
+            permutation[lo + k] = permutation[j]
+            permutation[j] = swap
+    return permutation
+
+
+_BLAS_CONTROLLER = None
+
+
+def _single_threaded_blas():
+    """Limit BLAS to one thread; the controller is built once because
+    discovering the loaded libraries costs far more than the dot it guards."""
+    global _BLAS_CONTROLLER
+    if _BLAS_CONTROLLER is None:
+        _BLAS_CONTROLLER = ThreadpoolController()
+    return _BLAS_CONTROLLER.limit(limits=1, user_api="blas")
+
+
+# Projection buckets: about this many points per uniform-width bucket. The
+# hard-negative window only needs each point's rank to well under the window
+# size; on MNIST embeddings ranks land within ~25 of exact.
+PROJECTION_POINTS_PER_BUCKET = 4
+# Beyond this many points in one bucket (outliers squeezing the rest into a few
+# buckets) the bucket order is too coarse and the exact sort is used instead.
+PROJECTION_MAX_BUCKET = 256
+
+
+@numba.njit(cache=True)
+def _bucket_projection_order(tail_projection, head_projection, symmetric):
+    """Approximate argsort of ``tail_projection`` by a stable counting sort.
+
+    Values go into uniform-width buckets (``PROJECTION_POINTS_PER_BUCKET`` on
+    average), so the order is exact between buckets and in index order within
+    one. Returns the order, each source's rank (insertion rank of
+    ``head_projection`` unless ``symmetric``), and the largest bucket size so
+    callers can reject a degenerate split. Serial: at this size thread
+    wake-ups cost more than the work.
+    """
+    n_values = tail_projection.shape[0]
+    low = np.inf
+    high = -np.inf
+    for i in range(n_values):
+        low = min(low, tail_projection[i])
+        high = max(high, tail_projection[i])
+    n_buckets = max(1, n_values // PROJECTION_POINTS_PER_BUCKET)
+    scale = 0.0
+    if high > low:
+        scale = n_buckets / (high - low)
+        if not np.isfinite(scale):
+            scale = 0.0
+
+    bucket_of = np.empty(n_values, dtype=np.int32)
+    starts = np.zeros(n_buckets + 1, dtype=np.int64)
+    for i in range(n_values):
+        offset = (tail_projection[i] - low) * scale
+        bucket = n_buckets - 1  # the maximum, or NaN
+        if offset >= 0.0 and offset < n_buckets:
+            bucket = np.int32(offset)
+        bucket_of[i] = bucket
+        starts[bucket + 1] += 1
+    largest = 0
+    for bucket in range(n_buckets):
+        largest = max(largest, starts[bucket + 1])
+        starts[bucket + 1] += starts[bucket]
+
+    order = np.empty(n_values, dtype=np.int32)
+    next_position = starts.copy()
+    if symmetric:
+        ranks = np.empty(n_values, dtype=np.int32)
+    else:
+        ranks = np.empty(head_projection.shape[0], dtype=np.int32)
+    for i in range(n_values):
+        position = next_position[bucket_of[i]]
+        order[position] = i
+        if symmetric:
+            ranks[i] = position
+        next_position[bucket_of[i]] = position + 1
+
+    if not symmetric:
+        for i in range(head_projection.shape[0]):
+            offset = (head_projection[i] - low) * scale
+            if offset < 0.0:
+                rank = 0
+            elif offset < n_buckets:
+                rank = starts[np.int32(offset)]
+            else:
+                rank = n_values - 1
+            ranks[i] = min(rank, n_values - 1)
+    return order, ranks, largest
+
+
 def _projection_order_and_source_ranks(head_embedding, tail_embedding, random_state):
     """Order references by a random projection and locate every source rank.
 
     Symmetric fits share source and reference indices. Asymmetric transforms
     instead insert each source projection into the sorted reference projection,
     so hard-negative windows are always indexed in the reference embedding.
+
+    The order comes from a bucket counting sort, exact to within a few ranks,
+    which is all the hard-negative window needs. If outliers make the buckets
+    too coarse, an exact argsort is used instead.
     """
     dim = head_embedding.shape[1]
     projection_direction = random_state.randn(dim)
     projection_direction /= np.linalg.norm(projection_direction)
+    symmetric = head_embedding.shape[0] == tail_embedding.shape[0]
     # Idle OpenBLAS threads keep spinning after a threaded dot and slow numba.
-    with threadpool_limits(limits=1, user_api="blas"):
+    with _single_threaded_blas():
         tail_projection = np.dot(tail_embedding, projection_direction)
+        if symmetric:
+            head_projection = tail_projection[:0]
+        else:
+            head_projection = np.dot(head_embedding, projection_direction)
+    to_node_order, source_ranks, largest_bucket = _bucket_projection_order(
+        tail_projection, head_projection, symmetric
+    )
+    if largest_bucket <= PROJECTION_MAX_BUCKET:
+        return to_node_order, source_ranks
+
     all_distinct = False
     n_threads = numba.get_num_threads()
     if tail_projection.shape[0] >= PARALLEL_ARGSORT_MIN_SIZE and n_threads > 1:
@@ -1570,8 +1823,6 @@ def _projection_order_and_source_ranks(head_embedding, tail_embedding, random_st
         source_ranks[to_node_order] = np.arange(tail_embedding.shape[0], dtype=np.int32)
     else:
         sorted_projection = tail_projection[to_node_order]
-        with threadpool_limits(limits=1, user_api="blas"):
-            head_projection = np.dot(head_embedding, projection_direction)
         source_ranks = np.searchsorted(sorted_projection, head_projection).astype(
             np.int32
         )
@@ -1713,34 +1964,243 @@ def _run_euclidean_compatibility_epoch(
     )
 
 
+def _l9_table_key(
+    a, b, gamma, negative_sample_scale, negative_selection_range, n_vertices
+):
+    """Return the radial-table key for an epoch, or None when ineligible.
+
+    The table depends only on the squared distance, so it is valid for any
+    embedding dimension, for transform, and with graph-neighbor exclusion. The
+    scale must match the ``negative_sample_scaling`` the kernels compute.
+    """
+    if negative_sample_scale < 0.0:
+        clipped_range = min(n_vertices, max(200, negative_selection_range))
+        negative_sample_scale = clipped_range / n_vertices
+    if not (
+        np.isfinite(a)
+        and 1e-8 <= a <= 1e8
+        and np.isfinite(b)
+        and 0.5 <= b <= 1.5
+        and np.isfinite(gamma)
+        and 1e-8 <= gamma <= 1e8
+        and np.isfinite(negative_sample_scale)
+        and 1e-8 <= negative_sample_scale <= 1e8
+    ):
+        return None
+    return (a, b, gamma, negative_sample_scale)
 
 
-@numba.njit
-def _l9_make_table(a,b,gamma,scale,bits=7):
- bins=1<<bits
- table=np.empty(60*(bins+1),np.float64)
- for exponent in range(87,147):
-  power=2.0**(exponent-127)
-  for k in range(bins+1):
-   t=power*(1.0+k/bins);r=np.sqrt(t)
-   if gamma<=0 or scale<=0 or b<=0:table[(exponent-87)*(bins+1)+k]=0.
-   else:
-    c=scale*2.0*gamma*b/((.001+t)*(1+a*t**b))
-    table[(exponent-87)*(bins+1)+k]=min(gamma,16.0)*np.tanh(c*r/gamma)/r
- return table
-
-
-@numba.njit(inline='always')
-def _l9_lookup(t,table,bits=7):
- rawbits=np.float32(t).view(np.uint32);exponent=(rawbits>>np.uint32(23))&np.uint32(255)
- if exponent<87 or exponent>=147:return -1.0
- mantissa=rawbits & np.uint32(0x7fffff);shift=23-bits;k=mantissa >> np.uint32(shift);frac=(mantissa & np.uint32((1<<shift)-1))*(1.0/(1<<shift))
- offset=(int(exponent)-87)*((1<<bits)+1)+int(k)
- return table[offset]+frac*(table[offset+1]-table[offset])
+# Sources claimed per atomic grab. Small enough that slower (efficiency)
+# cores take fewer chunks, large enough that claims are rare.
+_L9_SOURCE_CHUNK = 64
 
 
 @numba.njit(
-    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], f4[:, ::1], f4[:, ::1], f8, f8, i4[::1], i4[::1], i4[::1], i8, i8, f8, b1, f8[::1])",
+    fastmath=FASTMATH_FLAGS,
+    inline="always",
+    locals={
+        "updates": numba.types.float32[:, ::1],
+        "from_node": numba.types.intp,
+        "to_node": numba.types.intp,
+        "raw_index": numba.types.intp,
+        "dist_squared": numba.types.float32,
+        "grad_coeff": numba.types.float32,
+        "grad_d": numba.types.float32,
+        "c0": numba.types.float32,
+        "c1": numba.types.float32,
+        "d0": numba.types.float32,
+        "d1": numba.types.float32,
+        "u0": numba.types.float32,
+        "u1": numba.types.float32,
+        "range_start": numba.types.intp,
+        "selection": numba.types.intp,
+        "selection_step": numba.types.intp,
+        "stream": numba.types.uint64,
+    },
+)
+def _l9_adam_source_gradient(
+    from_node,
+    head_embedding,
+    tail_embedding,
+    csr_indptr,
+    csr_indices,
+    n_vertices,
+    epochs_per_sample,
+    a,
+    b,
+    gamma,
+    dim,
+    epochs_per_negative_sample,
+    epoch_of_next_negative_sample,
+    epoch_of_next_sample,
+    n,
+    updates,
+    to_node_order,
+    source_ranks,
+    negative_selection_range,
+    negative_sample_scaling,
+    transform_mode,
+    exclude_graph_neighbors,
+    radial_table,
+    hash_negatives,
+    hash_key,
+):
+    """Accumulate one source's attractive and repulsive gradients for an epoch.
+
+    With ``hash_negatives`` the window covers every reference point, so each
+    negative is drawn directly from a counter-based hash stream (one per edge,
+    keyed by ``hash_key``) instead of indexing a shuffled order array.
+    """
+    current = head_embedding[from_node]
+    range_start = get_range_limits(
+        source_ranks[from_node], negative_selection_range, n_vertices
+    )
+    c0 = 0.0
+    c1 = 0.0
+    u0 = 0.0
+    u1 = 0.0
+    if dim == 2:
+        c0 = current[0]
+        c1 = current[1]
+        u0 = updates[from_node, 0]
+        u1 = updates[from_node, 1]
+
+    for raw_index in range(csr_indptr[from_node], csr_indptr[from_node + 1]):
+        if epoch_of_next_sample[raw_index] <= n:
+            to_node = csr_indices[raw_index]
+            if dim == 2:
+                d0 = c0 - tail_embedding[to_node, 0]
+                d1 = c1 - tail_embedding[to_node, 1]
+                dist_squared = d0 * d0
+                dist_squared += d1 * d1
+                if dist_squared > 0.0:
+                    grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
+                    grad_coeff /= a * pow(dist_squared, b) + 1.0
+                    grad_d = grad_coeff * d0
+                    u0 += grad_d
+                    grad_d = grad_coeff * d1
+                    u1 += grad_d
+            else:
+                other = tail_embedding[to_node]
+                dist_squared = rdist(current, other)
+                if dist_squared > 0.0:
+                    grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
+                    grad_coeff /= a * pow(dist_squared, b) + 1.0
+                    for d in range(dim):
+                        grad_d = grad_coeff * (current[d] - other[d])
+                        updates[from_node, d] += grad_d
+
+            epoch_of_next_sample[raw_index] += epochs_per_sample[raw_index]
+
+            n_neg_samples = int(
+                (n - epoch_of_next_negative_sample[raw_index])
+                / epochs_per_negative_sample[raw_index]
+            )
+
+            stream = np.uint64(0)
+            selection = 0
+            selection_step = 0
+            if hash_negatives:
+                stream = _splitmix64(
+                    hash_key ^ (np.uint64(raw_index) * np.uint64(0xD1B54A32D192ED03))
+                )
+            else:
+                # Sample p uses (raw_index * (n + p + 1)) % range; advance it
+                # incrementally instead of dividing for every sample.
+                selection = (raw_index * n) % negative_selection_range
+                selection_step = raw_index % negative_selection_range
+            for p in range(n_neg_samples):
+                if hash_negatives:
+                    # One LCG step per sample from a SplitMix64-mixed per-edge
+                    # seed; the high 32 bits pick the node.
+                    stream = stream * np.uint64(6364136223846793005) + np.uint64(
+                        1442695040888963407
+                    )
+                    to_node = np.intp(_bounded_random(stream, n_vertices))
+                else:
+                    selection += selection_step
+                    if selection >= negative_selection_range:
+                        selection -= negative_selection_range
+                    # range_start + selection < n_vertices by construction.
+                    to_node = to_node_order[range_start + selection]
+                if exclude_graph_neighbors:
+                    if not transform_mode and to_node == from_node:
+                        continue
+                    edge_start = csr_indptr[from_node]
+                    edge_end = csr_indptr[from_node + 1]
+                    edge_position = np.searchsorted(
+                        csr_indices[edge_start:edge_end], to_node
+                    )
+                    if (
+                        edge_position < edge_end - edge_start
+                        and csr_indices[edge_start + edge_position] == to_node
+                    ):
+                        continue
+
+                if dim == 2:
+                    d0 = c0 - tail_embedding[to_node, 0]
+                    d1 = c1 - tail_embedding[to_node, 1]
+                    dist_squared = d0 * d0
+                    dist_squared += d1 * d1
+                    if dist_squared > 0.0:
+                        coeff = _l9_lookup(dist_squared, radial_table, 9)
+                        if coeff >= 0.0:
+                            u0 += coeff * d0
+                            u1 += coeff * d1
+                        else:
+                            grad_coeff = negative_sample_scaling * 2.0 * gamma * b
+                            grad_coeff /= (0.001 + dist_squared) * (
+                                a * pow(dist_squared, b) + 1
+                            )
+                            if grad_coeff > 0.0:
+                                grad_norm = np.sqrt(
+                                    grad_coeff * grad_coeff * dist_squared
+                                )
+                                scale = (
+                                    min(gamma, 16.0)
+                                    * np.tanh(grad_norm / gamma)
+                                    / grad_norm
+                                )
+                                u0 += grad_coeff * d0 * scale
+                                u1 += grad_coeff * d1 * scale
+                else:
+                    other = tail_embedding[to_node]
+                    dist_squared = rdist(current, other)
+                    if dist_squared > 0.0:
+                        coeff = _l9_lookup(dist_squared, radial_table, 9)
+                        if coeff >= 0.0:
+                            for d in range(dim):
+                                updates[from_node, d] += coeff * (current[d] - other[d])
+                        else:
+                            grad_coeff = negative_sample_scaling * 2.0 * gamma * b
+                            grad_coeff /= (0.001 + dist_squared) * (
+                                a * pow(dist_squared, b) + 1
+                            )
+                            if grad_coeff > 0.0:
+                                grad_norm = np.sqrt(
+                                    grad_coeff * grad_coeff * dist_squared
+                                )
+                                scale = (
+                                    min(gamma, 16.0)
+                                    * np.tanh(grad_norm / gamma)
+                                    / grad_norm
+                                )
+                                for d in range(dim):
+                                    updates[from_node, d] += (
+                                        grad_coeff * (current[d] - other[d]) * scale
+                                    )
+
+            epoch_of_next_negative_sample[raw_index] += (
+                n_neg_samples * epochs_per_negative_sample[raw_index]
+            )
+
+    if dim == 2:
+        updates[from_node, 0] = u0
+        updates[from_node, 1] = u1
+
+
+@numba.njit(
+    "void(f4[:, ::1], f4[:, ::1], i4[::1], i4[::1], i8, f8[::1], f8, f8, f8, i8, f8, f8[::1], f8[::1], f8[::1], i8, f4[:, ::1], f4[:, ::1], f4[:, ::1], f8, f8, i4[::1], i4[::1], i4[::1], i8, i8, f8, b1, f8[::1], i8, i8)",
     fastmath=FASTMATH_FLAGS,
     parallel=True,
     cache=True,
@@ -1752,6 +2212,15 @@ def _l9_lookup(t,table,bits=7):
         "dist_squared": numba.types.float32,
         "grad_coeff": numba.types.float32,
         "grad_d": numba.types.float32,
+        "c0": numba.types.float32,
+        "c1": numba.types.float32,
+        "d0": numba.types.float32,
+        "d1": numba.types.float32,
+        "u0": numba.types.float32,
+        "u1": numba.types.float32,
+        "range_start": numba.types.intp,
+        "selection": numba.types.intp,
+        "selection_step": numba.types.intp,
     },
 )
 def _l9_single_epoch_adam(
@@ -1783,6 +2252,8 @@ def _l9_single_epoch_adam(
     negative_sample_scale=-1.0,
     exclude_graph_neighbors=False,
     radial_table=None,
+    n_workers=1,
+    negative_hash_key=-1,
 ):
     n_from_vertices = csr_indptr.shape[0] - 1
     # At least 200 candidates, but never more than the reference embedding
@@ -1793,90 +2264,95 @@ def _l9_single_epoch_adam(
     else:
         negative_sample_scaling = negative_sample_scale
     transform_mode = from_node_order.shape[0] != to_node_order.shape[0]
+    hash_negatives = negative_hash_key >= 0 and negative_selection_range >= n_vertices
+    hash_key = _splitmix64(np.uint64(max(0, negative_hash_key)))
+    # Within a single block the gradient pass only reads the embeddings, and
+    # each source writes only its own update row and edge counters, so the
+    # visiting order cannot change the result. Visiting sources in memory
+    # order turns the CSR and per-edge schedule reads into sequential streams.
+    single_block = block_size >= n_from_vertices
     for block_start in range(0, n_from_vertices, block_size):
         block_end = min(block_start + block_size, n_from_vertices)
-        for raw_idx in numba.prange(block_start, block_end):
-            node_idx = from_node_order[raw_idx]
-            if transform_mode:
-                from_node = node_idx
-            else:
-                from_node = to_node_order[node_idx]
-            current = head_embedding[from_node]
-
-            for raw_index in range(csr_indptr[from_node], csr_indptr[from_node + 1]):
-                if epoch_of_next_sample[raw_index] <= n:
-                    to_node = csr_indices[raw_index]
-                    other = tail_embedding[to_node]
-
-                    dist_squared = rdist(current, other)
-
-                    if dist_squared > 0.0:
-                        grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
-                        grad_coeff /= a * pow(dist_squared, b) + 1.0
-                        for d in range(dim):
-                            grad_d = grad_coeff * (current[d] - other[d])
-                            updates[from_node, d] += grad_d
-
-                    epoch_of_next_sample[raw_index] += epochs_per_sample[raw_index]
-
-                    n_neg_samples = int(
-                        (n - epoch_of_next_negative_sample[raw_index])
-                        / epochs_per_negative_sample[raw_index]
-                    )
-
-                    for p in range(n_neg_samples):
-                        to_node_raw_selection = (
-                            raw_index * (n + p + 1)
-                        ) % negative_selection_range
-                        range_start = get_range_limits(
-                            source_ranks[from_node],
-                            negative_selection_range,
+        if single_block:
+            # Dynamic scheduling: each worker claims chunks of sources from a
+            # shared counter, so cores of different speeds stay busy until the
+            # epoch ends instead of waiting on a static equal split.
+            next_chunk = np.zeros(1, dtype=np.int64)
+            for worker in numba.prange(max(1, n_workers)):
+                while True:
+                    chunk_start = _atomic_fetch_add(next_chunk, _L9_SOURCE_CHUNK)
+                    if chunk_start >= n_from_vertices:
+                        break
+                    chunk_end = min(chunk_start + _L9_SOURCE_CHUNK, n_from_vertices)
+                    for from_node in range(chunk_start, chunk_end):
+                        _l9_adam_source_gradient(
+                            from_node,
+                            head_embedding,
+                            tail_embedding,
+                            csr_indptr,
+                            csr_indices,
                             n_vertices,
+                            epochs_per_sample,
+                            a,
+                            b,
+                            gamma,
+                            dim,
+                            epochs_per_negative_sample,
+                            epoch_of_next_negative_sample,
+                            epoch_of_next_sample,
+                            n,
+                            updates,
+                            to_node_order,
+                            source_ranks,
+                            negative_selection_range,
+                            negative_sample_scaling,
+                            transform_mode,
+                            exclude_graph_neighbors,
+                            radial_table,
+                            hash_negatives,
+                            hash_key,
                         )
-                        to_node = to_node_order[
-                            (range_start + to_node_raw_selection) % n_vertices
-                        ]
-                        if exclude_graph_neighbors:
-                            if not transform_mode and to_node == from_node:
-                                continue
-                            edge_start = csr_indptr[from_node]
-                            edge_end = csr_indptr[from_node + 1]
-                            edge_position = np.searchsorted(
-                                csr_indices[edge_start:edge_end], to_node
-                            )
-                            if (
-                                edge_position < edge_end - edge_start
-                                and csr_indices[edge_start + edge_position] == to_node
-                            ):
-                                continue
-                        other = tail_embedding[to_node]
-
-                        dist_squared = rdist(current, other)
-
-                        if dist_squared > 0.0:
-                            coeff = _l9_lookup(dist_squared, radial_table, 9)
-                            if coeff >= 0.0:
-                                for d in range(dim):
-                                    updates[from_node, d] += coeff * (current[d] - other[d])
-                            else:
-                                grad_coeff = negative_sample_scaling * 2.0 * gamma * b
-                                grad_coeff /= (0.001 + dist_squared) * (a * pow(dist_squared, b) + 1)
-                                if grad_coeff > 0.0:
-                                    grad_norm = np.sqrt(grad_coeff * grad_coeff * dist_squared)
-                                    scale = min(gamma, 16.0) * np.tanh(grad_norm / gamma) / grad_norm
-                                    for d in range(dim):
-                                        updates[from_node, d] += grad_coeff * (current[d] - other[d]) * scale
-
-                    epoch_of_next_negative_sample[raw_index] += (
-                        n_neg_samples * epochs_per_negative_sample[raw_index]
-                    )
+        else:
+            for raw_idx in numba.prange(block_start, block_end):
+                if transform_mode:
+                    from_node = from_node_order[raw_idx]
+                else:
+                    from_node = to_node_order[from_node_order[raw_idx]]
+                _l9_adam_source_gradient(
+                    from_node,
+                    head_embedding,
+                    tail_embedding,
+                    csr_indptr,
+                    csr_indices,
+                    n_vertices,
+                    epochs_per_sample,
+                    a,
+                    b,
+                    gamma,
+                    dim,
+                    epochs_per_negative_sample,
+                    epoch_of_next_negative_sample,
+                    epoch_of_next_sample,
+                    n,
+                    updates,
+                    to_node_order,
+                    source_ranks,
+                    negative_selection_range,
+                    negative_sample_scaling,
+                    transform_mode,
+                    exclude_graph_neighbors,
+                    radial_table,
+                    hash_negatives,
+                    hash_key,
+                )
 
         for raw_idx in numba.prange(block_start, block_end):
-            node_idx = from_node_order[raw_idx]
-            if transform_mode:
-                from_node = node_idx
+            if single_block:
+                from_node = raw_idx
+            elif transform_mode:
+                from_node = from_node_order[raw_idx]
             else:
-                from_node = to_node_order[node_idx]
+                from_node = to_node_order[from_node_order[raw_idx]]
             for d in range(dim):
                 if updates[from_node, d] != 0.0:
                     adam_m[from_node, d] = (
@@ -1924,7 +2400,7 @@ def optimize_layout_euclidean(
     exclude_graph_neighbors=False,
     negative_sample_scale_adaptation_samples=128,
     densmap=False,
-    _enable_l9=False,
+    _enable_l9=True,
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
     fuzzy set cross entropy between the 1-skeletons of the high dimensional
@@ -2157,8 +2633,14 @@ def optimize_layout_euclidean(
             head_embedding, tail_embedding, random_state
         )
 
-    _l9_table_key = None
+    _l9_key = None
     _l9_table = None
+    _new_key = None
+    negative_hash_key = (
+        random_state.randint(np.iinfo(np.int64).max, dtype=np.int64)
+        if optimizer == "adam"
+        else -1
+    )
     for n in tqdm(range(n_epochs), **tqdm_kwds):
         if (
             densmap
@@ -2295,6 +2777,21 @@ def optimize_layout_euclidean(
                     exclude_graph_neighbors=exclude_graph_neighbors,
                 )
             else:
+                _new_key = (
+                    _l9_table_key(
+                        a,
+                        b,
+                        gamma_schedule[n],
+                        resolved_negative_sample_scale,
+                        negative_selection_range_schedule[n],
+                        n_vertices,
+                    )
+                    if _enable_l9
+                    else None
+                )
+                if _new_key is not None and _l9_key != _new_key:
+                    _l9_table = _l9_make_table(*_new_key, 9)
+                    _l9_key = _new_key
                 optimize_layout_euclidean_single_epoch_momentum(
                     head_embedding,
                     tail_embedding,
@@ -2319,6 +2816,7 @@ def optimize_layout_euclidean(
                     negative_selection_range=negative_selection_range_schedule[n],
                     negative_sample_scale=resolved_negative_sample_scale,
                     exclude_graph_neighbors=exclude_graph_neighbors,
+                    radial_table=_l9_table if _new_key is not None else _L9_NO_TABLE,
                 )
             _finalize_update_buffer(updates, "momentum", momentum_schedule[n])
             random_state.shuffle(node_order)
@@ -2400,20 +2898,22 @@ def optimize_layout_euclidean(
                     exclude_graph_neighbors=exclude_graph_neighbors,
                 )
             else:
-                _l9_eligible = (
-                    _enable_l9 and head_embedding is tail_embedding and dim == 2
-                    and not exclude_graph_neighbors
-                    and np.isfinite(a) and 1e-8 <= a <= 1e8
-                    and np.isfinite(b_schedule[n]) and 0.5 <= b_schedule[n] <= 1.5
-                    and np.isfinite(gamma_schedule[n]) and 1e-8 <= gamma_schedule[n] <= 1e8
-                    and np.isfinite(resolved_negative_sample_scale)
-                    and 1e-8 <= resolved_negative_sample_scale <= 1e8
+                _new_key = (
+                    _l9_table_key(
+                        a,
+                        b_schedule[n],
+                        gamma_schedule[n],
+                        resolved_negative_sample_scale,
+                        negative_selection_range_schedule[n],
+                        n_vertices,
+                    )
+                    if _enable_l9
+                    else None
                 )
-                if _l9_eligible:
-                    _new_key = (a, b_schedule[n], gamma_schedule[n], resolved_negative_sample_scale)
-                    if _l9_table_key != _new_key:
+                if _new_key is not None:
+                    if _l9_key != _new_key:
                         _l9_table = _l9_make_table(*_new_key, 9)
-                        _l9_table_key = _new_key
+                        _l9_key = _new_key
                     _l9_single_epoch_adam(
                         head_embedding,
                         tail_embedding,
@@ -2443,6 +2943,8 @@ def optimize_layout_euclidean(
                         negative_sample_scale=resolved_negative_sample_scale,
                         exclude_graph_neighbors=exclude_graph_neighbors,
                         radial_table=_l9_table,
+                        n_workers=numba.get_num_threads(),
+                        negative_hash_key=negative_hash_key,
                     )
                 else:
                     optimize_layout_euclidean_single_epoch_adam(
@@ -2475,10 +2977,26 @@ def optimize_layout_euclidean(
                         exclude_graph_neighbors=exclude_graph_neighbors,
                     )
             _finalize_update_buffer(updates, "adam")
-            random_state.shuffle(node_order)
+            if head_embedding.shape[0] <= 1024:
+                random_state.shuffle(node_order)
+            # The large Adam kernels run the whole epoch as one block, so the
+            # order sources are visited in cannot matter; only the small
+            # kernel needs node_order shuffled.
             if negative_selection_range_schedule[n] < n_vertices:
                 to_node_order, source_ranks = _projection_order_and_source_ranks(
                     head_embedding, tail_embedding, random_state
+                )
+            elif _new_key is not None and head_embedding.shape[0] > 1024:
+                # The radial-table kernel hashes full-range negatives; a new
+                # key gives the next epoch fresh negatives.
+                negative_hash_key = random_state.randint(
+                    np.iinfo(np.int64).max, dtype=np.int64
+                )
+            elif to_node_order.shape[0] >= PARALLEL_ARGSORT_MIN_SIZE:
+                to_node_order = _parallel_random_permutation(
+                    random_state.randint(np.iinfo(np.int64).max, dtype=np.int64),
+                    to_node_order.shape[0],
+                    numba.get_num_threads(),
                 )
             else:
                 random_state.shuffle(to_node_order)
