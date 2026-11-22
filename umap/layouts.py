@@ -270,27 +270,36 @@ def _optimize_layout_euclidean_single_epoch(
 
 
 @numba.njit(cache=True)
-def _l9_make_table(a,b,gamma,scale,bits=7):
- bins=1<<bits
- table=np.empty(60*(bins+1),np.float64)
- for exponent in range(87,147):
-  power=2.0**(exponent-127)
-  for k in range(bins+1):
-   t=power*(1.0+k/bins);r=np.sqrt(t)
-   if gamma<=0 or scale<=0 or b<=0:table[(exponent-87)*(bins+1)+k]=0.
-   else:
-    c=scale*2.0*gamma*b/((.001+t)*(1+a*t**b))
-    table[(exponent-87)*(bins+1)+k]=min(gamma,16.0)*np.tanh(c*r/gamma)/r
- return table
+def _l9_make_table(a, b, gamma, scale, bits=7):
+    bins = 1 << bits
+    table = np.empty(60 * (bins + 1), np.float64)
+    for exponent in range(87, 147):
+        power = 2.0 ** (exponent - 127)
+        for k in range(bins + 1):
+            t = power * (1.0 + k / bins)
+            r = np.sqrt(t)
+            if gamma <= 0 or scale <= 0 or b <= 0:
+                table[(exponent - 87) * (bins + 1) + k] = 0.0
+            else:
+                c = scale * 2.0 * gamma * b / ((0.001 + t) * (1 + a * t**b))
+                table[(exponent - 87) * (bins + 1) + k] = (
+                    min(gamma, 16.0) * np.tanh(c * r / gamma) / r
+                )
+    return table
 
 
-@numba.njit(inline='always')
-def _l9_lookup(t,table,bits=7):
- rawbits=np.float32(t).view(np.uint32);exponent=(rawbits>>np.uint32(23))&np.uint32(255)
- if exponent<87 or exponent>=147:return -1.0
- mantissa=rawbits & np.uint32(0x7fffff);shift=23-bits;k=mantissa >> np.uint32(shift);frac=(mantissa & np.uint32((1<<shift)-1))*(1.0/(1<<shift))
- offset=(int(exponent)-87)*((1<<bits)+1)+int(k)
- return table[offset]+frac*(table[offset+1]-table[offset])
+@numba.njit(inline="always")
+def _l9_lookup(t, table, bits=7):
+    rawbits = np.float32(t).view(np.uint32)
+    exponent = (rawbits >> np.uint32(23)) & np.uint32(255)
+    if exponent < 87 or exponent >= 147:
+        return -1.0
+    mantissa = rawbits & np.uint32(0x7FFFFF)
+    shift = 23 - bits
+    k = mantissa >> np.uint32(shift)
+    frac = (mantissa & np.uint32((1 << shift) - 1)) * (1.0 / (1 << shift))
+    offset = (int(exponent) - 87) * ((1 << bits) + 1) + int(k)
+    return table[offset] + frac * (table[offset + 1] - table[offset])
 
 
 # Empty radial table: tells a kernel to compute repulsion directly.
@@ -1955,9 +1964,9 @@ def _run_euclidean_compatibility_epoch(
     )
 
 
-
-
-def _l9_table_key(a, b, gamma, negative_sample_scale, negative_selection_range, n_vertices):
+def _l9_table_key(
+    a, b, gamma, negative_sample_scale, negative_selection_range, n_vertices
+):
     """Return the radial-table key for an epoch, or None when ineligible.
 
     The table depends only on the squared distance, so it is valid for any
@@ -1968,9 +1977,12 @@ def _l9_table_key(a, b, gamma, negative_sample_scale, negative_selection_range, 
         clipped_range = min(n_vertices, max(200, negative_selection_range))
         negative_sample_scale = clipped_range / n_vertices
     if not (
-        np.isfinite(a) and 1e-8 <= a <= 1e8
-        and np.isfinite(b) and 0.5 <= b <= 1.5
-        and np.isfinite(gamma) and 1e-8 <= gamma <= 1e8
+        np.isfinite(a)
+        and 1e-8 <= a <= 1e8
+        and np.isfinite(b)
+        and 0.5 <= b <= 1.5
+        and np.isfinite(gamma)
+        and 1e-8 <= gamma <= 1e8
         and np.isfinite(negative_sample_scale)
         and 1e-8 <= negative_sample_scale <= 1e8
     ):
@@ -2137,10 +2149,18 @@ def _l9_adam_source_gradient(
                             u1 += coeff * d1
                         else:
                             grad_coeff = negative_sample_scaling * 2.0 * gamma * b
-                            grad_coeff /= (0.001 + dist_squared) * (a * pow(dist_squared, b) + 1)
+                            grad_coeff /= (0.001 + dist_squared) * (
+                                a * pow(dist_squared, b) + 1
+                            )
                             if grad_coeff > 0.0:
-                                grad_norm = np.sqrt(grad_coeff * grad_coeff * dist_squared)
-                                scale = min(gamma, 16.0) * np.tanh(grad_norm / gamma) / grad_norm
+                                grad_norm = np.sqrt(
+                                    grad_coeff * grad_coeff * dist_squared
+                                )
+                                scale = (
+                                    min(gamma, 16.0)
+                                    * np.tanh(grad_norm / gamma)
+                                    / grad_norm
+                                )
                                 u0 += grad_coeff * d0 * scale
                                 u1 += grad_coeff * d1 * scale
                 else:
@@ -2153,12 +2173,22 @@ def _l9_adam_source_gradient(
                                 updates[from_node, d] += coeff * (current[d] - other[d])
                         else:
                             grad_coeff = negative_sample_scaling * 2.0 * gamma * b
-                            grad_coeff /= (0.001 + dist_squared) * (a * pow(dist_squared, b) + 1)
+                            grad_coeff /= (0.001 + dist_squared) * (
+                                a * pow(dist_squared, b) + 1
+                            )
                             if grad_coeff > 0.0:
-                                grad_norm = np.sqrt(grad_coeff * grad_coeff * dist_squared)
-                                scale = min(gamma, 16.0) * np.tanh(grad_norm / gamma) / grad_norm
+                                grad_norm = np.sqrt(
+                                    grad_coeff * grad_coeff * dist_squared
+                                )
+                                scale = (
+                                    min(gamma, 16.0)
+                                    * np.tanh(grad_norm / gamma)
+                                    / grad_norm
+                                )
                                 for d in range(dim):
-                                    updates[from_node, d] += grad_coeff * (current[d] - other[d]) * scale
+                                    updates[from_node, d] += (
+                                        grad_coeff * (current[d] - other[d]) * scale
+                                    )
 
             epoch_of_next_negative_sample[raw_index] += (
                 n_neg_samples * epochs_per_negative_sample[raw_index]
@@ -2607,7 +2637,9 @@ def optimize_layout_euclidean(
     _l9_table = None
     _new_key = None
     negative_hash_key = (
-        random_state.randint(np.iinfo(np.int64).max) if optimizer == "adam" else -1
+        random_state.randint(np.iinfo(np.int64).max, dtype=np.int64)
+        if optimizer == "adam"
+        else -1
     )
     for n in tqdm(range(n_epochs), **tqdm_kwds):
         if (
@@ -2747,11 +2779,15 @@ def optimize_layout_euclidean(
             else:
                 _new_key = (
                     _l9_table_key(
-                        a, b, gamma_schedule[n],
+                        a,
+                        b,
+                        gamma_schedule[n],
                         resolved_negative_sample_scale,
-                        negative_selection_range_schedule[n], n_vertices,
+                        negative_selection_range_schedule[n],
+                        n_vertices,
                     )
-                    if _enable_l9 else None
+                    if _enable_l9
+                    else None
                 )
                 if _new_key is not None and _l9_key != _new_key:
                     _l9_table = _l9_make_table(*_new_key, 9)
@@ -2864,11 +2900,15 @@ def optimize_layout_euclidean(
             else:
                 _new_key = (
                     _l9_table_key(
-                        a, b_schedule[n], gamma_schedule[n],
+                        a,
+                        b_schedule[n],
+                        gamma_schedule[n],
                         resolved_negative_sample_scale,
-                        negative_selection_range_schedule[n], n_vertices,
+                        negative_selection_range_schedule[n],
+                        n_vertices,
                     )
-                    if _enable_l9 else None
+                    if _enable_l9
+                    else None
                 )
                 if _new_key is not None:
                     if _l9_key != _new_key:
@@ -2949,10 +2989,12 @@ def optimize_layout_euclidean(
             elif _new_key is not None and head_embedding.shape[0] > 1024:
                 # The radial-table kernel hashes full-range negatives; a new
                 # key gives the next epoch fresh negatives.
-                negative_hash_key = random_state.randint(np.iinfo(np.int64).max)
+                negative_hash_key = random_state.randint(
+                    np.iinfo(np.int64).max, dtype=np.int64
+                )
             elif to_node_order.shape[0] >= PARALLEL_ARGSORT_MIN_SIZE:
                 to_node_order = _parallel_random_permutation(
-                    random_state.randint(np.iinfo(np.int64).max),
+                    random_state.randint(np.iinfo(np.int64).max, dtype=np.int64),
                     to_node_order.shape[0],
                     numba.get_num_threads(),
                 )
