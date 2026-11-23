@@ -242,3 +242,105 @@ def test_place_outliers_falls_back_to_the_mean():
     knn = np.array([[0, 1], [1, 0], [2, -1]])
     result = umato.place_outliers(embedding, hub_info, knn, np.random.RandomState(0))
     np.testing.assert_allclose(result[2], [1, 0], atol=0.1)
+
+
+# --- local phase ------------------------------------------------------------
+
+
+def _local_setup(X, n_hubs=60, n_epochs=50):
+    from umap.umap_ import fuzzy_simplicial_set
+
+    knn = _knn(X)
+    hubs, _ = umato.select_hubs(knn, n_hubs)
+    hub_info = umato.expand_hubs(knn, hubs)
+    graph, _, _ = fuzzy_simplicial_set(
+        X,
+        10,
+        np.random.RandomState(0),
+        "euclidean",
+        {},
+        knn,
+        NearestNeighbors(n_neighbors=10).fit(X).kneighbors(X)[0].astype(np.float32),
+    )
+    members, local = umato.local_graph(graph, hub_info, n_epochs)
+    return knn, hubs, hub_info, graph, members, local
+
+
+def test_local_graph_reweights_hub_edges(blobs):
+    X, _ = blobs
+    knn, hubs, hub_info, graph, members, local = _local_setup(X)
+    info = hub_info[members]
+
+    assert np.array_equal(members, np.flatnonzero(hub_info > umato.OUTLIER))
+    assert local.shape == (len(members), len(members))
+    assert not np.any(info[local.row] == umato.HUB)
+    assert np.all(local.data[info[local.col] == umato.HUB] == 1.0)
+    # Other edges keep their fuzzy membership strength.
+    rest = info[local.col] != umato.HUB
+    original = graph.tocsr()[members][:, members]
+    np.testing.assert_allclose(
+        local.data[rest],
+        np.asarray(original[local.row[rest], local.col[rest]]).ravel(),
+    )
+
+
+def test_local_graph_drops_outliers():
+    import scipy.sparse
+
+    graph = scipy.sparse.csr_matrix(np.ones((4, 4)) - np.eye(4))
+    hub_info = np.array([2, 1, 0, 1], np.int8)
+    members, local = umato.local_graph(graph, hub_info, 50)
+    assert members.tolist() == [0, 1, 3]
+    assert local.shape == (3, 3)
+
+
+def _run_local(X, seed=0, hub_step_scale=umato.HUB_STEP_SCALE, n_epochs=50):
+    from umap.umap_ import find_ab_params
+
+    knn, hubs, hub_info, graph, members, local = _local_setup(X)
+    a, b = find_ab_params(1.0, 0.1)
+    start = (
+        np.random.RandomState(1).uniform(0, 10, (len(members), 2)).astype(np.float32)
+    )
+    embedding = start.copy()
+    rng_state = np.random.RandomState(seed).randint(-(2**31) + 1, 2**31 - 1, 3)
+    from umap.utils import make_epochs_per_sample
+
+    umato.optimize_local_layout(
+        embedding,
+        local.row,
+        local.col,
+        hub_info[members] == umato.HUB,
+        n_epochs,
+        make_epochs_per_sample(local.data, n_epochs),
+        a,
+        b,
+        rng_state.astype(np.int64),
+        learning_rate=0.5,
+        hub_step_scale=hub_step_scale,
+    )
+    return start, embedding, hub_info[members] == umato.HUB
+
+
+def test_optimize_local_layout_damps_hub_steps(blobs):
+    X, _ = blobs
+    # Compare the first epoch that samples edges (UMAP samples none at n=0),
+    # before the points settle into their clusters.
+    start, damped, is_hub = _run_local(X, n_epochs=2)
+    _, undamped, _ = _run_local(X, hub_step_scale=1.0, n_epochs=2)
+    assert np.all(np.isfinite(damped))
+
+    def hub_motion(embedding):
+        return np.linalg.norm(embedding[is_hub] - start[is_hub], axis=1).mean()
+
+    assert hub_motion(damped) < 0.3 * hub_motion(undamped)
+
+    _, frozen, _ = _run_local(X, hub_step_scale=0.0)
+    np.testing.assert_array_equal(frozen[is_hub], start[is_hub])
+
+
+def test_optimize_local_layout_is_reproducible(blobs):
+    X, _ = blobs
+    _, first, _ = _run_local(X, seed=3)
+    _, second, _ = _run_local(X, seed=3)
+    np.testing.assert_array_equal(first, second)

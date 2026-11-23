@@ -24,9 +24,12 @@ import numpy as np
 import scipy.sparse
 from sklearn.decomposition import PCA
 from sklearn.manifold import SpectralEmbedding
+from tqdm.auto import tqdm
 
 import umap.distances as dist
+from umap.layouts import rdist
 from umap.umap_ import init_transform
+from umap.utils import FASTMATH_FLAGS, make_epochs_per_sample, tau_rand_int
 
 # Point roles stored in ``hub_info``.
 OUTLIER = 0
@@ -39,6 +42,15 @@ GLOBAL_LEARNING_RATE = 0.0065
 N_NEAREST_HUBS = 10
 EXPANDED_NOISE = 0.05
 OUTLIER_NOISE = 0.02
+DEFAULT_LOCAL_EPOCHS = 50
+# The local phase of the reference implementation uses a learning rate of
+# 0.01 and a repulsion of 0.1. UMAP's learning_rate and repulsion_strength
+# multiply these values, so their default of 1.0 matches the reference.
+LOCAL_LEARNING_RATE = 0.01
+LOCAL_REPULSION = 0.1
+# Hubs move by this fraction of the step that other points take, so the
+# skeleton from the global phase changes slowly during the local phase.
+HUB_STEP_SCALE = 0.1
 
 
 def default_n_hubs(n_samples):
@@ -471,3 +483,193 @@ def place_outliers(embedding, hub_info, knn_indices, random_state, max_passes=10
         noise,
         max_passes,
     )
+
+
+def local_graph(graph, hub_info, n_epochs):
+    """The graph that the local phase of UMATO optimizes.
+
+    Only hubs and expanded points take part, so the graph is UMAP's fuzzy
+    graph restricted to them. Because the set is closed under the kNN
+    relation, these rows are exactly the graph that the reference
+    implementation rebuilds from the same neighbors. Edges towards a hub get
+    weight 1 and edges from a hub are removed, so hubs only move when an
+    attached point pulls them. Weak edges are pruned as in UMAP.
+
+    Returns
+    -------
+    members: array of int64
+        Indices of the hubs and expanded points; the graph uses positions in
+        this array.
+
+    graph: scipy.sparse.coo_matrix
+        The weighted local graph.
+    """
+    members = np.flatnonzero(hub_info > OUTLIER)
+    info = hub_info[members]
+    subgraph = scipy.sparse.csr_matrix(graph)[members][:, members].tocoo()
+    subgraph.sum_duplicates()
+    weights = subgraph.data.astype(np.float32)
+    weights[info[subgraph.col] == HUB] = 1.0
+    weights[info[subgraph.row] == HUB] = 0.0
+    if weights.size > 0:
+        weights[weights < weights.max() / float(n_epochs)] = 0.0
+    result = scipy.sparse.coo_matrix(
+        (weights, (subgraph.row, subgraph.col)), shape=subgraph.shape
+    )
+    result.eliminate_zeros()
+    return members, result
+
+
+@numba.njit(inline="always")
+def _clip(value, cutoff):
+    if value > cutoff:
+        return cutoff
+    if value < -cutoff:
+        return -cutoff
+    return value
+
+
+def _local_layout_single_epoch(
+    embedding,
+    head,
+    tail,
+    is_hub,
+    n_vertices,
+    epochs_per_sample,
+    a,
+    b,
+    rng_state,
+    gamma,
+    hub_step_scale,
+    dim,
+    alpha,
+    epochs_per_negative_sample,
+    epoch_of_next_negative_sample,
+    epoch_of_next_sample,
+    n,
+):
+    for i in numba.prange(epochs_per_sample.shape[0]):
+        if epoch_of_next_sample[i] <= n:
+            j = head[i]
+            k = tail[i]
+            current = embedding[j]
+            other = embedding[k]
+
+            dist_squared = rdist(current, other)
+            if dist_squared > 0.0:
+                grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
+                grad_coeff /= a * pow(dist_squared, b) + 1.0
+            else:
+                grad_coeff = 0.0
+
+            other_scale = hub_step_scale if is_hub[k] else 1.0
+            for d in range(dim):
+                grad_d = _clip(grad_coeff * (current[d] - other[d]), 10.0)
+                current[d] += grad_d * alpha
+                other[d] += -grad_d * alpha * other_scale
+
+            epoch_of_next_sample[i] += epochs_per_sample[i]
+
+            n_neg_samples = int(
+                (n - epoch_of_next_negative_sample[i]) / epochs_per_negative_sample[i]
+            )
+            for p in range(n_neg_samples):
+                k = tau_rand_int(rng_state) % n_vertices
+                other = embedding[k]
+                dist_squared = rdist(current, other)
+
+                if dist_squared > 0.0:
+                    grad_coeff = 2.0 * b
+                    grad_coeff /= (0.001 + dist_squared) * (
+                        a * pow(dist_squared, b) + 1
+                    )
+                elif j == k:
+                    continue
+                else:
+                    grad_coeff = 0.0
+
+                for d in range(dim):
+                    if grad_coeff > 0.0:
+                        grad_d = _clip(grad_coeff * (current[d] - other[d]), 10.0)
+                    else:
+                        grad_d = 10.0
+                    current[d] += grad_d * alpha * gamma
+
+            epoch_of_next_negative_sample[i] += (
+                n_neg_samples * epochs_per_negative_sample[i]
+            )
+
+
+_local_layout_single_epoch_serial = numba.njit(
+    _local_layout_single_epoch, fastmath=FASTMATH_FLAGS
+)
+_local_layout_single_epoch_parallel = numba.njit(
+    _local_layout_single_epoch, fastmath=FASTMATH_FLAGS, parallel=True
+)
+
+
+def optimize_local_layout(
+    embedding,
+    head,
+    tail,
+    is_hub,
+    n_epochs,
+    epochs_per_sample,
+    a,
+    b,
+    rng_state,
+    gamma=LOCAL_REPULSION,
+    learning_rate=LOCAL_LEARNING_RATE,
+    negative_sample_rate=5,
+    hub_step_scale=HUB_STEP_SCALE,
+    parallel=False,
+    verbose=False,
+    tqdm_kwds=None,
+):
+    """Refine local neighborhoods: the local phase of UMATO.
+
+    This is UMAP's original stochastic gradient descent with the changes of
+    the reference implementation: when an edge pulls a hub, the hub moves by
+    ``hub_step_scale`` of the step, repulsion is weighted by ``gamma``, and
+    negative samples are drawn only from the points being optimized. The
+    learning rate decays linearly. ``embedding`` is updated in place.
+    """
+    if negative_sample_rate <= 0:
+        raise ValueError("negative_sample_rate must be greater than 0 for UMATO")
+    dim = embedding.shape[1]
+    n_vertices = embedding.shape[0]
+    epochs_per_negative_sample = epochs_per_sample / negative_sample_rate
+    epoch_of_next_negative_sample = epochs_per_negative_sample.copy()
+    epoch_of_next_sample = epochs_per_sample.copy()
+    is_hub = np.ascontiguousarray(is_hub, dtype=np.bool_)
+
+    if parallel:
+        epoch_fn = _local_layout_single_epoch_parallel
+    else:
+        epoch_fn = _local_layout_single_epoch_serial
+
+    tqdm_kwds = dict(tqdm_kwds or {})
+    tqdm_kwds.setdefault("disable", not verbose)
+    alpha = learning_rate
+    for n in tqdm(range(n_epochs), **tqdm_kwds):
+        epoch_fn(
+            embedding,
+            head,
+            tail,
+            is_hub,
+            n_vertices,
+            epochs_per_sample,
+            a,
+            b,
+            rng_state,
+            gamma,
+            hub_step_scale,
+            dim,
+            alpha,
+            epochs_per_negative_sample,
+            epoch_of_next_negative_sample,
+            epoch_of_next_sample,
+            n,
+        )
+        alpha = learning_rate * (1.0 - (float(n) / float(n_epochs)))
+    return embedding
