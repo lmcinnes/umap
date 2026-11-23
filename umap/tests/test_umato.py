@@ -80,3 +80,99 @@ def test_expand_hubs_leaves_unreachable_points_as_outliers():
     knn = np.array([[0, 1], [1, 2], [2, 1], [3, 0]])
     hub_info = umato.expand_hubs(knn, np.array([0]))
     assert hub_info.tolist() == [umato.HUB, umato.EXPANDED, umato.EXPANDED, 0]
+
+
+# --- global hub layout -----------------------------------------------------
+
+
+def _ab():
+    from umap.umap_ import find_ab_params
+
+    return find_ab_params(1.0, 0.1)
+
+
+def test_hub_distances_match_pairwise_euclidean(blobs):
+    from scipy.spatial.distance import cdist
+    from umap.distances import named_distances
+
+    X, _ = blobs
+    hubs = np.arange(0, 600, 30)
+    D = umato.hub_distances(X, hubs, named_distances["euclidean"], {})
+    np.testing.assert_allclose(D, cdist(X[hubs], X[hubs]), rtol=1e-4, atol=1e-4)
+
+
+def test_hub_distances_read_precomputed_matrix(blobs):
+    import scipy.sparse
+    from scipy.spatial.distance import cdist
+
+    X, _ = blobs
+    full = cdist(X, X)
+    hubs = np.arange(0, 600, 60)
+    D = umato.hub_distances(full, hubs, "precomputed", {})
+    np.testing.assert_allclose(D, full[np.ix_(hubs, hubs)])
+
+    sparse = scipy.sparse.csr_matrix(np.where(full < np.median(full), full, 0.0))
+    D_sparse = umato.hub_distances(sparse, hubs, "precomputed", {})
+    assert np.all(np.isfinite(D_sparse))
+    assert np.all(D_sparse[~np.eye(len(hubs), dtype=bool)] > 0)
+
+
+@pytest.mark.parametrize("init", ["pca", "random", "spectral", "array"])
+def test_initial_hub_layout_is_scaled(blobs, init):
+    X, _ = blobs
+    from scipy.spatial.distance import cdist
+
+    hubs = np.arange(0, 600, 20)
+    D = cdist(X[hubs], X[hubs])
+    if init == "array":
+        init = np.random.RandomState(0).normal(size=(600, 2))
+    Z = umato.initial_hub_layout(init, X[hubs], D, hubs, 2, np.random.RandomState(0))
+    assert Z.shape == (len(hubs), 2)
+    assert np.isclose(np.abs(Z).max(), 1.0)
+
+
+def test_initial_hub_layout_pads_missing_pca_dimensions():
+    X = np.random.RandomState(0).normal(size=(40, 2))
+    hubs = np.arange(10)
+    Z = umato.initial_hub_layout(
+        "pca", X[hubs], None, hubs, 3, np.random.RandomState(0)
+    )
+    assert Z.shape == (10, 3)
+    assert np.all(np.isfinite(Z))
+
+
+def test_global_hub_layout_preserves_cluster_arrangement():
+    from scipy.spatial.distance import cdist
+    from scipy.stats import spearmanr
+
+    # Five clusters whose centers lie at very different distances.
+    centers = np.array([[0, 0], [1, 0], [5, 0], [5, 6], [-9, 4]], float) * 10
+    rng = np.random.RandomState(0)
+    X = np.vstack([c + rng.normal(size=(40, 2)) for c in centers]).astype(np.float32)
+    X = np.hstack([X, rng.normal(scale=0.1, size=(200, 3))]).astype(np.float32)
+    labels = np.repeat(np.arange(5), 40)
+    hubs = np.arange(0, 200, 4)
+
+    from umap.distances import named_distances
+
+    a, b = _ab()
+    Z = umato.global_hub_layout(
+        X,
+        hubs,
+        2,
+        a,
+        b,
+        named_distances["euclidean"],
+        {},
+        "pca",
+        100,
+        np.random.RandomState(0),
+    )
+    assert Z.shape == (len(hubs), 2)
+    assert np.all(np.isfinite(Z))
+
+    hub_labels = labels[hubs]
+    low = np.array([Z[hub_labels == k].mean(0) for k in range(5)])
+    iu = np.triu_indices(5, 1)
+    rho = spearmanr(cdist(centers, centers)[iu], cdist(low, low)[iu])[0]
+    assert rho > 0.8

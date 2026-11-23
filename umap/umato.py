@@ -21,6 +21,11 @@ Reference implementation: https://github.com/hyungkwonko/umato
 
 import numba
 import numpy as np
+import scipy.sparse
+from sklearn.decomposition import PCA
+from sklearn.manifold import SpectralEmbedding
+
+import umap.distances as dist
 
 # Point roles stored in ``hub_info``.
 OUTLIER = 0
@@ -28,6 +33,8 @@ EXPANDED = 1
 HUB = 2
 
 MAX_DEFAULT_HUBS = 300
+DEFAULT_GLOBAL_EPOCHS = 100
+GLOBAL_LEARNING_RATE = 0.0065
 
 
 def default_n_hubs(n_samples):
@@ -185,3 +192,160 @@ def expand_hubs(knn_indices, hubs):
     knn_indices = np.ascontiguousarray(knn_indices, dtype=np.int64)
     hubs = np.asarray(hubs, dtype=np.int64)
     return _expand_hubs(knn_indices, hubs)
+
+
+def dense_rows(data, rows):
+    """Return ``data[rows]`` as a dense, C-contiguous float32 array."""
+    subset = data[rows]
+    if scipy.sparse.issparse(subset):
+        subset = subset.toarray()
+    return np.ascontiguousarray(subset, dtype=np.float32)
+
+
+def resolve_dense_metric(metric, metric_name, sparse_data):
+    """Return a metric that works on dense rows of the input data.
+
+    ``metric`` is the function UMAP uses for the input data. For sparse input
+    that function expects sparse rows, so the dense function of the same name
+    is used instead; the rows UMATO compares are densified first.
+    """
+    if not sparse_data or metric == "precomputed":
+        return metric
+    if callable(metric_name):
+        return metric_name
+    if metric_name in dist.named_distances:
+        return dist.named_distances[metric_name]
+    from pynndescent.distances import named_distances as pynn_named_distances
+
+    if metric_name in pynn_named_distances:
+        return pynn_named_distances[metric_name]
+    raise ValueError(f"UMATO does not support metric {metric_name!r} for sparse data")
+
+
+def pairwise_input_distances(X, Y, metric, metric_kwds):
+    """Distances between the rows of ``X`` and ``Y`` under the input metric."""
+    try:
+        return dist.numba_aware_pairwise_distances(X, metric=metric, Y=Y, **metric_kwds)
+    except (ValueError, TypeError):
+        return dist.pairwise_special_metric(X, Y, metric=metric, kwds=metric_kwds)
+
+
+def hub_distances(data, hubs, metric, metric_kwds):
+    """Input-space distances between every pair of hubs.
+
+    With ``metric="precomputed"`` the distances are read from ``data``.
+    Missing or infinite entries are replaced by the largest finite distance.
+    """
+    if metric == "precomputed":
+        rows = data[hubs]
+        if scipy.sparse.issparse(rows):
+            distances = rows[:, hubs].toarray().astype(np.float64)
+            missing = distances == 0.0
+            np.fill_diagonal(missing, False)
+            distances[missing] = np.inf
+        else:
+            distances = np.asarray(rows, dtype=np.float64)[:, hubs]
+    else:
+        hub_data = dense_rows(data, hubs)
+        distances = np.asarray(
+            pairwise_input_distances(hub_data, None, metric, metric_kwds),
+            dtype=np.float64,
+        )
+    finite = np.isfinite(distances)
+    if not np.all(finite):
+        largest = distances[finite].max() if np.any(finite) else 1.0
+        distances[~finite] = largest
+    np.fill_diagonal(distances, 0.0)
+    return distances
+
+
+def initial_hub_layout(init, hub_features, distances, hubs, n_components, random_state):
+    """Initial positions of the hubs, scaled so the largest coordinate is 1.
+
+    ``init`` is ``"pca"``, ``"random"``, ``"spectral"`` or an array with a row
+    for every point (only the rows of the hubs are used).
+    """
+    n_hubs = len(hubs)
+    if isinstance(init, str) and init == "pca":
+        n_pca = min(n_components, n_hubs, hub_features.shape[1])
+        layout = PCA(n_components=n_pca, random_state=random_state).fit_transform(
+            hub_features
+        )
+        if n_pca < n_components:
+            scale = 0.05 * max(np.abs(layout).max(), 1e-12)
+            extra = random_state.normal(
+                scale=scale, size=(n_hubs, n_components - n_pca)
+            )
+            layout = np.hstack([layout, extra])
+    elif isinstance(init, str) and init == "random":
+        layout = random_state.normal(loc=0.0, scale=0.05, size=(n_hubs, n_components))
+    elif isinstance(init, str) and init == "spectral":
+        positive = distances[distances > 0]
+        bandwidth = np.median(positive) if positive.size else 1.0
+        affinity = np.exp(-((distances / bandwidth) ** 2))
+        layout = SpectralEmbedding(
+            n_components=n_components,
+            affinity="precomputed",
+            random_state=random_state,
+        ).fit_transform(affinity)
+    else:
+        layout = np.asarray(init, dtype=np.float64)[hubs]
+
+    layout = np.array(layout, dtype=np.float64)
+    largest = np.abs(layout).max()
+    if largest > 0.0:
+        layout /= largest
+    return layout
+
+
+def optimize_global_layout(P, Z, a, b, alpha=GLOBAL_LEARNING_RATE, n_epochs=100):
+    """Optimize the hub layout with full gradients over all pairs of hubs.
+
+    This is the global phase of UMATO. ``P`` holds the input-space distances
+    between hubs scaled to a maximum of 1, and ``Z`` the initial hub layout,
+    which is updated in place and returned.
+    """
+    for _ in range(n_epochs):
+        z_diff = Z[:, np.newaxis, :] - Z[np.newaxis, :, :]
+        d_squared = np.sum(z_diff * z_diff, axis=2)
+        d_inverse = (1.0 / (1.0 + a * d_squared**b))[:, :, np.newaxis]
+
+        Q = 1.0 / (0.001 + d_squared)
+        np.fill_diagonal(Q, 0.0)
+        Q = (1.0 - P) @ Q
+        Q /= np.sum(Q, axis=1, keepdims=True)
+
+        grad = (2.0 * a * b * P * (1e-12 + d_squared) ** (b - 1.0) - 2.0 * b * Q)[
+            :, :, np.newaxis
+        ]
+        Z -= alpha * np.sum(grad * z_diff * d_inverse, axis=1)
+    return Z
+
+
+def global_hub_layout(
+    data,
+    hubs,
+    n_components,
+    a,
+    b,
+    metric,
+    metric_kwds,
+    init,
+    n_epochs,
+    random_state,
+):
+    """Lay out the hubs: the global phase of UMATO.
+
+    Returns the hub positions, with one row per entry of ``hubs``.
+    """
+    distances = hub_distances(data, hubs, metric, metric_kwds)
+    if metric == "precomputed":
+        hub_features = distances
+    else:
+        hub_features = dense_rows(data, hubs)
+    Z = initial_hub_layout(
+        init, hub_features, distances, hubs, n_components, random_state
+    )
+    largest = distances.max()
+    P = distances / largest if largest > 0.0 else distances
+    return optimize_global_layout(P, Z, a, b, n_epochs=n_epochs).astype(np.float32)
