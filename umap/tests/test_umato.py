@@ -612,3 +612,52 @@ def test_combined_umato_models_use_the_umap_layout(fitted_umato):
     combined = model * model
     assert combined.umato is False
     assert combined.embedding_.shape == (X.shape[0], 2)
+
+
+# --- per-vertex step scale in UMAP's optimizer ----------------------------------
+
+
+def test_vertex_step_scale_damps_selected_vertices(blobs):
+    from umap.layouts import optimize_layout_euclidean
+    from umap.umap_ import find_ab_params
+    from umap.utils import make_epochs_per_sample
+
+    X, _ = blobs
+    _, _, hub_info, _, members, local = _local_setup(X)
+    graph = local.tocsr()
+    graph.sort_indices()
+    graph.indptr = graph.indptr.astype(np.int32)
+    graph.indices = graph.indices.astype(np.int32)
+    a, b = find_ab_params(1.0, 0.1)
+    start = (
+        np.random.RandomState(1).uniform(0, 10, (len(members), 2)).astype(np.float32)
+    )
+    scale = np.ones(len(members), np.float32)
+    scale[:50] = 0.0
+
+    def run(step_scale):
+        embedding = start.copy()
+        return optimize_layout_euclidean(
+            embedding,
+            embedding,
+            None,
+            None,
+            20,
+            len(members),
+            make_epochs_per_sample(graph.data, 20),
+            a,
+            b,
+            np.array([1, 2, 3], np.int64),
+            csr_indptr=graph.indptr,
+            csr_indices=graph.indices,
+            csr_data=graph.data,
+            optimizer="adam",
+            random_state=np.random.RandomState(0),
+            vertex_step_scale=step_scale,
+        )
+
+    plain = run(None)
+    damped = run(scale)
+    np.testing.assert_array_equal(damped[:50], start[:50])
+    assert not np.allclose(plain[:50], start[:50])
+    np.testing.assert_array_equal(run(np.ones(len(members), np.float32)), plain)
