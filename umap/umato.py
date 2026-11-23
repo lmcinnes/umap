@@ -26,6 +26,7 @@ from sklearn.decomposition import PCA
 from sklearn.manifold import SpectralEmbedding
 
 import umap.distances as dist
+from umap.umap_ import init_transform
 
 # Point roles stored in ``hub_info``.
 OUTLIER = 0
@@ -35,6 +36,9 @@ HUB = 2
 MAX_DEFAULT_HUBS = 300
 DEFAULT_GLOBAL_EPOCHS = 100
 GLOBAL_LEARNING_RATE = 0.0065
+N_NEAREST_HUBS = 10
+EXPANDED_NOISE = 0.05
+OUTLIER_NOISE = 0.02
 
 
 def default_n_hubs(n_samples):
@@ -349,3 +353,121 @@ def global_hub_layout(
     largest = distances.max()
     P = distances / largest if largest > 0.0 else distances
     return optimize_global_layout(P, Z, a, b, n_epochs=n_epochs).astype(np.float32)
+
+
+def nearest_hubs(data, points, hubs, metric, metric_kwds, n_nearest, chunk_size=4096):
+    """For each point, the positions in ``hubs`` of its nearest hubs.
+
+    Distances are measured in the input space, in chunks of points so that
+    memory stays bounded for large datasets.
+    """
+    result = np.empty((len(points), n_nearest), dtype=np.int64)
+    if metric != "precomputed":
+        hub_data = dense_rows(data, hubs)
+    for start in range(0, len(points), chunk_size):
+        chunk = points[start : start + chunk_size]
+        if metric == "precomputed":
+            rows = data[chunk]
+            if scipy.sparse.issparse(rows):
+                distances = rows[:, hubs].toarray().astype(np.float64)
+                distances[distances == 0.0] = np.inf
+            else:
+                distances = np.asarray(rows, dtype=np.float64)[:, hubs]
+        else:
+            distances = pairwise_input_distances(
+                dense_rows(data, chunk), hub_data, metric, metric_kwds
+            )
+        nearest = np.argpartition(distances, n_nearest - 1, axis=1)[:, :n_nearest]
+        result[start : start + len(chunk)] = nearest
+    return result
+
+
+def embed_from_hubs(
+    data, hub_layout, hubs, hub_info, metric, metric_kwds, random_state
+):
+    """Initial embedding of the hubs and the expanded points.
+
+    Hubs keep their position from the global phase. Each expanded point
+    starts at the mean position of its nearest hubs in the input space, plus
+    a little noise. Outliers are left at the origin and placed after the
+    local phase (see :func:`place_outliers`).
+    """
+    n_samples = hub_info.shape[0]
+    n_components = hub_layout.shape[1]
+    hub_layout = np.ascontiguousarray(hub_layout, dtype=np.float32)
+    embedding = np.zeros((n_samples, n_components), dtype=np.float32)
+    embedding[hubs] = hub_layout
+
+    expanded = np.flatnonzero(hub_info == EXPANDED)
+    if expanded.size > 0:
+        n_nearest = min(N_NEAREST_HUBS, len(hubs))
+        nearest = nearest_hubs(data, expanded, hubs, metric, metric_kwds, n_nearest)
+        weights = np.full(nearest.shape, 1.0 / n_nearest, dtype=np.float32)
+        noise = random_state.normal(
+            loc=0.0, scale=EXPANDED_NOISE, size=(expanded.size, n_components)
+        )
+        embedding[expanded] = init_transform(nearest, weights, hub_layout) + (
+            noise / n_nearest
+        ).astype(np.float32)
+    return embedding
+
+
+@numba.njit(cache=True)
+def _place_outliers(embedding, assigned, knn_indices, noise, max_passes):
+    n_samples, n_components = embedding.shape
+    total = np.zeros(n_components, dtype=np.float64)
+    for _ in range(max_passes):
+        changed = 0
+        for i in range(n_samples):
+            if assigned[i]:
+                continue
+            count = 0
+            total[:] = 0.0
+            for j in range(knn_indices.shape[1]):
+                neighbor = knn_indices[i, j]
+                if neighbor >= 0 and assigned[neighbor]:
+                    total += embedding[neighbor]
+                    count += 1
+            if count > 0:
+                for d in range(n_components):
+                    embedding[i, d] = total[d] / count + noise[i, d]
+                assigned[i] = True
+                changed += 1
+        if changed == 0:
+            break
+
+    n_assigned = 0
+    total[:] = 0.0
+    for i in range(n_samples):
+        if assigned[i]:
+            total += embedding[i]
+            n_assigned += 1
+    for i in range(n_samples):
+        if not assigned[i]:
+            for d in range(n_components):
+                embedding[i, d] = total[d] / max(n_assigned, 1) + noise[i, d]
+    return embedding
+
+
+def place_outliers(embedding, hub_info, knn_indices, random_state, max_passes=10):
+    """Place the outliers next to their already embedded nearest neighbors.
+
+    Each outlier moves to the mean position of its embedded kNN neighbors,
+    plus a little noise. Outliers whose neighbors are all outliers are placed
+    in later passes; any left after ``max_passes`` go to the mean position of
+    all embedded points.
+    """
+    outliers = hub_info == OUTLIER
+    if not np.any(outliers):
+        return embedding
+    noise = np.zeros(embedding.shape, dtype=np.float32)
+    noise[outliers] = random_state.normal(
+        loc=0.0, scale=OUTLIER_NOISE, size=(int(outliers.sum()), embedding.shape[1])
+    )
+    return _place_outliers(
+        embedding,
+        ~outliers,
+        np.ascontiguousarray(knn_indices, dtype=np.int64),
+        noise,
+        max_passes,
+    )

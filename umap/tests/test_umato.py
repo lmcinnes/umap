@@ -176,3 +176,69 @@ def test_global_hub_layout_preserves_cluster_arrangement():
     iu = np.triu_indices(5, 1)
     rho = spearmanr(cdist(centers, centers)[iu], cdist(low, low)[iu])[0]
     assert rho > 0.8
+
+
+# --- placing the expanded points and the outliers ---------------------------
+
+
+def test_nearest_hubs_match_brute_force(blobs):
+    from scipy.spatial.distance import cdist
+    from umap.distances import named_distances
+
+    X, _ = blobs
+    hubs = np.arange(0, 600, 15)
+    points = np.arange(1, 600, 7)
+    nearest = umato.nearest_hubs(
+        X, points, hubs, named_distances["euclidean"], {}, 5, chunk_size=16
+    )
+    expected = np.argsort(cdist(X[points], X[hubs]), axis=1)[:, :5]
+    assert np.array_equal(np.sort(nearest, axis=1), np.sort(expected, axis=1))
+
+    precomputed = umato.nearest_hubs(cdist(X, X), points, hubs, "precomputed", {}, 5)
+    assert np.array_equal(np.sort(precomputed, axis=1), np.sort(expected, axis=1))
+
+
+def test_embed_from_hubs_places_points_near_their_hubs(blobs):
+    from umap.distances import named_distances
+
+    X, y = blobs
+    knn = _knn(X)
+    hubs, _ = umato.select_hubs(knn, 120)
+    hub_info = umato.expand_hubs(knn, hubs)
+    # Put every hub of a cluster at that cluster's corner of a square.
+    corners = np.array([[0, 0], [10, 0], [0, 10], [10, 10]], np.float32)
+    hub_layout = corners[y[hubs]]
+
+    embedding = umato.embed_from_hubs(
+        X,
+        hub_layout,
+        hubs,
+        hub_info,
+        named_distances["euclidean"],
+        {},
+        np.random.RandomState(0),
+    )
+    np.testing.assert_array_equal(embedding[hubs], hub_layout)
+    expanded = np.flatnonzero(hub_info == umato.EXPANDED)
+    assert np.all(
+        np.linalg.norm(embedding[expanded] - corners[y[expanded]], axis=1) < 1
+    )
+    assert np.all(embedding[hub_info == umato.OUTLIER] == 0)
+
+
+def test_place_outliers_uses_embedded_neighbors():
+    embedding = np.array([[0, 0], [2, 0], [0, 2], [9, 9], [9, 9]], np.float32)
+    hub_info = np.array([2, 1, 1, 0, 0], np.int8)
+    # Outlier 3 points to 1 and 2; outlier 4 only points to outlier 3.
+    knn = np.array([[0, 1], [1, 0], [2, 0], [1, 2], [3, -1]])
+    result = umato.place_outliers(embedding, hub_info, knn, np.random.RandomState(0))
+    np.testing.assert_allclose(result[3], [1, 1], atol=0.1)
+    np.testing.assert_allclose(result[4], result[3], atol=0.1)
+
+
+def test_place_outliers_falls_back_to_the_mean():
+    embedding = np.array([[0, 0], [2, 0], [5, 5]], np.float32)
+    hub_info = np.array([2, 1, 0], np.int8)
+    knn = np.array([[0, 1], [1, 0], [2, -1]])
+    result = umato.place_outliers(embedding, hub_info, knn, np.random.RandomState(0))
+    np.testing.assert_allclose(result[2], [1, 0], atol=0.1)
