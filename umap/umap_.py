@@ -110,6 +110,15 @@ COMPATIBILITY_LAYOUT_DEFAULT_WARNING = (
     "silence this warning, or compatibility_layout=False (or optimizer='adam') "
     "to adopt the new behavior now."
 )
+UMATO_COMPATIBILITY_LAYOUT_DEFAULT_WARNING = (
+    "compatibility_layout was not set, so UMATO is using the legacy (0.5.x) "
+    "nearest-neighbor search and graph construction. In a future release the "
+    "default will change to compatibility_layout=False, which can change the "
+    "nearest neighbors and the graph of large datasets, and so the embedding; "
+    "the UMATO layout itself is unaffected. Set compatibility_layout=True to "
+    "keep the current behavior and silence this warning, or "
+    "compatibility_layout=False to adopt the new behavior now."
+)
 
 # Metrics whose RINND distances were verified against PyNNDescent. Excludes "dot"
 # (PyNNDescent normalizes the data first) and "russellrao" (differs on zero rows).
@@ -2874,7 +2883,12 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         if self.compatibility_layout is None and (
             self.optimizer not in MODERN_OPTIMIZERS
         ):
-            warn(COMPATIBILITY_LAYOUT_DEFAULT_WARNING, FutureWarning, stacklevel=4)
+            message = (
+                UMATO_COMPATIBILITY_LAYOUT_DEFAULT_WARNING
+                if self.umato
+                else COMPATIBILITY_LAYOUT_DEFAULT_WARNING
+            )
+            warn(message, FutureWarning, stacklevel=4)
         compatibility_layout, optimizer = _resolve_layout_options(
             self.compatibility_layout, self.optimizer
         )

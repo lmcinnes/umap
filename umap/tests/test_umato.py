@@ -458,6 +458,20 @@ def test_umap_umato_defaults_are_off():
     assert params["umato_global_epochs"] is None
 
 
+def test_umato_default_layout_warning_describes_umato():
+    from umap.umap_ import (
+        COMPATIBILITY_LAYOUT_DEFAULT_WARNING,
+        UMATO_COMPATIBILITY_LAYOUT_DEFAULT_WARNING,
+    )
+
+    model = _umato(compatibility_layout=None)
+    with pytest.warns(FutureWarning) as record:
+        model._resolve_layout_parameters()
+    messages = [str(w.message) for w in record]
+    assert UMATO_COMPATIBILITY_LAYOUT_DEFAULT_WARNING in messages
+    assert COMPATIBILITY_LAYOUT_DEFAULT_WARNING not in messages
+
+
 def test_umap_umato_fit_transform():
     X, labels, centers = _arranged_clusters()
     model = _umato()
