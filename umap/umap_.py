@@ -4303,6 +4303,10 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             raise NotImplementedError(
                 "Transforming data into an existing embedding not supported for densMAP."
             )
+        if self.umato:
+            raise NotImplementedError(
+                "Transforming data into an existing embedding not supported for UMATO."
+            )
 
         # #848: knn_search_index is allowed to be None if not transforming new data,
         # so now we must validate that if it exists it is not None.
@@ -4629,6 +4633,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             raise ValueError("Inverse transform not available for given metric.")
         elif self.densmap:
             raise ValueError("Inverse transform not available for densMAP.")
+        elif self.umato:
+            raise ValueError("Inverse transform not available for UMATO.")
         elif self.n_components >= 8:
             warn(
                 "Inverse transform works best with low dimensional embeddings."
@@ -4828,6 +4834,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             raise ValueError("Update does not currently support precomputed metrics")
         if self._supervised:
             raise ValueError("Updating supervised models is not currently " "supported")
+        if self.umato:
+            raise ValueError("Updating UMATO models is not currently supported")
 
         if self._small_data:
 

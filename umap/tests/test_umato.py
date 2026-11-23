@@ -566,3 +566,49 @@ def test_umap_umato_rejects_supervised_fit():
     X, labels, _ = _arranged_clusters()
     with pytest.raises(ValueError, match="Supervised"):
         _umato().fit(X, y=labels)
+
+
+# --- unsupported operations ---------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def fitted_umato():
+    X, _, _ = _arranged_clusters()
+    return X, _umato(n_epochs=20).fit(X)
+
+
+def test_umap_umato_transform_is_not_supported(fitted_umato):
+    X, model = fitted_umato
+    with pytest.raises(NotImplementedError, match="UMATO"):
+        model.transform(X[:5])
+
+
+def test_umap_umato_inverse_transform_is_not_supported(fitted_umato):
+    _, model = fitted_umato
+    with pytest.raises(ValueError, match="UMATO"):
+        model.inverse_transform(model.embedding_[:2])
+
+
+def test_umap_umato_update_is_not_supported(fitted_umato):
+    X, model = fitted_umato
+    with pytest.raises(ValueError, match="UMATO"):
+        model.update(X[:5])
+
+
+def test_umap_umato_rejects_subclasses_with_their_own_layout():
+    from umap import UMAP
+
+    class CustomLayout(UMAP):
+        def _fit_embed_data(self, X, n_epochs, init, random_state, **kwargs):
+            return super()._fit_embed_data(X, n_epochs, init, random_state)
+
+    X, _, _ = _arranged_clusters()
+    with pytest.raises(ValueError, match="CustomLayout"):
+        CustomLayout(umato=True, n_jobs=1, random_state=0).fit(X)
+
+
+def test_combined_umato_models_use_the_umap_layout(fitted_umato):
+    X, model = fitted_umato
+    combined = model * model
+    assert combined.umato is False
+    assert combined.embedding_.shape == (X.shape[0], 2)
