@@ -416,6 +416,32 @@ accepted; use ``densmap=True`` together with ``optimizer="adam"`` or
 Euclidean output metric. The DensMAP tutorial describes the density
 preservation objective and its parameters in more detail.
 
+Using the new optimizers with UMATO
+-----------------------------------
+
+UMATO lays out the data in two phases: a global phase that arranges a
+small set of representative points, called hubs, and a short local phase
+that refines the neighborhoods around them. The ``optimizer`` parameter
+applies only to the local phase. By default ``UMAP(umato=True)`` uses
+the update of the original UMATO implementation, while
+``optimizer="adam"`` or ``optimizer="momentum"`` uses the corresponding
+UMAP optimizer, with the steps of the hubs scaled down so that the
+arrangement found in the global phase is kept:
+
+.. code:: ipython3
+
+    umato_mapper = umap.UMAP(
+        umato=True,
+        optimizer="adam",
+        random_state=42,
+    )
+
+As for UMAP, selecting Adam or momentum without setting
+``compatibility_layout`` opts in to the new nearest-neighbor pipeline.
+Note that when ``random_state`` is fixed, the local phase of UMATO runs
+on a single thread with any of the optimizers. See :doc:`umato_demo` for
+more on UMATO and its parameters.
+
 Controlling negative sample selection
 -------------------------------------
 
@@ -474,11 +500,11 @@ supports them. The selection range, graph-neighbor exclusion, and
 explicit scale are available for large Euclidean Adam and momentum
 layouts, while automatic scale adaptation is specific to Adam. For small
 Euclidean layouts only graph-neighbor exclusion is applicable. These
-controls are not used by compatibility layout or DensMAP. For a generic
-non-Euclidean output metric only ``negative_selection_range`` is used,
-with a small force-ranked set of candidates. The defaults are designed
-to work without any special handling, so changing these values should
-generally be accompanied by quality and runtime measurements.
+controls are not used by compatibility layout, DensMAP or UMATO. For a
+generic non-Euclidean output metric only ``negative_selection_range`` is
+used, with a small force-ranked set of candidates. The defaults are
+designed to work without any special handling, so changing these values
+should generally be accompanied by quality and runtime measurements.
 
 Specialized layout objectives
 -----------------------------
