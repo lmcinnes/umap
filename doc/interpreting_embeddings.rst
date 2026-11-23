@@ -227,11 +227,22 @@ Further reading
 ---------------
 
 * Hyeon Jeon, Jeongin Park, Sungbok Shin and Jinwook Seo.
-  `Stop Misusing t-SNE and UMAP for Visual Analytics <https://arxiv.org/abs/2506.08725v3>`_.
+  `Stop Misusing t-SNE and UMAP for Visual Analytics
+  <https://arxiv.org/abs/2506.08725v3>`_.
   IEEE Transactions on Visualization and Computer Graphics (2026).
-* Dylan Cashman, Mark Keller, Hyeon Jeon, Bum Chul Kwon and Qianwen
-  Wang. `A Critical Analysis of the Usage of Dimensionality
-  Reduction in Four Domains <https://doi.org/10.1109/TVCG.2025.3567989>`_.
+* Dylan Cashman, Mark Keller, Hyeon Jeon, Bum Chul Kwon and
+  Qianwen Wang.
+  `A Critical Analysis of the Usage of Dimensionality Reduction in Four
+  Domains <https://doi.org/10.1109/TVCG.2025.3567989>`_.
   IEEE Transactions on Visualization and Computer Graphics (2025).
-* Ashwin Narayan, Bonnie Berger, and Hyunghoon Cho, `Assessing single-cell transcriptomic variability through density-preserving data visualization`. Nature Biotechnology (2021).
-* Hyeon Jeon, Kwon Ko, Soohyun Lee, Jake Hyun, Taehyun Yang, Gyehun Go, Jaemin Jo, and Jinwook Seo. `UMATO: Bridging local and global structures for reliable visual analytics with dimensionality reduction.` IEEE Transactions on Visualization and Computer Graphics (2025).
+* Ashwin Narayan, Bonnie Berger and Hyunghoon Cho.
+  `Assessing Single-Cell Transcriptomic Variability through
+  Density-Preserving Data Visualization
+  <https://doi.org/10.1038/s41587-020-00801-7>`_.
+  Nature Biotechnology (2021).
+* Hyeon Jeon, Kwon Ko, Soohyun Lee, Jake Hyun, Taehyun Yang, Gyehun Go,
+  Jaemin Jo and Jinwook Seo.
+  `UMATO: Bridging Local and Global Structures for Reliable Visual
+  Analytics with Dimensionality Reduction
+  <https://doi.org/10.1109/TVCG.2025.3602735>`_.
+  IEEE Transactions on Visualization and Computer Graphics (2025).
