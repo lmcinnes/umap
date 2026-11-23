@@ -28,7 +28,7 @@ from sklearn.neighbors import KDTree
 from tqdm.auto import tqdm
 
 import umap.distances as dist
-from umap.layouts import rdist
+from umap.layouts import optimize_layout_euclidean, rdist
 from umap.umap_ import INT32_MAX, INT32_MIN, init_transform
 from umap.utils import FASTMATH_FLAGS, make_epochs_per_sample, tau_rand_int, ts
 
@@ -676,6 +676,79 @@ def optimize_local_layout(
     return embedding
 
 
+def symmetric_local_graph(local, is_hub):
+    """Give the hubs rows of their own in the local graph.
+
+    UMAP's Adam and momentum kernels move each point only along its own row
+    of the graph. In the local graph the hubs have no rows, since they move
+    only when an attached point pulls them, so every edge towards a hub is
+    mirrored into the row of that hub.
+    """
+    graph = scipy.sparse.csr_matrix(local)
+    towards_hubs = graph.multiply(np.asarray(is_hub, dtype=np.float32)[np.newaxis, :])
+    graph = scipy.sparse.csr_matrix(graph + towards_hubs.T)
+    graph.sum_duplicates()
+    graph.sort_indices()
+    graph.indptr = graph.indptr.astype(np.int32)
+    graph.indices = graph.indices.astype(np.int32)
+    graph.data = graph.data.astype(np.float32)
+    return graph
+
+
+def optimize_local_layout_modern(
+    embedding,
+    local,
+    is_hub,
+    n_epochs,
+    a,
+    b,
+    rng_state,
+    random_state,
+    optimizer,
+    gamma,
+    learning_rate,
+    negative_sample_rate=5,
+    hub_step_scale=HUB_STEP_SCALE,
+    parallel=False,
+    verbose=False,
+    tqdm_kwds=None,
+):
+    """The local phase of UMATO with UMAP's Adam or momentum optimizer.
+
+    Each point takes the step that the optimizer computes from its own row
+    of :func:`symmetric_local_graph`, and the step of every hub is then
+    scaled by ``hub_step_scale``. ``embedding`` is updated in place.
+    """
+    graph = symmetric_local_graph(local, is_hub)
+    step_scale = np.where(is_hub, hub_step_scale, 1.0).astype(np.float32)
+    return optimize_layout_euclidean(
+        embedding,
+        embedding,
+        None,
+        None,
+        n_epochs,
+        embedding.shape[0],
+        make_epochs_per_sample(graph.data, n_epochs),
+        a,
+        b,
+        rng_state,
+        gamma=gamma,
+        initial_alpha=learning_rate,
+        negative_sample_rate=negative_sample_rate,
+        parallel=parallel,
+        verbose=verbose,
+        tqdm_kwds=dict(tqdm_kwds or {}),
+        move_other=False,
+        csr_indptr=graph.indptr,
+        csr_indices=graph.indices,
+        csr_data=graph.data,
+        optimizer=optimizer,
+        good_initialization=True,
+        random_state=random_state,
+        vertex_step_scale=step_scale,
+    )
+
+
 def exact_knn(data, n_neighbors, metric, metric_kwds, chunk_size=1024):
     """Exact nearest neighbors of every point, nearest first.
 
@@ -783,7 +856,8 @@ def umato_embedding(
 
     optimizer: str or None
         None or "compatibility" uses the local update of the reference
-        implementation.
+        implementation; "adam" or "momentum" uses UMAP's optimizer of that
+        name, with the hub steps scaled after each epoch.
 
     parallel, verbose: bool
 
@@ -804,10 +878,8 @@ def umato_embedding(
         global_epochs = DEFAULT_GLOBAL_EPOCHS
     if n_hubs is None:
         n_hubs = default_n_hubs(n_samples)
-    if optimizer not in (None, "compatibility"):
-        raise NotImplementedError(
-            f"optimizer={optimizer!r} is not supported for UMATO's local phase"
-        )
+    if optimizer not in (None, "compatibility", "adam", "momentum"):
+        raise ValueError(f"Unknown optimizer {optimizer!r} for UMATO")
 
     if verbose:
         print(ts(), "UMATO: selecting hubs")
@@ -851,23 +923,45 @@ def umato_embedding(
     layout = np.ascontiguousarray(10.0 * (layout - lower) / span, dtype=np.float32)
 
     rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
-    optimize_local_layout(
-        layout,
-        local.row,
-        local.col,
-        hub_info[members] == HUB,
-        n_epochs,
-        make_epochs_per_sample(local.data, n_epochs),
-        a,
-        b,
-        rng_state,
-        gamma=LOCAL_REPULSION * repulsion_strength,
-        learning_rate=LOCAL_LEARNING_RATE * learning_rate,
-        negative_sample_rate=negative_sample_rate,
-        parallel=parallel,
-        verbose=verbose,
-        tqdm_kwds=tqdm_kwds,
-    )
+    is_hub = hub_info[members] == HUB
+    gamma = LOCAL_REPULSION * repulsion_strength
+    local_learning_rate = LOCAL_LEARNING_RATE * learning_rate
+    if optimizer in ("adam", "momentum"):
+        layout = optimize_local_layout_modern(
+            layout,
+            local,
+            is_hub,
+            n_epochs,
+            a,
+            b,
+            rng_state,
+            random_state,
+            optimizer,
+            gamma,
+            local_learning_rate,
+            negative_sample_rate=negative_sample_rate,
+            parallel=parallel,
+            verbose=verbose,
+            tqdm_kwds=tqdm_kwds,
+        )
+    else:
+        optimize_local_layout(
+            layout,
+            local.row,
+            local.col,
+            is_hub,
+            n_epochs,
+            make_epochs_per_sample(local.data, n_epochs),
+            a,
+            b,
+            rng_state,
+            gamma=gamma,
+            learning_rate=local_learning_rate,
+            negative_sample_rate=negative_sample_rate,
+            parallel=parallel,
+            verbose=verbose,
+            tqdm_kwds=tqdm_kwds,
+        )
 
     embedding = np.zeros((n_samples, n_components), dtype=np.float32)
     embedding[members] = layout
@@ -916,10 +1010,6 @@ def validate_umato_parameters(model):
         raise ValueError(
             "With umato=True, init must be 'auto', 'pca', 'random', 'spectral' "
             "or an array"
-        )
-    if model.optimizer not in (None, "compatibility"):
-        raise NotImplementedError(
-            f"optimizer={model.optimizer!r} is not yet supported with umato=True"
         )
 
 

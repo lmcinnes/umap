@@ -2712,8 +2712,11 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         of the local phase (default 50), ``init`` sets the initial hub layout
         ('auto' means 'pca'; 'pca', 'random', 'spectral' or an array), and
         ``learning_rate`` and ``repulsion_strength`` scale the reference
-        values of the local phase (0.01 and 0.1). UMATO cannot be combined
-        with densMAP, supervised dimension reduction or ``transform``.
+        values of the local phase (0.01 and 0.1). ``optimizer`` None or
+        'compatibility' uses the local update of the reference
+        implementation, while 'adam' or 'momentum' uses that UMAP optimizer
+        with damped hub steps. UMATO cannot be combined with densMAP,
+        supervised dimension reduction or ``transform``.
 
     umato_n_hubs: int or None (optional, default None)
         Target number of hubs for UMATO. None uses a third of the samples, up

@@ -614,7 +614,21 @@ def test_combined_umato_models_use_the_umap_layout(fitted_umato):
     assert combined.embedding_.shape == (X.shape[0], 2)
 
 
-# --- per-vertex step scale in UMAP's optimizer ----------------------------------
+# --- Adam and momentum in the local phase -------------------------------------
+
+
+def test_symmetric_local_graph_mirrors_edges_into_hub_rows(blobs):
+    X, _ = blobs
+    _, _, hub_info, _, members, local = _local_setup(X)
+    is_hub = hub_info[members] == umato.HUB
+    graph = umato.symmetric_local_graph(local, is_hub)
+    csr = local.tocsr()
+
+    hub_rows = np.flatnonzero(is_hub)
+    np.testing.assert_allclose(graph[hub_rows].toarray(), csr[:, hub_rows].T.toarray())
+    other_rows = np.flatnonzero(~is_hub)
+    np.testing.assert_allclose(graph[other_rows].toarray(), csr[other_rows].toarray())
+    assert graph.indices.dtype == np.int32 and graph.data.dtype == np.float32
 
 
 def test_vertex_step_scale_damps_selected_vertices(blobs):
@@ -661,3 +675,17 @@ def test_vertex_step_scale_damps_selected_vertices(blobs):
     np.testing.assert_array_equal(damped[:50], start[:50])
     assert not np.allclose(plain[:50], start[:50])
     np.testing.assert_array_equal(run(np.ones(len(members), np.float32)), plain)
+
+
+@pytest.mark.parametrize("optimizer", ["adam", "momentum", "compatibility"])
+def test_umap_umato_optimizers(optimizer):
+    X, labels, centers = _arranged_clusters()
+    model = _umato(optimizer=optimizer, compatibility_layout=False)
+    if optimizer == "compatibility":
+        model.set_params(compatibility_layout=True)
+    embedding = model.fit_transform(X)
+    assert np.all(np.isfinite(embedding))
+    assert _centroid_rank_correlation(embedding, labels, centers) > 0.8
+
+    again = _umato(**model.get_params()).fit_transform(X)
+    np.testing.assert_array_equal(embedding, again)
