@@ -250,7 +250,7 @@ def test_place_outliers_falls_back_to_the_mean():
 # --- local phase ------------------------------------------------------------
 
 
-def _local_setup(X, n_hubs=60, n_epochs=50):
+def _local_setup(X, n_hubs=60):
     from umap.umap_ import fuzzy_simplicial_set
 
     knn = _knn(X)
@@ -265,11 +265,11 @@ def _local_setup(X, n_hubs=60, n_epochs=50):
         knn,
         NearestNeighbors(n_neighbors=10).fit(X).kneighbors(X)[0].astype(np.float32),
     )
-    members, local = umato.local_graph(graph, hub_info, n_epochs)
+    members, local = umato.local_graph(graph, hub_info)
     return knn, hubs, hub_info, graph, members, local
 
 
-def test_local_graph_reweights_hub_edges(blobs):
+def test_local_graph_has_unit_edges_out_of_non_hubs(blobs):
     X, _ = blobs
     knn, hubs, hub_info, graph, members, local = _local_setup(X)
     info = hub_info[members]
@@ -277,14 +277,16 @@ def test_local_graph_reweights_hub_edges(blobs):
     assert np.array_equal(members, np.flatnonzero(hub_info > umato.OUTLIER))
     assert local.shape == (len(members), len(members))
     assert not np.any(info[local.row] == umato.HUB)
-    assert np.all(local.data[info[local.col] == umato.HUB] == 1.0)
-    # Other edges keep their fuzzy membership strength.
-    rest = info[local.col] != umato.HUB
-    original = graph.tocsr()[members][:, members]
-    np.testing.assert_allclose(
-        local.data[rest],
-        np.asarray(original[local.row[rest], local.col[rest]]).ravel(),
+    assert np.all(local.data == 1.0)
+    # Every edge of the fuzzy graph between members that starts at a
+    # non-hub is kept.
+    original = graph.tocsr()[members][:, members].tocoo()
+    from_non_hub = info[original.row] != umato.HUB
+    kept = set(zip(local.row.tolist(), local.col.tolist()))
+    expected = set(
+        zip(original.row[from_non_hub].tolist(), original.col[from_non_hub].tolist())
     )
+    assert kept == expected
 
 
 def test_local_graph_drops_outliers():
@@ -292,7 +294,7 @@ def test_local_graph_drops_outliers():
 
     graph = scipy.sparse.csr_matrix(np.ones((4, 4)) - np.eye(4))
     hub_info = np.array([2, 1, 0, 1], np.int8)
-    members, local = umato.local_graph(graph, hub_info, 50)
+    members, local = umato.local_graph(graph, hub_info)
     assert members.tolist() == [0, 1, 3]
     assert local.shape == (3, 3)
 

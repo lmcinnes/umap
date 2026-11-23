@@ -613,15 +613,23 @@ def place_outliers_in_groups(
     return embedding
 
 
-def local_graph(graph, hub_info, n_epochs):
+def local_graph(graph, hub_info):
     """The graph that the local phase of UMATO optimizes.
 
-    Only hubs and expanded points take part, so the graph is UMAP's fuzzy
-    graph restricted to them. Because the set is closed under the kNN
-    relation, these rows are exactly the graph that the reference
-    implementation rebuilds from the same neighbors. Edges towards a hub get
-    weight 1 and edges from a hub are removed, so hubs only move when an
-    attached point pulls them. Weak edges are pruned as in UMAP.
+    Only hubs and expanded points take part, so the edges are those of UMAP's
+    fuzzy graph restricted to them. Because the set is closed under the kNN
+    relation, these are exactly the edges that the reference implementation
+    rebuilds from the same neighbors. Every edge gets weight 1, so each one
+    is sampled in every epoch, and edges from a hub are removed, so hubs only
+    move when an attached point pulls them.
+
+    The reference implementation computes fuzzy membership strengths, but
+    compiles ``smooth_knn_dist`` with full fastmath. That lets the compiler
+    drop its ``hi == inf`` check, so nearly every bandwidth becomes infinite
+    and nearly every membership strength becomes 1. The layouts of the
+    reference implementation, and of UMATO as it is distributed, therefore
+    come from this unit-weight graph, which also refines the local structure
+    of large datasets much better in UMATO's short local phase.
 
     Returns
     -------
@@ -630,17 +638,14 @@ def local_graph(graph, hub_info, n_epochs):
         this array.
 
     graph: scipy.sparse.coo_matrix
-        The weighted local graph.
+        The local graph, with weight 1 on every edge.
     """
     members = np.flatnonzero(hub_info > OUTLIER)
     info = hub_info[members]
     subgraph = scipy.sparse.csr_matrix(graph)[members][:, members].tocoo()
     subgraph.sum_duplicates()
-    weights = subgraph.data.astype(np.float32)
-    weights[info[subgraph.col] == HUB] = 1.0
+    weights = (subgraph.data > 0.0).astype(np.float32)
     weights[info[subgraph.row] == HUB] = 0.0
-    if weights.size > 0:
-        weights[weights < weights.max() / float(n_epochs)] = 0.0
     result = scipy.sparse.coo_matrix(
         (weights, (subgraph.row, subgraph.col)), shape=subgraph.shape
     )
@@ -1041,7 +1046,7 @@ def umato_embedding(
 
     if verbose:
         print(ts(), "UMATO: local phase")
-    members, local = local_graph(graph, hub_info, n_epochs)
+    members, local = local_graph(graph, hub_info)
     # As in the reference implementation, jitter duplicate positions and
     # scale the whole initial embedding (outliers still at the origin) to
     # [0, 10] before the local phase.
