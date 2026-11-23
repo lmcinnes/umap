@@ -24,12 +24,13 @@ import numpy as np
 import scipy.sparse
 from sklearn.decomposition import PCA
 from sklearn.manifold import SpectralEmbedding
+from sklearn.neighbors import KDTree
 from tqdm.auto import tqdm
 
 import umap.distances as dist
 from umap.layouts import rdist
-from umap.umap_ import init_transform
-from umap.utils import FASTMATH_FLAGS, make_epochs_per_sample, tau_rand_int
+from umap.umap_ import INT32_MAX, INT32_MIN, init_transform
+from umap.utils import FASTMATH_FLAGS, make_epochs_per_sample, tau_rand_int, ts
 
 # Point roles stored in ``hub_info``.
 OUTLIER = 0
@@ -673,3 +674,202 @@ def optimize_local_layout(
         )
         alpha = learning_rate * (1.0 - (float(n) / float(n_epochs)))
     return embedding
+
+
+def exact_knn(data, n_neighbors, metric, metric_kwds, chunk_size=1024):
+    """Exact nearest neighbors of every point, nearest first.
+
+    UMAP does not keep the neighbor arrays of small datasets, whose graph it
+    builds from a full distance matrix, so UMATO recomputes them here.
+    """
+    n_samples = data.shape[0]
+    indices = np.empty((n_samples, n_neighbors), dtype=np.int64)
+    distances = np.empty((n_samples, n_neighbors), dtype=np.float32)
+    if metric != "precomputed":
+        dense_data = dense_rows(data, np.arange(n_samples))
+    for start in range(0, n_samples, chunk_size):
+        rows = np.arange(start, min(start + chunk_size, n_samples))
+        if metric == "precomputed":
+            block = data[rows]
+            if scipy.sparse.issparse(block):
+                block = block.toarray().astype(np.float64)
+                block[block == 0.0] = np.inf
+                block[np.arange(len(rows)), rows] = 0.0
+            else:
+                block = np.asarray(block, dtype=np.float64)
+        else:
+            block = np.asarray(
+                pairwise_input_distances(
+                    dense_data[rows], dense_data, metric, metric_kwds
+                ),
+                dtype=np.float64,
+            )
+        nearest = np.argpartition(block, n_neighbors - 1, axis=1)[:, :n_neighbors]
+        nearest_dists = np.take_along_axis(block, nearest, axis=1)
+        order = np.argsort(nearest_dists, axis=1, kind="stable")
+        indices[rows] = np.take_along_axis(nearest, order, axis=1)
+        distances[rows] = np.take_along_axis(nearest_dists, order, axis=1)
+    return indices, distances
+
+
+def umato_embedding(
+    data,
+    graph,
+    knn_indices,
+    n_components,
+    a,
+    b,
+    n_epochs,
+    init,
+    random_state,
+    metric,
+    metric_kwds,
+    n_hubs=None,
+    global_epochs=None,
+    learning_rate=1.0,
+    repulsion_strength=1.0,
+    negative_sample_rate=5,
+    optimizer=None,
+    parallel=False,
+    verbose=False,
+    tqdm_kwds=None,
+):
+    """Embed the data with UMATO, reusing UMAP's neighbors and fuzzy graph.
+
+    Parameters
+    ----------
+    data: array or sparse matrix of shape (n_samples, n_features)
+        The input data, or a distance matrix if ``metric="precomputed"``.
+
+    graph: sparse matrix of shape (n_samples, n_samples)
+        UMAP's fuzzy simplicial set of the data.
+
+    knn_indices: array of shape (n_samples, n_neighbors)
+        The nearest neighbors the graph was built from.
+
+    n_components: int
+        Dimension of the embedding.
+
+    a, b: float
+        UMAP's curve parameters (from ``min_dist`` and ``spread``).
+
+    n_epochs: int or None
+        Epochs of the local phase; None uses 50.
+
+    init: str or array
+        Initial hub layout: "pca", "random", "spectral", or an array with a
+        row for every point.
+
+    random_state: numpy RandomState
+
+    metric: callable or "precomputed"
+        A metric that works on dense rows of ``data``.
+
+    metric_kwds: dict
+        Arguments of the metric.
+
+    n_hubs: int or None
+        Target number of hubs; None uses :func:`default_n_hubs`.
+
+    global_epochs: int or None
+        Epochs of the global phase; None uses 100.
+
+    learning_rate, repulsion_strength: float
+        Multipliers of the reference local learning rate (0.01) and
+        repulsion (0.1).
+
+    negative_sample_rate: int
+        Negative samples per positive sample in the local phase.
+
+    optimizer: str or None
+        None or "compatibility" uses the local update of the reference
+        implementation.
+
+    parallel, verbose: bool
+
+    tqdm_kwds: dict or None
+
+    Returns
+    -------
+    embedding: array of shape (n_samples, n_components)
+
+    aux_data: dict
+        ``hubs`` (indices of the hubs) and ``hub_info`` (the role of every
+        point: 2 hub, 1 expanded, 0 outlier).
+    """
+    n_samples = graph.shape[0]
+    if n_epochs is None:
+        n_epochs = DEFAULT_LOCAL_EPOCHS
+    if global_epochs is None:
+        global_epochs = DEFAULT_GLOBAL_EPOCHS
+    if n_hubs is None:
+        n_hubs = default_n_hubs(n_samples)
+    if optimizer not in (None, "compatibility"):
+        raise NotImplementedError(
+            f"optimizer={optimizer!r} is not supported for UMATO's local phase"
+        )
+
+    if verbose:
+        print(ts(), "UMATO: selecting hubs")
+    hubs, _ = select_hubs(knn_indices, n_hubs)
+    hub_info = expand_hubs(knn_indices, hubs)
+    if verbose:
+        print(
+            ts(),
+            f"UMATO: {len(hubs)} hubs, {int(np.sum(hub_info == EXPANDED))} "
+            f"expanded points, {int(np.sum(hub_info == OUTLIER))} outliers",
+        )
+        print(ts(), "UMATO: global phase")
+    hub_layout = global_hub_layout(
+        data,
+        hubs,
+        n_components,
+        a,
+        b,
+        metric,
+        metric_kwds,
+        init,
+        global_epochs,
+        random_state,
+    )
+    embedding = embed_from_hubs(
+        data, hub_layout, hubs, hub_info, metric, metric_kwds, random_state
+    )
+
+    if verbose:
+        print(ts(), "UMATO: local phase")
+    members, local = local_graph(graph, hub_info, n_epochs)
+    layout = embedding[members]
+    if np.unique(layout, axis=0).shape[0] < layout.shape[0]:
+        nn_distance = KDTree(layout).query(layout, k=2)[0][:, 1].mean()
+        layout = layout + random_state.normal(
+            scale=0.001 * nn_distance, size=layout.shape
+        )
+    lower = layout.min(axis=0)
+    span = layout.max(axis=0) - lower
+    span[span == 0.0] = 1.0
+    layout = np.ascontiguousarray(10.0 * (layout - lower) / span, dtype=np.float32)
+
+    rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
+    optimize_local_layout(
+        layout,
+        local.row,
+        local.col,
+        hub_info[members] == HUB,
+        n_epochs,
+        make_epochs_per_sample(local.data, n_epochs),
+        a,
+        b,
+        rng_state,
+        gamma=LOCAL_REPULSION * repulsion_strength,
+        learning_rate=LOCAL_LEARNING_RATE * learning_rate,
+        negative_sample_rate=negative_sample_rate,
+        parallel=parallel,
+        verbose=verbose,
+        tqdm_kwds=tqdm_kwds,
+    )
+
+    embedding = np.zeros((n_samples, n_components), dtype=np.float32)
+    embedding[members] = layout
+    embedding = place_outliers(embedding, hub_info, knn_indices, random_state)
+    return embedding, {"hubs": hubs, "hub_info": hub_info}

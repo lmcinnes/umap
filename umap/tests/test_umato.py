@@ -344,3 +344,90 @@ def test_optimize_local_layout_is_reproducible(blobs):
     _, first, _ = _run_local(X, seed=3)
     _, second, _ = _run_local(X, seed=3)
     np.testing.assert_array_equal(first, second)
+
+
+# --- the whole embedding ----------------------------------------------------
+
+
+def _arranged_clusters(n_per_cluster=60, seed=0):
+    """Clusters in 10 dimensions whose centers lie at very different distances."""
+    rng = np.random.RandomState(seed)
+    centers = np.zeros((5, 10))
+    centers[:, :2] = np.array([[0, 0], [1, 0], [5, 0], [5, 6], [-9, 4]]) * 10
+    X = np.vstack([c + rng.normal(size=(n_per_cluster, 10)) for c in centers])
+    return X.astype(np.float32), np.repeat(np.arange(5), n_per_cluster), centers
+
+
+def _centroid_rank_correlation(embedding, labels, centers):
+    from scipy.spatial.distance import cdist
+    from scipy.stats import spearmanr
+
+    low = np.array([embedding[labels == k].mean(0) for k in np.unique(labels)])
+    iu = np.triu_indices(len(centers), 1)
+    return spearmanr(cdist(centers, centers)[iu], cdist(low, low)[iu])[0]
+
+
+def test_exact_knn_matches_sklearn(blobs):
+    from scipy.spatial.distance import cdist
+    from umap.distances import named_distances
+
+    X, _ = blobs
+    expected_dists, expected = NearestNeighbors(n_neighbors=7).fit(X).kneighbors(X)
+    indices, dists = umato.exact_knn(
+        X, 7, named_distances["euclidean"], {}, chunk_size=100
+    )
+    np.testing.assert_allclose(dists, expected_dists, rtol=1e-4, atol=1e-4)
+    assert np.mean(indices == expected) > 0.99
+
+    precomputed, _ = umato.exact_knn(cdist(X, X), 7, "precomputed", {})
+    assert np.mean(precomputed == expected) > 0.99
+
+
+def _embed(X, seed=0, **kwargs):
+    from umap.distances import named_distances
+    from umap.umap_ import find_ab_params, fuzzy_simplicial_set
+
+    knn, knn_dists = umato.exact_knn(X, 15, named_distances["euclidean"], {})
+    graph = fuzzy_simplicial_set(
+        X, 15, np.random.RandomState(0), "euclidean", {}, knn, knn_dists
+    )[0]
+    a, b = find_ab_params(1.0, 0.1)
+    return umato.umato_embedding(
+        X,
+        graph,
+        knn,
+        2,
+        a,
+        b,
+        None,
+        "pca",
+        np.random.RandomState(seed),
+        named_distances["euclidean"],
+        {},
+        **kwargs,
+    )
+
+
+def test_umato_embedding_keeps_cluster_arrangement():
+    X, labels, centers = _arranged_clusters()
+    embedding, aux = _embed(X)
+
+    assert embedding.shape == (X.shape[0], 2)
+    assert embedding.dtype == np.float32
+    assert np.all(np.isfinite(embedding))
+    assert set(np.unique(aux["hub_info"])) <= {0, 1, 2}
+    assert np.all(aux["hub_info"][aux["hubs"]] == umato.HUB)
+    assert _centroid_rank_correlation(embedding, labels, centers) > 0.8
+
+
+def test_umato_embedding_is_reproducible():
+    X, _, _ = _arranged_clusters()
+    first, _ = _embed(X, seed=4)
+    second, _ = _embed(X, seed=4)
+    np.testing.assert_array_equal(first, second)
+
+
+def test_umato_embedding_respects_n_hubs():
+    X, _, _ = _arranged_clusters()
+    _, aux = _embed(X, n_hubs=20)
+    assert len(aux["hubs"]) <= 20
