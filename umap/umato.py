@@ -1,13 +1,11 @@
-"""UMATO: Uniform Manifold Approximation with Two-phase Optimization.
-
+"""
 UMATO first lays out a small set of representative points (hubs) using the
 distances between all pairs of hubs, without neighborhood approximation. It
 then embeds the remaining points around that skeleton and refines their local
 neighborhoods while the hubs move more slowly than the other points.
 
 This module reuses the nearest neighbors and the fuzzy graph that
-:class:`umap.UMAP` has already computed, so enabling ``UMAP(umato=True)`` only
-changes the layout step.
+:class:`umap.UMAP` computes.
 
 References
 ----------
@@ -16,7 +14,7 @@ Jo and Jinwook Seo. UMATO: Bridging Local and Global Structures for Reliable
 Visual Analytics with Dimensionality Reduction. IEEE Transactions on
 Visualization and Computer Graphics (2025). doi:10.1109/TVCG.2025.3602735
 
-Reference implementation: https://github.com/hyungkwonko/umato
+Note that this implementation originates from this reference implementation: https://github.com/hyungkwonko/umato
 """
 
 import numba
@@ -436,6 +434,11 @@ def global_hub_layout(
 ):
     """Lay out the hubs: the global phase of UMATO.
 
+    The hubs start from :func:`initial_hub_layout` and are then optimized
+    with full gradients over all pairs of hubs (see
+    :func:`optimize_global_layout`), using their input-space distances
+    scaled to a maximum of 1.
+
     Returns the hub positions, with one row per entry of ``hubs``.
     """
     distances = hub_distances(data, hubs, metric, metric_kwds)
@@ -486,7 +489,8 @@ def embed_from_hubs(
     Hubs keep their position from the global phase. Each expanded point
     starts at the mean position of its nearest hubs in the input space, plus
     a little noise. Outliers are left at the origin and placed after the
-    local phase (see :func:`place_outliers`).
+    local phase (see :func:`place_outliers_in_groups` and
+    :func:`place_outliers`).
     """
     n_samples = hub_info.shape[0]
     n_components = hub_layout.shape[1]

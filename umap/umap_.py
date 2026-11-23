@@ -2748,6 +2748,16 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
     graph_: csr_matrix
         The fuzzy simplicial set graph constructed from the input data.
 
+    umato_hubs_: array of int
+        Only set when ``umato=True``. Indices of the hubs that UMATO laid out
+        first. With ``unique=True`` they index the unique rows of the input.
+
+    umato_hub_info_: array of int8
+        Only set when ``umato=True``. The role of every input row (every
+        unique row with ``unique=True``) in UMATO: 2 for a hub, 1 for a point
+        placed around the hubs and refined in the local phase, and 0 for an
+        outlier placed after the local phase.
+
     """
 
     def __init__(
