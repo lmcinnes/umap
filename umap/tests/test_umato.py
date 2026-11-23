@@ -431,3 +431,138 @@ def test_umato_embedding_respects_n_hubs():
     X, _, _ = _arranged_clusters()
     _, aux = _embed(X, n_hubs=20)
     assert len(aux["hubs"]) <= 20
+
+
+# --- UMAP(umato=True) -------------------------------------------------------
+
+
+def _umato(**kwargs):
+    from umap import UMAP
+
+    kwargs.setdefault("umato", True)
+    kwargs.setdefault("random_state", 0)
+    kwargs.setdefault("compatibility_layout", True)
+    kwargs.setdefault("n_jobs", 1)
+    return UMAP(**kwargs)
+
+
+def test_umap_umato_defaults_are_off():
+    from umap import UMAP
+
+    params = UMAP().get_params()
+    assert params["umato"] is False
+    assert params["umato_n_hubs"] is None
+    assert params["umato_global_epochs"] is None
+
+
+def test_umap_umato_fit_transform():
+    X, labels, centers = _arranged_clusters()
+    model = _umato()
+    embedding = model.fit_transform(X)
+
+    assert embedding.shape == (X.shape[0], 2)
+    assert np.all(np.isfinite(embedding))
+    assert len(model.umato_hubs_) == umato.default_n_hubs(X.shape[0])
+    assert model.umato_hub_info_.shape == (X.shape[0],)
+    assert _centroid_rank_correlation(embedding, labels, centers) > 0.8
+
+
+def test_umap_umato_is_reproducible():
+    X, _, _ = _arranged_clusters()
+    first = _umato(random_state=7).fit_transform(X)
+    second = _umato(random_state=7).fit_transform(X)
+    np.testing.assert_array_equal(first, second)
+
+
+def test_umap_umato_uses_the_large_data_neighbors():
+    X, labels, centers = _arranged_clusters()
+    model = _umato(force_approximation_algorithm=True, umato_n_hubs=40)
+    embedding = model.fit_transform(X)
+    assert not model._small_data
+    assert np.all(np.isfinite(embedding))
+    assert len(model.umato_hubs_) <= 40
+
+
+@pytest.mark.parametrize("compatibility_layout", [True, False])
+def test_umap_umato_with_either_graph_pipeline(compatibility_layout):
+    X, labels, centers = _arranged_clusters()
+    embedding = _umato(compatibility_layout=compatibility_layout).fit_transform(X)
+    assert _centroid_rank_correlation(embedding, labels, centers) > 0.8
+
+
+@pytest.mark.parametrize("init", ["auto", "pca", "random", "spectral", "array"])
+def test_umap_umato_init(init):
+    X, _, _ = _arranged_clusters()
+    if init == "array":
+        init = np.random.RandomState(0).normal(size=(X.shape[0], 2))
+    embedding = _umato(init=init, n_epochs=20).fit_transform(X)
+    assert np.all(np.isfinite(embedding))
+
+
+def test_umap_umato_parameters():
+    X, _, _ = _arranged_clusters()
+    model = _umato(
+        n_components=3,
+        n_epochs=20,
+        umato_n_hubs=25,
+        umato_global_epochs=30,
+        learning_rate=2.0,
+        repulsion_strength=0.5,
+    )
+    embedding = model.fit_transform(X)
+    assert embedding.shape == (X.shape[0], 3)
+    assert len(model.umato_hubs_) <= 25
+
+
+def test_umap_umato_precomputed_and_sparse_inputs():
+    import scipy.sparse
+    from scipy.spatial.distance import cdist
+
+    X, _, _ = _arranged_clusters()
+    precomputed = _umato(metric="precomputed").fit_transform(cdist(X, X))
+    assert np.all(np.isfinite(precomputed))
+
+    sparse = scipy.sparse.csr_matrix(np.where(np.abs(X) > 0.5, X, 0.0))
+    embedding = _umato(n_epochs=20).fit_transform(sparse)
+    assert np.all(np.isfinite(embedding))
+
+    cosine = _umato(metric="cosine", n_epochs=20).fit_transform(X)
+    assert np.all(np.isfinite(cosine))
+
+
+def test_umap_umato_unique():
+    X, _, _ = _arranged_clusters()
+    X = np.vstack([X, X[:20]])
+    embedding = _umato(unique=True, n_epochs=20).fit_transform(X)
+    assert embedding.shape == (X.shape[0], 2)
+    np.testing.assert_array_equal(embedding[-20:], embedding[:20])
+
+
+@pytest.mark.parametrize(
+    "kwargs, message",
+    [
+        (dict(umato="yes"), "umato must be"),
+        (dict(umato_n_hubs=1), "umato_n_hubs"),
+        (dict(umato_n_hubs=2.5), "umato_n_hubs"),
+        (dict(umato_n_hubs=300), "smaller than the number of samples"),
+        (dict(umato_global_epochs=0), "umato_global_epochs"),
+        (dict(n_epochs=[10, 20]), "list of n_epochs"),
+        (dict(n_epochs=0), "n_epochs"),
+        (dict(densmap=True), "densmap"),
+        (dict(output_dens=True), "densmap"),
+        (dict(output_metric="haversine"), "Euclidean"),
+        (dict(negative_sample_rate=0), "negative_sample_rate"),
+        (dict(init="recursive"), "init must be"),
+        (dict(init="tswspectral"), "init must be"),
+    ],
+)
+def test_umap_umato_rejects_invalid_parameters(kwargs, message):
+    X, _, _ = _arranged_clusters()
+    with pytest.raises(ValueError, match=message):
+        _umato(**kwargs).fit(X)
+
+
+def test_umap_umato_rejects_supervised_fit():
+    X, labels, _ = _arranged_clusters()
+    with pytest.raises(ValueError, match="Supervised"):
+        _umato().fit(X, y=labels)

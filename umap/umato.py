@@ -873,3 +873,115 @@ def umato_embedding(
     embedding[members] = layout
     embedding = place_outliers(embedding, hub_info, knn_indices, random_state)
     return embedding, {"hubs": hubs, "hub_info": hub_info}
+
+
+def _is_positive_int(value, minimum):
+    return (
+        isinstance(value, (int, np.integer))
+        and not isinstance(value, (bool, np.bool_))
+        and value >= minimum
+    )
+
+
+def validate_umato_parameters(model):
+    """Check the parameters of a :class:`umap.UMAP` model with ``umato=True``."""
+    from umap.umap_ import UMAP
+
+    if not isinstance(model.umato, (bool, np.bool_)):
+        raise ValueError("umato must be True or False")
+    if type(model)._fit_embed_data is not UMAP._fit_embed_data:
+        raise ValueError(f"umato=True is not supported by {type(model).__name__}")
+    if model.umato_n_hubs is not None and not _is_positive_int(model.umato_n_hubs, 2):
+        raise ValueError("umato_n_hubs must be None or an integer of at least 2")
+    if model.umato_global_epochs is not None and not _is_positive_int(
+        model.umato_global_epochs, 1
+    ):
+        raise ValueError("umato_global_epochs must be None or a positive integer")
+    if model.n_epochs_list is not None:
+        raise ValueError("A list of n_epochs is not supported with umato=True")
+    if model.n_epochs is not None and model.n_epochs < 1:
+        raise ValueError("n_epochs must be a positive integer with umato=True")
+    if model.densmap or model.output_dens:
+        raise ValueError("umato=True cannot be combined with densmap or output_dens")
+    if model.output_metric not in ("euclidean", "l2"):
+        raise ValueError("umato=True requires a Euclidean output_metric")
+    if model.negative_sample_rate <= 0:
+        raise ValueError("negative_sample_rate must be greater than 0 for UMATO")
+    if isinstance(model.init, str) and model.init not in (
+        "auto",
+        "pca",
+        "random",
+        "spectral",
+    ):
+        raise ValueError(
+            "With umato=True, init must be 'auto', 'pca', 'random', 'spectral' "
+            "or an array"
+        )
+    if model.optimizer not in (None, "compatibility"):
+        raise NotImplementedError(
+            f"optimizer={model.optimizer!r} is not yet supported with umato=True"
+        )
+
+
+def umato_fit_embed_data(model, X, n_epochs, init, random_state):
+    """Lay out a fitted :class:`umap.UMAP` model with UMATO.
+
+    This replaces :func:`umap.umap_.simplicial_set_embedding` when
+    ``umato=True``, reusing the neighbors and the fuzzy graph of ``model``.
+    It also sets the fitted attributes ``umato_hubs_`` and
+    ``umato_hub_info_`` (with indices into the uniqued data if
+    ``unique=True``).
+    """
+    if model._supervised:
+        raise ValueError("Supervised dimension reduction is not supported with UMATO")
+    n_samples = X.shape[0]
+    n_hubs = model.umato_n_hubs
+    if n_hubs is None:
+        n_hubs = default_n_hubs(n_samples)
+    elif n_hubs >= n_samples:
+        raise ValueError(
+            f"umato_n_hubs ({n_hubs}) must be smaller than the number of "
+            f"samples ({n_samples})"
+        )
+
+    metric = resolve_dense_metric(
+        model._input_distance_func, model.metric, model._sparse_data
+    )
+    if getattr(model, "_small_data", False):
+        knn_indices, knn_dists = exact_knn(
+            X, model._n_neighbors, metric, model._metric_kwds
+        )
+        knn_indices[knn_dists >= model._disconnection_distance] = -1
+    else:
+        knn_indices = model._knn_indices
+
+    if isinstance(model.init, str):
+        hub_init = "pca" if model.init == "auto" else model.init
+    else:
+        hub_init = init
+
+    embedding, aux_data = umato_embedding(
+        X,
+        model.graph_,
+        knn_indices,
+        model.n_components,
+        model._a,
+        model._b,
+        n_epochs,
+        hub_init,
+        random_state,
+        metric,
+        model._metric_kwds,
+        n_hubs=n_hubs,
+        global_epochs=model.umato_global_epochs,
+        learning_rate=model.learning_rate,
+        repulsion_strength=model.repulsion_strength,
+        negative_sample_rate=model.negative_sample_rate,
+        optimizer=model.optimizer,
+        parallel=model.random_state is None,
+        verbose=model.verbose,
+        tqdm_kwds=model.tqdm_kwds,
+    )
+    model.umato_hubs_ = aux_data.pop("hubs")
+    model.umato_hub_info_ = aux_data.pop("hub_info")
+    return embedding, aux_data

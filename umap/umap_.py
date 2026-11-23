@@ -2701,6 +2701,28 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         when ``init='recursive'``; see ``umap.umap_.RECURSIVE_INIT_KWDS`` for
         the accepted keys.
 
+    umato: bool (optional, default False)
+        Whether to lay out the embedding with UMATO (Uniform Manifold
+        Approximation with Two-phase Optimization). UMATO first lays out a
+        set of representative points (hubs) using the input distances between
+        all pairs of hubs, then refines local neighborhoods while the hubs move
+        more slowly than the other points. This helps when the relative
+        arrangement of groups matters. The nearest neighbors and the fuzzy
+        graph are the same as in UMAP. With UMATO, ``n_epochs`` sets the epochs
+        of the local phase (default 50), ``init`` sets the initial hub layout
+        ('auto' means 'pca'; 'pca', 'random', 'spectral' or an array), and
+        ``learning_rate`` and ``repulsion_strength`` scale the reference
+        values of the local phase (0.01 and 0.1). UMATO cannot be combined
+        with densMAP, supervised dimension reduction or ``transform``.
+
+    umato_n_hubs: int or None (optional, default None)
+        Target number of hubs for UMATO. None uses a third of the samples, up
+        to 300.
+
+    umato_global_epochs: int or None (optional, default None)
+        Number of epochs of the UMATO global phase that lays out the hubs.
+        None uses 100.
+
     Attributes
     ----------
     embedding_: array of shape (n_samples, n_components)
@@ -2770,6 +2792,9 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         init_rescale="isotropic",
         init_scale_factor=1.0,
         recursive_init_kwds=None,
+        umato=False,
+        umato_n_hubs=None,
+        umato_global_epochs=None,
     ):
         self.n_neighbors = n_neighbors
         self.metric = metric
@@ -2831,6 +2856,10 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
 
         self.a = a
         self.b = b
+
+        self.umato = umato
+        self.umato_n_hubs = umato_n_hubs
+        self.umato_global_epochs = umato_global_epochs
 
     def _resolve_layout_parameters(self):
         """Resolve ``compatibility_layout``, ``optimizer`` and ``init="auto"``.
@@ -3205,6 +3234,11 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 if self.knn_dists.shape[1] > self.n_neighbors:
                     self.knn_indices = self.knn_indices[:, : self.n_neighbors]
                     self.knn_dists = self.knn_dists[:, : self.n_neighbors]
+
+        if self.umato:
+            from umap.umato import validate_umato_parameters
+
+            validate_umato_parameters(self)
 
     def _nn_metric(self):
         named = (
@@ -4093,6 +4127,10 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         replaced by subclasses. Arbitrary keyword arguments can be passed
         through .fit() and .fit_transform().
         """
+        if self.umato:
+            from umap.umato import umato_fit_embed_data
+
+            return umato_fit_embed_data(self, X, n_epochs, init, random_state)
         return simplicial_set_embedding(
             X,
             self.graph_,
