@@ -60,11 +60,17 @@ def default_n_hubs(n_samples):
 
 
 def _neighbor_frequency_order(knn_indices):
-    """Order points by how often they appear in the kNN lists (most first)."""
+    """Order points by how often they appear in the kNN lists (most first).
+
+    Ties and points that appear in no list are ordered as in the reference
+    implementation.
+    """
     n_samples = knn_indices.shape[0]
     flat = knn_indices.ravel()
-    counts = np.bincount(flat[flat >= 0], minlength=n_samples)
-    return np.argsort(-counts, kind="stable").astype(np.int64)
+    index, counts = np.unique(flat[flat >= 0], return_counts=True)
+    order = index[counts.argsort(kind="stable")[::-1]]
+    missing = np.setdiff1d(np.arange(n_samples), order)
+    return np.concatenate([order, missing]).astype(np.int64)
 
 
 @numba.njit(cache=True)
@@ -135,13 +141,67 @@ def _partition_by_knn(order, knn_indices, group_size):
     return sources[:n_groups].copy(), groups
 
 
-def select_hubs(knn_indices, n_hubs):
-    """Select representative points (hubs) from the kNN graph.
+def _partition_by_distance(order, group_size, data, metric, metric_kwds):
+    """Split the points into disjoint groups of ``group_size`` points.
+
+    Each group starts at the most frequent point that is still unassigned and
+    takes the unassigned points closest to it in the input space, as in the
+    reference implementation for dense data.
+    """
+    n_samples = order.shape[0]
+    remaining = np.ones(n_samples, dtype=np.bool_)
+    groups = np.full(n_samples, -1, dtype=np.int64)
+    sources = []
+    if metric != "precomputed":
+        dense_data = np.ascontiguousarray(data, dtype=np.float32)
+
+    order_position = 0
+    while True:
+        while order_position < n_samples and not remaining[order[order_position]]:
+            order_position += 1
+        if order_position >= n_samples:
+            break
+        source = order[order_position]
+        remaining[source] = False
+        groups[source] = len(sources)
+
+        candidates = order[remaining[order]]
+        n_take = min(group_size - 1, candidates.shape[0])
+        if n_take > 0:
+            if metric == "precomputed":
+                row = data[source]
+                if scipy.sparse.issparse(row):
+                    row = row.toarray().astype(np.float64)
+                    row[row == 0.0] = np.inf
+                distances = np.asarray(row, dtype=np.float64).ravel()[candidates]
+            else:
+                distances = np.asarray(
+                    pairwise_input_distances(
+                        dense_data[source : source + 1], dense_data, metric, metric_kwds
+                    )
+                ).ravel()[candidates]
+            if n_take < candidates.shape[0]:
+                nearest = np.argpartition(distances, n_take - 1)[:n_take]
+                chosen = candidates[nearest]
+            else:
+                chosen = candidates
+            remaining[chosen] = False
+            groups[chosen] = len(sources)
+        sources.append(source)
+
+    return np.asarray(sources, dtype=np.int64), groups
+
+
+def select_hubs(knn_indices, n_hubs, data=None, metric=None, metric_kwds=None):
+    """Select representative points (hubs).
 
     The points are split into at most ``n_hubs`` disjoint groups of equal
-    size, each grown from the most frequent remaining neighbor, and the first
-    point of each group becomes a hub. This follows the kNN-based variant of
-    the reference UMATO implementation, so it works for any input metric.
+    size, each started from the most frequent remaining neighbor, and the
+    first point of each group becomes a hub. With ``data``, a group takes the
+    unassigned points closest to its first point in the input space, as the
+    reference implementation does for dense data. Without it, a group grows
+    along the kNN graph, as the reference implementation does for sparse
+    data.
 
     Parameters
     ----------
@@ -151,6 +211,15 @@ def select_hubs(knn_indices, n_hubs):
     n_hubs: int
         Target number of hubs. The actual number may be smaller because every
         group has the same size.
+
+    data: array of shape (n_samples, n_features), optional
+        Dense input data, or a distance matrix if ``metric="precomputed"``.
+
+    metric: callable or "precomputed", optional
+        The input metric, for dense rows of ``data``.
+
+    metric_kwds: dict, optional
+        Arguments of the metric.
 
     Returns
     -------
@@ -166,6 +235,10 @@ def select_hubs(knn_indices, n_hubs):
     knn_indices = np.ascontiguousarray(knn_indices, dtype=np.int64)
     group_size = int(np.ceil(n_samples / n_hubs))
     order = _neighbor_frequency_order(knn_indices)
+    if data is not None:
+        return _partition_by_distance(
+            order, group_size, data, metric, metric_kwds or {}
+        )
     return _partition_by_knn(order, knn_indices, group_size)
 
 
@@ -277,10 +350,12 @@ def hub_distances(data, hubs, metric, metric_kwds):
 
 
 def initial_hub_layout(init, hub_features, distances, hubs, n_components, random_state):
-    """Initial positions of the hubs, scaled so the largest coordinate is 1.
+    """Initial positions of the hubs.
 
     ``init`` is ``"pca"``, ``"random"``, ``"spectral"`` or an array with a row
-    for every point (only the rows of the hubs are used).
+    for every point (only the rows of the hubs are used). As in the reference
+    implementation, the PCA, random and array layouts are divided by their
+    largest coordinate, and the spectral layout is used as it is.
     """
     n_hubs = len(hubs)
     if isinstance(init, str) and init == "pca":
@@ -297,19 +372,27 @@ def initial_hub_layout(init, hub_features, distances, hubs, n_components, random
     elif isinstance(init, str) and init == "random":
         layout = random_state.normal(loc=0.0, scale=0.05, size=(n_hubs, n_components))
     elif isinstance(init, str) and init == "spectral":
-        positive = distances[distances > 0]
-        bandwidth = np.median(positive) if positive.size else 1.0
-        affinity = np.exp(-((distances / bandwidth) ** 2))
-        layout = SpectralEmbedding(
-            n_components=n_components,
-            affinity="precomputed",
-            random_state=random_state,
-        ).fit_transform(affinity)
+        if hub_features is distances:
+            positive = distances[distances > 0]
+            bandwidth = np.median(positive) if positive.size else 1.0
+            affinity = np.exp(-((distances / bandwidth) ** 2))
+            embedder = SpectralEmbedding(
+                n_components=n_components,
+                affinity="precomputed",
+                random_state=random_state,
+            )
+            return embedder.fit_transform(affinity).astype(np.float64)
+        embedder = SpectralEmbedding(
+            n_components=n_components, random_state=random_state
+        )
+        return embedder.fit_transform(hub_features).astype(np.float64)
     else:
         layout = np.asarray(init, dtype=np.float64)[hubs]
 
     layout = np.array(layout, dtype=np.float64)
-    largest = np.abs(layout).max()
+    largest = layout.max()
+    if largest <= 0.0:
+        largest = np.abs(layout).max()
     if largest > 0.0:
         layout /= largest
     return layout
@@ -484,6 +567,46 @@ def place_outliers(embedding, hub_info, knn_indices, random_state, max_passes=10
         noise,
         max_passes,
     )
+
+
+def place_outliers_in_groups(
+    embedding, hub_info, groups, data, metric, metric_kwds, n_neighbors
+):
+    """Place the outliers next to the embedded points of their own group.
+
+    Each outlier moves to the mean position of the ``n_neighbors`` embedded
+    points of its group that are closest to it in the input space, as in the
+    reference implementation for dense data. Every group holds its hub, so
+    every outlier has at least one embedded point to follow.
+    """
+    order = np.argsort(groups, kind="stable")
+    bounds = np.searchsorted(groups[order], np.arange(groups.max() + 2))
+    for group in range(len(bounds) - 1):
+        members = order[bounds[group] : bounds[group + 1]]
+        embedded = members[hub_info[members] > OUTLIER]
+        outliers = members[hub_info[members] == OUTLIER]
+        if outliers.size == 0 or embedded.size == 0:
+            continue
+        if metric == "precomputed":
+            distances = data[outliers][:, embedded]
+            if scipy.sparse.issparse(distances):
+                distances = distances.toarray().astype(np.float64)
+                distances[distances == 0.0] = np.inf
+        else:
+            distances = pairwise_input_distances(
+                dense_rows(data, outliers),
+                dense_rows(data, embedded),
+                metric,
+                metric_kwds,
+            )
+        distances = np.asarray(distances, dtype=np.float64)
+        n_nearest = min(n_neighbors, embedded.size)
+        nearest = np.argpartition(distances, n_nearest - 1, axis=1)[:, :n_nearest]
+        weights = np.full(nearest.shape, 1.0 / n_nearest, dtype=np.float32)
+        embedding[outliers] = init_transform(
+            nearest, weights, np.ascontiguousarray(embedding[embedded])
+        )
+    return embedding
 
 
 def local_graph(graph, hub_info, n_epochs):
@@ -883,7 +1006,11 @@ def umato_embedding(
 
     if verbose:
         print(ts(), "UMATO: selecting hubs")
-    hubs, _ = select_hubs(knn_indices, n_hubs)
+    sparse_input = scipy.sparse.issparse(data) and metric != "precomputed"
+    if sparse_input:
+        hubs, groups = select_hubs(knn_indices, n_hubs)
+    else:
+        hubs, groups = select_hubs(knn_indices, n_hubs, data, metric, metric_kwds)
     hub_info = expand_hubs(knn_indices, hubs)
     if verbose:
         print(
@@ -911,16 +1038,19 @@ def umato_embedding(
     if verbose:
         print(ts(), "UMATO: local phase")
     members, local = local_graph(graph, hub_info, n_epochs)
-    layout = embedding[members]
-    if np.unique(layout, axis=0).shape[0] < layout.shape[0]:
-        nn_distance = KDTree(layout).query(layout, k=2)[0][:, 1].mean()
-        layout = layout + random_state.normal(
-            scale=0.001 * nn_distance, size=layout.shape
-        )
-    lower = layout.min(axis=0)
-    span = layout.max(axis=0) - lower
+    # As in the reference implementation, jitter duplicate positions and
+    # scale the whole initial embedding (outliers still at the origin) to
+    # [0, 10] before the local phase.
+    if np.unique(embedding, axis=0).shape[0] < n_samples:
+        nn_distance = KDTree(embedding).query(embedding, k=2)[0][:, 1].mean()
+        embedding = embedding + random_state.normal(
+            scale=0.001 * nn_distance, size=embedding.shape
+        ).astype(np.float32)
+    lower = embedding.min(axis=0)
+    span = embedding.max(axis=0) - lower
     span[span == 0.0] = 1.0
-    layout = np.ascontiguousarray(10.0 * (layout - lower) / span, dtype=np.float32)
+    embedding = (10.0 * (embedding - lower) / span).astype(np.float32)
+    layout = np.ascontiguousarray(embedding[members])
 
     rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
     is_hub = hub_info[members] == HUB
@@ -963,9 +1093,19 @@ def umato_embedding(
             tqdm_kwds=tqdm_kwds,
         )
 
-    embedding = np.zeros((n_samples, n_components), dtype=np.float32)
     embedding[members] = layout
-    embedding = place_outliers(embedding, hub_info, knn_indices, random_state)
+    if sparse_input:
+        embedding = place_outliers(embedding, hub_info, knn_indices, random_state)
+    else:
+        embedding = place_outliers_in_groups(
+            embedding,
+            hub_info,
+            groups,
+            data,
+            metric,
+            metric_kwds,
+            knn_indices.shape[1],
+        )
     return embedding, {"hubs": hubs, "hub_info": hub_info}
 
 

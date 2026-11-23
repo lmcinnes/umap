@@ -128,7 +128,10 @@ def test_initial_hub_layout_is_scaled(blobs, init):
         init = np.random.RandomState(0).normal(size=(600, 2))
     Z = umato.initial_hub_layout(init, X[hubs], D, hubs, 2, np.random.RandomState(0))
     assert Z.shape == (len(hubs), 2)
-    assert np.isclose(np.abs(Z).max(), 1.0)
+    assert np.all(np.isfinite(Z))
+    if not (isinstance(init, str) and init == "spectral"):
+        # Scaled by the largest coordinate, as in the reference implementation.
+        assert np.isclose(Z.max(), 1.0)
 
 
 def test_initial_hub_layout_pads_missing_pca_dimensions():
@@ -689,3 +692,59 @@ def test_umap_umato_optimizers(optimizer):
 
     again = _umato(**model.get_params()).fit_transform(X)
     np.testing.assert_array_equal(embedding, again)
+
+
+# --- following the reference implementation on dense data ---------------------
+
+
+def test_select_hubs_with_data_groups_nearest_points(blobs):
+    from scipy.spatial.distance import cdist
+    from umap.distances import named_distances
+
+    X, _ = blobs
+    knn = _knn(X)
+    hubs, groups = umato.select_hubs(knn, 50, X, named_distances["euclidean"], {})
+    group_size = int(np.ceil(X.shape[0] / 50))
+    assert np.all(groups >= 0)
+    assert np.bincount(groups).max() == group_size
+    # The first group holds the points closest to its hub.
+    first = np.flatnonzero(groups == 0)
+    closest = np.argsort(cdist(X[hubs[:1]], X)[0])[:group_size]
+    assert set(first) == set(closest)
+
+    precomputed_hubs, _ = umato.select_hubs(knn, 50, cdist(X, X), "precomputed")
+    assert np.array_equal(precomputed_hubs, hubs)
+
+
+def test_place_outliers_in_groups_uses_their_own_group():
+    from umap.distances import named_distances
+
+    data = np.array([[0.0], [1.0], [10.0], [11.0], [0.4], [10.6]], np.float32)
+    embedding = np.array([[0, 0], [1, 0], [5, 5], [6, 5], [0, 0], [0, 0]], np.float32)
+    hub_info = np.array([2, 1, 2, 1, 0, 0], np.int8)
+    groups = np.array([0, 0, 1, 1, 0, 1])
+    result = umato.place_outliers_in_groups(
+        embedding, hub_info, groups, data, named_distances["euclidean"], {}, 1
+    )
+    np.testing.assert_allclose(result[4], [0, 0])
+    np.testing.assert_allclose(result[5], [6, 5])
+
+
+def test_umato_embedding_keeps_points_that_no_one_lists_as_neighbors():
+    from scipy.spatial.distance import pdist
+    from scipy.stats import spearmanr
+
+    # Points on a large sphere around small clusters list cluster points as
+    # their nearest neighbors, so nothing lists them. They must still stay
+    # outside the clusters, as in the reference implementation.
+    rng = np.random.RandomState(0)
+    dim = 30
+    inner = [
+        c + rng.normal(scale=0.5, size=(100, dim)) for c in rng.normal(size=(4, dim))
+    ]
+    outer = rng.normal(size=(400, dim))
+    outer = 12.0 * outer / np.linalg.norm(outer, axis=1, keepdims=True)
+    X = np.vstack(inner + [outer]).astype(np.float32)
+    embedding, aux = _embed(X)
+    assert np.sum(aux["hub_info"][400:] == umato.OUTLIER) > 100
+    assert spearmanr(pdist(X), pdist(embedding))[0] > 0.3
