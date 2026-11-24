@@ -107,3 +107,79 @@ def test_diagonal_uses_the_metric_like_sklearn():
         result, pairwise_distances(X, metric=_offset_manhattan)
     )
     np.testing.assert_array_equal(np.diag(result), np.ones(25))
+
+
+@pytest.mark.parametrize("metric_name", METRICS)
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_rectangular_matches_sklearn_bit_for_bit(metric_name, dtype):
+    rng = np.random.default_rng(7)
+    X = rng.normal(size=(30, 9)).astype(dtype)
+    Y = rng.normal(size=(45, 9)).astype(dtype)
+    metric = dist.named_distances[metric_name]
+
+    expected = pairwise_distances(X, Y, metric=metric)
+    result = dist.numba_aware_pairwise_distances(X, metric=metric, Y=Y)
+
+    assert result.dtype == expected.dtype
+    np.testing.assert_array_equal(result, expected)
+
+
+def test_rectangular_non_finite_y_keeps_sklearn_error():
+    rng = np.random.default_rng(8)
+    X = rng.normal(size=(10, 4))
+    Y = rng.normal(size=(12, 4))
+    Y[3, 1] = np.nan
+
+    with pytest.raises(ValueError):
+        dist.numba_aware_pairwise_distances(
+            X, metric=dist.named_distances["euclidean"], Y=Y
+        )
+
+
+def test_rectangular_mixed_dtypes_delegate_to_sklearn():
+    rng = np.random.default_rng(9)
+    X = rng.normal(size=(10, 4)).astype(np.float32)
+    Y = rng.normal(size=(12, 4))
+    metric = dist.named_distances["euclidean"]
+
+    np.testing.assert_array_equal(
+        dist.numba_aware_pairwise_distances(X, metric=metric, Y=Y),
+        pairwise_distances(X, Y, metric=metric),
+    )
+
+
+@numba.njit("f8(f8[:],f8[:])")
+def _explicit_signature_euclidean(x, y):
+    return np.sqrt(np.sum((x - y) ** 2))
+
+
+def test_explicit_signature_metric_delegates_to_sklearn():
+    rng = np.random.default_rng(10)
+    X = rng.normal(size=(10, 4))
+    Y = rng.normal(size=(12, 4))
+
+    np.testing.assert_array_equal(
+        dist.numba_aware_pairwise_distances(
+            X, metric=_explicit_signature_euclidean, Y=Y
+        ),
+        pairwise_distances(X, Y, metric=_explicit_signature_euclidean),
+    )
+
+
+@numba.njit()
+def _integer_manhattan(x, y):
+    result = np.uint64(0)
+    for i in range(x.shape[0]):
+        result += np.uint64(np.abs(x[i] - y[i]) * 1e17)
+    return result
+
+
+def test_integer_valued_metric_matches_sklearn():
+    rng = np.random.default_rng(11)
+    X = rng.normal(size=(10, 4)).astype(np.float32)
+    Y = rng.normal(size=(12, 4)).astype(np.float32)
+
+    np.testing.assert_array_equal(
+        dist.numba_aware_pairwise_distances(X, metric=_integer_manhattan, Y=Y),
+        pairwise_distances(X, Y, metric=_integer_manhattan),
+    )

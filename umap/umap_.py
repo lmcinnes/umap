@@ -308,6 +308,7 @@ def raise_disconnected_warning(
     },
     parallel=True,
     fastmath=FASTMATH_FLAGS,
+    cache=True,
 )
 def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0):
     """Compute a continuous version of the distance to the kth nearest
@@ -716,13 +717,16 @@ def nearest_neighbors(
 
 @numba.njit(
     locals={
-        "knn_dists": numba.types.float32[:, ::1],
+        # Accept read-only precomputed distances without copying them merely
+        # for writability; Numba also accepts writable arrays with this type.
+        "knn_dists": numba.types.Array(numba.types.float32, 2, "C", readonly=True),
         "sigmas": numba.types.float32[::1],
         "rhos": numba.types.float32[::1],
         "val": numba.types.float32,
     },
     parallel=True,
     fastmath=FASTMATH_FLAGS,
+    cache=True,
 )
 def compute_membership_strengths(
     knn_indices,
@@ -2071,6 +2075,7 @@ def simplicial_set_embedding(
                 exclude_graph_neighbors=exclude_graph_neighbors,
                 negative_sample_scale_adaptation_samples=negative_sample_scale_adaptation_samples,
                 densmap=densmap,
+                _enable_l9=True,
             )
 
     else:
@@ -3100,6 +3105,7 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 f"n_jobs value {self.n_jobs} overridden to 1 by setting random_state. Use no seed for parallelism."
             )
             self.n_jobs = 1
+        self.n_jobs = min(self.n_jobs, numba.config.NUMBA_NUM_THREADS)
 
         if self.dens_lambda < 0.0:
             raise ValueError("dens_lambda cannot be negative")
@@ -3189,17 +3195,16 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self.knn_indices = None
                 self.knn_dists = None
                 self.knn_search_index = None
-            elif (
-                self.knn_dists.shape[0] < 4096
-                and not self.force_approximation_algorithm
-            ):
-                # force_approximation_algorithm is irrelevant for pre-computed knn
-                # always set it to True which keeps downstream code paths working
-                self.force_approximation_algorithm = True
-            elif self.knn_dists.shape[1] > self.n_neighbors:
-                # if k for precomputed_knn larger than n_neighbors we simply prune it
-                self.knn_indices = self.knn_indices[:, : self.n_neighbors]
-                self.knn_dists = self.knn_dists[:, : self.n_neighbors]
+            else:
+                if (
+                    self.knn_dists.shape[0] < 4096
+                    and not self.force_approximation_algorithm
+                ):
+                    # Use the supplied neighbors even for small datasets.
+                    self.force_approximation_algorithm = True
+                if self.knn_dists.shape[1] > self.n_neighbors:
+                    self.knn_indices = self.knn_indices[:, : self.n_neighbors]
+                    self.knn_dists = self.knn_dists[:, : self.n_neighbors]
 
     def _nn_metric(self):
         named = (
@@ -3670,18 +3675,23 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                     (X_indexed.shape[0], self.n_neighbors), dtype=int
                 )
                 self._knn_dists = np.zeros(self._knn_indices.shape, dtype=float)
+                X_indptr = X_indexed.indptr
+                X_indices = X_indexed.indices
+                X_data = X_indexed.data
                 for row_id in range(X_indexed.shape[0]):
                     # Find KNNs row-by-row
-                    row_data = X_indexed[row_id].data
-                    row_indices = X_indexed[row_id].indices
+                    row_start, row_end = X_indptr[row_id], X_indptr[row_id + 1]
+                    row_data = X_data[row_start:row_end]
+                    row_indices = X_indices[row_start:row_end]
                     if len(row_data) < self._n_neighbors:
                         raise ValueError(
                             "Some rows contain fewer than n_neighbors distances!"
                         )
-                    # argpartition selects the k smallest in O(d) vs O(d·log d) for argsort
-                    row_nn_data_indices = np.argpartition(row_data, self._n_neighbors)[
-                        : self._n_neighbors
-                    ]
+                    # argpartition selects the k smallest in O(d) vs O(d·log d) for argsort.
+                    # Partition at k - 1 so a row with exactly k distances is valid.
+                    row_nn_data_indices = np.argpartition(
+                        row_data, self._n_neighbors - 1
+                    )[: self._n_neighbors]
                     row_nn_data_indices = row_nn_data_indices[
                         np.argsort(row_data[row_nn_data_indices])
                     ]
@@ -3692,9 +3702,14 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self._knn_dists = self.knn_dists
             # Disconnect any vertices farther apart than _disconnection_distance
             disconnected_index = self._knn_dists >= self._disconnection_distance
-            self._knn_indices[disconnected_index] = -1
-            self._knn_dists[disconnected_index] = np.inf
             edges_removed = disconnected_index.sum()
+            if edges_removed:
+                if self.knn_dists is not None:
+                    # Pruning must not change caller-owned precomputed neighbors.
+                    self._knn_indices = self._knn_indices.copy()
+                    self._knn_dists = self._knn_dists.copy()
+                self._knn_indices[disconnected_index] = -1
+                self._knn_dists[disconnected_index] = np.inf
 
             (
                 self.graph_,
@@ -3839,9 +3854,14 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 self._knn_search_index = self.knn_search_index
             # Disconnect any vertices farther apart than _disconnection_distance
             disconnected_index = self._knn_dists >= self._disconnection_distance
-            self._knn_indices[disconnected_index] = -1
-            self._knn_dists[disconnected_index] = np.inf
             edges_removed = disconnected_index.sum()
+            if edges_removed:
+                if self.knn_dists is not None:
+                    # Pruning must not change caller-owned precomputed neighbors.
+                    self._knn_indices = self._knn_indices.copy()
+                    self._knn_dists = self._knn_dists.copy()
+                self._knn_indices[disconnected_index] = -1
+                self._knn_dists[disconnected_index] = np.inf
 
             (
                 self.graph_,
@@ -4290,9 +4310,9 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                         raise ValueError(
                             f"Need at least n_neighbors ({self.n_neighbors}) distances for each row!"
                         )
-                    row_nn_data_indices = np.argpartition(row_data, self._n_neighbors)[
-                        : self._n_neighbors
-                    ]
+                    row_nn_data_indices = np.argpartition(
+                        row_data, self._n_neighbors - 1
+                    )[: self._n_neighbors]
                     row_nn_data_indices = row_nn_data_indices[
                         np.argsort(row_data[row_nn_data_indices])
                     ]
@@ -4313,8 +4333,8 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
             try:
                 # sklearn pairwise_distances fails for callable metric on sparse data
                 _m = self.metric if self._sparse_data else self._input_distance_func
-                dmat = pairwise_distances(
-                    X, self._raw_data, metric=_m, **self._metric_kwds
+                dmat = dist.numba_aware_pairwise_distances(
+                    X, metric=_m, Y=self._raw_data, **self._metric_kwds
                 )
             except (TypeError, ValueError):
                 # metric is numba.jit'd or not supported by sklearn,

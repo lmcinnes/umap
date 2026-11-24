@@ -211,6 +211,49 @@ def test_csr_row_sort_check():
     assert not _csr_rows_sorted(graph.indptr, graph.indices)
 
 
+@pytest.mark.parametrize("n_threads", [1, 3])
+@pytest.mark.parametrize("above_parallel_threshold", [False, True])
+@pytest.mark.parametrize("with_ties", [False, True])
+def test_projection_order_matches_numpy_argsort(
+    n_threads, above_parallel_threshold, with_ties
+):
+    import numba
+    from umap.layouts import (
+        PARALLEL_ARGSORT_MIN_SIZE,
+        _parallel_argsort_if_distinct,
+        _projection_order_and_source_ranks,
+    )
+
+    n_points = PARALLEL_ARGSORT_MIN_SIZE + 7 if above_parallel_threshold else 1000
+
+    embedding = np.random.RandomState(0).randn(n_points, 2).astype(np.float32)
+    if with_ties:
+        embedding[n_points // 2 :] = embedding[: n_points - n_points // 2]
+    random_state = np.random.RandomState(1)
+    expected_state = np.random.RandomState(1)
+    direction = expected_state.randn(2)
+    direction /= np.linalg.norm(direction)
+    expected_order = np.argsort(np.dot(embedding, direction)).astype(np.int32)
+
+    original_threads = numba.get_num_threads()
+    numba.set_num_threads(min(n_threads, numba.config.NUMBA_NUM_THREADS))
+    try:
+        order, ranks = _projection_order_and_source_ranks(
+            embedding, embedding, random_state
+        )
+    finally:
+        numba.set_num_threads(original_threads)
+
+    np.testing.assert_array_equal(order, expected_order)
+    np.testing.assert_array_equal(ranks[order], np.arange(n_points))
+    assert random_state.randint(2**31) == expected_state.randint(2**31)
+    # Distinct projections must take the parallel path, not only the fallback.
+    _, all_distinct = _parallel_argsort_if_distinct(
+        np.dot(embedding, direction), n_threads
+    )
+    assert all_distinct != with_ties
+
+
 def test_unsorted_graph_rejected_when_excluding_neighbors():
     from umap.layouts import optimize_layout_euclidean
 

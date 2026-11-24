@@ -754,7 +754,8 @@ def compute_cross_entropy(
     log_probabilities_distance : array
         low dimensional log probabilities
     EPS : float, optional
-        offset to ensure log is taken of a positive number, by default 1e-4
+        minimum complementary probability to keep repulsion finite,
+        by default 1e-4
     repulsion_strength : float, optional
         strength of repulsion between negative samples, by default 1.0
 
@@ -768,14 +769,15 @@ def compute_cross_entropy(
         cross entropy umap loss
 
     """
-    # cross entropy
-    attraction_term = -probabilities_graph * ops.log_sigmoid(log_probabilities_distance)
-    # use numerically stable repellent term
-    # Shi et al. 2022 (https://arxiv.org/abs/2111.08851)
-    # log(1 - sigmoid(logits)) = log(sigmoid(logits)) - logits
+    # The distance helper returns log probabilities, not logits.
+    attraction_term = -probabilities_graph * log_probabilities_distance
+    # expm1 avoids cancellation in 1 - exp(log_probability) near probability 1.
+    complementary_probabilities = ops.maximum(
+        -ops.expm1(log_probabilities_distance), EPS
+    )
     repellant_term = (
         -(1.0 - probabilities_graph)
-        * (ops.log_sigmoid(log_probabilities_distance) - log_probabilities_distance)
+        * ops.log(complementary_probabilities)
         * repulsion_strength
     )
 
@@ -882,7 +884,7 @@ def construct_edge_dataset(
     """
 
     def gather_index(tensor, index):
-        return tensor[index]
+        return tensor[index.numpy()]
 
     # if X is > 512Mb in size, we need to use a different, slower method for
     #    batching data.
@@ -895,10 +897,15 @@ def construct_edge_dataset(
     def gather_X(edge_to, edge_from):
         # gather data from indexes (edges) in either numpy of tf, depending on array size
         if gather_indices_in_python:
-            edge_to_batch = tf.py_function(gather_index, [X, edge_to], [tf.float32])[0]
-            edge_from_batch = tf.py_function(
-                gather_index, [X, edge_from], [tf.float32]
+            edge_to_batch = tf.py_function(
+                lambda index: gather_index(X, index), [edge_to], [tf.float32]
             )[0]
+            edge_from_batch = tf.py_function(
+                lambda index: gather_index(X, index), [edge_from], [tf.float32]
+            )[0]
+            # py_function does not preserve the shape needed by Keras tracing.
+            edge_to_batch.set_shape((batch_size,) + X.shape[1:])
+            edge_from_batch.set_shape((batch_size,) + X.shape[1:])
         else:
             edge_to_batch = tf.gather(X, edge_to)
             edge_from_batch = tf.gather(X, edge_from)
@@ -915,8 +922,13 @@ def construct_edge_dataset(
         if landmark_positions is not None:
             if gather_landmark_indices_in_python:
                 outputs["landmark_to"] = tf.py_function(
-                    gather_index, [landmark_positions, edge_to], [tf.float32]
+                    lambda index: gather_index(landmark_positions, index),
+                    [edge_to],
+                    [tf.float32],
                 )[0]
+                outputs["landmark_to"].set_shape(
+                    (batch_size,) + landmark_positions.shape[1:]
+                )
             else:
                 # Make sure we explicitly cast landmark_positions to float32,
                 # as it's user-provided and needs to play nice with loss functions.

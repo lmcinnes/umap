@@ -20,7 +20,7 @@ FASTMATH_FLAGS = {"nsz", "arcp", "contract", "afn", "reassoc"}
 COMPATIBILITY_FASTMATH_FLAGS = FASTMATH_FLAGS - {"contract", "arcp"}
 
 
-@numba.njit(parallel=True)
+@numba.njit(parallel=True, cache=True)
 def fast_knn_indices(X, n_neighbors):
     """A fast computation of knn indices.
 
@@ -46,7 +46,7 @@ def fast_knn_indices(X, n_neighbors):
     return knn_indices
 
 
-@numba.njit("i4(i8[:])")
+@numba.njit("i4(i8[:])", cache=True)
 def tau_rand_int(state):
     """A fast (pseudo)-random number generator.
 
@@ -72,7 +72,7 @@ def tau_rand_int(state):
     return state[0] ^ state[1] ^ state[2]
 
 
-@numba.njit("f4(i8[:])")
+@numba.njit("f4(i8[:])", cache=True)
 def tau_rand(state):
     """A fast (pseudo)-random number generator for floats in the range [0,1]
 

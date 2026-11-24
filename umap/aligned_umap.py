@@ -418,8 +418,20 @@ target_weight, transform_seed, force_approximation_algorithm, verbose, unique:
         self.a = a
         self.b = b
 
+    def __getstate__(self):
+        state = super().__getstate__().copy()
+        embeddings = state.get("embeddings_")
+        # Numba's typed list cannot be pickled, but its arrays can.
+        if isinstance(embeddings, numba.typed.List):
+            state["embeddings_"] = list(embeddings)
+        return state
+
     def __setstate__(self, state):
         super().__setstate__(state)
+        embeddings = state.get("embeddings_")
+        if isinstance(embeddings, list):
+            self.embeddings_ = numba.typed.List(embeddings)
+
         # Fill parameters added after the model was pickled with their defaults;
         # fitted pre-0.6 models always used the legacy pipeline.
         for name, parameter in inspect.signature(

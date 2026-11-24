@@ -1,3 +1,4 @@
+import pickle
 import warnings
 import pytest
 from umap import AlignedUMAP
@@ -54,6 +55,48 @@ def test_aligned_update(aligned_iris, aligned_iris_relations):
         embd_dmat = pairwise_distances(small_aligned_model.embeddings_[i])
         embd_nn = np.argsort(embd_dmat, axis=1)[:, :10]
         assert nn_accuracy(true_nn, embd_nn) >= 0.45
+
+
+@pytest.mark.parametrize("compatibility_layout", [True, False])
+def test_aligned_pickle_round_trip(
+    aligned_iris, aligned_iris_relations, compatibility_layout
+):
+    data, _ = aligned_iris
+    model = AlignedUMAP(
+        n_neighbors=5,
+        n_epochs=12,
+        random_state=42,
+        compatibility_layout=compatibility_layout,
+    ).fit(data[:2], relations=aligned_iris_relations[:1])
+    original_container = model.embeddings_
+    original_embeddings = [embedding.copy() for embedding in original_container]
+
+    restored = pickle.loads(pickle.dumps(model))
+
+    assert model.embeddings_ is original_container
+    assert len(restored.embeddings_) == 2
+    for actual, expected in zip(restored.embeddings_, original_embeddings):
+        np.testing.assert_array_equal(actual, expected)
+
+    restored.update(data[2], relations=aligned_iris_relations[1])
+    assert [embedding.shape for embedding in restored.embeddings_] == [(50, 2)] * 3
+    assert np.isfinite(restored.embeddings_[-1]).all()
+    for actual, expected in zip(restored.embeddings_[:2], original_embeddings):
+        np.testing.assert_array_equal(actual, expected)
+
+    restored_again = pickle.loads(pickle.dumps(restored))
+    assert len(restored_again.embeddings_) == 3
+    for actual, expected in zip(restored_again.embeddings_, restored.embeddings_):
+        np.testing.assert_array_equal(actual, expected)
+
+
+def test_unfitted_aligned_pickle_round_trip():
+    model = AlignedUMAP(n_neighbors=5, compatibility_layout=False)
+
+    restored = pickle.loads(pickle.dumps(model))
+
+    assert restored.get_params() == model.get_params()
+    assert not hasattr(restored, "embeddings_")
 
 
 def test_aligned_update_params(aligned_iris, aligned_iris_relations):

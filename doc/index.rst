@@ -78,6 +78,7 @@ PyPI install, presuming you have numba and sklearn and all its requirements
    precomputed_k-nn
    benchmarking
    parameter_map
+   whats_new_0_6
    release_notes
    faq
 

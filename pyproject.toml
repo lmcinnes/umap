@@ -34,6 +34,7 @@ dependencies = [
     "scikit-learn >= 1.6",
     "numba >= 0.60",
     "pynndescent >= 0.7",
+    "threadpoolctl >= 3.5",
     "tqdm",
 ]
 

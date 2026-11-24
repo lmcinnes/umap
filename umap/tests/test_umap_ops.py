@@ -768,3 +768,19 @@ def test_modern_fuzzy_set_operations_skip_missing_neighbors():
     ]
     assert abs(graphs[0] - graphs[1]).max() == 0.0
     assert graphs[1].shape == (3, 3)
+
+
+def test_fit_with_more_jobs_than_numba_threads():
+    import numba
+
+    data, _ = make_blobs(n_samples=100, n_features=4, centers=3, random_state=0)
+    original_threads = numba.get_num_threads()
+    embedding = UMAP(
+        n_neighbors=10,
+        n_epochs=10,
+        n_jobs=numba.config.NUMBA_NUM_THREADS + 1,
+        force_approximation_algorithm=True,
+    ).fit_transform(data)
+
+    assert embedding.shape == (100, 2)
+    assert numba.get_num_threads() == original_threads
