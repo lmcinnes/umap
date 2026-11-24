@@ -1451,7 +1451,7 @@ INIT_TARGET_PARAMS = {
     # budget. Starting above it leaves gaps the layout never closes.
     "kappa": 0.85,
     # Fraction of the large-n local-resolution floor to guarantee.
-    "phi": 0.5,
+    "phi": 0.85,
     # Mirrors the layout kernel's per-sample repulsion cap min(gamma, 16).
     "gamma_cap": 16.0,
     # gamma above the cap enlarges the start as (gamma / gamma_cap) ** this;
@@ -1530,8 +1530,11 @@ def _init_target_radius(
     ceiling = (R0**q + K * max(travel, 0.0)) ** (1.0 / q)
 
     c, exponent = p["floor"]
-    floor = c * lam * max(2.0 * b - 1.0, 0.0) * n_vertices ** (
-        exponent * 2.0 / max(int(n_components), 1)
+    floor = (
+        c
+        * lam
+        * max(2.0 * b - 1.0, 0.0)
+        * n_vertices ** (exponent * 2.0 / max(int(n_components), 1))
     )
 
     radius = max(p["kappa"] * ceiling, p["phi"] * floor, lam)
@@ -1589,9 +1592,7 @@ def _rescale_embedding(
     )
     robust_spread[robust_spread == 0.0] = 1.0
     if method == "legacy":
-        target_spread = (
-            np.log10(n_vertices) * 3.0 * np.log2(gamma + 1.0) * scale_factor
-        )
+        target_spread = np.log10(n_vertices) * 3.0 * np.log2(gamma + 1.0) * scale_factor
         characteristic_spread = np.exp(np.mean(np.log(robust_spread)))
         multiplier = target_spread / characteristic_spread
     else:
