@@ -3548,6 +3548,9 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 order="C",
                 ensure_all_finite=ensure_all_finite,
             )
+            if scipy.sparse.issparse(X):
+                # The sparse code expects a csr_matrix, not a csr_array
+                X = scipy.sparse.csr_matrix(X)
         self._raw_data = X
 
         # Handle all the optional arguments, setting default
@@ -4234,6 +4237,9 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 order="C",
                 ensure_all_finite=ensure_all_finite,
             )
+            if scipy.sparse.issparse(X):
+                # The sparse code expects a csr_matrix, not a csr_array
+                X = scipy.sparse.csr_matrix(X)
         # Match the sparsity of the data the model was fit on; the distance
         # computations below assume both have the same format
         if self.metric != "precomputed":
@@ -4781,6 +4787,9 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
                 order="C",
                 ensure_all_finite=ensure_all_finite,
             )
+            if scipy.sparse.issparse(X):
+                # The sparse code expects a csr_matrix, not a csr_array
+                X = scipy.sparse.csr_matrix(X)
         random_state = check_random_state(self.transform_seed)
         rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
