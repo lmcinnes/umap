@@ -261,19 +261,13 @@ Fashion MNIST:
     test_data = np.array(test)
 
 Now we can fit a model to the training data, making use of the training
-labels to learn a supervised embedding.
+labels to learn a supervised embedding. Set a random seed so the example
+is reproducible.
 
 .. code:: python3
 
-    %%time
-    mapper = umap.UMAP(n_neighbors=10).fit(train_data, np.array(train_labels))
-
-
-.. parsed-literal::
-
-    CPU times: user 2min 18s, sys: 7.53 s, total: 2min 26s
-    Wall time: 1min 52s
-
+    mapper = umap.UMAP(n_neighbors=10, random_state=42, n_jobs=1)
+    mapper.fit(train_data, np.array(train_labels))
 
 Next we can use the :meth:`~umap.umap_.UMAP.transform` method on that model to transform the
 test set into the learned space. This time we won't pass the label
@@ -281,63 +275,53 @@ information and let the model attempt to place the data correctly.
 
 .. code:: python3
 
-    %%time
     test_embedding = mapper.transform(test_data)
 
-
-.. parsed-literal::
-
-    CPU times: user 17.3 s, sys: 986 ms, total: 18.3 s
-    Wall time: 15.4 s
-
-
-UMAP transforms are not as fast as some approaches, but as you can see
-this was still fairly efficient. The important question is how well we
-managed to embed the test data into the existing learned space. To start
-let's visualise the embedding of the training data so we can get a sense
-of where things *should* go.
+Plot both embeddings with the same axis limits and color scale to compare
+where the test points landed. Start with the training embedding.
 
 .. code:: python3
 
-    fig, ax = plt.subplots(1, figsize=(14, 10))
-    plt.scatter(*mapper.embedding_.T, s=0.3, c=np.array(train_labels), cmap='Spectral', alpha=1.0)
-    plt.setp(ax, xticks=[], yticks=[])
-    cbar = plt.colorbar(boundaries=np.arange(11)-0.5)
-    cbar.set_ticks(np.arange(10))
-    cbar.set_ticklabels(classes)
-    plt.title('Fashion MNIST Train Digits Embedded via UMAP Transform');
+    lower = np.minimum(mapper.embedding_.min(axis=0), test_embedding.min(axis=0))
+    upper = np.maximum(mapper.embedding_.max(axis=0), test_embedding.max(axis=0))
+    padding = 0.04 * (upper - lower)
 
+    def plot_embedding(embedding, labels, title, marker_size):
+        fig, ax = plt.subplots(figsize=(14, 10))
+        scatter = ax.scatter(
+            *embedding.T, s=marker_size, c=labels, cmap="Spectral", vmin=-0.5, vmax=9.5
+        )
+        ax.set(
+            xlim=(lower[0] - padding[0], upper[0] + padding[0]),
+            ylim=(lower[1] - padding[1], upper[1] + padding[1]),
+            xticks=[], yticks=[], title=title,
+        )
+        cbar = fig.colorbar(scatter, boundaries=np.arange(11) - 0.5, ticks=np.arange(10))
+        cbar.set_ticklabels(classes)
 
+    plot_embedding(
+        mapper.embedding_, train_labels, "Fashion-MNIST training set embedded by UMAP", 0.3
+    )
 
 .. image:: images/SupervisedUMAP_31_0.png
+   :alt: UMAP embedding fitted on the Fashion-MNIST training set, colored by clothing class.
 
-
-As you can see this has done a similar job as before, successfully
-embedding the separate classes while retaining both the internal
-structure and the overall global structure. We can now look at how the
-test set, for which we provided no label information, was embedded via
-the :meth:`~umap.umap_.UMAP.transform` method.
+Now plot the test embedding in the same space. Test labels are used here
+only to color the points in the figure.
 
 .. code:: python3
 
-    fig, ax = plt.subplots(1, figsize=(14, 10))
-    plt.scatter(*test_embedding.T, s=2, c=np.array(test_labels), cmap='Spectral', alpha=1.0)
-    plt.setp(ax, xticks=[], yticks=[])
-    cbar = plt.colorbar(boundaries=np.arange(11)-0.5)
-    cbar.set_ticks(np.arange(10))
-    cbar.set_ticklabels(classes)
-    plt.title('Fashion MNIST Test Digits Embedded via UMAP');
-
-
+    plot_embedding(
+        test_embedding, test_labels, "Fashion-MNIST test set embedded via UMAP transform", 2
+    )
 
 .. image:: images/SupervisedUMAP_33_0.png
+   :alt: Held-out Fashion-MNIST test set transformed into the training embedding, colored by clothing class.
 
 
-As you can see we have replicated the layout of the training data,
-including much of the internal structure of the classes. For the most
-part assignment of new points follows the classes well. The greatest
-source of confusion are some t-shirts that ended up mixed with the
-shirts, and some pullovers which are confused with the coats. Given the
+Most test points fall near the corresponding training clusters. Some
+clothing classes, such as shirts and pullovers, show overlap in the
+transformed test set. Given the
 difficulty of the problem this is a good result, particularly when
 compared with current state-of-the-art approaches such as `siamese and
 triplet
