@@ -123,6 +123,36 @@ def test_transform_sparse_model_with_dense_input(metric, compatibility_layout):
 
 
 @pytest.mark.parametrize(
+    "sparse_array",
+    [scipy.sparse.csr_array, scipy.sparse.csc_array, scipy.sparse.coo_array],
+)
+@pytest.mark.parametrize("compatibility_layout", [True, False])
+def test_fit_transform_and_update_with_sparse_array_input(
+    sparse_array, compatibility_layout
+):
+    rng = np.random.RandomState(42)
+    data = scipy.sparse.random(50, 30, density=0.2, format="csr", random_state=rng)
+    new_data = scipy.sparse.random(3, 30, density=0.2, format="csr", random_state=rng)
+    more_data = scipy.sparse.random(10, 30, density=0.2, format="csr", random_state=rng)
+
+    def run(wrap):
+        model = UMAP(
+            n_neighbors=5,
+            n_epochs=10,
+            random_state=42,
+            compatibility_layout=compatibility_layout,
+        ).fit(wrap(data))
+        transformed = model.transform(wrap(new_data))
+        model.update(wrap(more_data))
+        return model.embedding_, transformed
+
+    expected_embedding, expected_transformed = run(scipy.sparse.csr_matrix)
+    embedding, transformed = run(sparse_array)
+    np.testing.assert_allclose(transformed, expected_transformed)
+    np.testing.assert_allclose(embedding, expected_embedding)
+
+
+@pytest.mark.parametrize(
     "kwargs",
     [
         dict(compatibility_layout=True),
