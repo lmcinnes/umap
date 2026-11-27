@@ -762,3 +762,42 @@ def test_fallback_path(levenshtein_fn):
     d = levenshtein_fn(x, y)
     assert isinstance(d, float)
     assert d == 0.0
+
+
+def test_umap_metric_docs_cover_builtin_metrics_and_kwds():
+    import pynndescent.distances as pynn_dist
+    from umap import UMAP
+    from umap.umap_ import fuzzy_simplicial_set
+
+    builtin_metrics = [
+        name for name in dist.named_distances if name not in dist.DISCRETE_METRICS
+    ]
+    shared_nn_metrics = [
+        name for name in builtin_metrics if name in pynn_dist.named_distances
+    ]
+    umap_only_metrics = [
+        name for name in builtin_metrics if name not in pynn_dist.named_distances
+    ]
+
+    for doc in (UMAP.__doc__, fuzzy_simplicial_set.__doc__):
+        assert doc is not None
+        assert "russelrao" not in doc
+        assert "cityblock" not in doc
+
+    for metric_name in builtin_metrics + ["precomputed"]:
+        assert metric_name in UMAP.__doc__, f"{metric_name} missing from UMAP docstring"
+    for kwarg in ("vinv", "sigma", "w", "p", "z", "cost", "max_iter", "regularization"):
+        assert f"{kwarg}" in UMAP.__doc__, f"metric_kwds key {kwarg} missing from UMAP docstring"
+
+    for metric_name in shared_nn_metrics + ["precomputed"]:
+        assert (
+            metric_name in fuzzy_simplicial_set.__doc__
+        ), f"{metric_name} missing from fuzzy_simplicial_set docstring"
+    for metric_name in umap_only_metrics:
+        assert (
+            f"* {metric_name}" not in fuzzy_simplicial_set.__doc__
+        ), f"UMAP-only metric {metric_name} should not be listed as string bullet in fuzzy_simplicial_set"
+    for kwarg in ("vinv", "sigma", "w", "p", "cost", "max_iter", "regularization"):
+        assert (
+            f"``{kwarg}``" in fuzzy_simplicial_set.__doc__
+        ), f"metric_kwds key {kwarg} missing from fuzzy_simplicial_set docstring"

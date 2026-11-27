@@ -982,38 +982,65 @@ def fuzzy_simplicial_set(
         include:
 
         * euclidean (or l2)
-        * manhattan (or l1)
-        * cityblock
+        * manhattan (or l1, taxicab)
+        * chebyshev (or linfinity, linfty, linf)
+        * minkowski
+        * mahalanobis
+        * wminkowski (or weighted_minkowski)
+        * seuclidean (or standardised_euclidean)
         * braycurtis
         * canberra
-        * chebyshev
+        * haversine
+        * hellinger
+        * symmetric_kl
         * correlation
         * cosine
         * dice
         * hamming
         * jaccard
         * kulsinski
-        * ll_dirichlet
-        * mahalanobis
         * matching
-        * minkowski
         * rogerstanimoto
         * russellrao
-        * seuclidean
         * sokalmichener
         * sokalsneath
-        * sqeuclidean
         * yule
-        * wminkowski
+        * precomputed
 
-        Metrics that take arguments (such as minkowski, mahalanobis etc.)
-        can have arguments passed via the metric_kwds dictionary. At this
-        time care must be taken and dictionary elements must be ordered
-        appropriately; this will hopefully be fixed in the future.
+        Additional string metrics defined in ``pynndescent.distances.named_distances``
+        (including ``sqeuclidean``, ``jensen_shannon``, ``spearmanr``,
+        ``direct_cosine``, ``dot``, ``inner_product``, ``true_angular``, ``tsss``,
+        ``bit_hamming``, ``bit_jaccard``, ``wasserstein``, ``wasserstein_1d``,
+        ``kantorovich``, ``kantorovich_1d``, ``circular_wasserstein``,
+        ``circular_kantorovich``, and ``sinkhorn``) are also supported. UMAP-only
+        metrics in ``umap.distances`` (such as ``poincare``, ``softmax_hellinger``,
+        and ``ll_dirichlet``) should be passed as callables.
+
+        String metrics that accept parameters via ``metric_kwds`` are:
+
+        * ``minkowski``: ``p`` (float, default 2)
+        * ``wminkowski`` / ``weighted_minkowski``: ``w`` (1D weight array of
+          shape ``(n_features,)``, default ones), ``p`` (float, default 2)
+        * ``seuclidean`` / ``standardised_euclidean``: ``sigma`` (1D per-feature
+          variance array of shape ``(n_features,)``, default ones)
+        * ``mahalanobis``: ``vinv`` (2D inverse covariance array of shape
+          ``(n_features, n_features)``, default identity)
+        * ``wasserstein`` / ``kantorovich``: ``cost`` (2D cost array),
+          ``max_iter`` (int, default 100000)
+        * ``sinkhorn``: ``cost`` (2D cost array), ``regularization`` (float,
+          default 1.0)
+        * ``wasserstein_1d`` / ``kantorovich_1d`` / ``circular_wasserstein`` /
+          ``circular_kantorovich``: ``p`` (float, default 1)
+
+        Dictionary keys in ``metric_kwds`` must follow the parameter order
+        listed above because nearest-neighbor search passes ``metric_kwds``
+        values positionally.
 
     metric_kwds: dict (optional, default {})
-        Arguments to pass on to the metric, such as the ``p`` value for
-        Minkowski distance.
+        Arguments to pass on to the metric, such as ``{"p": 3}`` for
+        ``minkowski`` or ``{"vinv": inv_cov}`` for ``mahalanobis``. See
+        ``metric`` above for the built-in metrics that accept keyword
+        arguments and their parameter names.
 
     knn_indices: array of shape (n_samples, n_neighbors) (optional)
         If the k-nearest neighbors of each point has already been calculated
@@ -2373,34 +2400,63 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         required that this be a numba jit'd function. Valid string metrics
         include:
 
-        * euclidean
-        * manhattan
-        * chebyshev
+        * euclidean (or l2)
+        * manhattan (or l1, taxicab)
+        * chebyshev (or linfinity, linfty, linf)
         * minkowski
+        * poincare
         * canberra
         * braycurtis
         * mahalanobis
-        * wminkowski
-        * seuclidean
+        * wminkowski (or weighted_minkowski)
+        * seuclidean (or standardised_euclidean)
         * cosine
         * correlation
         * haversine
         * hamming
         * jaccard
         * dice
-        * russelrao
+        * matching
+        * russellrao
         * kulsinski
         * ll_dirichlet
         * hellinger
+        * softmax_hellinger
+        * symmetric_kl
         * rogerstanimoto
         * sokalmichener
         * sokalsneath
         * yule
+        * precomputed
 
-        Metrics that take arguments (such as minkowski, mahalanobis etc.)
-        can have arguments passed via the metric_kwds dictionary. At this
-        time care must be taken and dictionary elements must be ordered
-        appropriately; this will hopefully be fixed in the future.
+        Additional metrics defined in ``pynndescent.distances.named_distances``
+        (including ``sqeuclidean``, ``jensen_shannon``, ``spearmanr``,
+        ``direct_cosine``, ``dot``, ``inner_product``, ``true_angular``, ``tsss``,
+        ``bit_hamming``, ``bit_jaccard``, ``wasserstein``, ``wasserstein_1d``,
+        ``kantorovich``, ``kantorovich_1d``, ``circular_wasserstein``,
+        ``circular_kantorovich``, and ``sinkhorn``) are also accepted.
+
+        Built-in metrics that accept arguments via ``metric_kwds`` are:
+
+        * ``minkowski``: ``p`` (float, default 2)
+        * ``wminkowski`` / ``weighted_minkowski``: ``w`` (1D weight array of
+          shape ``(n_features,)``, default ones), ``p`` (float, default 2)
+        * ``seuclidean`` / ``standardised_euclidean``: ``sigma`` (1D per-feature
+          variance array of shape ``(n_features,)``, default ones)
+        * ``mahalanobis``: ``vinv`` (2D inverse covariance array of shape
+          ``(n_features, n_features)``, default identity)
+        * ``symmetric_kl``: ``z`` (float smoothing constant, default ``1e-11``;
+          supported only on the exact pairwise path when ``n_samples < 4096``
+          and ``force_approximation_algorithm=False``)
+
+        PyNNDescent optimal-transport metrics also accept ``metric_kwds``:
+        ``wasserstein`` / ``kantorovich`` (``cost``, ``max_iter=100000``),
+        ``sinkhorn`` (``cost``, ``regularization=1.0``), and
+        ``wasserstein_1d`` / ``kantorovich_1d`` / ``circular_wasserstein`` /
+        ``circular_kantorovich`` (``p=1``). Dictionary keys in ``metric_kwds``
+        must follow the parameter order in the metric signature because
+        approximate nearest-neighbor search, special-metric fallbacks, and
+        ``inverse_transform`` pass ``metric_kwds`` values positionally.
 
     n_epochs: int (optional, default None)
         The number of training epochs to be used in optimizing the
@@ -2509,8 +2565,11 @@ class UMAP(BaseEstimator, ClassNamePrefixFeaturesOutMixin):
         by `np.random`.
 
     metric_kwds: dict (optional, default None)
-        Arguments to pass on to the metric, such as the ``p`` value for
-        Minkowski distance. If None then no arguments are passed on.
+        Arguments to pass on to the metric, such as ``{"p": 3}`` for
+        ``minkowski`` or ``{"vinv": inv_cov}`` for ``mahalanobis``. See
+        ``metric`` above for the built-in metrics that accept keyword
+        arguments, their parameter names, and their ordering requirements. If
+        None then no arguments are passed on.
 
     output_metric: string or function (optional, default 'euclidean')
         The metric of the embedding space. Non-Euclidean output metrics must
