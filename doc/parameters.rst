@@ -221,7 +221,10 @@ of some of the finer local structure (individual colors are no longer
 necessarily immediately near their closest color match).
 
 This effect well exemplifies the local/global tradeoff provided by
-``n_neighbors``.
+``n_neighbors``. If the arrangement of clusters and the distances
+between them matter for your analysis, also consider UMATO (see
+:doc:`umato_demo`), which better preserves global structure by changing
+how the layout is optimized rather than the size of the neighborhoods.
 
 .. _parameters-min-dist:
 
@@ -530,7 +533,10 @@ The default, ``init="auto"``, selects ``"spectral"`` while the compatibility
 layout is in use (the 0.6 default) and ``"recursive"`` when
 ``compatibility_layout=False``. Other choices are ``"spectral"``,
 ``"tswspectral"``, ``"pca"``, ``"random"``, ``"recursive"``, or an array of
-initial coordinates.
+initial coordinates. With ``umato=True``, ``init`` instead sets the initial
+layout of the UMATO hubs: ``"auto"`` selects ``"pca"``, and ``"pca"``,
+``"random"``, ``"spectral"`` or an array can be given (see
+:doc:`umato_demo`).
 
 The new ``init="recursive"`` option works by repeatedly coarsening the fuzzy
 graph, laying out the smaller graph, and then expanding the result back to the

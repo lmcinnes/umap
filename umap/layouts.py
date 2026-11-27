@@ -1925,6 +1925,7 @@ def optimize_layout_euclidean(
     negative_sample_scale_adaptation_samples=128,
     densmap=False,
     _enable_l9=False,
+    vertex_step_scale=None,
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
     fuzzy set cross entropy between the 1-skeletons of the high dimensional
@@ -2022,6 +2023,11 @@ def optimize_layout_euclidean(
     densmap: bool, optional (default False)
         Whether to include the DensMAP objective terms. This is independent of
         the selected optimizer.
+    vertex_step_scale: array of shape (n_samples,), optional (default None)
+        Multiplier for the step each vertex of ``head_embedding`` takes in
+        every epoch. It is applied after the optimizer computes the step, so
+        optimizer state such as Adam moments is unaffected. UMATO uses it to
+        move its hubs more slowly. None leaves every step unchanged.
     Returns
     -------
     embedding: array of shape (n_samples, n_components)
@@ -2029,6 +2035,11 @@ def optimize_layout_euclidean(
     """
 
     dim = head_embedding.shape[1]
+    if vertex_step_scale is not None:
+        damped_vertices = np.flatnonzero(np.asarray(vertex_step_scale) != 1.0)
+        damped_scale = np.asarray(vertex_step_scale, dtype=np.float32)[
+            damped_vertices, np.newaxis
+        ]
     if random_state is None:
         random_state = _random_state_from_rng_state(rng_state)
     resolved_negative_sample_scale = (
@@ -2160,6 +2171,8 @@ def optimize_layout_euclidean(
     _l9_table_key = None
     _l9_table = None
     for n in tqdm(range(n_epochs), **tqdm_kwds):
+        if vertex_step_scale is not None:
+            damped_start = head_embedding[damped_vertices]
         if (
             densmap
             and (densmap_kwds["lambda"] > 0)
@@ -2505,6 +2518,11 @@ def optimize_layout_euclidean(
                 dens_re_cov,
                 dens_re_std,
                 dens_re_mean,
+            )
+
+        if vertex_step_scale is not None:
+            head_embedding[damped_vertices] = damped_start + damped_scale * (
+                head_embedding[damped_vertices] - damped_start
             )
 
         if epochs_list is not None and n in epochs_list:

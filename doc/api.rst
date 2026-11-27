@@ -44,3 +44,23 @@ Spectral initialization
 
 .. automodule:: umap.spectral
    :members: spectral_layout, tswspectral_layout
+
+UMATO
+-----
+
+UMATO is enabled with ``UMAP(umato=True)``; its parameters are listed with
+:class:`~umap.umap_.UMAP`. The steps of its layout can also be called
+separately.
+
+.. automodule:: umap.umato
+
+.. autofunction:: umap.umato.umato_embedding
+.. autofunction:: umap.umato.default_n_hubs
+.. autofunction:: umap.umato.select_hubs
+.. autofunction:: umap.umato.expand_hubs
+.. autofunction:: umap.umato.global_hub_layout
+.. autofunction:: umap.umato.embed_from_hubs
+.. autofunction:: umap.umato.local_graph
+.. autofunction:: umap.umato.optimize_local_layout
+.. autofunction:: umap.umato.place_outliers_in_groups
+.. autofunction:: umap.umato.place_outliers

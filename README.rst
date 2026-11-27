@@ -85,6 +85,15 @@ Details of this method are described in the following `paper <https://doi.org/10
 Narayan, A, Berger, B, Cho, H, *Assessing Single-Cell Transcriptomic Variability
 through Density-Preserving Data Visualization*, Nature Biotechnology, 2021
 
+**New: this package now also provides support for UMATO.** The UMATO algorithm changes how
+UMAP optimizes the layout so that the global structure of the data, such as the arrangement
+of clusters, is better preserved alongside its local structure. Details of this method are
+described in the following `paper <https://doi.org/10.1109/TVCG.2025.3602735>`_:
+
+Jeon, H, Ko, K, Lee, S, Hyun, J, Yang, T, Go, G, Jo, J, Seo, J, *UMATO: Bridging Local and
+Global Structures for Reliable Visual Analytics with Dimensionality Reduction*, IEEE
+Transactions on Visualization and Computer Graphics, 2025
+
 ----------
 Installing
 ----------
@@ -431,6 +440,38 @@ An example of making use of these options (based on a subsample of the mnist_784
 See `the documentation <https://umap-learn.readthedocs.io/en/latest/densmap_demo.html>`_ for more details.
 
 
+-----
+UMATO
+-----
+
+The UMATO (Uniform Manifold Approximation with Two-phase Optimization) algorithm
+changes how UMAP optimizes the layout so that the global structure of the data, such
+as the arrangement of and distances between clusters, is better preserved. UMATO first
+lays out a small set of representative points (hubs) using the distances between all
+pairs of hubs, and then places the remaining points around them and refines their local
+neighborhoods. One can easily run UMATO using the umap package by setting the
+``umato`` input flag:
+
+.. code:: python
+
+    embedding = umap.UMAP(umato=True).fit_transform(data)
+
+This functionality is built upon the UMATO `implementation <https://github.com/hyungkwonko/umato>`_
+provided by the developers of UMATO, who also contributed to integrating UMATO into the umap package.
+
+UMATO reuses the nearest neighbor graph of UMAP, so parameters such as ``n_neighbors`` and
+``metric`` work as usual. The following additional parameters can be set for UMATO:
+
+ - ``umato_n_hubs``: The target number of hubs. By default UMATO uses a third of the points, up to 300. More hubs give a finer skeleton of the global structure, but the cost of laying out the hubs grows quadratically with their number.
+
+ - ``umato_global_epochs``: The number of epochs of the global phase that lays out the hubs. The default is 100.
+
+With UMATO, ``n_epochs`` sets the number of epochs of the local phase (50 by default). Note that UMATO
+does not support ``transform``, ``inverse_transform``, ``update``, supervised dimension reduction or densMAP.
+
+See `the documentation <https://umap-learn.readthedocs.io/en/latest/umato_demo.html>`_ for more details.
+
+
 ---------------------------------
 GPU-Accelerated UMAP with torchdr
 ---------------------------------
@@ -538,6 +579,19 @@ Additionally, if you use the densMAP algorithm in your work please cite the foll
         publisher = {Springer Nature},
         URL = {https://doi.org/10.1038/s41587-020-00801-7},
         eprint = {https://www.biorxiv.org/content/early/2020/05/14/2020.05.12.077776.full.pdf},
+    }
+
+If you use the UMATO algorithm in your work please cite the following reference:
+
+.. code:: bibtex
+
+    @article{jeon2025umato,
+        author = {Jeon, Hyeon and Ko, Kwon and Lee, Soohyun and Hyun, Jake and Yang, Taehyun and Go, Gyehun and Jo, Jaemin and Seo, Jinwook},
+        title = {UMATO: Bridging Local and Global Structures for Reliable Visual Analytics with Dimensionality Reduction},
+        journal = {IEEE Transactions on Visualization and Computer Graphics},
+        year = {2025},
+        doi = {10.1109/TVCG.2025.3602735},
+        URL = {https://doi.org/10.1109/TVCG.2025.3602735},
     }
 
 If you use the Parametric UMAP algorithm in your work please cite the following reference:

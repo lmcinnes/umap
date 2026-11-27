@@ -252,3 +252,13 @@ embedding, so we should not expect these coordinates to match those produced
 by the compatibility layout. The important question is whether the result is
 stable in the ways that matter for the analysis. See :doc:`optimizers` for a
 more complete discussion of the available choices.
+
+Reproducibility with UMATO
+--------------------------
+
+UMATO, which is enabled with ``umato=True`` (see :doc:`umato_demo`), is
+reproducible in the same way: fitting it again with the same data,
+parameters and ``random_state`` produces the same embedding, whichever
+optimizer its local phase uses. Unlike UMAP with the Adam and momentum
+optimizers, however, the local phase of UMATO runs on a single thread
+whenever ``random_state`` is fixed.
