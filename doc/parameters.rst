@@ -414,6 +414,9 @@ To get more adventurous it will be useful to have some colorspace
 conversion -- to keep things simple we'll just use HSL formulas to
 extract the hue, saturation, and lightness from an (R,G,B) tuple.
 
+Grayscale colors have zero saturation and no defined hue; here we assign
+them a hue of zero.
+
 .. code:: python3
 
     @numba.njit()
@@ -421,7 +424,9 @@ extract the hue, saturation, and lightness from an (R,G,B) tuple.
         cmax = max(r, g, b)
         cmin = min(r, g, b)
         delta = cmax - cmin
-        if cmax == r:
+        if delta == 0:
+            return 0
+        elif cmax == r:
             return ((g - b) / delta) % 6
         elif cmax == g:
             return ((b - r) / delta) + 2
@@ -440,7 +445,7 @@ extract the hue, saturation, and lightness from an (R,G,B) tuple.
         cmin = min(r, g, b)
         chroma = cmax - cmin
         light = lightness(r, g, b)
-        if light == 1:
+        if chroma == 0:
             return 0
         else:
             return chroma / (1 - abs(2*light - 1))
