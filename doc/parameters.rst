@@ -347,22 +347,27 @@ of metrics, including:
 
 **Minkowski style metrics**
 
-- euclidean
-- manhattan
-- chebyshev
+- euclidean (alias ``l2``)
+- manhattan (aliases ``l1``, ``taxicab``)
+- chebyshev (aliases ``linfinity``, ``linfty``, ``linf``)
 - minkowski
 
-**Miscellaneous spatial metrics**
+**Miscellaneous spatial and distributional metrics**
 
 - canberra
 - braycurtis
 - haversine
+- poincare
+- hellinger
+- softmax_hellinger
+- ll_dirichlet
+- symmetric_kl
 
 **Normalized spatial metrics**
 
 - mahalanobis
-- wminkowski
-- seuclidean
+- wminkowski (alias ``weighted_minkowski``)
+- seuclidean (alias ``standardised_euclidean``)
 
 **Angular and correlation metrics**
 
@@ -374,12 +379,42 @@ of metrics, including:
 - hamming
 - jaccard
 - dice
+- matching
 - russellrao
 - kulsinski
 - rogerstanimoto
 - sokalmichener
 - sokalsneath
 - yule
+
+**PyNNDescent metrics**
+
+UMAP also accepts any metric defined in
+``pynndescent.distances.named_distances``, including ``sqeuclidean``,
+``jensen_shannon``, ``spearmanr``, ``direct_cosine``, ``dot``,
+``inner_product``, ``true_angular``, ``tsss``, ``bit_hamming``,
+``bit_jaccard``, ``wasserstein``, ``wasserstein_1d``, ``kantorovich``,
+``kantorovich_1d``, ``circular_wasserstein``, ``circular_kantorovich``, and
+``sinkhorn``.
+
+**Metrics taking ``metric_kwds``**
+
+Most built-in metrics take no extra arguments. Metrics that accept parameters
+via ``metric_kwds`` are:
+
+- ``minkowski``: ``p`` (float, default ``2``)
+- ``wminkowski`` / ``weighted_minkowski``: ``w`` (1D weight array of length ``n_features``), ``p`` (float, default ``2``)
+- ``seuclidean`` / ``standardised_euclidean``: ``sigma`` (1D per-feature variance array of length ``n_features``)
+- ``mahalanobis``: ``vinv`` (2D inverse covariance matrix of shape ``(n_features, n_features)``)
+- ``symmetric_kl``: ``z`` (float smoothing constant, default ``1e-11``; exact pairwise path with ``n_samples < 4096`` and ``force_approximation_algorithm=False`` only)
+- ``wasserstein`` / ``kantorovich``: ``cost`` (2D cost matrix), ``max_iter`` (int, default ``100000``)
+- ``sinkhorn``: ``cost`` (2D cost matrix), ``regularization`` (float, default ``1.0``)
+- ``wasserstein_1d`` / ``kantorovich_1d`` / ``circular_wasserstein`` / ``circular_kantorovich``: ``p`` (float, default ``1``)
+
+Keep ``metric_kwds`` dictionary keys in the parameter order listed above
+because approximate nearest-neighbor search, special-metric fallbacks, and
+``inverse_transform`` pass ``metric_kwds`` values positionally, for example
+``UMAP(metric="wminkowski", metric_kwds={"w": weights, "p": 3})``.
 
 **Precomputed**
 
