@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UMAP parameter map</title>
+<script src="https://unpkg.com/deck.gl@8.9.35/dist.min.js"></script>
+<style>
+  :root { --ink: #1f2933; --muted: #62707d; --line: #d9dee3; --accent: #1f77b4; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex; color: var(--ink); background: #fff;
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  #map { position: relative; flex: 1; min-width: 0; background: #f1f3f5; }
+  #controls {
+    position: absolute; top: 12px; left: 12px; z-index: 2; padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.92); border: 1px solid var(--line); border-radius: 6px;
+  }
+  #controls select { font: inherit; margin-left: 4px; }
+  #dataset-choice { display: block; margin-bottom: 6px; }
+  #dataset-choice[hidden] { display: none; }
+  #dataset { max-width: 190px; }
+  #views { display: flex; margin-bottom: 6px; }
+  #views button { border-radius: 0; flex: 1; }
+  #views button:first-child { border-radius: 4px 0 0 4px; }
+  #views button:last-child { border-radius: 0 4px 4px 0; border-left: 0; }
+  #views button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  #preview {
+    position: absolute; z-index: 3; display: none; width: 210px; padding: 6px;
+    pointer-events: none; background: #fff; border: 1px solid #cfd6dc; border-radius: 8px;
+    box-shadow: 0 4px 14px rgba(31, 41, 51, 0.22); font-size: 12px; line-height: 1.35;
+  }
+  #preview img { display: block; width: 100%; aspect-ratio: 1; }
+  #preview div { margin-top: 4px; color: var(--muted); }
+  #legend { margin-top: 6px; display: none; align-items: center; gap: 6px; color: var(--muted); }
+  #legend .ramp { width: 110px; height: 10px; border-radius: 2px; }
+  #panel {
+    width: 380px; padding: 16px; overflow-y: auto; border-left: 1px solid var(--line);
+  }
+  #panel h1 { font-size: 16px; margin: 0 0 4px; }
+  #panel p { margin: 6px 0; }
+  #panel .muted { color: var(--muted); }
+  #panel img { width: 100%; border: 1px solid var(--line); border-radius: 4px; margin: 10px 0 6px; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 10px; }
+  th, td { text-align: left; padding: 3px 6px 3px 0; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; }
+  td.changed { font-weight: 600; }
+  .hist { display: flex; align-items: flex-end; gap: 2px; height: 30px; }
+  .hist div { flex: 1; min-width: 0; text-align: center; }
+  .hist i { display: block; background: var(--accent); opacity: 0.75; border-radius: 1px 1px 0 0; }
+  .hist i.shown { opacity: 1; background: var(--ink); }
+  .hist span { display: block; font-size: 9.5px; color: var(--muted); overflow: hidden; }
+  pre {
+    margin: 6px 0; padding: 10px; overflow-x: auto; background: #f4f6f8;
+    border-radius: 4px; font: 12.5px/1.5 ui-monospace, Menlo, Consolas, monospace;
+  }
+  button {
+    font: inherit; padding: 4px 10px; background: #fff; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 4px;
+  }
+  @media (max-width: 720px) {
+    body { flex-direction: column; }
+    #panel { width: auto; height: 45%; border-left: 0; border-top: 1px solid var(--line); }
+  }
+</style>
+</head>
+<body>
+<div id="map">
+  <div id="controls">
+    <label id="dataset-choice" hidden>Dataset
+      <select id="dataset"></select>
+    </label>
+    <div id="views" role="group" aria-label="View">
+      <button id="view-grid" class="on" title="Similar settings snapped to a zoomable grid of tiles">Grid</button>
+      <button id="view-scatter" title="Each setting at its position in the UMAP of all settings">Scatter</button>
+    </div>
+    <label>Colour by
+      <select id="colour"><option value="">nothing</option></select>
+    </label>
+    <div id="legend"><span id="legend-min"></span><span class="ramp"></span><span id="legend-max"></span></div>
+  </div>
+  <canvas id="deck"></canvas>
+  <div id="preview"><img alt=""><div></div></div>
+</div>
+<aside id="panel">
+  <h1>UMAP parameter map</h1>
+  <p class="muted" id="intro"></p>
+  <div id="detail"><p>Zoom towards the style of plot you want. Each tile stands for a group of
+  parameter settings that give similar-looking results; click one for its parameters.
+  Switch to <b>Scatter</b> to see every setting at its place in a UMAP of the settings
+  themselves; hover over a point to see its plot.</p></div>
+</aside>
+
+<script>
+const TILE = 256;
+const ZOOM_BAND = 0.35;  // range of zoom, centred on a change of level, over which tiles split
+const LEVEL_MS = 300;  // fastest the split may play, for a jump in zoom
+// A tile is a card: a white rounded square with a border and a faint shadow,
+// holding the plot. Sizes are fractions of the tile's cell.
+const CARD_GAP = 0.035;  // from the cell's edge to the card
+const CARD_PAD = 0.02;  // from the card's edge to the plot
+const CARD_MARGIN = 0.06;  // room around the cell for the shadow, in the card image
+const RAMP = [[68, 1, 84], [59, 82, 139], [33, 145, 140], [94, 201, 98], [253, 231, 37]];
+
+function ramp(t) {
+  const s = Math.min(Math.max(t, 0), 1) * (RAMP.length - 1);
+  const i = Math.min(Math.floor(s), RAMP.length - 2), f = s - i;
+  return RAMP[i].map((c, k) => Math.round(c + (RAMP[i + 1][k] - c) * f));
+}
+
+function python(value) {
+  if (value === true) return 'True';
+  if (value === false) return 'False';
+  return typeof value === 'string' ? JSON.stringify(value) : String(value);
+}
+
+async function main() {
+  // A combined site lists its datasets in datasets.json, each in a folder of
+  // its own; a single viewer folder has its data beside the page.
+  const datasets = await fetch('datasets.json').then(r => r.ok ? r.json() : null).catch(() => null);
+  let base = '';
+  if (datasets && datasets.length) {
+    const asked = new URLSearchParams(location.search).get('dataset');
+    const chosen = datasets.find(d => d.id === asked) || datasets[0];
+    base = `${chosen.id}/`;
+    const choice = document.getElementById('dataset');
+    for (const d of datasets) choice.add(new Option(d.label, d.id, false, d.id === chosen.id));
+    choice.onchange = () => {
+      const url = new URL(location.href);
+      url.searchParams.set('dataset', choice.value);
+      location.href = url.href;
+    };
+    document.getElementById('dataset-choice').hidden = false;
+  }
+  const meta = await (await fetch(`${base}meta.json`)).json();
+  const levels = meta.levels, top = meta.top_level, world = TILE * meta.side;
+  const names = meta.param_names;
+  const format = v => typeof v === 'boolean' ? (v ? 'on' : 'off')
+    : v >= 1000 ? v.toLocaleString('en-US') : String(v);
+  const compact = v => typeof v === 'boolean' ? (v ? 'on' : 'off')
+    : v >= 1000 ? `${v / 1000}k` : String(v);
+  // A run's parameter values, from its level of each parameter.
+  const paramsOf = run => Object.fromEntries(
+    names.map((name, p) => [name, meta.param_levels[name][meta.runs[run].levels[p]]]));
+  // n_neighbors and min_dist are always listed; the rest only when changed.
+  const changed = (name, value) => name in meta.defaults && meta.defaults[name] !== value;
+  const listed = params => Object.entries(params)
+    .filter(([name, value]) => !(name in meta.defaults) || changed(name, value));
+  const cellAt = (level, x, y) => meta.cells[level][y * (1 << level) + x];
+  const cellSize = level => world / (1 << level);
+  // The outline of a cell's card.
+  const square = (cell, level) => {
+    const size = cellSize(level), s = size * (1 - 2 * CARD_GAP);
+    const x = (cell.x + CARD_GAP) * size, y = (cell.y + CARD_GAP) * size;
+    return [[x, y], [x + s, y], [x + s, y + s], [x, y + s]];
+  };
+
+  // The card image, drawn once: it spans the cell plus CARD_MARGIN all round.
+  const card = document.createElement('canvas');
+  card.width = card.height = 512;
+  {
+    const unit = card.width / (1 + 2 * CARD_MARGIN);  // pixels per cell
+    const at = CARD_MARGIN * unit + CARD_GAP * unit, side = (1 - 2 * CARD_GAP) * unit;
+    const ctx = card.getContext('2d');
+    const outline = () => { ctx.beginPath(); ctx.roundRect(at, at, side, side, 0.045 * unit); };
+    ctx.shadowColor = 'rgba(31, 41, 51, 0.22)';
+    ctx.shadowBlur = 0.03 * unit;
+    ctx.shadowOffsetY = 0.008 * unit;
+    ctx.fillStyle = '#fff';
+    outline(); ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = '#cfd6dc';
+    ctx.lineWidth = 0.006 * unit;
+    outline(); ctx.stroke();
+  }
+
+  // Mean level of a parameter over a tile's settings, scaled to [0, 1].
+  function meanLevel(cell, name) {
+    const p = names.indexOf(name), last = meta.param_levels[name].length - 1;
+    if (!cell.hist) return meta.runs[cell.run].levels[p] / last;
+    return cell.hist[p].reduce((sum, n, level) => sum + n * level, 0) / cell.count / last;
+  }
+
+  document.getElementById('intro').textContent =
+    `${meta.runs.length.toLocaleString('en-US')} parameter settings on ${meta.dataset}.`;
+  const select = document.getElementById('colour');
+  for (const name of names) select.add(new Option(name, name));
+  document.querySelector('#legend .ramp').style.background =
+    `linear-gradient(to right, ${RAMP.map(c => `rgb(${c})`).join(',')})`;
+
+  // The level to show at a zoom. Level k gives way to k + 1 where its tiles
+  // reach full size; across a band of zoom around that point the level is
+  // fractional, and the tiles are drawn part-way through splitting.
+  function levelAt(zoom) {
+    const z = zoom + levels, k = Math.round(z);
+    if (k < top) return top;
+    if (k >= levels) return levels;
+    return k + Math.min(Math.max((z - k) / ZOOM_BAND + 0.5, 0), 1);
+  }
+  // ``target`` is the level for the current zoom; ``shown`` follows it, at
+  // once for small changes and at a limited pace for jumps. ``level`` is the
+  // whole level on show, for picking and overlays.
+  const state = {target: 0, shown: 0, level: 0, view: null, colour: '', hover: null, selected: null,
+                 mode: 'grid', point: null, flash: null};
+  // The deepest cell showing each run, to carry a selection between views.
+  const deepest = new Map(meta.cells[levels].map(cell => [cell.run, cell]));
+
+  // Thumbnails, by run id, once loaded: the image file and its decoded bitmap.
+  const blobs = new Map(), bitmaps = new Map(), loading = new Set(), waiting = new Map();
+  function stored(id, blob) {
+    if (blobs.has(id)) return;
+    blobs.set(id, blob);
+    for (const resolve of waiting.get(id) || []) resolve(blob);
+    waiting.delete(id);
+    createImageBitmap(blob).then(image => { bitmaps.set(id, image); scheduleRender(); });
+  }
+  // Request the thumbnail of a cell. Thumbnails come in bundles, one per
+  // block of ``thumb_bundle`` cells square at each level (see build.py): a
+  // uint32 count, the uint32 lengths, then the image files.
+  function request(cell, level) {
+    if (blobs.has(meta.runs[cell.run].id)) return;
+    const b = Math.min(meta.thumb_bundle, 1 << level);
+    const bx = Math.floor(cell.x / b), by = Math.floor(cell.y / b), key = `${level}/${bx}-${by}`;
+    if (loading.has(key)) return;
+    loading.add(key);
+    fetch(`${base}tiles/${key}.bin`).then(r => r.arrayBuffer()).then(buffer => {
+      const view = new DataView(buffer), count = view.getUint32(0, true);
+      let offset = 4 * (count + 1);
+      for (let i = 0; i < count; i++) {
+        const length = view.getUint32(4 * (i + 1), true);
+        const run = cellAt(level, bx * b + i % b, by * b + Math.floor(i / b)).run;
+        stored(meta.runs[run].id, new Blob([buffer.slice(offset, offset + length)],
+                                          {type: `image/${meta.thumb_format}`}));
+        offset += length;
+      }
+    });
+  }
+  function bitmap(cell, level) {
+    request(cell, level);
+    return bitmaps.get(meta.runs[cell.run].id);
+  }
+  // A run's thumbnail as an object URL, for an <img>; loaded if need be.
+  const urls = new Map();
+  function thumbSrc(run) {
+    const id = meta.runs[run].id;
+    const url = blob => urls.get(id) || (urls.set(id, URL.createObjectURL(blob)), urls.get(id));
+    if (blobs.has(id)) return Promise.resolve(url(blobs.get(id)));
+    const promise = new Promise(resolve => waiting.set(id, [...(waiting.get(id) || []), resolve]));
+    request(deepest.get(run), levels);
+    return promise.then(url);
+  }
+
+  // Cells of a level under the view, with a margin of one cell.
+  function visibleCells(level) {
+    const size = cellSize(level), scale = 2 ** state.view.zoom, n = 1 << level;
+    const [cx, cy] = state.view.target;
+    const halfW = mapElement.clientWidth / 2 / scale, halfH = mapElement.clientHeight / 2 / scale;
+    const clamp = v => Math.min(Math.max(v, 0), n - 1);
+    const cells = [];
+    for (let y = clamp(Math.floor((cy - halfH) / size) - 1); y <= clamp(Math.floor((cy + halfH) / size) + 1); y++) {
+      for (let x = clamp(Math.floor((cx - halfW) / size) - 1); x <= clamp(Math.floor((cx + halfW) / size) + 1); x++) {
+        cells.push(cellAt(level, x, y));
+      }
+    }
+    return cells;
+  }
+
+  // A tile drawn in the square at (x, y) of side ``size``: its card, then its
+  // plot once loaded. Both scale with the square, so a tile grows as a whole.
+  function tile(cell, level, x, y, size) {
+    const id = `${level}-${cell.x}-${cell.y}`, margin = CARD_MARGIN * size;
+    const inset = (CARD_GAP + CARD_PAD) * size;
+    const image = bitmap(cell, level);
+    return [
+      new deck.BitmapLayer({
+        id: `card-${id}`, image: card, pickable: true, cell, level,
+        bounds: [x - margin, y + size + margin, x + size + margin, y - margin],
+      }),
+      image && new deck.BitmapLayer({
+        id: `tile-${id}`, image, pickable: true, cell, level,
+        bounds: [x + inset, y + size - inset, x + size - inset, y + inset],
+      }),
+    ];
+  }
+
+  // Between levels, a tile shrinks into the quarter that keeps its picture;
+  // once it has made room, the other three quarters grow from their centres.
+  function tileLayers() {
+    const base = Math.min(Math.max(Math.floor(state.shown), top), levels);
+    const split = Math.min(Math.max(state.shown - base, 0), 1);
+    if (split === 0) {
+      if (base < levels) {  // fetch the next level down ahead of need
+        for (const cell of visibleCells(base + 1)) request(cell, base + 1);
+      }
+      return visibleCells(base).flatMap(cell => {
+        const size = cellSize(base);
+        return tile(cell, base, cell.x * size, cell.y * size, size);
+      });
+    }
+    const t = split * split * (3 - 2 * split);
+    const size = cellSize(base + 1), keeping = [], growing = [];
+    for (const cell of visibleCells(base + 1)) {
+      const parent = cellAt(base, cell.x >> 1, cell.y >> 1);
+      const x = cell.x * size, y = cell.y * size;
+      // The shrinking tile has side size * (2 - t), so a quarter's centre is
+      // size * (t - 1/2) clear of it: the quarter may grow to scale 2t - 1.
+      const grown = Math.max(2 * t - 1, 0);
+      if (cell.run === parent.run) {
+        const px = parent.x * 2 * size, py = parent.y * 2 * size;
+        keeping.push(...tile(cell, base + 1, px + (x - px) * t, py + (y - py) * t, size * (2 - t)));
+      } else {
+        const inset = size * (1 - grown) / 2;
+        if (grown > 0) growing.push(...tile(cell, base + 1, x + inset, y + inset, size * grown));
+      }
+    }
+    return [...keeping, ...growing];
+  }
+
+  // Scatter view: every run at its meta-UMAP position, in the grid's frame.
+  const RUN_IDS = meta.runs.map((_, i) => i);
+  const pointColour = run => state.colour
+    ? [...ramp(meta.runs[run].levels[names.indexOf(state.colour)]
+               / (meta.param_levels[state.colour].length - 1)), 210]
+    : [52, 78, 98, 170];
+  function scatterLayers() {
+    // Points grow a little as you zoom in, to stay easy to hover.
+    const radius = Math.min(Math.max(1.6 * 2 ** ((state.view.zoom - fit) / 2), 2), 7);
+    const marked = [state.selected && {run: state.selected.cell.run, colour: [31, 119, 180]},
+                    state.point !== null && {run: state.point, colour: [31, 41, 51]}].filter(Boolean);
+    return [
+      new deck.ScatterplotLayer({
+        id: 'runs', data: RUN_IDS, pickable: true,
+        getPosition: run => [meta.runs[run].xy[0] * world, meta.runs[run].xy[1] * world],
+        getFillColor: pointColour, getRadius: radius, radiusUnits: 'pixels',
+        updateTriggers: {getFillColor: state.colour, getRadius: radius},
+      }),
+      flashLayer(radius),
+      new deck.ScatterplotLayer({
+        id: 'marked', data: marked, filled: false, stroked: true,
+        getPosition: d => [meta.runs[d.run].xy[0] * world, meta.runs[d.run].xy[1] * world],
+        getRadius: radius + 3, radiusUnits: 'pixels', getLineColor: d => d.colour,
+        getLineWidth: 2, lineWidthUnits: 'pixels',
+      }),
+    ];
+  }
+
+  function layers() {
+    if (state.mode === 'scatter') return scatterLayers();
+    const result = tileLayers().filter(Boolean);
+    // Mid-split, tiles are not where their cells are: only the selection is marked.
+    const settled = Number.isInteger(state.shown);
+    if (state.colour && settled) {
+      result.push(new deck.PolygonLayer({
+        id: `colour-${state.colour}-${state.level}`, data: meta.cells[state.level],
+        getPolygon: cell => square(cell, state.level), stroked: false,
+        getFillColor: cell => [...ramp(meanLevel(cell, state.colour)), 120],
+      }));
+    }
+    result.push(flashLayer());
+    const outlines = [state.selected && {...state.selected, colour: [31, 119, 180], width: 3},
+                      settled && state.hover && {...state.hover, colour: [31, 41, 51], width: 1.5}].filter(Boolean);
+    result.push(new deck.PolygonLayer({
+      id: 'outlines', data: outlines, filled: false, stroked: true,
+      getPolygon: d => square(d.cell, d.level), getLineColor: d => d.colour,
+      getLineWidth: d => d.width, lineWidthUnits: 'pixels',
+    }));
+    return result;
+  }
+
+  function picked(info) {
+    if (info.layer && info.layer.id === 'runs' && info.index >= 0) {
+      const run = info.index;
+      return {cell: deepest.get(run) || {run, count: 1}, level: levels};
+    }
+    const cell = info.layer && info.layer.props.cell;
+    return cell ? {cell, level: info.layer.props.level} : null;
+  }
+
+  // Bars for how many of a tile's settings use each level of a parameter.
+  function histogram(cell, name) {
+    const p = names.indexOf(name), counts = cell.hist[p], most = Math.max(...counts);
+    const shown = meta.runs[cell.run].levels[p];
+    return `<div class="hist">${counts.map((n, level) => `<div title="${n} of ${cell.count}">
+      <i class="${level === shown ? 'shown' : ''}" style="height:${Math.round(18 * n / most)}px"></i>
+      <span>${compact(meta.param_levels[name][level])}</span></div>`).join('')}</div>`;
+  }
+
+  function showDetail(pick) {
+    const {cell, level} = pick;
+    const params = paramsOf(cell.run);
+    const args = [...listed(params), ...Object.entries(meta.base_params)];
+    const code = `umap.UMAP(\n${args.map(([k, v]) => `    ${k}=${python(v)},`).join('\n')}\n)`;
+    const rows = names.map(name => `<tr><td>${name}</td>
+      <td class="num ${changed(name, params[name]) ? 'changed' : ''}">${format(params[name])}</td>
+      ${cell.hist ? `<td>${histogram(cell, name)}</td>` : ''}</tr>`).join('');
+    const group = cell.count === 1
+      ? 'This tile is a single parameter setting.'
+      : `This tile stands for <b>${cell.count}</b> similar-looking parameter settings; the bars show
+         how many of them use each value. Zoom in to tell them apart.`;
+    document.getElementById('detail').innerHTML = `
+      <img id="detail-image" alt="UMAP embedding for the shown parameters">
+      <p>${group}</p>
+      <table><tr><th>Parameter</th><th>Shown</th>${cell.hist ? '<th>Values in tile</th>' : ''}</tr>${rows}</table>
+      <p class="muted">Code for the plot shown (other arguments at their defaults)</p>
+      <pre id="code"></pre>
+      <button id="copy">Copy</button>
+      ${state.mode === 'grid' ? `<p class="muted">Zoom level ${level - top + 1} of ${levels - top + 1}</p>` : ''}`;
+    const image = document.getElementById('detail-image');
+    thumbSrc(cell.run).then(src => { image.src = src; });
+    document.getElementById('code').textContent = code;
+    document.getElementById('copy').onclick = event => {
+      navigator.clipboard.writeText(code);
+      event.target.textContent = 'Copied';
+    };
+  }
+
+  // The page can load before it has a size (a hidden tab or iframe), so floor it.
+  const mapElement = document.getElementById('map');
+  // The starting view fits the map into the space below the controls.
+  const controls = document.getElementById('controls');
+  const reserved = () => controls.offsetTop + controls.offsetHeight + 8;
+  const fitFor = () => Math.log2(Math.max(
+    Math.min(mapElement.clientWidth, mapElement.clientHeight - reserved()), 256) * 0.95 / world);
+  const fitView = zoom => ({target: [world / 2, world / 2 - reserved() / 2 / 2 ** zoom, 0], zoom});
+  let fit = fitFor(), untouched = true;
+  state.view = fitView(fit);
+  state.target = state.shown = levelAt(fit);
+  state.level = Math.round(state.shown);
+  const deckgl = new deck.Deck({
+    canvas: 'deck', parent: document.getElementById('map'),
+    views: new deck.OrthographicView({id: 'ortho'}),
+    initialViewState: {...state.view, minZoom: Math.min(fit, top - levels) - 0.5, maxZoom: 1},
+    controller: true,
+    onViewStateChange: ({viewState, interactionState}) => {
+      if (interactionState && Object.values(interactionState).some(Boolean)) untouched = false;
+      state.view = viewState;
+      state.target = levelAt(viewState.zoom);
+      if (state.target !== state.shown) animate();
+      render();
+    },
+    getCursor: ({isDragging}) => isDragging ? 'grabbing' : 'pointer',
+    getTooltip: info => {
+      if (state.mode === 'scatter') return null;
+      const pick = picked(info);
+      if (!pick) return null;
+      const parts = listed(paramsOf(pick.cell.run)).map(([name, value]) => `${name} ${format(value)}`);
+      const head = pick.cell.count === 1 ? '1 setting' : `${pick.cell.count} settings, showing`;
+      return `${head}\n${parts.join('\n')}`;
+    },
+    onHover: info => {
+      if (state.mode === 'scatter') { preview(info); return; }
+      const pick = picked(info);
+      const key = p => p && `${p.level}/${p.cell.x}/${p.cell.y}`;
+      if (key(pick) !== key(state.hover)) { state.hover = pick; render(); }
+    },
+    onClick: info => {
+      const pick = picked(info);
+      if (pick) { state.selected = pick; showDetail(pick); render(); }
+    },
+  });
+  function render() { deckgl.setProps({layers: layers()}); }
+
+  // Culling uses the map's size, so redraw when it changes.
+  new ResizeObserver(() => {
+    if (untouched) {
+      fit = fitFor();
+      state.view = fitView(fit);
+      state.target = state.shown = levelAt(fit);
+      state.level = Math.round(state.shown);
+      deckgl.setProps({initialViewState: {
+        ...state.view, minZoom: Math.min(fit, top - levels) - 0.5, maxZoom: 1}});
+    }
+    scheduleRender();
+  }).observe(mapElement);
+
+  let renderQueued = false;
+  function scheduleRender() {
+    if (renderQueued) return;
+    renderQueued = true;
+    requestAnimationFrame(() => { renderQueued = false; render(); });
+  }
+
+  // Move the level shown towards the target, no faster than LEVEL_MS a level.
+  let animating = false;
+  function animate() {
+    if (animating) return;
+    animating = true;
+    // A frame's timestamp can precede the call that asked for it.
+    let last = null;
+    const step = now => {
+      const change = Math.max(now - (last ?? now), 0) / LEVEL_MS, gap = state.target - state.shown;
+      last = now;
+      state.shown = Math.abs(gap) <= change ? state.target : state.shown + Math.sign(gap) * change;
+      state.level = Math.round(state.shown);
+      if (!Number.isInteger(state.shown)) state.hover = null;
+      render();
+      if (state.shown === state.target) animating = false;
+      else requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  // The plot under the pointer, in the scatter view.
+  const previewBox = document.getElementById('preview');
+  function preview(info) {
+    const run = info.layer && info.layer.id === 'runs' && info.index >= 0 ? info.index : null;
+    if (run !== state.point) { state.point = run; render(); }
+    if (run === null) { previewBox.style.display = 'none'; return; }
+    const img = previewBox.querySelector('img');
+    if (img.dataset.run !== String(run)) {
+      img.dataset.run = run;
+      img.removeAttribute('src');
+      thumbSrc(run).then(src => { if (img.dataset.run === String(run)) img.src = src; });
+    }
+    const parts = listed(paramsOf(run)).map(([name, value]) => `${name} ${format(value)}`);
+    previewBox.querySelector('div').textContent = parts.join(' · ');
+    previewBox.style.display = 'block';
+    // Beside the pointer, on whichever side has room.
+    const gap = 16, w = previewBox.offsetWidth, h = previewBox.offsetHeight;
+    const x = info.x + gap + w > mapElement.clientWidth ? info.x - gap - w : info.x + gap;
+    const y = Math.min(Math.max(info.y - h / 2, 4), mapElement.clientHeight - h - 4);
+    previewBox.style.left = `${x}px`;
+    previewBox.style.top = `${y}px`;
+  }
+
+  // On switching views, the new view centres on the runs the old one had on
+  // screen: at the median of their positions, zoomed so that the middle
+  // FOCUS_SHARE of them fits on each axis. They are then briefly ringed.
+  const FOCUS_SHARE = 0.8, FOCUS_PAD = 1.15, FLASH_MS = 1500, FLASH_COLOUR = [217, 119, 6];
+  const scatterAt = run => [meta.runs[run].xy[0] * world, meta.runs[run].xy[1] * world];
+  const gridAt = run => {
+    const cell = deepest.get(run), size = cellSize(levels);
+    return [(cell.x + 0.5) * size, (cell.y + 0.5) * size];
+  };
+  function onScreen([x, y]) {
+    const scale = 2 ** state.view.zoom, [cx, cy] = state.view.target;
+    return Math.abs(x - cx) <= mapElement.clientWidth / 2 / scale
+      && Math.abs(y - cy) <= mapElement.clientHeight / 2 / scale;
+  }
+  // The runs on screen: in the grid, every run that a tile whose centre is
+  // on screen stands for; in the scatter, every point on screen.
+  function runsOnScreen() {
+    if (state.mode === 'scatter') return RUN_IDS.filter(run => onScreen(scatterAt(run)));
+    const level = Math.min(Math.max(state.level, top), levels), shift = levels - level;
+    const size = cellSize(level);
+    return meta.cells[levels].filter(cell => onScreen(
+      [((cell.x >> shift) + 0.5) * size, ((cell.y >> shift) + 0.5) * size])).map(cell => cell.run);
+  }
+  function focusOn(points) {
+    const sorted = d => points.map(p => p[d]).sort((a, b) => a - b);
+    const at = (values, t) => values[Math.round(t * (values.length - 1))];
+    const xs = sorted(0), ys = sorted(1);
+    const low = (1 - FOCUS_SHARE) / 2, high = 1 - low;
+    const centre = [at(xs, 0.5), at(ys, 0.5)];
+    // Twice the larger reach from the median, so the whole box is on screen.
+    const span = (values, mid) => Math.max(2 * Math.max(at(values, high) - mid, mid - at(values, low)),
+                                           3 * cellSize(levels));
+    const minZoom = Math.min(fit, top - levels) - 0.5;
+    const zoom = Math.min(Math.max(Math.log2(Math.min(
+      mapElement.clientWidth / (span(xs, centre[0]) * FOCUS_PAD),
+      (mapElement.clientHeight - reserved()) / (span(ys, centre[1]) * FOCUS_PAD))), minZoom), 1);
+    state.view = {target: [centre[0], centre[1] - reserved() / 2 / 2 ** zoom, 0], zoom};
+    state.target = state.shown = levelAt(zoom);
+    state.level = Math.round(state.shown);
+    untouched = false;
+    deckgl.setProps({initialViewState: {...state.view, minZoom, maxZoom: 1}});
+  }
+  // A fading ring around the runs just focused on.
+  function flash(runs) {
+    state.flash = {runs, start: performance.now()};
+    const step = now => {
+      if (!state.flash) return;
+      if (now - state.flash.start > FLASH_MS) state.flash = null;
+      render();
+      if (state.flash) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+  const flashOpacity = () => Math.max(1 - (performance.now() - state.flash.start) / FLASH_MS, 0);
+  function flashLayer(radius) {
+    if (!state.flash) return null;
+    if (state.mode === 'scatter') {
+      return new deck.ScatterplotLayer({
+        id: 'flash', data: state.flash.runs, filled: false, stroked: true, opacity: flashOpacity(),
+        getPosition: scatterAt, getRadius: radius + 2, radiusUnits: 'pixels',
+        getLineColor: FLASH_COLOUR, getLineWidth: 1.5, lineWidthUnits: 'pixels',
+      });
+    }
+    if (!Number.isInteger(state.shown)) return null;
+    const shift = levels - state.level, keys = new Set();
+    for (const run of state.flash.runs) {
+      const cell = deepest.get(run);
+      keys.add(`${cell.x >> shift},${cell.y >> shift}`);
+    }
+    const cells = [...keys].map(key => cellAt(state.level, ...key.split(',').map(Number)));
+    return new deck.PolygonLayer({
+      id: 'flash', data: cells, filled: false, stroked: true, opacity: flashOpacity(),
+      getPolygon: cell => square(cell, state.level), getLineColor: FLASH_COLOUR,
+      getLineWidth: 3, lineWidthUnits: 'pixels',
+    });
+  }
+
+  function setMode(mode) {
+    if (mode === state.mode) return;
+    const runs = runsOnScreen();
+    state.mode = mode;
+    state.hover = null; state.point = null;
+    if (runs.length) {
+      focusOn(runs.map(mode === 'scatter' ? scatterAt : gridAt));
+      // Ringing every run says nothing.
+      if (runs.length < meta.runs.length) flash(runs);
+    }
+    previewBox.style.display = 'none';
+    document.getElementById('view-grid').classList.toggle('on', mode === 'grid');
+    document.getElementById('view-scatter').classList.toggle('on', mode === 'scatter');
+    if (state.selected) showDetail(state.selected);
+    render();
+  }
+  document.getElementById('view-grid').onclick = () => setMode('grid');
+  document.getElementById('view-scatter').onclick = () => setMode('scatter');
+  mapElement.addEventListener('mouseleave', () => {
+    previewBox.style.display = 'none';
+    if (state.point !== null) { state.point = null; render(); }
+  });
+
+  select.onchange = () => {
+    state.colour = select.value;
+    const legend = document.getElementById('legend');
+    legend.style.display = state.colour ? 'flex' : 'none';
+    if (state.colour) {
+      const values = meta.param_levels[state.colour];
+      document.getElementById('legend-min').textContent = format(values[0]);
+      document.getElementById('legend-max').textContent = format(values[values.length - 1]);
+    }
+    render();
+  };
+  render();
+}
+
+main();
+</script>
+</body>
+</html>
