@@ -293,11 +293,15 @@ visualization attuned parameters:
 .. image:: images/clustering_27_1.png
 
 
-As you can see we still have the general global structure, but we are
-packing points together more tightly within clusters, and consequently
-we can see larger gaps between the clusters. Ultimately this embedding
-was for clustering purposes only, and we will go back to the original
-embedding for visualization purposes from here on out.
+With these settings, points within the digit groups are packed more
+tightly, and the gaps between groups look wider than in the earlier
+plot. Note that these gaps make the groups easier to see, but their
+widths do not tell us which digit groups are most similar in the
+original pixel data (please see :doc:`interpreting_embeddings` for
+detailed instructions on interpreting these gaps between clusters).
+Ultimately this embedding was for clustering purposes only, and we will
+go back to the original embedding for visualization purposes from here
+on out.
 
 The next step is to cluster this data. We'll use HDBSCAN again, with the
 same parameter setting as before.

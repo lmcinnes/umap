@@ -43,14 +43,16 @@ distinguish that information then you can get *useful*
 clustering results out since algorithms like HDBSCAN will
 easily pick out the components after applying UMAP.
 
-UMAP does offer significant improvements over algorithms
-like t-SNE for clustering. First, by preserving more
-global structure and creating meaningful separation
-between connected components of the manifold on which
-the data lies, UMAP offers more meaningful clusters.
-Second, because it supports arbitrary embedding
-dimensions, UMAP allows embedding to larger dimensional
-spaces that make it more amenable to clustering.
+UMAP brings neighboring observations closer together,
+making groups easier for a clustering algorithm such as
+HDBSCAN to identify, compared to other algorithms like
+t-SNE. Still, note that the gaps between those groups in a
+UMAP plot are not a reliable measure of how far apart the
+groups are in the original data. The
+:doc:`interpreting_embeddings` tutorial illustrates this
+distinction with the penguin dataset. If your goal is
+clustering, you can also use more than two embedding
+dimensions.
 
 The clusters are all squashed together and I can't see internal structure
 -------------------------------------------------------------------------
