@@ -67,7 +67,7 @@ We can then pass the network into ParametricUMAP and train:
     embedder = ParametricUMAP(encoder=encoder, dims=dims)
     embedding = embedder.fit_transform(train_images)
 
-If you are unfamilar with Tensorflow/Keras and want to train your own model, we reccomend that you take a look at the `Tensorflow documentation <https://www.tensorflow.org/>`_. 
+If you are unfamiliar with Tensorflow/Keras and want to train your own model, we recommend that you take a look at the `Tensorflow documentation <https://www.tensorflow.org/>`_. 
 
 
 Saving and loading your model
